@@ -7,8 +7,12 @@ import {
   Text,
   View,
 } from "react-native";
+import * as Application from "expo-application";
 import { surfaceColors } from "@mobile-surfaces/design-tokens";
 import { liveActivityAdapter as LiveActivity, LiveActivitySnapshot } from "../liveActivity";
+
+const appName = Application.applicationName ?? "this app";
+const activitiesUnsupportedHint = `no (toggle in iOS Settings → Face ID & Passcode → Allow Notifications, or Settings → ${appName} → Live Activities)`;
 import { activityFixtureStates, surfaceFixtures } from "../fixtures/surfaceFixtures";
 import {
   canRequestPushToken,
@@ -153,7 +157,7 @@ export function LiveActivityHarness() {
 
       <Section label="Activities supported">
         <Text style={styles.value}>
-          {supported === null ? "checking…" : supported ? "yes" : "no (toggle in iOS Settings → Face ID & Passcode → Allow Notifications, or Settings → Mobile Surfaces → Live Activities)"}
+          {supported === null ? "checking…" : supported ? "yes" : activitiesUnsupportedHint}
         </Text>
       </Section>
 
