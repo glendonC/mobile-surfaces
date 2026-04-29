@@ -30,3 +30,15 @@ if xcrun simctl list devices available | grep -q "$DEVICE"; then
 else
   echo "Simulator: $DEVICE not found. Set DEVICE=\"<simulator name>\" when running pnpm mobile:sim."
 fi
+
+APP_JSON="apps/mobile/app.json"
+if [ -f "$APP_JSON" ]; then
+  TEAM_ID=$(node -e "const j=require('./$APP_JSON');process.stdout.write(j.expo?.ios?.appleTeamId||'')" 2>/dev/null || true)
+  if [ -z "$TEAM_ID" ]; then
+    echo "Apple Team ID: not set. Add expo.ios.appleTeamId to $APP_JSON before running expo run:ios --device."
+  elif [ "$TEAM_ID" = "XXXXXXXXXX" ]; then
+    echo "Apple Team ID: placeholder still in $APP_JSON. Replace expo.ios.appleTeamId with your 10-character team id (Xcode → Signing & Capabilities → Team, or developer.apple.com → Membership)."
+  else
+    echo "Apple Team ID: $TEAM_ID"
+  fi
+fi

@@ -1,8 +1,17 @@
 {
   "name": "live-activity",
   "version": "1.0.0",
-  "description": "Mobile Surfaces Live Activity bridge",
+  "description": "Local Expo module wrapping ActivityKit start/update/end and push token events for Mobile Surfaces.",
   "main": "index.ts",
   "private": true,
-  "license": "MIT"
+  "license": "MIT",
+  "homepage": "https://github.com/glendonC/mobile-surfaces#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/glendonC/mobile-surfaces.git",
+    "directory": "apps/mobile/modules/live-activity"
+  },
+  "bugs": {
+    "url": "https://github.com/glendonC/mobile-surfaces/issues"
+  }
 }

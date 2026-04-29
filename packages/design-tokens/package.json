@@ -1,8 +1,24 @@
 {
   "name": "@mobile-surfaces/design-tokens",
   "version": "0.1.0",
+  "description": "Shared design tokens for the Mobile Surfaces React Native app and SwiftUI widget target.",
   "private": true,
   "license": "MIT",
+  "homepage": "https://github.com/glendonC/mobile-surfaces#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/glendonC/mobile-surfaces.git",
+    "directory": "packages/design-tokens"
+  },
+  "bugs": {
+    "url": "https://github.com/glendonC/mobile-surfaces/issues"
+  },
+  "keywords": [
+    "mobile-surfaces",
+    "design-tokens",
+    "live-activity",
+    "widgetkit"
+  ],
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",

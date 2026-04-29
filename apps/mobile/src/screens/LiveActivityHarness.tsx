@@ -8,7 +8,7 @@ import {
   View,
 } from "react-native";
 import { surfaceColors } from "@mobile-surfaces/design-tokens";
-import LiveActivity, { LiveActivitySnapshot } from "../../modules/live-activity";
+import { liveActivityAdapter as LiveActivity, LiveActivitySnapshot } from "../liveActivity";
 import { activityFixtureStates, surfaceFixtures } from "../fixtures/surfaceFixtures";
 import {
   canRequestPushToken,

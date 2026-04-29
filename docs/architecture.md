@@ -34,6 +34,59 @@ Why:
 
 The code should keep an adapter boundary around Live Activity operations so a future branch can swap the local module for `expo-live-activity` or `expo-widgets` without changing fixtures, docs, or product mapping code.
 
+The harness imports the adapter from `apps/mobile/src/liveActivity/index.ts` as `liveActivityAdapter`. That re-export is the stable swap point: a future adapter only needs to satisfy the same surface (see [Adapter Contract](#adapter-contract)) and replace what is exported from this file. No call site under `apps/mobile/src/` should import from `apps/mobile/modules/live-activity` directly.
+
+## Adapter Contract
+
+Any Live Activity adapter exported from `apps/mobile/src/liveActivity/index.ts` must implement this surface. Future swaps (`expo-live-activity`, `expo-widgets`, a different local module) only need to satisfy it; nothing else under `apps/mobile/src/` should change.
+
+```ts
+import type {
+  LiveSurfaceActivityContentState,
+  LiveSurfaceStage,
+} from "@mobile-surfaces/surface-contracts";
+
+export type LiveActivityStage = LiveSurfaceStage;
+export type LiveActivityContentState = LiveSurfaceActivityContentState;
+
+export interface LiveActivitySnapshot {
+  id: string;
+  surfaceId: string;
+  modeLabel: string;
+  state: LiveActivityContentState;
+  pushToken: string | null;
+}
+
+export type LiveActivityEvents = {
+  onPushToken: (payload: { activityId: string; token: string }) => void;
+  onActivityStateChange: (payload: {
+    activityId: string;
+    state: "active" | "ended" | "dismissed" | "stale" | "pending";
+  }) => void;
+};
+
+export interface LiveActivityAdapter {
+  areActivitiesEnabled(): Promise<boolean>;
+  start(
+    surfaceId: string,
+    modeLabel: string,
+    state: LiveActivityContentState,
+  ): Promise<{ id: string; state: LiveActivityContentState }>;
+  update(activityId: string, state: LiveActivityContentState): Promise<void>;
+  end(
+    activityId: string,
+    dismissalPolicy: "immediate" | "default",
+  ): Promise<void>;
+  listActive(): Promise<LiveActivitySnapshot[]>;
+  addListener<E extends keyof LiveActivityEvents>(
+    event: E,
+    handler: LiveActivityEvents[E],
+  ): { remove(): void };
+}
+```
+
+Four async methods (`areActivitiesEnabled`, `start`, `update`, `end`, `listActive`) plus two events (`onPushToken`, `onActivityStateChange`). Adding to this surface counts as a breaking change; all adapters and the harness must update together.
+
 ## Research Findings
 
 - `expo-widgets`: alpha, iOS-only, dev-build only, and subject to breaking changes. It can create widgets and Live Activities with Expo UI, but recent reports include blank widget bundles and intermittent Live Activity spinner overlays. Not stable enough for the default v0 starter path.

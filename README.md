@@ -18,7 +18,29 @@ Mobile Surfaces gives developers the native iOS pieces of a multi-surface Expo a
 - Shared `LiveSurfaceSnapshot` contract, design tokens, fixtures, validation scripts, and APNs smoke helpers.
 - Opinionated defaults: local ActivityKit bridge, SwiftUI WidgetKit extension, JSON fixture source of truth, and generated TypeScript preview fixtures.
 
-Out of scope for v0: Android, a SwiftUI-only starter, arbitrary backend integrations, a production push service, a universal add-to-existing-repo patcher, and an MCP runtime.
+## Non-Goals
+
+These are intentionally out of scope. PRs that add them will be redirected.
+
+- Android.
+- A SwiftUI-only starter (no Expo).
+- A universal "add Mobile Surfaces to an existing repo" patcher.
+- A production push service or backend integration.
+- An MCP runtime.
+- Multi-tenant theming, plugin systems, or any abstraction not justified by two real consumers in this repo.
+- Replacing the local ActivityKit module with `expo-live-activity` or `expo-widgets` before v0 ships.
+- Anchoring on `expo-widgets` while it is alpha.
+- Tracking iOS bleeding edge (broadcast push, channel-based delivery) before v0 ships.
+
+## Prerequisites
+
+- macOS with Xcode 16 or newer (`xcodebuild -version`).
+- An installed iOS 16.2+ simulator. Confirm with `xcrun simctl list devices available`. The default simulator is `iPhone 17 Pro`; override with `DEVICE="<name>"`.
+- Node.js 24 (the repo's `engines` field). Use `nvm`, `fnm`, or Homebrew to install.
+- pnpm 10.7+ (`corepack enable pnpm` is enough — the repo pins the exact version via `packageManager`).
+- An Apple Developer account, but only when you reach APNs smoke tests or device builds. Simulator + harness flows do not require one.
+
+See [`docs/compatibility.md`](./docs/compatibility.md) for the pinned toolchain row.
 
 ## Quick Start
 
@@ -31,6 +53,8 @@ pnpm mobile:sim
 ```
 
 `pnpm mobile:sim` builds an iOS development app. Live Activities and Dynamic Island testing require a dev build; Expo Go cannot load the local native module or widget extension.
+
+When `pnpm mobile:sim` finishes, the simulator opens the dev-client app on the **Surface Harness** screen. You should see "Activities supported: yes" near the top, a row of generic Start buttons (`queued`, `active`, `paused`, `completed`, etc., one per fixture in `data/surface-fixtures/`), and empty "Current activity" and "All active activities" sections. Tap **queued** to start a Live Activity from `data/surface-fixtures/queued.json`: an activity id appears in "Current activity", the entry shows up in "All active activities" with progress and stage, and once iOS issues a push token it streams in asynchronously. The Update and End rows then operate on that activity.
 
 The core dev workflow is contract-driven: start a generic surface state from the harness, preview Lock Screen and Dynamic Island layouts, update or end it locally, then smoke-test APNs payloads with the same contract.
 
@@ -66,4 +90,5 @@ This repo keeps the current local ActivityKit module for v0 and uses `@bacons/ap
 
 - [`docs/architecture.md`](./docs/architecture.md) - contract-first architecture and implementation choice.
 - [`docs/ios-environment.md`](./docs/ios-environment.md) - dev builds, simulator/device testing, APNs, and generated iOS policy.
+- [`docs/compatibility.md`](./docs/compatibility.md) - pinned Expo SDK, React Native, iOS, Xcode, and `@bacons/apple-targets` versions.
 - [`docs/roadmap.md`](./docs/roadmap.md) - v0 priorities and future `create-mobile-surfaces` CLI.

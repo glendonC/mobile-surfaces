@@ -40,6 +40,12 @@ DEVICE="iPhone 17 Pro Max" pnpm mobile:sim
 
 The default simulator name tracks the current development environment. If Xcode changes simulator names, set `DEVICE` to any available simulator from `xcrun simctl list devices available`.
 
+## Apple Team ID
+
+`apps/mobile/app.json` ships with `expo.ios.appleTeamId` set to the placeholder `XXXXXXXXXX`. Replace it with your 10-character team id before running `pnpm mobile:run:ios:device` or any signed build; otherwise the generated Xcode project will fail to sign and `expo run:ios --device` will error out on first launch. Find your team id in Xcode → Signing & Capabilities → Team, or at [developer.apple.com](https://developer.apple.com/account) → Membership.
+
+`pnpm dev:doctor` warns when the placeholder is still present.
+
 ## Generated iOS Policy
 
 `apps/mobile/ios/` is intentionally ignored. Regenerate it with Expo prebuild:

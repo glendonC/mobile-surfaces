@@ -60,6 +60,39 @@ pnpm mobile:push:device:liveactivity -- \
   --env=development
 ```
 
+Live Activity remote start (iOS 17.2+) using a fixture as the attributes source:
+
+```bash
+pnpm mobile:push:device:liveactivity -- \
+  --activity-token=<push-to-start-token> \
+  --event=start \
+  --attributes-file=./data/surface-fixtures/queued.json \
+  --state-file=./scripts/sample-state.json \
+  --env=development
+```
+
+`--event=start` requires:
+
+- `--activity-token`: the push-to-start token from `Activity<…>.pushToStartTokenUpdates` (not the per-activity token used by `update` / `end`).
+- `--attributes-file`: a JSON file with `surfaceId` and `modeLabel`. Surface fixtures already match this shape.
+- `--attributes-type`: defaults to `MobileSurfacesActivityAttributes`. Override to match your Swift attributes struct after `pnpm surface:rename`.
+
+Live Activity end with explicit dismissal:
+
+```bash
+pnpm mobile:push:device:liveactivity -- \
+  --activity-token=<activity-token> \
+  --event=end \
+  --state-file=./scripts/sample-state.json \
+  --dismissal-date=$(date -v +5M +%s) \
+  --env=development
+```
+
+Useful flags for any Live Activity event:
+
+- `--stale-date=<unix-seconds>`: when iOS should dim the activity as stale.
+- `--dismissal-date=<unix-seconds>`: when iOS should remove a `--event=end` activity from the Lock Screen. Defaults to now if omitted on `--event=end`.
+
 Live Activity pushes default to `apns-priority: 5`. Apple rate-limits priority 10
 updates aggressively, so use it only for updates the user must see immediately:
 

@@ -15,7 +15,20 @@
 //     --event=update --snapshot-file=./data/surface-fixtures/active-progress.json --env=development
 //
 // `device-token` is the APNs device token (regular pushes).
-// `activity-token` is the Live Activity push token from `Activity.pushTokenUpdates`.
+// `activity-token` is the Live Activity push token. Source depends on --event:
+//   - update / end: token from `Activity.pushTokenUpdates` for an existing activity.
+//   - start (iOS 17.2+): push-to-start token from `Activity<…>.pushToStartTokenUpdates`.
+//
+// Live Activity events:
+//   --event=start    iOS 17.2+ remote start. Requires --attributes-file with
+//                    surfaceId and modeLabel; defaults --attributes-type to
+//                    MobileSurfacesActivityAttributes (override after rename).
+//   --event=update   ActivityKit content update.
+//   --event=end      End the activity. Sets dismissal-date to now unless
+//                    --dismissal-date is passed.
+//
+// `--stale-date=<unix-seconds>` and `--dismissal-date=<unix-seconds>` map
+// directly to the APNs `stale-date` and `dismissal-date` aps fields.
 //
 // `--priority` overrides apns-priority. Defaults: 5 for liveactivity (Apple
 // rate-limits priority 10 aggressively), 10 for alert. Use 10 only when the
@@ -44,6 +57,13 @@ const { values } = parseArgs({
     event: { type: "string", default: "update" },
     "snapshot-file": { type: "string" },
     "state-file": { type: "string" },
+    "attributes-file": { type: "string" },
+    "attributes-type": {
+      type: "string",
+      default: "MobileSurfacesActivityAttributes",
+    },
+    "stale-date": { type: "string" },
+    "dismissal-date": { type: "string" },
     title: { type: "string", default: "Mobile Surfaces" },
     body: { type: "string", default: "Push path is wired." },
     priority: { type: "string" },
@@ -57,6 +77,19 @@ if (!token) {
   console.error(`Missing --${isLiveActivity ? "activity-token" : "device-token"}`);
   process.exit(2);
 }
+
+if (isLiveActivity && !["start", "update", "end"].includes(values.event)) {
+  console.error(`--event must be one of: start, update, end (got ${JSON.stringify(values.event)})`);
+  process.exit(2);
+}
+
+if (isLiveActivity && values.event === "start" && !values["attributes-file"]) {
+  console.error("--event=start requires --attributes-file with surfaceId and modeLabel");
+  process.exit(2);
+}
+
+const staleDate = parseUnixSeconds(values["stale-date"], "--stale-date");
+const dismissalDate = parseUnixSeconds(values["dismissal-date"], "--dismissal-date");
 
 const host =
   values.env === "production"
@@ -128,9 +161,39 @@ function buildPayload() {
     event: values.event,
     "content-state": contentState,
   };
-  if (values.event === "end") aps["dismissal-date"] = Math.floor(Date.now() / 1000);
+
+  if (values.event === "start") {
+    const attrSource = JSON.parse(fs.readFileSync(values["attributes-file"], "utf8"));
+    if (typeof attrSource.surfaceId !== "string" || typeof attrSource.modeLabel !== "string") {
+      console.error(`--attributes-file ${values["attributes-file"]} must include string fields surfaceId and modeLabel`);
+      process.exit(2);
+    }
+    aps["attributes-type"] = values["attributes-type"];
+    aps.attributes = {
+      surfaceId: attrSource.surfaceId,
+      modeLabel: attrSource.modeLabel,
+    };
+  }
+
+  if (staleDate !== undefined) aps["stale-date"] = staleDate;
+
+  if (values.event === "end") {
+    aps["dismissal-date"] = dismissalDate ?? Math.floor(Date.now() / 1000);
+  } else if (dismissalDate !== undefined) {
+    aps["dismissal-date"] = dismissalDate;
+  }
 
   return { aps };
+}
+
+function parseUnixSeconds(raw, label) {
+  if (raw === undefined) return undefined;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) {
+    console.error(`${label} must be a positive integer unix timestamp in seconds (got ${JSON.stringify(raw)})`);
+    process.exit(2);
+  }
+  return n;
 }
 
 function buildHeaders(jwt) {

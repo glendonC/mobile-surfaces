@@ -16,6 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.example.mobilesurfaces",
+      "appleTeamId": "XXXXXXXXXX",
       "deploymentTarget": "16.2",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
