@@ -3,5 +3,6 @@
   "version": "1.0.0",
   "description": "Mobile Surfaces Live Activity bridge",
   "main": "index.ts",
-  "private": true
+  "private": true,
+  "license": "MIT"
 }

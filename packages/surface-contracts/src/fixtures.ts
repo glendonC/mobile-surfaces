@@ -17,7 +17,6 @@ export const surfaceFixtureSnapshots = {
     "morePartsCount": 0,
     "progress": 0,
     "stage": "prompted",
-    "colorIntent": "primary",
     "deepLink": "mobilesurfaces://surface/surface-queued"
   },
   "attention": {
@@ -34,7 +33,6 @@ export const surfaceFixtureSnapshots = {
     "morePartsCount": 1,
     "progress": 0.15,
     "stage": "prompted",
-    "colorIntent": "primary",
     "deepLink": "mobilesurfaces://surface/surface-attention"
   },
   "activeProgress": {
@@ -51,7 +49,6 @@ export const surfaceFixtureSnapshots = {
     "morePartsCount": 0,
     "progress": 0.5,
     "stage": "inProgress",
-    "colorIntent": "accent",
     "deepLink": "mobilesurfaces://surface/surface-active-progress"
   },
   "activeCountdown": {
@@ -68,7 +65,6 @@ export const surfaceFixtureSnapshots = {
     "morePartsCount": 0,
     "progress": 0.35,
     "stage": "inProgress",
-    "colorIntent": "primary",
     "deepLink": "mobilesurfaces://surface/surface-active-countdown"
   },
   "paused": {
@@ -85,7 +81,6 @@ export const surfaceFixtureSnapshots = {
     "morePartsCount": 0,
     "progress": 0.4,
     "stage": "prompted",
-    "colorIntent": "primary",
     "deepLink": "mobilesurfaces://surface/surface-paused"
   },
   "badTiming": {
@@ -102,7 +97,6 @@ export const surfaceFixtureSnapshots = {
     "morePartsCount": 0,
     "progress": 0,
     "stage": "completing",
-    "colorIntent": "warning",
     "deepLink": "mobilesurfaces://today"
   },
   "completed": {
@@ -119,7 +113,6 @@ export const surfaceFixtureSnapshots = {
     "morePartsCount": 0,
     "progress": 1,
     "stage": "completing",
-    "colorIntent": "success",
     "deepLink": "mobilesurfaces://surface/surface-completed"
   },
   "activeDetails": {
@@ -136,7 +129,6 @@ export const surfaceFixtureSnapshots = {
     "morePartsCount": 2,
     "progress": 0.75,
     "stage": "inProgress",
-    "colorIntent": "accent",
     "deepLink": "mobilesurfaces://surface/surface-active-details"
   }
 } as const satisfies Record<string, LiveSurfaceSnapshot>;

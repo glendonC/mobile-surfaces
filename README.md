@@ -34,6 +34,20 @@ pnpm mobile:sim
 
 The core dev workflow is contract-driven: start a generic surface state from the harness, preview Lock Screen and Dynamic Island layouts, update or end it locally, then smoke-test APNs payloads with the same contract.
 
+## Rename For Your Project
+
+The starter ships with the placeholder identity `Mobile Surfaces` / `mobilesurfaces` / `com.example.mobilesurfaces` / `MobileSurfacesWidget`. Run the rename script once after cloning to swap in your own:
+
+```bash
+pnpm surface:rename -- \
+  --name "Your App" \
+  --scheme yourapp \
+  --bundle-id com.acme.yourapp \
+  --widget-target YourAppWidget
+```
+
+The script rewrites `app.json`, the SwiftUI target sources, the local Live Activity module, fixture deep links, scripts, and docs in one pass, then renames the `MobileSurfaces*.swift` files to use your Swift prefix and reruns `surface:check`. Pass `--help` for the optional `--slug`, `--swift-prefix`, and `--app-package-name` overrides.
+
 ## Repo Map
 
 - `apps/mobile/` - Expo app and Live Activity harness.

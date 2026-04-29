@@ -16,6 +16,10 @@
 //
 // `device-token` is the APNs device token (regular pushes).
 // `activity-token` is the Live Activity push token from `Activity.pushTokenUpdates`.
+//
+// `--priority` overrides apns-priority. Defaults: 5 for liveactivity (Apple
+// rate-limits priority 10 aggressively), 10 for alert. Use 10 only when the
+// update must be visible immediately.
 
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -42,6 +46,7 @@ const { values } = parseArgs({
     "state-file": { type: "string" },
     title: { type: "string", default: "Mobile Surfaces" },
     body: { type: "string", default: "Push path is wired." },
+    priority: { type: "string" },
   },
   strict: true,
 });
@@ -132,13 +137,18 @@ function buildHeaders(jwt) {
   const apnsTopic = isLiveActivity
     ? `${process.env.APNS_BUNDLE_ID}.push-type.liveactivity`
     : process.env.APNS_BUNDLE_ID;
+  // Apple budgets Live Activity updates by priority. Default to 5
+  // (non-time-sensitive) and only escalate to 10 when the user must see the
+  // change immediately. Alerts default to 10 since they are user-initiated.
+  // Override with --priority=<5|10>.
+  const priority = values.priority ?? (isLiveActivity ? "5" : "10");
   const headers = {
     ":method": "POST",
     ":path": `/3/device/${token}`,
     authorization: `bearer ${jwt}`,
     "apns-topic": apnsTopic,
     "apns-push-type": isLiveActivity ? "liveactivity" : "alert",
-    "apns-priority": isLiveActivity ? "10" : "10",
+    "apns-priority": priority,
     "content-type": "application/json",
   };
   if (isLiveActivity) {

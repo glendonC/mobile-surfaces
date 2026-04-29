@@ -19,13 +19,6 @@ export const liveSurfaceStages = schema.liveSurfaceStages as unknown as readonly
 
 export type LiveSurfaceStage = (typeof liveSurfaceStages)[number];
 
-export type LiveSurfaceColorIntent =
-  | "primary"
-  | "accent"
-  | "success"
-  | "warning"
-  | "muted";
-
 export interface LiveSurfaceSnapshot {
   id: string;
   surfaceId: string;
@@ -40,7 +33,6 @@ export interface LiveSurfaceSnapshot {
   morePartsCount: number;
   progress: number;
   stage: LiveSurfaceStage;
-  colorIntent: LiveSurfaceColorIntent;
   deepLink: string;
 }
 
@@ -77,10 +69,6 @@ export function toLiveActivityContentState(
     progress: snapshot.progress,
     stage: snapshot.stage,
   };
-}
-
-export function toLiveActivityModeLabel(snapshot: LiveSurfaceSnapshot): string {
-  return snapshot.modeLabel;
 }
 
 export function toAlertPayload(snapshot: LiveSurfaceSnapshot): LiveSurfaceAlertPayload {

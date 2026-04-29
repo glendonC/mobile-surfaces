@@ -60,4 +60,16 @@ pnpm mobile:push:device:liveactivity -- \
   --env=development
 ```
 
+Live Activity pushes default to `apns-priority: 5`. Apple rate-limits priority 10
+updates aggressively, so use it only for updates the user must see immediately:
+
+```bash
+pnpm mobile:push:device:liveactivity -- \
+  --activity-token=<activity-token> \
+  --event=update \
+  --priority=10 \
+  --state-file=./scripts/sample-state.json \
+  --env=development
+```
+
 Use `--env=production` for TestFlight and App Store builds.

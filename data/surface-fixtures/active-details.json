@@ -12,6 +12,5 @@
   "morePartsCount": 2,
   "progress": 0.75,
   "stage": "inProgress",
-  "colorIntent": "accent",
   "deepLink": "mobilesurfaces://surface/surface-active-details"
 }
