@@ -1,0 +1,180 @@
+#!/usr/bin/env node
+// Send a push to APNs from the local machine. Two modes:
+//   --type=alert         regular notification (apns-push-type=alert)
+//   --type=liveactivity  ActivityKit update or end (apns-push-type=liveactivity)
+//
+// Env (load from .env.local or shell):
+//   APNS_KEY_PATH        path to the .p8 APNs auth key
+//   APNS_KEY_ID          10-char key id from Apple Dev portal
+//   APNS_TEAM_ID         10-char team id
+//   APNS_BUNDLE_ID       e.g. com.example.mobilesurfaces
+//
+// Usage:
+//   node scripts/send-apns.mjs --device-token=<hex> --type=alert --env=development
+//   node scripts/send-apns.mjs --activity-token=<hex> --type=liveactivity \
+//     --event=update --snapshot-file=./data/surface-fixtures/active-progress.json --env=development
+//
+// `device-token` is the APNs device token (regular pushes).
+// `activity-token` is the Live Activity push token from `Activity.pushTokenUpdates`.
+
+import crypto from "node:crypto";
+import fs from "node:fs";
+import http2 from "node:http2";
+import path from "node:path";
+import { parseArgs } from "node:util";
+
+const REQUIRED_ENV = ["APNS_KEY_PATH", "APNS_KEY_ID", "APNS_TEAM_ID", "APNS_BUNDLE_ID"];
+for (const k of REQUIRED_ENV) {
+  if (!process.env[k]) {
+    console.error(`Missing env: ${k}`);
+    process.exit(2);
+  }
+}
+
+const { values } = parseArgs({
+  options: {
+    "device-token": { type: "string" },
+    "activity-token": { type: "string" },
+    type: { type: "string", default: "alert" },
+    env: { type: "string", default: "development" },
+    event: { type: "string", default: "update" },
+    "snapshot-file": { type: "string" },
+    "state-file": { type: "string" },
+    title: { type: "string", default: "Mobile Surfaces" },
+    body: { type: "string", default: "Push path is wired." },
+  },
+  strict: true,
+});
+
+const isLiveActivity = values.type === "liveactivity";
+const token = isLiveActivity ? values["activity-token"] : values["device-token"];
+if (!token) {
+  console.error(`Missing --${isLiveActivity ? "activity-token" : "device-token"}`);
+  process.exit(2);
+}
+
+const host =
+  values.env === "production"
+    ? "api.push.apple.com"
+    : "api.development.push.apple.com";
+
+const keyPem = fs.readFileSync(path.resolve(process.env.APNS_KEY_PATH), "utf8");
+
+function base64Url(buf) {
+  return Buffer.from(buf).toString("base64").replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+
+function makeJwt() {
+  const header = base64Url(JSON.stringify({ alg: "ES256", kid: process.env.APNS_KEY_ID, typ: "JWT" }));
+  const payload = base64Url(
+    JSON.stringify({ iss: process.env.APNS_TEAM_ID, iat: Math.floor(Date.now() / 1000) }),
+  );
+  const signingInput = `${header}.${payload}`;
+  const sig = crypto
+    .createSign("SHA256")
+    .update(signingInput)
+    .sign({ key: keyPem, dsaEncoding: "ieee-p1363" });
+  return `${signingInput}.${base64Url(sig)}`;
+}
+
+function buildPayload() {
+  if (!isLiveActivity) {
+    const snapshot = values["snapshot-file"]
+      ? JSON.parse(fs.readFileSync(values["snapshot-file"], "utf8"))
+      : null;
+    return {
+      aps: {
+        alert: {
+          title: snapshot?.primaryText ?? values.title,
+          body: snapshot?.secondaryText ?? values.body,
+        },
+        sound: "default",
+      },
+      liveSurface: snapshot
+        ? {
+            kind: "surface_snapshot",
+            snapshotId: snapshot.id,
+            surfaceId: snapshot.surfaceId,
+            state: snapshot.state,
+            deepLink: snapshot.deepLink,
+          }
+        : { kind: "smoke_test" },
+    };
+  }
+
+  let contentState = JSON.parse(
+    fs.readFileSync(path.resolve("./scripts/sample-state.json"), "utf8"),
+  );
+  if (values["snapshot-file"]) {
+    const snapshot = JSON.parse(fs.readFileSync(values["snapshot-file"], "utf8"));
+    contentState = {
+      headline: snapshot.primaryText,
+      subhead: snapshot.secondaryText,
+      progress: snapshot.progress,
+      stage: snapshot.stage,
+    };
+  }
+  if (values["state-file"]) {
+    contentState = JSON.parse(fs.readFileSync(values["state-file"], "utf8"));
+  }
+
+  const aps = {
+    timestamp: Math.floor(Date.now() / 1000),
+    event: values.event,
+    "content-state": contentState,
+  };
+  if (values.event === "end") aps["dismissal-date"] = Math.floor(Date.now() / 1000);
+
+  return { aps };
+}
+
+function buildHeaders(jwt) {
+  const apnsTopic = isLiveActivity
+    ? `${process.env.APNS_BUNDLE_ID}.push-type.liveactivity`
+    : process.env.APNS_BUNDLE_ID;
+  const headers = {
+    ":method": "POST",
+    ":path": `/3/device/${token}`,
+    authorization: `bearer ${jwt}`,
+    "apns-topic": apnsTopic,
+    "apns-push-type": isLiveActivity ? "liveactivity" : "alert",
+    "apns-priority": isLiveActivity ? "10" : "10",
+    "content-type": "application/json",
+  };
+  if (isLiveActivity) {
+    headers["apns-expiration"] = String(Math.floor(Date.now() / 1000) + 3600);
+  }
+  return headers;
+}
+
+const jwt = makeJwt();
+const payload = JSON.stringify(buildPayload());
+const headers = buildHeaders(jwt);
+
+const client = http2.connect(`https://${host}:443`);
+client.on("error", (err) => {
+  console.error("Connection error:", err.message);
+  process.exit(1);
+});
+
+const req = client.request(headers);
+req.setEncoding("utf8");
+
+let status = 0;
+let bodyText = "";
+req.on("response", (h) => {
+  status = h[":status"];
+});
+req.on("data", (chunk) => (bodyText += chunk));
+req.on("end", () => {
+  client.close();
+  console.log(`HTTP ${status}`);
+  console.log(`Topic: ${headers["apns-topic"]}`);
+  console.log(`Push-type: ${headers["apns-push-type"]}`);
+  console.log(`Payload: ${payload}`);
+  if (bodyText) console.log(`Body: ${bodyText}`);
+  process.exit(status >= 200 && status < 300 ? 0 : 1);
+});
+
+req.write(payload);
+req.end();

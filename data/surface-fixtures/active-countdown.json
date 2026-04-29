@@ -1,0 +1,17 @@
+{
+  "id": "fixture-active-countdown",
+  "surfaceId": "surface-active-countdown",
+  "state": "active",
+  "modeLabel": "countdown",
+  "contextLabel": "timer",
+  "statusLine": "active · 30s remaining",
+  "primaryText": "Countdown in progress",
+  "secondaryText": "Preview time-sensitive progress changes without connecting a backend.",
+  "actionLabel": "Continue",
+  "estimatedSeconds": 30,
+  "morePartsCount": 0,
+  "progress": 0.35,
+  "stage": "inProgress",
+  "colorIntent": "primary",
+  "deepLink": "mobilesurfaces://surface/surface-active-countdown"
+}

@@ -1,0 +1,90 @@
+# Architecture
+
+Mobile Surfaces is contract-first. Product data should map into one portable `LiveSurfaceSnapshot`; every surface then derives its own view or payload from that snapshot. The starter is opinionated about the native implementation, but the snapshot contract is intentionally stable.
+
+```mermaid
+flowchart LR
+  Domain["Domain data"] --> Snapshot["LiveSurfaceSnapshot"]
+  Snapshot --> App["React Native app UI"]
+  Snapshot --> Alert["APNs alert payload"]
+  Snapshot --> ActivityState["ActivityKit ContentState"]
+  ActivityState --> LockScreen["Lock Screen Live Activity"]
+  ActivityState --> Island["Dynamic Island"]
+```
+
+## Starter Identity
+
+The starter identity is intentionally generic:
+
+- App name: `Mobile Surfaces`
+- URL scheme: `mobilesurfaces`
+- Example bundle id: `com.example.mobilesurfaces`
+- Widget target: `MobileSurfacesWidget`
+
+## V0 Implementation Choice
+
+Use the existing local Expo ActivityKit module for v0, with `@bacons/apple-targets` generating and linking the WidgetKit target during Expo prebuild.
+
+Why:
+
+- The local module is already small and purpose-built: start, update, list, and end ActivityKit activities, plus push token and state events.
+- `@bacons/apple-targets` keeps SwiftUI widget source in `apps/mobile/targets/widget/`, outside generated `apps/mobile/ios/`, which fits Continuous Native Generation.
+- `software-mansion-labs/expo-live-activity` is a credible future option, but switching now would add dependency churn without improving the starter's contract boundary.
+- `expo-widgets` is promising for React-authored widgets and Live Activities, but it is still alpha and has active rendering/runtime rough edges. Treat it as an experiment, not the v0 default.
+
+The code should keep an adapter boundary around Live Activity operations so a future branch can swap the local module for `expo-live-activity` or `expo-widgets` without changing fixtures, docs, or product mapping code.
+
+## Research Findings
+
+- `expo-widgets`: alpha, iOS-only, dev-build only, and subject to breaking changes. It can create widgets and Live Activities with Expo UI, but recent reports include blank widget bundles and intermittent Live Activity spinner overlays. Not stable enough for the default v0 starter path.
+- `software-mansion-labs/expo-live-activity`: a focused Expo module for iOS Live Activities with start, update, stop, and optional push support. It is a good adapter candidate once this starter has a clean boundary, but adopting it now is not required.
+- `@bacons/apple-targets`: current best fit for a SwiftUI WidgetKit target in an Expo project. It keeps target source outside generated `ios/` and links it during prebuild.
+- Native ActivityKit / WidgetKit: Live Activities update through the app or APNs, cannot do their own network fetches, have a 4 KB data limit, and require all Lock Screen and Dynamic Island layouts to be handled by the widget extension.
+- npm create conventions: future scaffolding should publish `create-mobile-surfaces` so users can run `npm create mobile-surfaces@latest`.
+
+## Reusable Foundation
+
+- `packages/surface-contracts/` defines `LiveSurfaceSnapshot`, `LiveSurfaceActivityContentState`, `LiveSurfaceAlertPayload`, generated fixture exports, and mapping helpers.
+- `packages/design-tokens/` defines colors and shared token names for React Native and Swift asset catalogs. `tokens.json` is the source of truth used by both TypeScript and the widget target config.
+- `data/surface-fixtures/` stores deterministic JSON snapshots used by previews, harness flows, validation, and push smoke tests. TypeScript fixtures are generated from this directory.
+- `apps/mobile/` contains the Expo dev-client app and the harness screen.
+- `apps/mobile/modules/live-activity/` contains the local Expo module wrapping ActivityKit.
+- `apps/mobile/targets/widget/` contains the SwiftUI Lock Screen and Dynamic Island surfaces.
+- `scripts/` contains doctor, setup, APNs, simulator push, and surface validation commands.
+
+## Contract Rules
+
+Domain objects should not flow directly into ActivityKit or APNs payloads. Convert them first:
+
+```ts
+const snapshot = mapDomainEventToLiveSurfaceSnapshot(event);
+const activityState = toLiveActivityContentState(snapshot);
+const alertPayload = toAlertPayload(snapshot);
+```
+
+This keeps app-specific data models free to change while the app UI, alert pushes, ActivityKit content state, Lock Screen, and Dynamic Island agree on one portable surface shape.
+
+## Native Constraints
+
+ActivityKit and WidgetKit impose important limits:
+
+- A Live Activity is active for up to 8 hours, then may remain on the Lock Screen for up to 4 more hours.
+- Static and dynamic ActivityKit data must stay within Apple's 4 KB payload limit.
+- Live Activities cannot fetch network data directly; update through the app or ActivityKit push notifications.
+- Dynamic Island is only available on supported iPhone Pro models; the Lock Screen is the primary surface.
+- APNs Live Activity updates have system budgets. Prefer low priority updates unless the user needs immediate attention.
+
+## Validation
+
+Run:
+
+```bash
+pnpm surface:check
+```
+
+This validates JSON fixtures, checks generated TypeScript fixtures for drift, and verifies the duplicated ActivityKit attribute definitions remain byte-identical:
+
+- `apps/mobile/modules/live-activity/ios/MobileSurfacesActivityAttributes.swift`
+- `apps/mobile/targets/widget/MobileSurfacesActivityAttributes.swift`
+
+The duplication is intentional. The app module and widget extension compile in separate Swift modules, and ActivityKit relies on matching Codable shapes.

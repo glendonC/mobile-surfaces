@@ -1,0 +1,26 @@
+{
+  "requiredStringFields": [
+    "id",
+    "surfaceId",
+    "state",
+    "modeLabel",
+    "contextLabel",
+    "statusLine",
+    "primaryText",
+    "secondaryText",
+    "deepLink"
+  ],
+  "liveSurfaceStates": [
+    "queued",
+    "active",
+    "paused",
+    "attention",
+    "bad_timing",
+    "completed"
+  ],
+  "liveSurfaceStages": [
+    "prompted",
+    "inProgress",
+    "completing"
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "live-activity",
+  "version": "1.0.0",
+  "description": "Mobile Surfaces Live Activity bridge",
+  "main": "index.ts",
+  "private": true
+}

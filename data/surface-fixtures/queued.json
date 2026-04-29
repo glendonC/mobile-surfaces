@@ -1,0 +1,17 @@
+{
+  "id": "fixture-queued",
+  "surfaceId": "surface-queued",
+  "state": "queued",
+  "modeLabel": "queued",
+  "contextLabel": "starter",
+  "statusLine": "queued · ready to start",
+  "primaryText": "Surface queued",
+  "secondaryText": "Use this as the initial state before a Live Activity starts changing.",
+  "actionLabel": "Open surface",
+  "estimatedSeconds": 900,
+  "morePartsCount": 0,
+  "progress": 0,
+  "stage": "prompted",
+  "colorIntent": "primary",
+  "deepLink": "mobilesurfaces://surface/surface-queued"
+}

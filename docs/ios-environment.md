@@ -1,0 +1,110 @@
+# iOS Environment
+
+Mobile Surfaces is an Expo iOS dev-client starter for ActivityKit-backed Live Activity and Dynamic Island workflows. Expo Go is not supported for the native surface path because Live Activities, Dynamic Island, APNs behavior, and local native modules require a development build or a TestFlight/App Store build.
+
+## Native Pieces
+
+1. Main app: `apps/mobile/`, bundle id `com.example.mobilesurfaces`.
+2. Widget extension: `apps/mobile/targets/widget/`, generated into Xcode by `@bacons/apple-targets`.
+3. Local Expo module: `apps/mobile/modules/live-activity/`, wrapping `Activity<MobileSurfacesActivityAttributes>.request`, update, list, end, push token events, and activity state events.
+
+The Swift attribute type is intentionally duplicated in the module and widget target. Keep these files byte-identical:
+
+- `apps/mobile/modules/live-activity/ios/MobileSurfacesActivityAttributes.swift`
+- `apps/mobile/targets/widget/MobileSurfacesActivityAttributes.swift`
+
+`pnpm surface:check` verifies this.
+
+## Commands
+
+```bash
+pnpm dev:setup                        # verify toolchain and install dependencies
+pnpm dev:doctor                       # verify Node, pnpm, Xcode, and simulator availability
+pnpm surface:check                    # validate fixtures and ActivityKit attribute drift
+pnpm typecheck                        # TypeScript check
+pnpm mobile:sim                       # build/install dev app to the default simulator
+pnpm mobile:dev-client                # start Metro for the dev-client build
+pnpm mobile:prebuild:ios              # regenerate apps/mobile/ios
+pnpm mobile:run:ios                   # build/install to simulator
+pnpm mobile:run:ios:device            # build/install to a connected iPhone
+pnpm mobile:push:sim                  # simctl push smoke payload
+pnpm mobile:push:device:alert         # APNs alert push, requires APNS_* env vars
+pnpm mobile:push:device:liveactivity  # ActivityKit push update/end, requires an activity token
+```
+
+`pnpm mobile:sim` defaults to `iPhone 17 Pro`. Override with:
+
+```bash
+DEVICE="iPhone 17 Pro Max" pnpm mobile:sim
+```
+
+The default simulator name tracks the current development environment. If Xcode changes simulator names, set `DEVICE` to any available simulator from `xcrun simctl list devices available`.
+
+## Generated iOS Policy
+
+`apps/mobile/ios/` is intentionally ignored. Regenerate it with Expo prebuild:
+
+```bash
+pnpm mobile:prebuild:ios
+```
+
+The committed native sources of truth are:
+
+- `apps/mobile/app.json`
+- `apps/mobile/modules/live-activity/`
+- `apps/mobile/targets/widget/`
+
+This keeps the repo reviewable and avoids committing generated Xcode churn.
+
+`newArchEnabled` is currently `false` in `app.json` to keep the native starter path conservative while the local ActivityKit bridge and widget target are the focus.
+
+## Testing Matrix
+
+| Capability | Expo Go | Dev build simulator | Dev build device |
+| --- | ---: | ---: | ---: |
+| React Native harness UI | Partial | Yes | Yes |
+| Local native module | No | Yes | Yes |
+| Simulated alert push | No | Yes | No |
+| Real APNs alert | No | No | Yes |
+| Live Activity local start/update/end | No | Limited | Yes |
+| Dynamic Island | No | No | iPhone 14 Pro or newer |
+| ActivityKit push update/end | No | No | Yes |
+
+## Device Live Activity Loop
+
+1. Run `pnpm mobile:run:ios:device` on a physical iPhone.
+2. Open Mobile Surfaces and confirm "Activities supported" shows `yes`.
+3. Tap a generic Start fixture in the harness, such as `queued` or `active`.
+4. Lock the phone and verify the Lock Screen Live Activity.
+5. On a Dynamic Island-capable iPhone, verify compact, expanded, and minimal presentations.
+6. Tap update and end controls in the harness.
+7. Copy the activity push token and run an APNs Live Activity update:
+
+```bash
+pnpm mobile:push:device:liveactivity -- \
+  --activity-token=<paste> \
+  --event=update \
+  --state-file=./scripts/sample-state.json \
+  --env=development
+```
+
+## APNs Environment
+
+Create an APNs auth key in the Apple Developer portal and store it outside the repo, for example:
+
+```bash
+mkdir -p ~/.mobile-surfaces
+mv ~/Downloads/AuthKey_*.p8 ~/.mobile-surfaces/
+chmod 600 ~/.mobile-surfaces/AuthKey_*.p8
+```
+
+Set:
+
+```bash
+export APNS_KEY_PATH="$HOME/.mobile-surfaces/AuthKey_XXXXXXXXXX.p8"
+export APNS_KEY_ID="XXXXXXXXXX"
+export APNS_TEAM_ID="XXXXXXXXXX"
+export APNS_BUNDLE_ID="com.example.mobilesurfaces"
+```
+
+Use `--env=development` for dev builds and `--env=production` for TestFlight/App Store builds.

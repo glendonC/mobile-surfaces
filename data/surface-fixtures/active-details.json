@@ -1,0 +1,17 @@
+{
+  "id": "fixture-active-details",
+  "surfaceId": "surface-active-details",
+  "state": "active",
+  "modeLabel": "details",
+  "contextLabel": "expanded",
+  "statusLine": "active · more detail available",
+  "primaryText": "Surface has more detail",
+  "secondaryText": "Use morePartsCount when a surface has additional detail in the app.",
+  "actionLabel": "View details",
+  "estimatedSeconds": 420,
+  "morePartsCount": 2,
+  "progress": 0.75,
+  "stage": "inProgress",
+  "colorIntent": "accent",
+  "deepLink": "mobilesurfaces://surface/surface-active-details"
+}

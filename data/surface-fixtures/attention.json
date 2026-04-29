@@ -1,0 +1,17 @@
+{
+  "id": "fixture-attention",
+  "surfaceId": "surface-attention",
+  "state": "attention",
+  "modeLabel": "attention",
+  "contextLabel": "urgent",
+  "statusLine": "attention · user-visible update",
+  "primaryText": "Attention needed",
+  "secondaryText": "Use this state for alert-worthy pushes or prominent ActivityKit updates.",
+  "actionLabel": "Review",
+  "estimatedSeconds": 120,
+  "morePartsCount": 1,
+  "progress": 0.15,
+  "stage": "prompted",
+  "colorIntent": "primary",
+  "deepLink": "mobilesurfaces://surface/surface-attention"
+}

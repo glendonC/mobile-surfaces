@@ -1,0 +1,17 @@
+{
+  "id": "fixture-bad-timing",
+  "surfaceId": "surface-none-bad-timing",
+  "state": "bad_timing",
+  "modeLabel": "bad timing",
+  "contextLabel": "suppressed",
+  "statusLine": "suppressed · not now",
+  "primaryText": "Surface suppressed",
+  "secondaryText": "Use this state when the app decides not to interrupt the user.",
+  "actionLabel": "Snooze",
+  "estimatedSeconds": 0,
+  "morePartsCount": 0,
+  "progress": 0,
+  "stage": "completing",
+  "colorIntent": "warning",
+  "deepLink": "mobilesurfaces://today"
+}

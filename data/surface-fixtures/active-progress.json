@@ -1,0 +1,17 @@
+{
+  "id": "fixture-active-progress",
+  "surfaceId": "surface-active-progress",
+  "state": "active",
+  "modeLabel": "active",
+  "contextLabel": "progress",
+  "statusLine": "active · 50%",
+  "primaryText": "Surface in progress",
+  "secondaryText": "The same snapshot feeds the app view and ActivityKit content state.",
+  "actionLabel": "View progress",
+  "estimatedSeconds": 360,
+  "morePartsCount": 0,
+  "progress": 0.5,
+  "stage": "inProgress",
+  "colorIntent": "accent",
+  "deepLink": "mobilesurfaces://surface/surface-active-progress"
+}

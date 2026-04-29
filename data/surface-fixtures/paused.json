@@ -1,0 +1,17 @@
+{
+  "id": "fixture-paused",
+  "surfaceId": "surface-paused",
+  "state": "paused",
+  "modeLabel": "paused",
+  "contextLabel": "waiting",
+  "statusLine": "paused · no update needed",
+  "primaryText": "Surface paused",
+  "secondaryText": "A paused surface can stay visible without noisy updates.",
+  "actionLabel": "Open surface",
+  "estimatedSeconds": 1800,
+  "morePartsCount": 0,
+  "progress": 0.4,
+  "stage": "prompted",
+  "colorIntent": "primary",
+  "deepLink": "mobilesurfaces://surface/surface-paused"
+}

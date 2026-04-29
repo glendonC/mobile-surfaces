@@ -1,0 +1,27 @@
+{
+  "name": "mobile-surfaces",
+  "private": true,
+  "packageManager": "pnpm@10.7.1",
+  "engines": {
+    "node": ">=24.0.0 <25"
+  },
+  "scripts": {
+    "dev:doctor": "bash scripts/doctor.sh",
+    "dev:setup": "bash scripts/setup.sh",
+    "surface:check": "node scripts/validate-surface-fixtures.mjs && node scripts/generate-surface-fixtures.mjs --check && node scripts/check-activity-attributes.mjs",
+    "mobile:dev": "pnpm --dir apps/mobile exec expo start --host lan",
+    "mobile:dev-client": "pnpm --dir apps/mobile exec expo start --dev-client --host lan",
+    "mobile:ios": "pnpm --dir apps/mobile exec expo start --ios",
+    "mobile:sim": "bash scripts/mobile-ios-sim.sh",
+    "mobile:prebuild:ios": "pnpm --dir apps/mobile exec expo prebuild --platform ios --clean",
+    "mobile:run:ios": "pnpm --dir apps/mobile exec expo run:ios",
+    "mobile:run:ios:device": "pnpm --dir apps/mobile exec expo run:ios --device",
+    "mobile:build:ios": "pnpm --dir apps/mobile exec eas build --platform ios --profile development",
+    "mobile:build:ios:sim": "pnpm --dir apps/mobile exec eas build --platform ios --profile development-simulator",
+    "mobile:build:ios:preview": "pnpm --dir apps/mobile exec eas build --platform ios --profile preview",
+    "mobile:push:sim": "bash scripts/push-simulator-notification.sh",
+    "mobile:push:device:alert": "node scripts/send-apns.mjs --type=alert",
+    "mobile:push:device:liveactivity": "node scripts/send-apns.mjs --type=liveactivity",
+    "typecheck": "pnpm --filter mobile-surfaces-app typecheck"
+  }
+}
