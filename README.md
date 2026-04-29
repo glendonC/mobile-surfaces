@@ -1,5 +1,8 @@
 # Mobile Surfaces
 
+[![CI](https://github.com/glendonC/mobile-surfaces/actions/workflows/ci.yml/badge.svg)](https://github.com/glendonC/mobile-surfaces/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+
 Opinionated Expo iOS starter for Live Activities and Dynamic Island workflows.
 
 Mobile Surfaces gives developers the native iOS pieces of a multi-surface Expo app without first becoming ActivityKit, WidgetKit, or APNs experts. It includes a React Native harness, shared surface contracts, deterministic fixtures, a local ActivityKit bridge, a SwiftUI widget target, APNs smoke scripts, and local setup/doctor commands.
@@ -91,4 +94,6 @@ This repo keeps the current local ActivityKit module for v0 and uses `@bacons/ap
 - [`docs/architecture.md`](./docs/architecture.md) - contract-first architecture and implementation choice.
 - [`docs/ios-environment.md`](./docs/ios-environment.md) - dev builds, simulator/device testing, APNs, and generated iOS policy.
 - [`docs/compatibility.md`](./docs/compatibility.md) - pinned Expo SDK, React Native, iOS, Xcode, and `@bacons/apple-targets` versions.
+- [`docs/troubleshooting.md`](./docs/troubleshooting.md) - symptom-to-fix recipes for the most common dev-loop snags.
+- [`docs/backend-integration.md`](./docs/backend-integration.md) - domain event → `LiveSurfaceSnapshot` → APNs walkthrough for backend developers.
 - [`docs/roadmap.md`](./docs/roadmap.md) - v0 priorities and future `create-mobile-surfaces` CLI.
