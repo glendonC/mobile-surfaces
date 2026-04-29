@@ -6,11 +6,11 @@ Mobile Surfaces is an Expo iOS dev-client starter for ActivityKit-backed Live Ac
 
 1. Main app: `apps/mobile/`, bundle id `com.example.mobilesurfaces`.
 2. Widget extension: `apps/mobile/targets/widget/`, generated into Xcode by `@bacons/apple-targets`.
-3. Local Expo module: `apps/mobile/modules/live-activity/`, wrapping `Activity<MobileSurfacesActivityAttributes>.request`, update, list, end, push token events, and activity state events.
+3. Expo native module: `packages/live-activity/` (`@mobile-surfaces/live-activity`), wrapping `Activity<MobileSurfacesActivityAttributes>.request`, update, list, end, push token events, and activity state events.
 
 The Swift attribute type is intentionally duplicated in the module and widget target. Keep these files byte-identical:
 
-- `apps/mobile/modules/live-activity/ios/MobileSurfacesActivityAttributes.swift`
+- `packages/live-activity/ios/MobileSurfacesActivityAttributes.swift`
 - `apps/mobile/targets/widget/MobileSurfacesActivityAttributes.swift`
 
 `pnpm surface:check` verifies this.
@@ -57,7 +57,7 @@ pnpm mobile:prebuild:ios
 The committed native sources of truth are:
 
 - `apps/mobile/app.json`
-- `apps/mobile/modules/live-activity/`
+- `packages/live-activity/`
 - `apps/mobile/targets/widget/`
 
 This keeps the repo reviewable and avoids committing generated Xcode churn.

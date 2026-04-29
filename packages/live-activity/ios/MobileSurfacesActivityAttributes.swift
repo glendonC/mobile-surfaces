@@ -1,5 +1,5 @@
-// MUST stay byte-identical across the local Expo module and widget target:
-//   apps/mobile/modules/live-activity/ios/MobileSurfacesActivityAttributes.swift
+// MUST stay byte-identical across the Expo module and widget target:
+//   packages/live-activity/ios/MobileSurfacesActivityAttributes.swift
 //   apps/mobile/targets/widget/MobileSurfacesActivityAttributes.swift
 //
 // ActivityKit binds the type used in `Activity<T>.request` (main app) to the

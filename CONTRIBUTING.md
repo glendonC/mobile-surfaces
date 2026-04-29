@@ -36,7 +36,7 @@ Do not hand-edit `packages/surface-contracts/src/fixtures.ts`; it is generated.
 `apps/mobile/ios/` is generated and ignored. Update these committed sources instead:
 
 - `apps/mobile/app.json`
-- `apps/mobile/modules/live-activity/`
+- `packages/live-activity/`
 - `apps/mobile/targets/widget/`
 
 Then regenerate with:

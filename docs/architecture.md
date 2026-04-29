@@ -34,7 +34,7 @@ Why:
 
 The code should keep an adapter boundary around Live Activity operations so a future branch can swap the local module for `expo-live-activity` or `expo-widgets` without changing fixtures, docs, or product mapping code.
 
-The harness imports the adapter from `apps/mobile/src/liveActivity/index.ts` as `liveActivityAdapter`. That re-export is the stable swap point: a future adapter only needs to satisfy the same surface (see [Adapter Contract](#adapter-contract)) and replace what is exported from this file. No call site under `apps/mobile/src/` should import from `apps/mobile/modules/live-activity` directly.
+The harness imports the adapter from `apps/mobile/src/liveActivity/index.ts` as `liveActivityAdapter`. That re-export is the stable swap point: a future adapter only needs to satisfy the same surface (see [Adapter Contract](#adapter-contract)) and replace what is exported from this file. No call site under `apps/mobile/src/` should import from `@mobile-surfaces/live-activity` directly.
 
 ## Adapter Contract
 
@@ -101,7 +101,7 @@ Four async methods (`areActivitiesEnabled`, `start`, `update`, `end`, `listActiv
 - `packages/design-tokens/` defines colors and shared token names for React Native and Swift asset catalogs. `tokens.json` is the source of truth used by both TypeScript and the widget target config.
 - `data/surface-fixtures/` stores deterministic JSON snapshots used by previews, harness flows, validation, and push smoke tests. TypeScript fixtures are generated from this directory.
 - `apps/mobile/` contains the Expo dev-client app and the harness screen.
-- `apps/mobile/modules/live-activity/` contains the local Expo module wrapping ActivityKit.
+- `packages/live-activity/` contains `@mobile-surfaces/live-activity`, the Expo native module wrapping ActivityKit.
 - `apps/mobile/targets/widget/` contains the SwiftUI Lock Screen and Dynamic Island surfaces.
 - `scripts/` contains doctor, setup, APNs, simulator push, and surface validation commands.
 
@@ -137,7 +137,7 @@ pnpm surface:check
 
 This validates JSON fixtures, checks generated TypeScript fixtures for drift, and verifies the duplicated ActivityKit attribute definitions remain byte-identical:
 
-- `apps/mobile/modules/live-activity/ios/MobileSurfacesActivityAttributes.swift`
+- `packages/live-activity/ios/MobileSurfacesActivityAttributes.swift`
 - `apps/mobile/targets/widget/MobileSurfacesActivityAttributes.swift`
 
 The duplication is intentional. The app module and widget extension compile in separate Swift modules, and ActivityKit relies on matching Codable shapes.

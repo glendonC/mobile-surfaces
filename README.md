@@ -78,7 +78,7 @@ The script rewrites `app.json`, the SwiftUI target sources, the local Live Activ
 ## Repo Map
 
 - `apps/mobile/` - Expo app and Live Activity harness.
-- `apps/mobile/modules/live-activity/` - local Expo module wrapping ActivityKit.
+- `packages/live-activity/` - `@mobile-surfaces/live-activity`, Expo native module wrapping ActivityKit.
 - `apps/mobile/targets/widget/` - SwiftUI WidgetKit target for Lock Screen and Dynamic Island.
 - `packages/surface-contracts/` - `@mobile-surfaces/surface-contracts`, `LiveSurfaceSnapshot`, generated fixture exports, and mapping helpers.
 - `packages/design-tokens/` - `@mobile-surfaces/design-tokens`, shared UI tokens for app and widget alignment.

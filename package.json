@@ -25,10 +25,31 @@
   "engines": {
     "node": ">=24.0.0 <25"
   },
+  "mobileSurfaces": {
+    "addPackages": [
+      "@mobile-surfaces/surface-contracts",
+      "@mobile-surfaces/design-tokens",
+      "@mobile-surfaces/live-activity",
+      "@bacons/apple-targets",
+      "expo-application",
+      "expo-build-properties"
+    ],
+    "addPlugins": [
+      "@bacons/apple-targets",
+      "expo-build-properties"
+    ],
+    "addInfoPlistKeys": [
+      "NSSupportsLiveActivities",
+      "NSSupportsLiveActivitiesFrequentUpdates",
+      "UIBackgroundModes"
+    ],
+    "widgetTargetDir": "apps/mobile/targets/widget",
+    "minimumXcodeMajor": 16
+  },
   "scripts": {
     "dev:doctor": "bash scripts/doctor.sh",
     "dev:setup": "bash scripts/setup.sh",
-    "surface:check": "node scripts/validate-surface-fixtures.mjs && node scripts/generate-surface-fixtures.mjs --check && node scripts/check-activity-attributes.mjs",
+    "surface:check": "node scripts/validate-surface-fixtures.mjs && node scripts/generate-surface-fixtures.mjs --check && node scripts/check-activity-attributes.mjs && node scripts/check-validator-sync.mjs",
     "surface:rename": "node scripts/rename-starter.mjs",
     "mobile:dev": "pnpm --dir apps/mobile exec expo start --host lan",
     "mobile:dev-client": "pnpm --dir apps/mobile exec expo start --dev-client --host lan",
@@ -43,6 +64,10 @@
     "mobile:push:sim": "bash scripts/push-simulator-notification.sh",
     "mobile:push:device:alert": "node scripts/send-apns.mjs --type=alert",
     "mobile:push:device:liveactivity": "node scripts/send-apns.mjs --type=liveactivity",
+    "cli:dev": "pnpm --filter create-mobile-surfaces start",
+    "cli:smoke": "pnpm --filter create-mobile-surfaces smoke",
+    "cli:smoke:existing": "pnpm --filter create-mobile-surfaces smoke:existing",
+    "cli:test": "pnpm --filter create-mobile-surfaces test",
     "typecheck": "pnpm --filter mobile-surfaces-app typecheck"
   }
 }

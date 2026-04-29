@@ -202,4 +202,4 @@ What can change without notice:
 
 - The Swift `MobileSurfacesActivityAttributes.ContentState` shape — it must agree with `toLiveActivityContentState`'s output, but adding a field is a coordinated change in this repo.
 - The smoke script's CLI flags — match the documented set in `scripts/README.md`, do not parse the script itself.
-- The local Live Activity adapter under `apps/mobile/modules/live-activity/`. Production backends should not depend on its internals; they depend only on the snapshot contract and APNs.
+- The Live Activity adapter at `packages/live-activity/` (`@mobile-surfaces/live-activity`). Production backends should not depend on its internals; they depend only on the snapshot contract and APNs.

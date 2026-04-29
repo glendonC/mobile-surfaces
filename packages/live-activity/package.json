@@ -1,0 +1,37 @@
+{
+  "name": "@mobile-surfaces/live-activity",
+  "version": "0.1.0",
+  "description": "Expo native module wrapping ActivityKit start/update/end and push token events for Mobile Surfaces.",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "private": true,
+  "license": "MIT",
+  "homepage": "https://github.com/glendonC/mobile-surfaces#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/glendonC/mobile-surfaces.git",
+    "directory": "packages/live-activity"
+  },
+  "bugs": {
+    "url": "https://github.com/glendonC/mobile-surfaces/issues"
+  },
+  "keywords": [
+    "mobile-surfaces",
+    "expo",
+    "ios",
+    "live-activity",
+    "activitykit",
+    "dynamic-island"
+  ],
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  },
+  "dependencies": {
+    "@mobile-surfaces/surface-contracts": "workspace:*"
+  }
+}

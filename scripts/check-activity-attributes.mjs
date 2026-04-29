@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const moduleDir = path.resolve("apps/mobile/modules/live-activity/ios");
+const moduleDir = path.resolve("packages/live-activity/ios");
 const widgetDir = path.resolve("apps/mobile/targets/widget");
 
 const modulePath = findAttributesFile(moduleDir);
