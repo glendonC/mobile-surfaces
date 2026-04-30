@@ -48,6 +48,7 @@ export function buildPatchedAppJson({ existing, plan, teamId = null }) {
   const needsIos =
     plan.deploymentTargetTo ||
     Object.keys(plan.infoPlistToAdd).length > 0 ||
+    Object.keys(plan.entitlementsToAdd ?? {}).length > 0 ||
     Boolean(teamId);
   if (needsIos) expo.ios = expo.ios ?? {};
 
@@ -58,6 +59,11 @@ export function buildPatchedAppJson({ existing, plan, teamId = null }) {
   if (Object.keys(plan.infoPlistToAdd).length > 0) {
     expo.ios.infoPlist = expo.ios.infoPlist ?? {};
     Object.assign(expo.ios.infoPlist, plan.infoPlistToAdd);
+  }
+
+  if (Object.keys(plan.entitlementsToAdd ?? {}).length > 0) {
+    expo.ios.entitlements = expo.ios.entitlements ?? {};
+    Object.assign(expo.ios.entitlements, plan.entitlementsToAdd);
   }
 
   if (teamId) {
@@ -94,6 +100,7 @@ export function renderManualSnippet(plan, { teamId = null } = {}) {
   const needsIos =
     plan.deploymentTargetTo ||
     Object.keys(plan.infoPlistToAdd).length > 0 ||
+    Object.keys(plan.entitlementsToAdd ?? {}).length > 0 ||
     Boolean(teamId);
   if (needsIos) snippet.ios = {};
   if (plan.deploymentTargetTo) {
@@ -104,6 +111,9 @@ export function renderManualSnippet(plan, { teamId = null } = {}) {
   }
   if (Object.keys(plan.infoPlistToAdd).length > 0) {
     snippet.ios.infoPlist = { ...plan.infoPlistToAdd };
+  }
+  if (Object.keys(plan.entitlementsToAdd ?? {}).length > 0) {
+    snippet.ios.entitlements = { ...plan.entitlementsToAdd };
   }
   return JSON.stringify(snippet, null, 2);
 }

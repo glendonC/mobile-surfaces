@@ -7,11 +7,13 @@ Ship iOS Live Activities and Dynamic Island in a day, without becoming an iOS ex
 
 ## What is this?
 
-A one-command install that gives you a working iOS app with three surfaces wired together:
+A one-command install that gives you a working iOS app with multiple surfaces wired together:
 
 - The **app UI** (a React Native screen, you customize this).
 - The **Lock Screen Live Activity** — the persistent panel that shows real-time updates while the phone is locked.
 - The **Dynamic Island** — the pill at the top of newer iPhones.
+- A **home-screen widget** backed by shared App Group state.
+- An **iOS 18 control widget** for Control Center / Lock Screen controls.
 
 All three render from one shared data shape, so they stay in sync automatically. You write one function that produces that shape from your own data; everything else is already done.
 
@@ -64,8 +66,10 @@ flowchart LR
   Snapshot --> App["App UI"]
   Snapshot --> Lock["Lock Screen Live Activity"]
   Snapshot --> Island["Dynamic Island"]
+  Snapshot --> Widget["Home widget"]
+  Snapshot --> Control["Control widget"]
   Snapshot --> APNs["APNs push payload"]
-  Snapshot --> Future["Widget/control/notification projections"]
+  Snapshot --> Future["Notification/StandBy projections"]
 ```
 
 Change the snapshot once, every surface updates together. They can't drift, because they're all reading from the same shape. The shape is defined in TypeScript with a runtime validator, so your editor and your CI both catch mistakes before they ship.
@@ -74,7 +78,7 @@ Change the snapshot once, every surface updates together. They can't drift, beca
 
 - A working Expo app with all three surfaces already wired up.
 - The shared `LiveSurfaceSnapshot` contract (one TypeScript type, one Zod validator, one published JSON Schema, and kind-gated projections).
-- A SwiftUI widget for the Lock Screen and Dynamic Island layouts. You can restyle it; you don't have to write it from scratch.
+- A SwiftUI WidgetKit extension for Lock Screen, Dynamic Island, home-screen widget, and iOS 18 control layouts. You can restyle it; you don't have to write it from scratch.
 - APNs scripts with JWT signing, dev/prod environment routing, and translated error messages.
 - A `doctor` command that catches setup mistakes before you waste a day on them.
 - Pinned, tested-together versions of Expo, React Native, Xcode, and the widget tooling.

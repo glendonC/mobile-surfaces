@@ -6,5 +6,7 @@
   "./paused.json",
   "./bad-timing.json",
   "./completed.json",
-  "./active-details.json"
+  "./active-details.json",
+  "./widget-dashboard.json",
+  "./control-toggle.json"
 ]

@@ -37,6 +37,9 @@ const samplePlan = {
     NSSupportsLiveActivities: true,
     UIBackgroundModes: ["remote-notification"],
   },
+  entitlementsToAdd: {
+    "com.apple.security.application-groups": ["group.com.example.mobilesurfaces"],
+  },
   deploymentTargetTo: "17.2",
   appConfigManual: false,
   widgetTargetDir: "apps/mobile/targets/widget",
@@ -64,6 +67,9 @@ describe("buildPatchedAppJson — additions", () => {
     assert.equal(patched.expo.ios.deploymentTarget, "17.2");
     assert.equal(patched.expo.ios.infoPlist.NSSupportsLiveActivities, true);
     assert.deepEqual(patched.expo.ios.infoPlist.UIBackgroundModes, ["remote-notification"]);
+    assert.deepEqual(patched.expo.ios.entitlements["com.apple.security.application-groups"], [
+      "group.com.example.mobilesurfaces",
+    ]);
   });
 
   it("merges into existing infoPlist without dropping pre-existing keys", () => {
@@ -78,7 +84,27 @@ describe("buildPatchedAppJson — additions", () => {
     const patched = JSON.parse(buildPatchedAppJson({ existing, plan: samplePlan }));
     assert.equal(patched.expo.ios.infoPlist.ITSAppUsesNonExemptEncryption, false);
     assert.equal(patched.expo.ios.infoPlist.NSSupportsLiveActivities, true);
+    assert.deepEqual(patched.expo.ios.entitlements["com.apple.security.application-groups"], [
+      "group.com.example.mobilesurfaces",
+    ]);
     assert.equal(patched.expo.ios.deploymentTarget, "17.2");
+  });
+
+  it("merges into existing entitlements without dropping pre-existing keys", () => {
+    const existing = JSON.stringify({
+      expo: {
+        ios: {
+          entitlements: { "com.apple.developer.associated-domains": ["applinks:example.com"] },
+        },
+      },
+    });
+    const patched = JSON.parse(buildPatchedAppJson({ existing, plan: samplePlan }));
+    assert.deepEqual(patched.expo.ios.entitlements["com.apple.developer.associated-domains"], [
+      "applinks:example.com",
+    ]);
+    assert.deepEqual(patched.expo.ios.entitlements["com.apple.security.application-groups"], [
+      "group.com.example.mobilesurfaces",
+    ]);
   });
 
   it("is a no-op when the plan has no additions", () => {
@@ -86,6 +112,7 @@ describe("buildPatchedAppJson — additions", () => {
       ...samplePlan,
       pluginsToAdd: [],
       infoPlistToAdd: {},
+      entitlementsToAdd: {},
       deploymentTargetTo: null,
     };
     const existing = JSON.stringify({ expo: { name: "Host" } });
@@ -106,6 +133,7 @@ describe("renderManualSnippet", () => {
       ...samplePlan,
       pluginsToAdd: [],
       infoPlistToAdd: {},
+      entitlementsToAdd: {},
       deploymentTargetTo: null,
     };
     const snippet = JSON.parse(renderManualSnippet(empty));
@@ -119,6 +147,9 @@ describe("renderManualSnippet", () => {
       ["expo-build-properties", { ios: { deploymentTarget: "17.2" } }],
     ]);
     assert.equal(snippet.ios.deploymentTarget, "17.2");
+    assert.deepEqual(snippet.ios.entitlements["com.apple.security.application-groups"], [
+      "group.com.example.mobilesurfaces",
+    ]);
   });
 });
 
@@ -236,6 +267,7 @@ describe("renderManualSnippet — appleTeamId", () => {
       ...samplePlan,
       pluginsToAdd: [],
       infoPlistToAdd: {},
+      entitlementsToAdd: {},
       deploymentTargetTo: null,
     };
     const snippet = JSON.parse(renderManualSnippet(empty, { teamId: "ABCDE12345" }));

@@ -48,4 +48,11 @@ if [ -f "$APP_JSON" ]; then
   else
     echo "Apple Team ID: $TEAM_ID"
   fi
+
+  APP_GROUPS=$(node -e "const j=require('./$APP_JSON');const g=j.expo?.ios?.entitlements?.['com.apple.security.application-groups']||[];process.stdout.write(Array.isArray(g)?g.join(','):'')" 2>/dev/null || true)
+  if [ -z "$APP_GROUPS" ]; then
+    echo "App Groups: not set. Add expo.ios.entitlements['com.apple.security.application-groups'] so widgets can read shared surface state."
+  else
+    echo "App Groups: $APP_GROUPS"
+  fi
 fi

@@ -18,6 +18,9 @@ const sampleManifest = {
     NSSupportsLiveActivities: true,
     NSSupportsLiveActivitiesFrequentUpdates: true,
   },
+  addEntitlements: {
+    "com.apple.security.application-groups": ["group.com.example.mobilesurfaces"],
+  },
   widgetTargetDir: "apps/mobile/targets/widget",
   widgetFiles: ["apps/mobile/targets/widget/Widget.swift"],
 };
@@ -47,6 +50,7 @@ describe("planChanges — clean Expo app", () => {
     assert.equal(plan.packagesToAdd.length, 2);
     assert.equal(plan.pluginsToAdd.length, 2);
     assert.deepEqual(plan.infoPlistToAdd, sampleManifest.addInfoPlist);
+    assert.deepEqual(plan.entitlementsToAdd, sampleManifest.addEntitlements);
     assert.equal(plan.deploymentTargetTo, "17.2");
     assert.equal(plan.appConfigManual, false);
   });
@@ -87,6 +91,19 @@ describe("planChanges — partial existing wiring", () => {
     ]);
   });
 
+  it("dedupes entitlements that already have any value", () => {
+    const evidence = evidenceWithJsonConfig({
+      ios: {
+        bundleIdentifier: "com.acme.partial",
+        entitlements: {
+          "com.apple.security.application-groups": ["group.com.acme.existing"],
+        },
+      },
+    });
+    const plan = planChanges({ evidence, manifest: sampleManifest });
+    assert.deepEqual(plan.entitlementsToAdd, {});
+  });
+
   it("does not bump deployment target when current is equal", () => {
     const evidence = evidenceWithJsonConfig({
       ios: { bundleIdentifier: "com.acme.x", deploymentTarget: "17.2" },
@@ -122,6 +139,9 @@ describe("planChanges — already fully wired (no-op delta)", () => {
           NSSupportsLiveActivities: true,
           NSSupportsLiveActivitiesFrequentUpdates: true,
         },
+        entitlements: {
+          "com.apple.security.application-groups": ["group.com.example.mobilesurfaces"],
+        },
       },
       plugins: ["@bacons/apple-targets", "expo-build-properties"],
     });
@@ -129,6 +149,7 @@ describe("planChanges — already fully wired (no-op delta)", () => {
 
     assert.equal(plan.pluginsToAdd.length, 0);
     assert.deepEqual(plan.infoPlistToAdd, {});
+    assert.deepEqual(plan.entitlementsToAdd, {});
     assert.equal(plan.deploymentTargetTo, null);
   });
 });
@@ -148,6 +169,7 @@ describe("planChanges — manual patch path", () => {
     assert.equal(plan.appConfigManual, true);
     assert.equal(plan.pluginsToAdd.length, 2);
     assert.deepEqual(plan.infoPlistToAdd, sampleManifest.addInfoPlist);
+    assert.deepEqual(plan.entitlementsToAdd, sampleManifest.addEntitlements);
     assert.match(
       plan.manualFollowups[0],
       /Apply the app\.config\.ts changes/,

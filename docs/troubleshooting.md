@@ -28,6 +28,16 @@ Simulator support for Live Activities is partial.
 - The expanded layout shows when the activity is invoked from a long press. Compact appears next to the camera; minimal shows when another activity is also active.
 - If only the Lock Screen presentation works, the widget bundle compiled but the `DynamicIsland` block in `apps/mobile/targets/widget/MobileSurfacesLiveActivity.swift` may be unreachable. Check `pnpm surface:check` — it verifies the `MobileSurfacesActivityAttributes.swift` files are byte-identical, which is the most common silent break.
 
+## Home widget or control widget shows placeholder state
+
+The home widget and iOS 18 control widget read projected snapshots from App Group `UserDefaults`.
+
+- Confirm `pnpm dev:doctor` prints an App Group value.
+- Confirm `apps/mobile/app.json` and `apps/mobile/targets/widget/expo-target.config.js` use the same `com.apple.security.application-groups` value.
+- Tap the harness `refresh widget` or `toggle control` button after reinstalling the dev build. WidgetKit and Control Center cache state, so old installs can keep stale entitlements.
+- If the home widget still shows placeholder copy, delete the app from the simulator/device and run `pnpm mobile:sim` again. Entitlement changes are install-time sensitive.
+- Control widgets require iOS 18 or newer. On older runtimes the control widget will not be available even though the app build can still succeed.
+
 ## APNs returns 403
 
 The APNs response body carries the actual reason. `pnpm mobile:push:device:liveactivity` and `…:alert` print it as `Body: {"reason":"…"}`.

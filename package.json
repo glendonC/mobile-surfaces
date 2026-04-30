@@ -44,6 +44,9 @@
       "NSSupportsLiveActivitiesFrequentUpdates",
       "UIBackgroundModes"
     ],
+    "addEntitlementKeys": [
+      "com.apple.security.application-groups"
+    ],
     "widgetTargetDir": "apps/mobile/targets/widget",
     "minimumXcodeMajor": 26
   },
@@ -75,7 +78,7 @@
     "cli:smoke": "pnpm --filter create-mobile-surfaces smoke",
     "cli:smoke:existing": "pnpm --filter create-mobile-surfaces smoke:existing",
     "cli:test": "pnpm --filter create-mobile-surfaces test",
-    "typecheck": "pnpm --filter mobile-surfaces-app typecheck"
+    "typecheck": "pnpm build && pnpm --filter mobile-surfaces-app typecheck"
   },
   "devDependencies": {
     "@changesets/cli": "2.31.0",

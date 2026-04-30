@@ -10,12 +10,21 @@ import {
 import { surfaceColors } from "@mobile-surfaces/design-tokens";
 import { liveActivityAdapter as LiveActivity, LiveActivitySnapshot } from "../liveActivity";
 import { diagnoseSupport } from "../liveActivity/diagnoseSupport";
-import { activityFixtureStates, surfaceFixtures } from "../fixtures/surfaceFixtures";
+import {
+  activityFixtureStates,
+  controlSurfaceFixtures,
+  surfaceFixtures,
+  widgetSurfaceFixtures,
+} from "../fixtures/surfaceFixtures";
 import {
   canRequestPushToken,
   getDeviceApnsToken,
   requestNotificationPermissions,
 } from "../notifications";
+import {
+  refreshWidgetSurface,
+  toggleControlSurface,
+} from "../surfaceStorage";
 
 export function LiveActivityHarness() {
   const [supported, setSupported] = useState<boolean | null>(null);
@@ -23,6 +32,8 @@ export function LiveActivityHarness() {
   const [activityId, setActivityId] = useState<string | null>(null);
   const [pushToken, setPushToken] = useState<string | null>(null);
   const [apnsToken, setApnsToken] = useState<string | null>(null);
+  const [surfaceStatus, setSurfaceStatus] = useState<string | null>(null);
+  const [controlOn, setControlOn] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fixtureKeys = Object.keys(activityFixtureStates) as Array<
@@ -161,6 +172,44 @@ export function LiveActivityHarness() {
     }
   }, []);
 
+  const handleRefreshWidget = useCallback(async () => {
+    const snapshot = Object.values(widgetSurfaceFixtures)[0];
+    if (!snapshot) {
+      setError("No widget fixture is available.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const entry = await refreshWidgetSurface(snapshot);
+      setSurfaceStatus(`Widget refreshed: ${entry.headline}`);
+    } catch (e) {
+      setError(formatError(e));
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  const handleToggleControl = useCallback(async () => {
+    const snapshot = Object.values(controlSurfaceFixtures)[0];
+    if (!snapshot) {
+      setError("No control fixture is available.");
+      return;
+    }
+    const next = !controlOn;
+    setBusy(true);
+    setError(null);
+    try {
+      const entry = await toggleControlSurface(snapshot, next);
+      setControlOn(next);
+      setSurfaceStatus(`Control ${entry.value ? "on" : "off"}: ${entry.label}`);
+    } catch (e) {
+      setError(formatError(e));
+    } finally {
+      setBusy(false);
+    }
+  }, [controlOn]);
+
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
       <Text style={styles.title}>Surface Harness</Text>
@@ -234,6 +283,30 @@ export function LiveActivityHarness() {
         )}
         <Btn label="refresh" onPress={refreshActive} disabled={busy} />
       </Section>
+
+      <Section label="Home widget">
+        <Text style={styles.value}>
+          Writes the widget fixture into the App Group and reloads the timeline.
+        </Text>
+        <Btn label="refresh widget" onPress={handleRefreshWidget} disabled={busy} />
+      </Section>
+
+      <Section label="Control widget">
+        <Text style={styles.value}>
+          Writes the control fixture into the App Group and reloads iOS 18 controls.
+        </Text>
+        <Btn
+          label={`toggle control ${controlOn ? "off" : "on"}`}
+          onPress={handleToggleControl}
+          disabled={busy}
+        />
+      </Section>
+
+      {surfaceStatus ? (
+        <Section label="Widget/control status">
+          <Text style={styles.value}>{surfaceStatus}</Text>
+        </Section>
+      ) : null}
 
       <Section label="APNs device token (for regular alerts)">
         <Text style={styles.value} selectable>

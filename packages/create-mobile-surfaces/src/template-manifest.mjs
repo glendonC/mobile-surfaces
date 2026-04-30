@@ -99,6 +99,16 @@ export function buildManifestFromLive(repoRoot) {
     }
   }
 
+  // Entitlements: App Groups must be present on both the host app and the
+  // widget extension for shared UserDefaults state to work.
+  const entitlementsSource = expo.ios?.entitlements ?? {};
+  const addEntitlements = {};
+  for (const key of ms.addEntitlementKeys ?? []) {
+    if (key in entitlementsSource) {
+      addEntitlements[key] = entitlementsSource[key];
+    }
+  }
+
   // Widget target files: list whatever's in the declared dir.
   const widgetDirRel = ms.widgetTargetDir ?? "apps/mobile/targets/widget";
   const widgetDirAbs = path.join(repoRoot, widgetDirRel);
@@ -113,6 +123,7 @@ export function buildManifestFromLive(repoRoot) {
     addPackages,
     addPlugins,
     addInfoPlist,
+    addEntitlements,
     widgetTargetDir: widgetDirRel,
     widgetFiles,
   };

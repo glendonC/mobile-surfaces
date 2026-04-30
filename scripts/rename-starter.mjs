@@ -172,9 +172,15 @@ function main() {
     "packages/live-activity/ios/LiveActivityModule.swift",
     `packages/live-activity/ios/${currentIdentity.swiftPrefix}ActivityAttributes.swift`,
     `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}ActivityAttributes.swift`,
+    `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}ControlWidget.swift`,
+    `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}HomeWidget.swift`,
     `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}LiveActivity.swift`,
     `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}WidgetBundle.swift`,
+    `apps/mobile/targets/widget/_shared/${currentIdentity.swiftPrefix}ControlIntents.swift`,
+    `apps/mobile/targets/widget/_shared/${currentIdentity.swiftPrefix}SharedState.swift`,
     "apps/mobile/targets/widget/expo-target.config.js",
+    "apps/mobile/targets/widget/generated.entitlements",
+    "apps/mobile/src/surfaceStorage/index.ts",
     "docs/README.md",
     "docs/architecture.md",
     "docs/ios-environment.md",
@@ -217,8 +223,12 @@ function main() {
   const renameTargets = [
     `packages/live-activity/ios/${currentIdentity.swiftPrefix}ActivityAttributes.swift`,
     `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}ActivityAttributes.swift`,
+    `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}ControlWidget.swift`,
+    `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}HomeWidget.swift`,
     `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}LiveActivity.swift`,
     `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}WidgetBundle.swift`,
+    `apps/mobile/targets/widget/_shared/${currentIdentity.swiftPrefix}ControlIntents.swift`,
+    `apps/mobile/targets/widget/_shared/${currentIdentity.swiftPrefix}SharedState.swift`,
   ];
   for (const rel of renameTargets) {
     if (!fs.existsSync(rel)) continue;

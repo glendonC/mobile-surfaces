@@ -13,6 +13,8 @@ flowchart LR
   Snapshot --> NotificationPayload["Notification content payload"]
   ActivityState --> LockScreen["Lock Screen Live Activity"]
   ActivityState --> Island["Dynamic Island"]
+  WidgetEntry --> HomeWidget["Home Screen widget"]
+  ControlValue --> ControlWidget["iOS 18 Control widget"]
 ```
 
 ## Starter Identity
@@ -105,7 +107,7 @@ Five async methods (`areActivitiesEnabled`, `start`, `update`, `end`, `listActiv
 - `data/surface-fixtures/` stores deterministic JSON snapshots used by previews, harness flows, validation, and push smoke tests. TypeScript fixtures are generated from this directory.
 - `apps/mobile/` contains the Expo dev-client app and the harness screen.
 - `packages/live-activity/` contains `@mobile-surfaces/live-activity`, the Expo native module wrapping ActivityKit.
-- `apps/mobile/targets/widget/` contains the SwiftUI Lock Screen and Dynamic Island surfaces.
+- `apps/mobile/targets/widget/` contains the SwiftUI WidgetKit extension: Lock Screen Live Activity, Dynamic Island, home-screen widget, and iOS 18 control widget.
 - `scripts/` contains doctor, setup, APNs, simulator push, and surface validation commands.
 
 ## Contract Rules
@@ -122,6 +124,8 @@ const controlValue = toControlValueProvider(snapshot);
 
 This keeps app-specific data models free to change while the app UI, alert pushes, ActivityKit content state, Lock Screen, Dynamic Island, widgets, controls, and notification content projections agree on one portable surface shape. Projection helpers are `kind`-gated: a `widget` snapshot cannot be accidentally sent through the Live Activity projection.
 
+Widget and control snapshots move through the shared App Group declared in `apps/mobile/app.json` and mirrored into `apps/mobile/targets/widget/expo-target.config.js`. The app writes projected JSON under `surface.snapshot.<surfaceId>`, points `surface.widget.currentSurfaceId` / `surface.control.currentSurfaceId` at the active entries, then requests WidgetKit and Control Center reloads.
+
 ## Native Constraints
 
 ActivityKit and WidgetKit impose important limits:
@@ -129,6 +133,7 @@ ActivityKit and WidgetKit impose important limits:
 - A Live Activity is active for up to 8 hours, then may remain on the Lock Screen for up to 4 more hours.
 - Static and dynamic ActivityKit data must stay within Apple's 4 KB payload limit.
 - Live Activities cannot fetch network data directly; update through the app or ActivityKit push notifications.
+- Home-screen widgets and control widgets read shared App Group state; an entitlement mismatch between the host app and extension makes them fall back to placeholder state.
 - Dynamic Island is only available on supported iPhone Pro models; the Lock Screen is the primary surface.
 - APNs Live Activity updates have system budgets. Prefer low priority updates unless the user needs immediate attention.
 

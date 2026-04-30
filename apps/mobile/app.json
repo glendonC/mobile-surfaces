@@ -17,6 +17,11 @@
       "bundleIdentifier": "com.example.mobilesurfaces",
       "appleTeamId": "XXXXXXXXXX",
       "deploymentTarget": "17.2",
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.example.mobilesurfaces"
+        ]
+      },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSMicrophoneUsageDescription": "Mobile Surfaces may use the microphone in example surfaces that capture audio.",
