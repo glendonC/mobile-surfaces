@@ -85,7 +85,7 @@ export interface LiveActivityAdapter {
 }
 ```
 
-Four async methods (`areActivitiesEnabled`, `start`, `update`, `end`, `listActive`) plus two events (`onPushToken`, `onActivityStateChange`). Adding to this surface counts as a breaking change; all adapters and the harness must update together.
+Five async methods (`areActivitiesEnabled`, `start`, `update`, `end`, `listActive`) plus two events (`onPushToken`, `onActivityStateChange`). Adding to this surface counts as a breaking change; all adapters and the harness must update together.
 
 ## Research Findings
 
