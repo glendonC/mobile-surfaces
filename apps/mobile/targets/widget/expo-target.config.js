@@ -5,7 +5,7 @@ module.exports = {
   type: "widget",
   name: "MobileSurfacesWidget",
   icon: "../../assets/icon.png",
-  deploymentTarget: "16.2",
+  deploymentTarget: "17.2",
   frameworks: ["ActivityKit", "WidgetKit", "SwiftUI"],
   colors: {
     $accent: swiftAssetColorMap.AccentColor,

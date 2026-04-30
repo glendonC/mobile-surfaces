@@ -18,7 +18,7 @@ The installer detects whether the current directory is empty (greenfield) or an 
 
 **Greenfield**
 
-1. Preflight: macOS, Node 24, Xcode 16+, an iOS 16.2+ simulator runtime, pnpm, and CocoaPods.
+1. Preflight: macOS, Node 24, Xcode 26+, an iOS 17.2+ simulator runtime, pnpm, and CocoaPods.
 2. Prompts for project name, URL scheme, bundle identifier, Apple Team ID (optional), and whether to install + prebuild now.
 3. Materializes the starter, runs the rename script, installs, and runs `expo prebuild --platform ios`.
 
@@ -30,10 +30,10 @@ The installer detects whether the current directory is empty (greenfield) or an 
 
 ## Requirements
 
-- macOS with Xcode 16+
+- macOS with Xcode 26+
 - Node 24
 - pnpm 10+ for the greenfield flow (the template ships `pnpm-lock.yaml`); npm / yarn / bun work in add-to-existing
-- An iOS 16.2+ simulator runtime
+- An iOS 17.2+ simulator runtime
 - CocoaPods (`gem install cocoapods` or `brew install cocoapods`)
 
 ## Links

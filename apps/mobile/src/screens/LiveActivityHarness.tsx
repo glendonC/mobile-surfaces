@@ -123,6 +123,22 @@ export function LiveActivityHarness() {
     }
   }, [activityId, refreshActive]);
 
+  const handleEndAll = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const list = await LiveActivity.listActive();
+      await Promise.all(list.map((activity) => LiveActivity.end(activity.id, "immediate")));
+      setActivityId(null);
+      setPushToken(null);
+      await refreshActive();
+    } catch (e) {
+      setError(formatError(e));
+    } finally {
+      setBusy(false);
+    }
+  }, [refreshActive]);
+
   const handleFetchApns = useCallback(async () => {
     setBusy(true);
     setError(null);
@@ -188,6 +204,7 @@ export function LiveActivityHarness() {
         <Row>
           <Btn label="default" onPress={() => handleEnd("default")} disabled={busy || !activityId} />
           <Btn label="immediate" onPress={() => handleEnd("immediate")} disabled={busy || !activityId} />
+          <Btn label="all active" onPress={handleEndAll} disabled={busy || active.length === 0} />
         </Row>
       </Section>
 

@@ -45,7 +45,7 @@
       "UIBackgroundModes"
     ],
     "widgetTargetDir": "apps/mobile/targets/widget",
-    "minimumXcodeMajor": 16
+    "minimumXcodeMajor": 26
   },
   "scripts": {
     "build": "pnpm -r --filter \"./packages/{surface-contracts,design-tokens,live-activity}\" build",

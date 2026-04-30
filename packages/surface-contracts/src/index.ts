@@ -8,20 +8,20 @@ export {
   liveSurfaceStages,
   assertSnapshot,
   safeParseSnapshot,
-} from "./schema.js";
+} from "./schema";
 export type {
   LiveSurfaceSnapshot,
   LiveSurfaceState,
   LiveSurfaceStage,
   LiveSurfaceActivityContentState,
   LiveSurfaceAlertPayload,
-} from "./schema.js";
+} from "./schema";
 
 import type {
   LiveSurfaceSnapshot,
   LiveSurfaceActivityContentState,
   LiveSurfaceAlertPayload,
-} from "./schema.js";
+} from "./schema";
 
 export function toLiveActivityContentState(
   snapshot: LiveSurfaceSnapshot,
@@ -53,4 +53,4 @@ export function toAlertPayload(snapshot: LiveSurfaceSnapshot): LiveSurfaceAlertP
   };
 }
 
-export { surfaceFixtureSnapshots } from "./fixtures.js";
+export { surfaceFixtureSnapshots } from "./fixtures";

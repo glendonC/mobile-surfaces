@@ -69,7 +69,7 @@ const summary = await applyToExisting({
 
 // 5) Assertions — what should be true on disk?
 const appJson = JSON.parse(fs.readFileSync(path.join(tmp, "app.json"), "utf8"));
-assert.equal(appJson.expo.ios.deploymentTarget, "16.2", "deploymentTarget should be bumped");
+assert.equal(appJson.expo.ios.deploymentTarget, "17.2", "deploymentTarget should be bumped");
 assert.equal(
   appJson.expo.ios.infoPlist.NSSupportsLiveActivities,
   true,

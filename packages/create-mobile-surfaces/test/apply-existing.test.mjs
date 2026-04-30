@@ -31,13 +31,13 @@ const samplePlan = {
   appConfigPath: "/test/app.json",
   pluginsToAdd: [
     { name: "@bacons/apple-targets" },
-    { name: "expo-build-properties", config: { ios: { deploymentTarget: "16.2" } } },
+    { name: "expo-build-properties", config: { ios: { deploymentTarget: "17.2" } } },
   ],
   infoPlistToAdd: {
     NSSupportsLiveActivities: true,
     UIBackgroundModes: ["remote-notification"],
   },
-  deploymentTargetTo: "16.2",
+  deploymentTargetTo: "17.2",
   appConfigManual: false,
   widgetTargetDir: "apps/mobile/targets/widget",
   widgetFilesToCopy: [],
@@ -54,14 +54,14 @@ describe("buildPatchedAppJson — additions", () => {
     assert.deepEqual(patched.expo.plugins, [
       "expo-router",
       "@bacons/apple-targets",
-      ["expo-build-properties", { ios: { deploymentTarget: "16.2" } }],
+      ["expo-build-properties", { ios: { deploymentTarget: "17.2" } }],
     ]);
   });
 
   it("creates expo.ios when missing and writes deploymentTarget + infoPlist", () => {
     const existing = JSON.stringify({ expo: { name: "Host" } });
     const patched = JSON.parse(buildPatchedAppJson({ existing, plan: samplePlan }));
-    assert.equal(patched.expo.ios.deploymentTarget, "16.2");
+    assert.equal(patched.expo.ios.deploymentTarget, "17.2");
     assert.equal(patched.expo.ios.infoPlist.NSSupportsLiveActivities, true);
     assert.deepEqual(patched.expo.ios.infoPlist.UIBackgroundModes, ["remote-notification"]);
   });
@@ -78,7 +78,7 @@ describe("buildPatchedAppJson — additions", () => {
     const patched = JSON.parse(buildPatchedAppJson({ existing, plan: samplePlan }));
     assert.equal(patched.expo.ios.infoPlist.ITSAppUsesNonExemptEncryption, false);
     assert.equal(patched.expo.ios.infoPlist.NSSupportsLiveActivities, true);
-    assert.equal(patched.expo.ios.deploymentTarget, "16.2");
+    assert.equal(patched.expo.ios.deploymentTarget, "17.2");
   });
 
   it("is a no-op when the plan has no additions", () => {
@@ -116,9 +116,9 @@ describe("renderManualSnippet", () => {
     const snippet = JSON.parse(renderManualSnippet(samplePlan));
     assert.deepEqual(snippet.plugins, [
       "@bacons/apple-targets",
-      ["expo-build-properties", { ios: { deploymentTarget: "16.2" } }],
+      ["expo-build-properties", { ios: { deploymentTarget: "17.2" } }],
     ]);
-    assert.equal(snippet.ios.deploymentTarget, "16.2");
+    assert.equal(snippet.ios.deploymentTarget, "17.2");
   });
 });
 
@@ -173,7 +173,7 @@ describe("patchAppJson — file I/O", () => {
     const reread = JSON.parse(fs.readFileSync(appJsonPath, "utf8"));
     assert.equal(reread.expo.name, "Host");
     assert.equal(reread.expo.ios.bundleIdentifier, "com.acme");
-    assert.equal(reread.expo.ios.deploymentTarget, "16.2");
+    assert.equal(reread.expo.ios.deploymentTarget, "17.2");
     assert.equal(reread.expo.plugins.length, 2);
   });
 });

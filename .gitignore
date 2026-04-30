@@ -153,3 +153,5 @@ packages/create-mobile-surfaces/template/manifest.json
 # Never ship it back to upstream when forking.
 .mobile-surfaces-identity.json
 
+# Local planning and refactor notes.
+notes/

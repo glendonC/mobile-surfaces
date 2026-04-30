@@ -162,7 +162,7 @@ function parseProjectNodeMajor(spec) {
 
 export async function runPreflight({ manifest }) {
   const projectMajor = parseProjectNodeMajor(manifest?.cliRequiredNode);
-  const minimumIos = manifest?.deploymentTarget ?? "16.2";
+  const minimumIos = manifest?.deploymentTarget ?? "17.2";
   const minimumXcode = manifest?.minimumXcodeMajor ?? null;
 
   const results = await Promise.all([

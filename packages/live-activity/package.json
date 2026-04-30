@@ -52,9 +52,9 @@
     "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {
-    "expo": ">=54",
-    "react": ">=19",
-    "react-native": ">=0.81"
+    "expo": ">=55",
+    "react": ">=19.2",
+    "react-native": ">=0.83"
   },
   "dependencies": {
     "@mobile-surfaces/surface-contracts": "workspace:*"

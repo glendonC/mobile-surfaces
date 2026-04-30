@@ -4,15 +4,15 @@ import { planChanges } from "../src/existing-expo.mjs";
 
 const sampleManifest = {
   cliRequiredNode: ">=24.0.0 <25",
-  deploymentTarget: "16.2",
-  minimumXcodeMajor: 16,
+  deploymentTarget: "17.2",
+  minimumXcodeMajor: 26,
   addPackages: [
     { name: "@mobile-surfaces/surface-contracts", version: "workspace:*" },
     { name: "@bacons/apple-targets", version: "4.0.6" },
   ],
   addPlugins: [
     { name: "@bacons/apple-targets" },
-    { name: "expo-build-properties", config: { ios: { deploymentTarget: "16.2" } } },
+    { name: "expo-build-properties", config: { ios: { deploymentTarget: "17.2" } } },
   ],
   addInfoPlist: {
     NSSupportsLiveActivities: true,
@@ -47,7 +47,7 @@ describe("planChanges — clean Expo app", () => {
     assert.equal(plan.packagesToAdd.length, 2);
     assert.equal(plan.pluginsToAdd.length, 2);
     assert.deepEqual(plan.infoPlistToAdd, sampleManifest.addInfoPlist);
-    assert.equal(plan.deploymentTargetTo, "16.2");
+    assert.equal(plan.deploymentTargetTo, "17.2");
     assert.equal(plan.appConfigManual, false);
   });
 });
@@ -89,7 +89,7 @@ describe("planChanges — partial existing wiring", () => {
 
   it("does not bump deployment target when current is equal", () => {
     const evidence = evidenceWithJsonConfig({
-      ios: { bundleIdentifier: "com.acme.x", deploymentTarget: "16.2" },
+      ios: { bundleIdentifier: "com.acme.x", deploymentTarget: "17.2" },
     });
     const plan = planChanges({ evidence, manifest: sampleManifest });
     assert.equal(plan.deploymentTargetTo, null);
@@ -97,7 +97,7 @@ describe("planChanges — partial existing wiring", () => {
 
   it("does not bump deployment target when current is higher", () => {
     const evidence = evidenceWithJsonConfig({
-      ios: { bundleIdentifier: "com.acme.x", deploymentTarget: "17.0" },
+      ios: { bundleIdentifier: "com.acme.x", deploymentTarget: "18.0" },
     });
     const plan = planChanges({ evidence, manifest: sampleManifest });
     assert.equal(plan.deploymentTargetTo, null);
@@ -108,7 +108,7 @@ describe("planChanges — partial existing wiring", () => {
       ios: { bundleIdentifier: "com.acme.x", deploymentTarget: "15.0" },
     });
     const plan = planChanges({ evidence, manifest: sampleManifest });
-    assert.equal(plan.deploymentTargetTo, "16.2");
+    assert.equal(plan.deploymentTargetTo, "17.2");
   });
 });
 
@@ -117,7 +117,7 @@ describe("planChanges — already fully wired (no-op delta)", () => {
     const evidence = evidenceWithJsonConfig({
       ios: {
         bundleIdentifier: "com.acme.full",
-        deploymentTarget: "16.2",
+        deploymentTarget: "17.2",
         infoPlist: {
           NSSupportsLiveActivities: true,
           NSSupportsLiveActivitiesFrequentUpdates: true,

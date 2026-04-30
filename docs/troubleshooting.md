@@ -9,7 +9,7 @@ The harness reads `Activity<…>.activityAuthorizationInfo().areActivitiesEnable
 - The user has Live Activities turned off for this app. Open iOS Settings → your app's name → Live Activities and toggle it on.
 - The user has Live Activities turned off globally. Open iOS Settings → Face ID & Passcode → Allow Notifications, or Settings → Notifications → Live Activities, depending on iOS version.
 - The build is still running on Expo Go. Live Activities require a development build; run `pnpm mobile:sim` or `pnpm mobile:run:ios:device`.
-- The deployment target dropped below 16.2. Confirm `apps/mobile/app.json` still has `expo.ios.deploymentTarget: "16.2"` and the `expo-build-properties` plugin block sets the same.
+- The deployment target dropped below the project floor. Confirm `apps/mobile/app.json` still has `expo.ios.deploymentTarget: "17.2"` and the `expo-build-properties` plugin block sets the same.
 
 If all of the above check out, fully delete the app from the device or simulator and reinstall. iOS caches the entitlement decision per install.
 
@@ -70,7 +70,7 @@ The `.expo` cache and the prebuild output are the most common culprits. `--clean
 WARN  Unsupported engine: wanted: {"node":">=24.0.0 <25"} (current: {"node":"vXX.X.X","pnpm":"…"})
 ```
 
-The repo pins Node 24 in `engines`. Older versions still install; newer majors may break Expo SDK 54. Use `nvm install 24` or `fnm use 24` to silence.
+The repo pins Node 24 in `engines`. Older versions still install; newer majors may break Expo SDK 55. Use `nvm install 24` or `fnm use 24` to silence.
 
 ## Duplicate `-lc++` warning during prebuild
 

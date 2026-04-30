@@ -4,7 +4,7 @@
 // Live Activities can be unsupported for four reasons (also documented in
 // docs/troubleshooting.md):
 //
-//   1. iOS deployment target dropped below 16.2.
+//   1. iOS deployment target dropped below 17.2 (the project floor).
 //   2. Running in Expo Go (Live Activities require a development build).
 //   3. The user disabled Live Activities for this app in iOS Settings.
 //   4. The user disabled Live Activities globally.
@@ -22,7 +22,7 @@ import { Platform } from "react-native";
 import Constants from "expo-constants";
 import * as Application from "expo-application";
 
-const MIN_IOS_MAJOR = 16;
+const MIN_IOS_MAJOR = 17;
 const MIN_IOS_MINOR = 2;
 
 export function diagnoseSupport(): string {
@@ -38,7 +38,7 @@ export function diagnoseSupport(): string {
       Number.isFinite(major) &&
       (major < MIN_IOS_MAJOR || (major === MIN_IOS_MAJOR && minor < MIN_IOS_MINOR))
     ) {
-      return `iOS ${version} doesn't support Live Activities. Update to iOS 16.2 or newer.`;
+      return `iOS ${version} is below the project floor. Update to iOS ${MIN_IOS_MAJOR}.${MIN_IOS_MINOR} or newer.`;
     }
   }
 
