@@ -154,3 +154,7 @@ The Swift duplication is intentional: the app module and widget extension compil
 - **Bump `schemaVersion` only on a breaking change.** Renaming a field, removing a field, changing a type, tightening a constraint (e.g. an enum drops a value, a string gains a regex it did not have before), or anything that would make a previously valid payload fail to parse.
 - **Additive optional fields are non-breaking.** Adding a new `actionLabel`-style optional field does not require a bump. Existing payloads still parse; new clients can read the new field when present.
 - **The `unpkg.com/@mobile-surfaces/surface-contracts@0/schema.json` URL pins to major `0`.** Backends point IDE tooling and external validators at it; a future v1 contract would publish at the corresponding major URL.
+
+### Linked Release Group
+
+`.changeset/config.json` links `@mobile-surfaces/surface-contracts`, `@mobile-surfaces/design-tokens`, `@mobile-surfaces/live-activity`, and `create-mobile-surfaces` so they always release at the same version. The CLI ships a baked `template/manifest.json` snapshot of the contract packages; if `surface-contracts` could bump on its own, the published CLI would silently reference stale dependency versions until the next CLI release. Linking forces a CLI republish on every contract change, which is the only way the bundled manifest stays in sync with what users actually install.
