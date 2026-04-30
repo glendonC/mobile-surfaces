@@ -17,9 +17,47 @@ export const liveSurfaceStage = z.enum([
 ]);
 export type LiveSurfaceStage = z.infer<typeof liveSurfaceStage>;
 
+export const liveSurfaceKind = z.enum([
+  "liveActivity",
+  "widget",
+  "control",
+  "lockAccessory",
+  "standby",
+  "notification",
+]);
+export type LiveSurfaceKind = z.infer<typeof liveSurfaceKind>;
+
+export const liveSurfaceWidgetSlice = z
+  .object({
+    family: z.enum(["systemSmall", "systemMedium", "systemLarge"]).optional(),
+    reloadPolicy: z.enum(["manual", "afterDate"]).optional(),
+  })
+  .strict();
+export type LiveSurfaceWidgetSlice = z.infer<typeof liveSurfaceWidgetSlice>;
+
+export const liveSurfaceControlSlice = z
+  .object({
+    kind: z.enum(["toggle", "button", "deepLink"]),
+    state: z.boolean().optional(),
+    intent: z.string().optional(),
+  })
+  .strict();
+export type LiveSurfaceControlSlice = z.infer<typeof liveSurfaceControlSlice>;
+
+export const liveSurfaceNotificationSlice = z
+  .object({
+    category: z.string().optional(),
+    threadId: z.string().optional(),
+  })
+  .strict();
+export type LiveSurfaceNotificationSlice = z.infer<
+  typeof liveSurfaceNotificationSlice
+>;
+
 export const liveSurfaceSnapshot = z
   .object({
-    schemaVersion: z.literal("0").default("0"),
+    schemaVersion: z.literal("1").default("1"),
+    kind: liveSurfaceKind.default("liveActivity"),
     id: z.string().min(1),
     surfaceId: z.string().min(1),
     state: liveSurfaceState,
@@ -34,6 +72,9 @@ export const liveSurfaceSnapshot = z
     progress: z.number().min(0).max(1),
     stage: liveSurfaceStage,
     deepLink: z.string().regex(/^[a-z][a-z0-9+\-.]*:\/\//),
+    widget: liveSurfaceWidgetSlice.optional(),
+    control: liveSurfaceControlSlice.optional(),
+    notification: liveSurfaceNotificationSlice.optional(),
   })
   .strict();
 export type LiveSurfaceSnapshot = z.infer<typeof liveSurfaceSnapshot>;
@@ -85,6 +126,14 @@ export const liveSurfaceStages = liveSurfaceStage.options as unknown as readonly
   "prompted",
   "inProgress",
   "completing",
+];
+export const liveSurfaceKinds = liveSurfaceKind.options as unknown as readonly [
+  "liveActivity",
+  "widget",
+  "control",
+  "lockAccessory",
+  "standby",
+  "notification",
 ];
 
 export function assertSnapshot(value: unknown): LiveSurfaceSnapshot {

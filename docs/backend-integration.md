@@ -4,24 +4,28 @@ How a backend service turns a domain event into an APNs push that this starter c
 
 ## Mental Model
 
-The contract is one type with two derived shapes.
+The contract is one type with kind-gated derived shapes.
 
 ```mermaid
 flowchart LR
   Event["Domain event<br/>(yours)"] --> Snapshot["LiveSurfaceSnapshot<br/>(@mobile-surfaces/surface-contracts)"]
-  Snapshot --> Content["ContentState<br/>toLiveActivityContentState()"]
+  Snapshot --> Content["ActivityKit ContentState<br/>toLiveActivityContentState()"]
   Snapshot --> Alert["Alert payload<br/>toAlertPayload()"]
+  Snapshot --> Widget["Widget timeline entry<br/>toWidgetTimelineEntry()"]
+  Snapshot --> Control["Control value<br/>toControlValueProvider()"]
+  Snapshot --> Notification["Notification content<br/>toNotificationContentPayload()"]
   Content --> APNS1["APNs liveactivity push<br/>(start | update | end)"]
   Alert --> APNS2["APNs alert push"]
 ```
 
-`LiveSurfaceSnapshot` is the only shape your domain code should emit. Everything else is a pure transform. See [`packages/surface-contracts/src/index.ts`](../packages/surface-contracts/src/index.ts) for the full type and the `toLiveActivityContentState` / `toAlertPayload` helpers.
+`LiveSurfaceSnapshot` is the only shape your domain code should emit. Everything else is a pure transform. See [`packages/surface-contracts/src/index.ts`](../packages/surface-contracts/src/index.ts) for the full type and projection helpers.
 
 ## Snapshot Fields
 
 ```ts
 interface LiveSurfaceSnapshot {
-  schemaVersion: "0";         // discriminator; bumped only on breaking changes
+  schemaVersion: "1";         // discriminator; bumped only on breaking changes
+  kind: "liveActivity" | "widget" | "control" | "lockAccessory" | "standby" | "notification";
   id: string;                 // unique per snapshot revision (event-scoped)
   surfaceId: string;          // stable across snapshots for the same surface
   state: "queued" | "active" | "paused" | "attention" | "bad_timing" | "completed";
@@ -36,10 +40,13 @@ interface LiveSurfaceSnapshot {
   progress: number;           // 0..1
   stage: "prompted" | "inProgress" | "completing";
   deepLink: string;           // <scheme>://surface/<surfaceId>
+  widget?: { family?: "systemSmall" | "systemMedium" | "systemLarge"; reloadPolicy?: "manual" | "afterDate" };
+  control?: { kind: "toggle" | "button" | "deepLink"; state?: boolean; intent?: string };
+  notification?: { category?: string; threadId?: string };
 }
 ```
 
-`state` is the canonical state machine: drive the lifecycle from the backend; `stage` is a UI-facing axis (whether the surface is being prompted, actively running, or wrapping up). `progress` is independent of either.
+`kind` selects the projection path. `state` is the canonical state machine: drive the lifecycle from the backend; `stage` is a UI-facing axis (whether the surface is being prompted, actively running, or wrapping up). `progress` is independent of either.
 
 Look at `data/surface-fixtures/*.json` for committed examples of every state.
 
@@ -64,6 +71,8 @@ function snapshotFromJob(job: Job): LiveSurfaceSnapshot {
     : "attention";
 
   return {
+    schemaVersion: "1",
+    kind: "liveActivity",
     id: `${job.id}@${job.revision}`,
     surfaceId: `job-${job.id}`,
     state,
@@ -91,9 +100,9 @@ const snapshot = assertSnapshot(snapshotFromJob(job)); // throws ZodError on inv
 const result = safeParseSnapshot(input);               // { success, data | error }
 ```
 
-The published JSON Schema at [`unpkg.com/@mobile-surfaces/surface-contracts@0/schema.json`](https://unpkg.com/@mobile-surfaces/surface-contracts@0/schema.json) is generated from the same Zod source and pinned to major `0`. Use it for IDE tooling, OpenAPI components, or non-TypeScript validators (Ajv, jsonschema, etc.).
+The published JSON Schema at [`unpkg.com/@mobile-surfaces/surface-contracts@1/schema.json`](https://unpkg.com/@mobile-surfaces/surface-contracts@1/schema.json) is generated from the same Zod source and pinned to major `1`. Use it for IDE tooling, OpenAPI components, or non-TypeScript validators (Ajv, jsonschema, etc.).
 
-Every snapshot carries a `schemaVersion: "0"` discriminator. The validator defaults the field to `"0"` when missing, so backends written before the field existed continue to parse, but new code should emit it explicitly.
+Every snapshot carries a `schemaVersion: "1"` discriminator. Version 1 adds the top-level `kind` field that separates Live Activity, widget, control, StandBy, lock accessory, and notification projections. The validator defaults missing `kind` to `"liveActivity"` for migration ergonomics, but new code should emit it explicitly.
 
 ### 2. Derive the wire payloads
 
@@ -103,6 +112,9 @@ Use the helpers from `@mobile-surfaces/surface-contracts`.
 import {
   toLiveActivityContentState,
   toAlertPayload,
+  toWidgetTimelineEntry,
+  toControlValueProvider,
+  toNotificationContentPayload,
 } from "@mobile-surfaces/surface-contracts";
 
 const snapshot = snapshotFromJob(job);
@@ -113,7 +125,7 @@ const alertPayload = toAlertPayload(snapshot);
 //   { aps: { alert, sound }, liveSurface: { kind, snapshotId, surfaceId, state, deepLink } }
 ```
 
-`toLiveActivityContentState` is the projection that matches the Swift `MobileSurfacesActivityAttributes.ContentState` declared in the widget target. If you add a field to the Swift struct, add it here in the same change set; the surface check in CI does not catch this drift on the JS side.
+`toLiveActivityContentState` is the projection that matches the Swift `MobileSurfacesActivityAttributes.ContentState` declared in the widget target. Projection helpers are `kind`-gated: `toLiveActivityContentState` and `toAlertPayload` accept only `kind: "liveActivity"` snapshots, while widget/control/notification helpers accept their matching kinds.
 
 ### 3. Send the APNs request
 
@@ -208,12 +220,12 @@ When something fails, [`docs/troubleshooting.md`](./troubleshooting.md) maps the
 
 All string fields on `LiveSurfaceSnapshot` are pre-rendered for one locale per snapshot. The backend selects the locale (per-user preference, request `Accept-Language`, etc.) and emits the snapshot in that locale. If the locale changes, send a fresh snapshot — there is no in-place locale switch on the client.
 
-A future `LocalizedString` shape (e.g. `{ en: string; "es-MX"?: string }`) would arrive in v1 and bump `schemaVersion` to `"1"`. v0 stays string-only on purpose; ActivityKit content states are size-bound (4 KB) and shipping every translation per push wastes that budget.
+A future `LocalizedString` shape (e.g. `{ en: string; "es-MX"?: string }`) would arrive in a future major and bump `schemaVersion` again. v1 stays string-only on purpose; ActivityKit content states are size-bound (4 KB) and shipping every translation per push wastes that budget.
 
 ## What Stays Stable
 
 - `LiveSurfaceSnapshot` and its TypeScript schema.
-- The two helpers (`toLiveActivityContentState`, `toAlertPayload`) and their projections.
+- The projection helpers (`toLiveActivityContentState`, `toAlertPayload`, `toWidgetTimelineEntry`, `toControlValueProvider`, `toNotificationContentPayload`) and their kind gates.
 - The APNs topic / push-type / priority defaults.
 
 What can change without notice:

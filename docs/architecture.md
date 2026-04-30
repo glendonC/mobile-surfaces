@@ -8,6 +8,9 @@ flowchart LR
   Snapshot --> App["React Native app UI"]
   Snapshot --> Alert["APNs alert payload"]
   Snapshot --> ActivityState["ActivityKit ContentState"]
+  Snapshot --> WidgetEntry["Widget timeline entry"]
+  Snapshot --> ControlValue["Control value provider"]
+  Snapshot --> NotificationPayload["Notification content payload"]
   ActivityState --> LockScreen["Lock Screen Live Activity"]
   ActivityState --> Island["Dynamic Island"]
 ```
@@ -97,7 +100,7 @@ Five async methods (`areActivitiesEnabled`, `start`, `update`, `end`, `listActiv
 
 ## Reusable Foundation
 
-- `packages/surface-contracts/` defines `LiveSurfaceSnapshot`, `LiveSurfaceActivityContentState`, `LiveSurfaceAlertPayload`, generated fixture exports, and mapping helpers.
+- `packages/surface-contracts/` defines `LiveSurfaceSnapshot`, `LiveSurfaceActivityContentState`, `LiveSurfaceAlertPayload`, generated fixture exports, and mapping helpers for each supported surface kind.
 - `packages/design-tokens/` defines colors and shared token names for React Native and Swift asset catalogs. `tokens.json` is the source of truth used by both TypeScript and the widget target config.
 - `data/surface-fixtures/` stores deterministic JSON snapshots used by previews, harness flows, validation, and push smoke tests. TypeScript fixtures are generated from this directory.
 - `apps/mobile/` contains the Expo dev-client app and the harness screen.
@@ -113,9 +116,11 @@ Domain objects should not flow directly into ActivityKit or APNs payloads. Conve
 const snapshot = mapDomainEventToLiveSurfaceSnapshot(event);
 const activityState = toLiveActivityContentState(snapshot);
 const alertPayload = toAlertPayload(snapshot);
+const widgetEntry = toWidgetTimelineEntry(snapshot);
+const controlValue = toControlValueProvider(snapshot);
 ```
 
-This keeps app-specific data models free to change while the app UI, alert pushes, ActivityKit content state, Lock Screen, and Dynamic Island agree on one portable surface shape.
+This keeps app-specific data models free to change while the app UI, alert pushes, ActivityKit content state, Lock Screen, Dynamic Island, widgets, controls, and notification content projections agree on one portable surface shape. Projection helpers are `kind`-gated: a `widget` snapshot cannot be accidentally sent through the Live Activity projection.
 
 ## Native Constraints
 
@@ -137,7 +142,7 @@ pnpm surface:check
 
 The flow:
 
-1. **Zod is the single source of truth.** `packages/surface-contracts/src/schema.ts` defines `liveSurfaceSnapshot` (and the activity / alert payload shapes) as Zod v4 objects. The TypeScript types are inferred from the schema (`z.infer<typeof liveSurfaceSnapshot>`); there is no second hand-written interface to drift.
+1. **Zod is the single source of truth.** `packages/surface-contracts/src/schema.ts` defines `liveSurfaceSnapshot` (including the `kind` discriminator and optional per-kind slices) as well as the activity / alert payload shapes as Zod v4 objects. The TypeScript types are inferred from the schema (`z.infer<typeof liveSurfaceSnapshot>`); there is no second hand-written interface to drift.
 2. **JSON Schema is generated.** `scripts/build-schema.mjs` calls `z.toJSONSchema` and writes the result to `packages/surface-contracts/schema.json`. `surface:check` runs the generator with `--check` so a stale committed file fails CI.
 3. **Fixtures are validated by the same Zod schema.** `scripts/validate-surface-fixtures.mjs` parses every JSON under `data/surface-fixtures/` through `liveSurfaceSnapshot.safeParse`. Fixtures carry a `$schema` pointer for IDE tooling; the validator strips it before parsing because the wire payload itself never carries `$schema`.
 4. **Generated TypeScript fixtures are checked for drift** against the JSON via `scripts/generate-surface-fixtures.mjs --check`.
@@ -149,11 +154,11 @@ The Swift duplication is intentional: the app module and widget extension compil
 
 ### Schema Evolution
 
-`LiveSurfaceSnapshot` carries a `schemaVersion: "0"` literal. The rule:
+`LiveSurfaceSnapshot` carries a `schemaVersion: "1"` literal and a top-level `kind` discriminator. Version `1` is the first multi-projection contract: existing Live Activity fixtures now emit `kind: "liveActivity"` explicitly, and future widget/control/notification snapshots use the same base fields with optional per-kind slices.
 
 - **Bump `schemaVersion` only on a breaking change.** Renaming a field, removing a field, changing a type, tightening a constraint (e.g. an enum drops a value, a string gains a regex it did not have before), or anything that would make a previously valid payload fail to parse.
 - **Additive optional fields are non-breaking.** Adding a new `actionLabel`-style optional field does not require a bump. Existing payloads still parse; new clients can read the new field when present.
-- **The `unpkg.com/@mobile-surfaces/surface-contracts@0/schema.json` URL pins to major `0`.** Backends point IDE tooling and external validators at it; a future v1 contract would publish at the corresponding major URL.
+- **The `unpkg.com/@mobile-surfaces/surface-contracts@1/schema.json` URL pins to major `1`.** Backends point IDE tooling and external validators at it; a future v2 contract would publish at the corresponding major URL.
 
 ### Linked Release Group
 

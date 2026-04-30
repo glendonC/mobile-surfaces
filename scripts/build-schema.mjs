@@ -15,7 +15,7 @@ const { values } = parseArgs({
 });
 
 const schema = z.toJSONSchema(liveSurfaceSnapshot, { target: "draft-2020-12" });
-schema.$id = "https://unpkg.com/@mobile-surfaces/surface-contracts@0/schema.json";
+schema.$id = "https://unpkg.com/@mobile-surfaces/surface-contracts@1/schema.json";
 schema.title = "LiveSurfaceSnapshot";
 
 const out = JSON.stringify(schema, null, 2) + "\n";

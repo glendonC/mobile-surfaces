@@ -42,6 +42,8 @@ You write one function:
 ```ts
 function snapshotFromJob(job: Job): LiveSurfaceSnapshot {
   return {
+    schemaVersion: "1",
+    kind: "liveActivity",
     id: `${job.id}@${job.revision}`,
     surfaceId: `job-${job.id}`,
     state: job.status,             // "queued" | "active" | "completed" | …
@@ -63,6 +65,7 @@ flowchart LR
   Snapshot --> Lock["Lock Screen Live Activity"]
   Snapshot --> Island["Dynamic Island"]
   Snapshot --> APNs["APNs push payload"]
+  Snapshot --> Future["Widget/control/notification projections"]
 ```
 
 Change the snapshot once, every surface updates together. They can't drift, because they're all reading from the same shape. The shape is defined in TypeScript with a runtime validator, so your editor and your CI both catch mistakes before they ship.
@@ -70,7 +73,7 @@ Change the snapshot once, every surface updates together. They can't drift, beca
 ## What's actually in the box
 
 - A working Expo app with all three surfaces already wired up.
-- The shared `LiveSurfaceSnapshot` contract (one TypeScript type, one Zod validator, one published JSON Schema).
+- The shared `LiveSurfaceSnapshot` contract (one TypeScript type, one Zod validator, one published JSON Schema, and kind-gated projections).
 - A SwiftUI widget for the Lock Screen and Dynamic Island layouts. You can restyle it; you don't have to write it from scratch.
 - APNs scripts with JWT signing, dev/prod environment routing, and translated error messages.
 - A `doctor` command that catches setup mistakes before you waste a day on them.

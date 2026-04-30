@@ -1,9 +1,19 @@
 import {
   surfaceFixtureSnapshots,
   toLiveActivityContentState,
+  type LiveSurfaceSnapshot,
 } from "@mobile-surfaces/surface-contracts";
 
-export const surfaceFixtures = surfaceFixtureSnapshots;
+type LiveActivityFixture = LiveSurfaceSnapshot & { kind: "liveActivity" };
+
+const liveActivityEntries = Object.entries(surfaceFixtureSnapshots).filter(
+  ([, snapshot]) => snapshot.kind === "liveActivity",
+) as Array<[string, LiveActivityFixture]>;
+
+export const surfaceFixtures = Object.fromEntries(liveActivityEntries) as Record<
+  string,
+  LiveActivityFixture
+>;
 
 export const activityFixtureStates = Object.fromEntries(
   Object.entries(surfaceFixtures).map(([key, snapshot]) => [

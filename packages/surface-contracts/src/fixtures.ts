@@ -4,7 +4,8 @@ import type { LiveSurfaceSnapshot } from "./index";
 // Edit the JSON fixtures, then run pnpm surface:check.
 export const surfaceFixtureSnapshots = {
   "queued": {
-    "schemaVersion": "0",
+    "schemaVersion": "1",
+    "kind": "liveActivity",
     "id": "fixture-queued",
     "surfaceId": "surface-queued",
     "state": "queued",
@@ -21,7 +22,8 @@ export const surfaceFixtureSnapshots = {
     "deepLink": "mobilesurfaces://surface/surface-queued"
   },
   "attention": {
-    "schemaVersion": "0",
+    "schemaVersion": "1",
+    "kind": "liveActivity",
     "id": "fixture-attention",
     "surfaceId": "surface-attention",
     "state": "attention",
@@ -38,7 +40,8 @@ export const surfaceFixtureSnapshots = {
     "deepLink": "mobilesurfaces://surface/surface-attention"
   },
   "activeProgress": {
-    "schemaVersion": "0",
+    "schemaVersion": "1",
+    "kind": "liveActivity",
     "id": "fixture-active-progress",
     "surfaceId": "surface-active-progress",
     "state": "active",
@@ -55,7 +58,8 @@ export const surfaceFixtureSnapshots = {
     "deepLink": "mobilesurfaces://surface/surface-active-progress"
   },
   "activeCountdown": {
-    "schemaVersion": "0",
+    "schemaVersion": "1",
+    "kind": "liveActivity",
     "id": "fixture-active-countdown",
     "surfaceId": "surface-active-countdown",
     "state": "active",
@@ -72,7 +76,8 @@ export const surfaceFixtureSnapshots = {
     "deepLink": "mobilesurfaces://surface/surface-active-countdown"
   },
   "paused": {
-    "schemaVersion": "0",
+    "schemaVersion": "1",
+    "kind": "liveActivity",
     "id": "fixture-paused",
     "surfaceId": "surface-paused",
     "state": "paused",
@@ -89,7 +94,8 @@ export const surfaceFixtureSnapshots = {
     "deepLink": "mobilesurfaces://surface/surface-paused"
   },
   "badTiming": {
-    "schemaVersion": "0",
+    "schemaVersion": "1",
+    "kind": "liveActivity",
     "id": "fixture-bad-timing",
     "surfaceId": "surface-none-bad-timing",
     "state": "bad_timing",
@@ -106,7 +112,8 @@ export const surfaceFixtureSnapshots = {
     "deepLink": "mobilesurfaces://today"
   },
   "completed": {
-    "schemaVersion": "0",
+    "schemaVersion": "1",
+    "kind": "liveActivity",
     "id": "fixture-completed",
     "surfaceId": "surface-completed",
     "state": "completed",
@@ -123,7 +130,8 @@ export const surfaceFixtureSnapshots = {
     "deepLink": "mobilesurfaces://surface/surface-completed"
   },
   "activeDetails": {
-    "schemaVersion": "0",
+    "schemaVersion": "1",
+    "kind": "liveActivity",
     "id": "fixture-active-details",
     "surfaceId": "surface-active-details",
     "state": "active",

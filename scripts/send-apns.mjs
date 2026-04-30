@@ -39,6 +39,11 @@ import fs from "node:fs";
 import http2 from "node:http2";
 import path from "node:path";
 import { parseArgs } from "node:util";
+import {
+  assertSnapshot,
+  toAlertPayload,
+  toLiveActivityContentState,
+} from "../packages/surface-contracts/src/index.ts";
 
 // Apple's APNs returns a JSON body with a `reason` enum on every non-2xx.
 // docs/troubleshooting.md (#31-44) maps these to causes; mirror the table here
@@ -176,26 +181,16 @@ function makeJwt() {
 
 function buildPayload() {
   if (!isLiveActivity) {
-    const snapshot = values["snapshot-file"]
-      ? JSON.parse(fs.readFileSync(values["snapshot-file"], "utf8"))
-      : null;
-    return {
+    const snapshot = values["snapshot-file"] ? readSnapshotFile(values["snapshot-file"]) : null;
+    return snapshot ? toAlertPayload(snapshot) : {
       aps: {
         alert: {
-          title: snapshot?.primaryText ?? values.title,
-          body: snapshot?.secondaryText ?? values.body,
+          title: values.title,
+          body: values.body,
         },
         sound: "default",
       },
-      liveSurface: snapshot
-        ? {
-            kind: "surface_snapshot",
-            snapshotId: snapshot.id,
-            surfaceId: snapshot.surfaceId,
-            state: snapshot.state,
-            deepLink: snapshot.deepLink,
-          }
-        : { kind: "smoke_test" },
+      liveSurface: { kind: "smoke_test" },
     };
   }
 
@@ -203,13 +198,7 @@ function buildPayload() {
     fs.readFileSync(path.resolve("./scripts/sample-state.json"), "utf8"),
   );
   if (values["snapshot-file"]) {
-    const snapshot = JSON.parse(fs.readFileSync(values["snapshot-file"], "utf8"));
-    contentState = {
-      headline: snapshot.primaryText,
-      subhead: snapshot.secondaryText,
-      progress: snapshot.progress,
-      stage: snapshot.stage,
-    };
+    contentState = toLiveActivityContentState(readSnapshotFile(values["snapshot-file"]));
   }
   if (values["state-file"]) {
     contentState = JSON.parse(fs.readFileSync(values["state-file"], "utf8"));
@@ -243,6 +232,12 @@ function buildPayload() {
   }
 
   return { aps };
+}
+
+function readSnapshotFile(filePath) {
+  const raw = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  const { $schema: _schema, ...snapshot } = raw;
+  return assertSnapshot(snapshot);
 }
 
 function parseUnixSeconds(raw, label) {

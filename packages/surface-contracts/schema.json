@@ -3,9 +3,21 @@
   "type": "object",
   "properties": {
     "schemaVersion": {
-      "default": "0",
+      "default": "1",
       "type": "string",
-      "const": "0"
+      "const": "1"
+    },
+    "kind": {
+      "default": "liveActivity",
+      "type": "string",
+      "enum": [
+        "liveActivity",
+        "widget",
+        "control",
+        "lockAccessory",
+        "standby",
+        "notification"
+      ]
     },
     "id": {
       "type": "string",
@@ -72,10 +84,67 @@
     "deepLink": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9+\\-.]*:\\/\\/"
+    },
+    "widget": {
+      "type": "object",
+      "properties": {
+        "family": {
+          "type": "string",
+          "enum": [
+            "systemSmall",
+            "systemMedium",
+            "systemLarge"
+          ]
+        },
+        "reloadPolicy": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "afterDate"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "control": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "toggle",
+            "button",
+            "deepLink"
+          ]
+        },
+        "state": {
+          "type": "boolean"
+        },
+        "intent": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "notification": {
+      "type": "object",
+      "properties": {
+        "category": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     }
   },
   "required": [
     "schemaVersion",
+    "kind",
     "id",
     "surfaceId",
     "state",
@@ -91,6 +160,6 @@
     "deepLink"
   ],
   "additionalProperties": false,
-  "$id": "https://unpkg.com/@mobile-surfaces/surface-contracts@0/schema.json",
+  "$id": "https://unpkg.com/@mobile-surfaces/surface-contracts@1/schema.json",
   "title": "LiveSurfaceSnapshot"
 }
