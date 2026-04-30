@@ -54,6 +54,24 @@ describe("validateBundleId", () => {
     assert.match(validateBundleId("9.starts-with-digit"), /reverse-DNS/);
     assert.match(validateBundleId("with spaces.bad"), /reverse-DNS/);
   });
+
+  it("rejects the com.example.* placeholder Apple bounces on upload", () => {
+    assert.match(validateBundleId("com.example.foo"), /placeholder/);
+    assert.match(validateBundleId("com.example.foo"), /com\.example/);
+    // Casing variants — Apple is case-insensitive on the domain portion.
+    assert.match(validateBundleId("COM.EXAMPLE.foo"), /placeholder/);
+  });
+
+  it("does not reject other reverse-DNS prefixes that look generic", () => {
+    // "acme" is a real reverse-DNS prefix for several orgs; we don't gate.
+    assert.equal(validateBundleId("com.acme.foo"), undefined);
+  });
+
+  it("falls through to the structural error when the trailing segment is empty", () => {
+    // The structural regex catches the trailing dot before the placeholder
+    // check can fire, so this still reports the reverse-DNS shape.
+    assert.match(validateBundleId("com.example."), /reverse-DNS/);
+  });
 });
 
 describe("validateTeamId", () => {
@@ -81,9 +99,13 @@ describe("default-derivation helpers", () => {
     assert.equal(toScheme("a-b-c"), "abc");
   });
 
-  it("toBundleId produces a valid placeholder", () => {
+  it("toBundleId produces the com.example.* placeholder the user must replace", () => {
+    // The default is intentionally a placeholder so the prompt's validator
+    // forces the user to think about their real reverse-DNS prefix before
+    // submitting. validateBundleId rejects com.example.* with the explicit
+    // "placeholder Apple rejects on upload" message.
     assert.equal(toBundleId("my-app"), "com.example.my-app");
-    assert.equal(validateBundleId(toBundleId("any-name")), undefined);
+    assert.match(validateBundleId(toBundleId("any-name")), /placeholder/);
   });
 
   it("toSwiftPrefix camelcases project name", () => {

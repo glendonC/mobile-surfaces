@@ -1,11 +1,11 @@
 # iOS Environment
 
-Mobile Surfaces is an Expo iOS dev-client starter for ActivityKit-backed Live Activity and Dynamic Island workflows. Expo Go is not supported for the native surface path because Live Activities, Dynamic Island, APNs behavior, and local native modules require a development build or a TestFlight/App Store build.
+Mobile Surfaces is an Expo iOS dev-client starter for ActivityKit-backed Live Activity, Dynamic Island, home-screen widget, and iOS 18 control widget workflows. Expo Go is not supported for the native surface path because WidgetKit, Live Activities, Dynamic Island, APNs behavior, App Groups, and local native modules require a development build or a TestFlight/App Store build. The current pinned toolchain row (Expo SDK 55, RN 0.83.6, iOS 17.2, Xcode 26) lives in [`docs/compatibility.md`](./compatibility.md).
 
 ## Native Pieces
 
 1. Main app: `apps/mobile/`, bundle id `com.example.mobilesurfaces`.
-2. Widget extension: `apps/mobile/targets/widget/`, generated into Xcode by `@bacons/apple-targets`.
+2. Widget extension: `apps/mobile/targets/widget/`, generated into Xcode by `@bacons/apple-targets`; it contains the Live Activity, home-screen widget, and iOS 18 control widget.
 3. Expo native module: `packages/live-activity/` (`@mobile-surfaces/live-activity`), wrapping `Activity<MobileSurfacesActivityAttributes>.request`, update, list, end, push token events, and activity state events.
 
 The Swift attribute type is intentionally duplicated in the module and widget target. Keep these files byte-identical:
@@ -14,6 +14,14 @@ The Swift attribute type is intentionally duplicated in the module and widget ta
 - `apps/mobile/targets/widget/MobileSurfacesActivityAttributes.swift`
 
 `pnpm surface:check` verifies this.
+
+Widget and control snapshots are shared through the App Group in `apps/mobile/app.json`:
+
+```json
+"com.apple.security.application-groups": ["group.com.example.mobilesurfaces"]
+```
+
+The widget target copies that same entitlement from `apps/mobile/targets/widget/expo-target.config.js`. If you rename the bundle id, keep the App Group aligned.
 
 ## Commands
 
@@ -62,7 +70,7 @@ The committed native sources of truth are:
 
 This keeps the repo reviewable and avoids committing generated Xcode churn.
 
-`newArchEnabled` is currently `false` in `app.json` to keep the native starter path conservative while the local ActivityKit bridge and widget target are the focus.
+Expo SDK 55 makes the New Architecture mandatory; `newArchEnabled` is no longer a togglable `app.json` option. The local ActivityKit bridge runs on the new arch by default.
 
 ## Testing Matrix
 
@@ -73,6 +81,8 @@ This keeps the repo reviewable and avoids committing generated Xcode churn.
 | Simulated alert push | No | Yes | No |
 | Real APNs alert | No | No | Yes |
 | Live Activity local start/update/end | No | Limited | Yes |
+| Home-screen widget shared state | No | Yes | Yes |
+| iOS 18 control widget shared state | No | iOS 18+ runtime | iOS 18+ device |
 | Dynamic Island | No | No | iPhone 14 Pro or newer |
 | ActivityKit push update/end | No | No | Yes |
 

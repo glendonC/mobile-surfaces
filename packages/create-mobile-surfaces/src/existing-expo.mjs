@@ -21,6 +21,7 @@ export function planChanges({ evidence, manifest }) {
     appConfigPath: evidence.config?.path ?? null,
     pluginsToAdd: [],
     infoPlistToAdd: {},
+    entitlementsToAdd: {},
     deploymentTargetTo: null,
     appConfigManual: false,
     widgetTargetDir: manifest.widgetTargetDir,
@@ -45,6 +46,13 @@ export function planChanges({ evidence, manifest }) {
       }
     }
 
+    const existingEntitlements = expo.ios?.entitlements ?? {};
+    for (const [k, v] of Object.entries(manifest.addEntitlements ?? {})) {
+      if (existingEntitlements[k] === undefined) {
+        plan.entitlementsToAdd[k] = v;
+      }
+    }
+
     const cur = parseFloat(expo.ios?.deploymentTarget ?? "0");
     const needed = parseFloat(manifest.deploymentTarget ?? "0");
     if (needed > cur) plan.deploymentTargetTo = manifest.deploymentTarget;
@@ -54,6 +62,7 @@ export function planChanges({ evidence, manifest }) {
     plan.appConfigManual = true;
     plan.pluginsToAdd = [...manifest.addPlugins];
     plan.infoPlistToAdd = { ...manifest.addInfoPlist };
+    plan.entitlementsToAdd = { ...(manifest.addEntitlements ?? {}) };
     plan.deploymentTargetTo = manifest.deploymentTarget;
     plan.manualFollowups.push(
       evidence.config
@@ -119,6 +128,10 @@ function renderPlanRecap(plan) {
   for (const [k, v] of Object.entries(plan.infoPlistToAdd)) {
     const valStr = Array.isArray(v) ? `[${v.map(String).join(", ")}]` : String(v);
     appLines.push(`+ ios.infoPlist.${k}: ${pc.bold(valStr)}`);
+  }
+  for (const [k, v] of Object.entries(plan.entitlementsToAdd)) {
+    const valStr = Array.isArray(v) ? `[${v.map(String).join(", ")}]` : String(v);
+    appLines.push(`+ ios.entitlements.${k}: ${pc.bold(valStr)}`);
   }
   if (appLines.length > 0) {
     const heading = plan.appConfigManual

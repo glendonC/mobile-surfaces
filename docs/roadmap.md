@@ -1,13 +1,14 @@
 # Roadmap
 
-Mobile Surfaces v0 stays narrow: create a runnable Expo iOS starter for Live Activity and Dynamic Island workflows, with app UI, alert pushes, deterministic fixtures, and local validation commands.
+Mobile Surfaces v0 stays focused: create a runnable Expo iOS starter for Live Activity, Dynamic Island, home-screen widget, and iOS 18 control widget workflows, with app UI, alert pushes, deterministic fixtures, and local validation commands.
 
 ## V0
 
 - Keep Expo / React Native as the app shell.
 - Keep iOS as the only supported native platform.
 - Use Expo dev client, not Expo Go.
-- Use the local ActivityKit module plus `@bacons/apple-targets`.
+- Use the local ActivityKit module plus `@bacons/apple-targets` for the WidgetKit extension.
+- Share widget/control state through App Groups.
 - Keep fixtures deterministic and app-agnostic.
 - Keep scripts focused on local setup, doctor checks, surface validation, simulator push, and APNs smoke tests.
 
@@ -43,7 +44,7 @@ The first CLI should create a new starter repo from this template. That means:
 The CLI can later infer:
 
 - Empty repo: create a full Mobile Surfaces starter.
-- Existing Expo app: add packages, widget target, local module or adapter, fixtures, scripts, and docs.
+- Existing Expo app: add packages, WidgetKit target, App Group entitlements, local module or adapter, fixtures, scripts, and docs.
 - Existing non-mobile monorepo: create `apps/mobile` and wire workspace packages.
 
 Do not overbuild this in v0. Existing app layouts vary too much for a universal patcher to be reliable without more real-world examples.

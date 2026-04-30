@@ -26,22 +26,22 @@
   "dependencies": {
     "@mobile-surfaces/design-tokens": "workspace:*",
     "@mobile-surfaces/surface-contracts": "workspace:*",
-    "expo": "~54.0.33",
-    "expo-application": "~7.0.8",
+    "expo": "~55.0.18",
+    "expo-application": "~55.0.14",
     "expo-build-properties": "55.0.13",
-    "expo-constants": "~18.0.13",
-    "expo-dev-client": "~6.0.21",
-    "expo-device": "~8.0.10",
-    "expo-notifications": "~0.32.17",
-    "expo-status-bar": "~3.0.9",
-    "expo-task-manager": "~14.0.9",
+    "expo-constants": "~55.0.15",
+    "expo-dev-client": "~55.0.28",
+    "expo-device": "~55.0.15",
+    "expo-notifications": "~55.0.21",
+    "expo-status-bar": "~55.0.5",
+    "expo-task-manager": "~55.0.15",
     "@mobile-surfaces/live-activity": "workspace:*",
-    "react": "19.1.0",
-    "react-native": "0.81.5"
+    "react": "19.2.0",
+    "react-native": "0.83.6"
   },
   "devDependencies": {
     "@bacons/apple-targets": "4.0.6",
-    "@types/react": "~19.1.0",
+    "@types/react": "~19.2.10",
     "eas-cli": "^16.25.1",
     "typescript": "~5.9.2"
   },

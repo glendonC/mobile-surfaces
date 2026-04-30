@@ -69,11 +69,16 @@ const summary = await applyToExisting({
 
 // 5) Assertions — what should be true on disk?
 const appJson = JSON.parse(fs.readFileSync(path.join(tmp, "app.json"), "utf8"));
-assert.equal(appJson.expo.ios.deploymentTarget, "16.2", "deploymentTarget should be bumped");
+assert.equal(appJson.expo.ios.deploymentTarget, "17.2", "deploymentTarget should be bumped");
 assert.equal(
   appJson.expo.ios.infoPlist.NSSupportsLiveActivities,
   true,
   "NSSupportsLiveActivities should be set",
+);
+assert.deepEqual(
+  appJson.expo.ios.entitlements["com.apple.security.application-groups"],
+  ["group.com.example.mobilesurfaces"],
+  "App Group entitlement should be set",
 );
 const pluginNames = (appJson.expo.plugins ?? []).map((p) =>
   Array.isArray(p) ? p[0] : p,
@@ -90,10 +95,12 @@ assert.ok(
   "widget dest should have at least one .swift file",
 );
 
-assert.ok(
-  summary.followups.some((f) => f.includes("aren't on npm yet")),
-  "expected a followup mentioning the workspace packages were skipped",
-);
+if (summary.packagesSkipped.length > 0) {
+  assert.ok(
+    summary.followups.some((f) => f.includes("aren't on npm yet")),
+    "expected a followup mentioning the workspace packages were skipped",
+  );
+}
 
 console.log(`[smoke-existing] summary:`, {
   appJsonPatched: summary.appJsonPatched,

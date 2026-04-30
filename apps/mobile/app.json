@@ -7,7 +7,6 @@
     "icon": "./assets/icon.png",
     "scheme": "mobilesurfaces",
     "userInterfaceStyle": "light",
-    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -17,7 +16,12 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.example.mobilesurfaces",
       "appleTeamId": "XXXXXXXXXX",
-      "deploymentTarget": "16.2",
+      "deploymentTarget": "17.2",
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.example.mobilesurfaces"
+        ]
+      },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSMicrophoneUsageDescription": "Mobile Surfaces may use the microphone in example surfaces that capture audio.",
@@ -41,7 +45,7 @@
         "expo-build-properties",
         {
           "ios": {
-            "deploymentTarget": "16.2"
+            "deploymentTarget": "17.2"
           }
         }
       ],

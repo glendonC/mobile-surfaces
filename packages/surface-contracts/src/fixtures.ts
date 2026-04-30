@@ -4,6 +4,8 @@ import type { LiveSurfaceSnapshot } from "./index";
 // Edit the JSON fixtures, then run pnpm surface:check.
 export const surfaceFixtureSnapshots = {
   "queued": {
+    "schemaVersion": "1",
+    "kind": "liveActivity",
     "id": "fixture-queued",
     "surfaceId": "surface-queued",
     "state": "queued",
@@ -20,6 +22,8 @@ export const surfaceFixtureSnapshots = {
     "deepLink": "mobilesurfaces://surface/surface-queued"
   },
   "attention": {
+    "schemaVersion": "1",
+    "kind": "liveActivity",
     "id": "fixture-attention",
     "surfaceId": "surface-attention",
     "state": "attention",
@@ -36,6 +40,8 @@ export const surfaceFixtureSnapshots = {
     "deepLink": "mobilesurfaces://surface/surface-attention"
   },
   "activeProgress": {
+    "schemaVersion": "1",
+    "kind": "liveActivity",
     "id": "fixture-active-progress",
     "surfaceId": "surface-active-progress",
     "state": "active",
@@ -52,6 +58,8 @@ export const surfaceFixtureSnapshots = {
     "deepLink": "mobilesurfaces://surface/surface-active-progress"
   },
   "activeCountdown": {
+    "schemaVersion": "1",
+    "kind": "liveActivity",
     "id": "fixture-active-countdown",
     "surfaceId": "surface-active-countdown",
     "state": "active",
@@ -68,6 +76,8 @@ export const surfaceFixtureSnapshots = {
     "deepLink": "mobilesurfaces://surface/surface-active-countdown"
   },
   "paused": {
+    "schemaVersion": "1",
+    "kind": "liveActivity",
     "id": "fixture-paused",
     "surfaceId": "surface-paused",
     "state": "paused",
@@ -84,6 +94,8 @@ export const surfaceFixtureSnapshots = {
     "deepLink": "mobilesurfaces://surface/surface-paused"
   },
   "badTiming": {
+    "schemaVersion": "1",
+    "kind": "liveActivity",
     "id": "fixture-bad-timing",
     "surfaceId": "surface-none-bad-timing",
     "state": "bad_timing",
@@ -100,6 +112,8 @@ export const surfaceFixtureSnapshots = {
     "deepLink": "mobilesurfaces://today"
   },
   "completed": {
+    "schemaVersion": "1",
+    "kind": "liveActivity",
     "id": "fixture-completed",
     "surfaceId": "surface-completed",
     "state": "completed",
@@ -116,6 +130,8 @@ export const surfaceFixtureSnapshots = {
     "deepLink": "mobilesurfaces://surface/surface-completed"
   },
   "activeDetails": {
+    "schemaVersion": "1",
+    "kind": "liveActivity",
     "id": "fixture-active-details",
     "surfaceId": "surface-active-details",
     "state": "active",
@@ -130,5 +146,50 @@ export const surfaceFixtureSnapshots = {
     "progress": 0.75,
     "stage": "inProgress",
     "deepLink": "mobilesurfaces://surface/surface-active-details"
+  },
+  "widgetDashboard": {
+    "schemaVersion": "1",
+    "kind": "widget",
+    "id": "fixture-widget-dashboard",
+    "surfaceId": "surface-widget-dashboard",
+    "state": "active",
+    "modeLabel": "widget",
+    "contextLabel": "home",
+    "statusLine": "widget · shared state",
+    "primaryText": "Widget surface synced",
+    "secondaryText": "This snapshot is written through the App Group and rendered by the home-screen widget.",
+    "actionLabel": "Open surface",
+    "estimatedSeconds": 300,
+    "morePartsCount": 1,
+    "progress": 0.62,
+    "stage": "inProgress",
+    "deepLink": "mobilesurfaces://surface/surface-widget-dashboard",
+    "widget": {
+      "family": "systemMedium",
+      "reloadPolicy": "manual"
+    }
+  },
+  "controlToggle": {
+    "schemaVersion": "1",
+    "kind": "control",
+    "id": "fixture-control-toggle",
+    "surfaceId": "surface-control-toggle",
+    "state": "active",
+    "modeLabel": "control",
+    "contextLabel": "toggle",
+    "statusLine": "control · ready",
+    "primaryText": "Control surface",
+    "secondaryText": "This snapshot backs the iOS 18 control widget toggle.",
+    "actionLabel": "Surface toggle",
+    "estimatedSeconds": 0,
+    "morePartsCount": 0,
+    "progress": 1,
+    "stage": "inProgress",
+    "deepLink": "mobilesurfaces://surface/surface-control-toggle",
+    "control": {
+      "kind": "toggle",
+      "state": false,
+      "intent": "toggleSurface"
+    }
   }
 } as const satisfies Record<string, LiveSurfaceSnapshot>;

@@ -1,5 +1,150 @@
 {
-  "requiredStringFields": [
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "default": "1",
+      "type": "string",
+      "const": "1"
+    },
+    "kind": {
+      "default": "liveActivity",
+      "type": "string",
+      "enum": [
+        "liveActivity",
+        "widget",
+        "control",
+        "lockAccessory",
+        "standby",
+        "notification"
+      ]
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "surfaceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "active",
+        "paused",
+        "attention",
+        "bad_timing",
+        "completed"
+      ]
+    },
+    "modeLabel": {
+      "type": "string",
+      "minLength": 1
+    },
+    "contextLabel": {
+      "type": "string"
+    },
+    "statusLine": {
+      "type": "string"
+    },
+    "primaryText": {
+      "type": "string",
+      "minLength": 1
+    },
+    "secondaryText": {
+      "type": "string"
+    },
+    "actionLabel": {
+      "type": "string"
+    },
+    "estimatedSeconds": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "morePartsCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "progress": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "stage": {
+      "type": "string",
+      "enum": [
+        "prompted",
+        "inProgress",
+        "completing"
+      ]
+    },
+    "deepLink": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9+\\-.]*:\\/\\/"
+    },
+    "widget": {
+      "type": "object",
+      "properties": {
+        "family": {
+          "type": "string",
+          "enum": [
+            "systemSmall",
+            "systemMedium",
+            "systemLarge"
+          ]
+        },
+        "reloadPolicy": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "afterDate"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "control": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "toggle",
+            "button",
+            "deepLink"
+          ]
+        },
+        "state": {
+          "type": "boolean"
+        },
+        "intent": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "notification": {
+      "type": "object",
+      "properties": {
+        "category": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "kind",
     "id",
     "surfaceId",
     "state",
@@ -8,19 +153,13 @@
     "statusLine",
     "primaryText",
     "secondaryText",
+    "estimatedSeconds",
+    "morePartsCount",
+    "progress",
+    "stage",
     "deepLink"
   ],
-  "liveSurfaceStates": [
-    "queued",
-    "active",
-    "paused",
-    "attention",
-    "bad_timing",
-    "completed"
-  ],
-  "liveSurfaceStages": [
-    "prompted",
-    "inProgress",
-    "completing"
-  ]
+  "additionalProperties": false,
+  "$id": "https://unpkg.com/@mobile-surfaces/surface-contracts@1/schema.json",
+  "title": "LiveSurfaceSnapshot"
 }

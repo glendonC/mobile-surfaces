@@ -62,6 +62,9 @@ export function renderExistingSuccess({ summary, evidence, packageManager, plan 
     const rel = path.relative(evidence.cwd, summary.widgetDestDir);
     did.push(`Copied widget target to ${rel}`);
   }
+  if (summary.widgetRenamed) {
+    did.push(`Renamed widget to ${summary.widgetRenamed.to}Widget`);
+  }
   if (summary.prebuilt) {
     did.push(`Ran expo prebuild`);
   }

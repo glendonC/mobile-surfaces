@@ -3,6 +3,7 @@
   "description": "Opinionated Expo iOS starter for Live Activities and Dynamic Island workflows.",
   "private": true,
   "license": "MIT",
+  "author": "Glendon Chin <glendonchin@gmail.com>",
   "homepage": "https://github.com/glendonC/mobile-surfaces#readme",
   "repository": {
     "type": "git",
@@ -43,13 +44,20 @@
       "NSSupportsLiveActivitiesFrequentUpdates",
       "UIBackgroundModes"
     ],
+    "addEntitlementKeys": [
+      "com.apple.security.application-groups"
+    ],
     "widgetTargetDir": "apps/mobile/targets/widget",
-    "minimumXcodeMajor": 16
+    "minimumXcodeMajor": 26
   },
   "scripts": {
+    "build": "pnpm -r --filter \"./packages/{surface-contracts,design-tokens,live-activity}\" build",
+    "clean": "pnpm -r --filter \"./packages/*\" clean",
+    "preinstall": "npx only-allow pnpm",
     "dev:doctor": "bash scripts/doctor.sh",
     "dev:setup": "bash scripts/setup.sh",
-    "surface:check": "node scripts/validate-surface-fixtures.mjs && node scripts/generate-surface-fixtures.mjs --check && node scripts/check-activity-attributes.mjs && node scripts/check-validator-sync.mjs",
+    "surface:check": "node --experimental-strip-types scripts/validate-surface-fixtures.mjs && node --experimental-strip-types scripts/build-schema.mjs --check && node scripts/generate-surface-fixtures.mjs --check && node --experimental-strip-types scripts/check-activity-attributes.mjs && node scripts/check-validator-sync.mjs",
+    "test:scripts": "node --test scripts/*.test.mjs",
     "surface:rename": "node scripts/rename-starter.mjs",
     "mobile:dev": "pnpm --dir apps/mobile exec expo start --host lan",
     "mobile:dev-client": "pnpm --dir apps/mobile exec expo start --dev-client --host lan",
@@ -70,9 +78,11 @@
     "cli:smoke": "pnpm --filter create-mobile-surfaces smoke",
     "cli:smoke:existing": "pnpm --filter create-mobile-surfaces smoke:existing",
     "cli:test": "pnpm --filter create-mobile-surfaces test",
-    "typecheck": "pnpm --filter mobile-surfaces-app typecheck"
+    "typecheck": "pnpm build && pnpm --filter mobile-surfaces-app typecheck"
   },
   "devDependencies": {
-    "@changesets/cli": "2.31.0"
+    "@changesets/cli": "2.31.0",
+    "tsup": "^8.3.5",
+    "zod": "^4"
   }
 }

@@ -83,7 +83,7 @@ describe("detectMode — existing Expo", () => {
     write("app.json", JSON.stringify({
       expo: {
         name: "Host App",
-        ios: { bundleIdentifier: "com.acme.host", deploymentTarget: "16.2" },
+        ios: { bundleIdentifier: "com.acme.host", deploymentTarget: "17.2" },
         plugins: ["expo-dev-client"],
       },
     }));
@@ -130,7 +130,7 @@ describe("detectMode — existing Expo", () => {
       expo: {
         plugins: [
           "expo-dev-client",
-          ["expo-build-properties", { ios: { deploymentTarget: "16.2" } }],
+          ["expo-build-properties", { ios: { deploymentTarget: "17.2" } }],
         ],
       },
     }));

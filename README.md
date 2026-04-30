@@ -1,99 +1,122 @@
 # Mobile Surfaces
 
+Ship iOS Live Activities and Dynamic Island in a day, without becoming an iOS expert.
+
 [![CI](https://github.com/glendonC/mobile-surfaces/actions/workflows/ci.yml/badge.svg)](https://github.com/glendonC/mobile-surfaces/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
-Opinionated Expo iOS starter for Live Activities and Dynamic Island workflows.
+## What is this?
 
-Mobile Surfaces gives developers the native iOS pieces of a multi-surface Expo app without first becoming ActivityKit, WidgetKit, or APNs experts. It includes a React Native harness, shared surface contracts, deterministic fixtures, a local ActivityKit bridge, a SwiftUI widget target, APNs smoke scripts, and local setup/doctor commands.
+A one-command install that gives you a working iOS app with multiple surfaces wired together:
 
-## Who This Is For
+- The **app UI** (a React Native screen, you customize this).
+- The **Lock Screen Live Activity** — the persistent panel that shows real-time updates while the phone is locked.
+- The **Dynamic Island** — the pill at the top of newer iPhones.
+- A **home-screen widget** backed by shared App Group state.
+- An **iOS 18 control widget** for Control Center / Lock Screen controls.
 
-- Expo or React Native developers adding iOS Live Activities and Dynamic Island previews.
-- Web or backend developers who need deterministic fixtures and push payload examples before wiring production services.
-- Teams that want a contract-first boundary between product data and mobile surfaces.
+All three render from one shared data shape, so they stay in sync automatically. You write one function that produces that shape from your own data; everything else is already done.
 
-## V0 Scope
+## Why this exists
 
-- Expo / React Native with an Expo dev client, not Expo Go.
-- iOS only.
-- ActivityKit, WidgetKit, and Dynamic Island through a local Expo module plus `@bacons/apple-targets`.
-- Shared `LiveSurfaceSnapshot` contract, design tokens, fixtures, validation scripts, and APNs smoke helpers.
-- Opinionated defaults: local ActivityKit bridge, SwiftUI WidgetKit extension, JSON fixture source of truth, and generated TypeScript preview fixtures.
+iOS Live Activities fail silently.
 
-## Non-Goals
+Your code compiles. Your push returns HTTP 200. The app runs. And nothing shows up on the Lock Screen. There's no error, no log, no signal explaining why. Apple's docs cover roughly half of what you actually need; the other half lives in scattered GitHub issues and dev forum threads.
 
-These are intentionally out of scope. PRs that add them will be redirected.
+Most people who try to add Live Activities to an Expo app spend three to seven days fighting silent failures: token environment mismatches, byte-identical Swift files, push priority budgets, embedded extensions that didn't link, deployment targets off by a minor version, generated `ios/` files getting wiped on the next build.
 
-- Android.
-- A SwiftUI-only starter (no Expo).
-- A universal "add Mobile Surfaces to an existing repo" patcher.
-- A production push service or backend integration.
-- An MCP runtime.
-- Multi-tenant theming, plugin systems, or any abstraction not justified by two real consumers in this repo.
-- Replacing the local ActivityKit module with `expo-live-activity` or `expo-widgets` before v0 ships.
-- Anchoring on `expo-widgets` while it is alpha.
-- Tracking iOS bleeding edge (broadcast push, channel-based delivery) before v0 ships.
+Mobile Surfaces is the working baseline past every one of those traps. You start where most people give up.
 
-## Prerequisites
-
-- macOS with Xcode 16 or newer (`xcodebuild -version`).
-- An installed iOS 16.2+ simulator. Confirm with `xcrun simctl list devices available`. The default simulator is `iPhone 17 Pro`; override with `DEVICE="<name>"`.
-- Node.js 24 (the repo's `engines` field). Use `nvm`, `fnm`, or Homebrew to install.
-- pnpm 10.7+ (`corepack enable pnpm` is enough — the repo pins the exact version via `packageManager`).
-- An Apple Developer account, but only when you reach APNs smoke tests or device builds. Simulator + harness flows do not require one.
-
-See [`docs/compatibility.md`](./docs/compatibility.md) for the pinned toolchain row.
-
-## Quick Start
+## Try it
 
 ```bash
-pnpm dev:setup
-pnpm dev:doctor
-pnpm surface:check
-pnpm typecheck
-pnpm mobile:sim
+npm create mobile-surfaces@latest
 ```
 
-`pnpm mobile:sim` builds an iOS development app. Live Activities and Dynamic Island testing require a dev build; Expo Go cannot load the local native module or widget extension.
+The CLI checks your toolchain (macOS, Xcode, Node, an iOS simulator), prompts for your app's name and bundle id, installs everything, and prepares your iOS build. Then run `pnpm mobile:sim` to launch the demo on your simulator.
 
-When `pnpm mobile:sim` finishes, the simulator opens the dev-client app on the **Surface Harness** screen. You should see "Activities supported: yes" near the top, a row of generic Start buttons (`queued`, `active`, `paused`, `completed`, etc., one per fixture in `data/surface-fixtures/`), and empty "Current activity" and "All active activities" sections. Tap **queued** to start a Live Activity from `data/surface-fixtures/queued.json`: an activity id appears in "Current activity", the entry shows up in "All active activities" with progress and stage, and once iOS issues a push token it streams in asynchronously. The Update and End rows then operate on that activity.
+That's it. No Xcode UI to navigate, no Swift you have to write up front, no APNs setup before you can see something work.
 
-The core dev workflow is contract-driven: start a generic surface state from the harness, preview Lock Screen and Dynamic Island layouts, update or end it locally, then smoke-test APNs payloads with the same contract.
+## How it works
 
-## Rename For Your Project
+You write one function:
 
-The starter ships with the placeholder identity `Mobile Surfaces` / `mobilesurfaces` / `com.example.mobilesurfaces` / `MobileSurfacesWidget`. Run the rename script once after cloning to swap in your own:
-
-```bash
-pnpm surface:rename -- \
-  --name "Your App" \
-  --scheme yourapp \
-  --bundle-id com.acme.yourapp \
-  --widget-target YourAppWidget
+```ts
+function snapshotFromJob(job: Job): LiveSurfaceSnapshot {
+  return {
+    schemaVersion: "1",
+    kind: "liveActivity",
+    id: `${job.id}@${job.revision}`,
+    surfaceId: `job-${job.id}`,
+    state: job.status,             // "queued" | "active" | "completed" | …
+    primaryText: job.title,        // the headline shown on the Lock Screen
+    secondaryText: job.subtitle,   // subhead
+    progress: job.progress,        // 0 to 1
+    deepLink: `myapp://surface/job-${job.id}`,
+    // …a few more typed fields, all checked at compile time and runtime
+  };
+}
 ```
 
-The script rewrites `app.json`, the SwiftUI target sources, the local Live Activity module, fixture deep links, scripts, and docs in one pass, then renames the `MobileSurfaces*.swift` files to use your Swift prefix and reruns `surface:check`. Pass `--help` for the optional `--slug`, `--swift-prefix`, and `--app-package-name` overrides.
+That `LiveSurfaceSnapshot` shape feeds every surface:
 
-## Repo Map
+```mermaid
+flowchart LR
+  Data["Your data"] --> Snapshot["LiveSurfaceSnapshot"]
+  Snapshot --> App["App UI"]
+  Snapshot --> Lock["Lock Screen Live Activity"]
+  Snapshot --> Island["Dynamic Island"]
+  Snapshot --> Widget["Home widget"]
+  Snapshot --> Control["Control widget"]
+  Snapshot --> APNs["APNs push payload"]
+  Snapshot --> Future["Notification/StandBy projections"]
+```
 
-- `apps/mobile/` - Expo app and Live Activity harness.
-- `packages/live-activity/` - `@mobile-surfaces/live-activity`, Expo native module wrapping ActivityKit.
-- `apps/mobile/targets/widget/` - SwiftUI WidgetKit target for Lock Screen and Dynamic Island.
-- `packages/surface-contracts/` - `@mobile-surfaces/surface-contracts`, `LiveSurfaceSnapshot`, generated fixture exports, and mapping helpers.
-- `packages/design-tokens/` - `@mobile-surfaces/design-tokens`, shared UI tokens for app and widget alignment.
-- `data/surface-fixtures/` - deterministic JSON snapshots for previews and smoke tests.
-- `scripts/` - setup, doctor, validation, simulator push, and APNs scripts.
+Change the snapshot once, every surface updates together. They can't drift, because they're all reading from the same shape. The shape is defined in TypeScript with a runtime validator, so your editor and your CI both catch mistakes before they ship.
 
-## Recommended V0 Path
+## What's actually in the box
 
-This repo keeps the current local ActivityKit module for v0 and uses `@bacons/apple-targets` to keep widget source outside generated `ios/`. `expo-live-activity` is a useful future adapter candidate. `expo-widgets` is promising, but it is still alpha and has active Live Activity rendering rough edges, so it is not the default path yet.
+- A working Expo app with all three surfaces already wired up.
+- The shared `LiveSurfaceSnapshot` contract (one TypeScript type, one Zod validator, one published JSON Schema, and kind-gated projections).
+- A SwiftUI WidgetKit extension for Lock Screen, Dynamic Island, home-screen widget, and iOS 18 control layouts. You can restyle it; you don't have to write it from scratch.
+- APNs scripts with JWT signing, dev/prod environment routing, and translated error messages.
+- A `doctor` command that catches setup mistakes before you waste a day on them.
+- Pinned, tested-together versions of Expo, React Native, Xcode, and the widget tooling.
+
+## Adding to an existing Expo app
+
+If you already have an Expo app, `npm create mobile-surfaces` detects it and switches to add-to-existing mode: it patches your `app.json`, copies in the widget target, adds the right Info.plist keys, and shows you a recap of every change before applying it. No surprise edits.
+
+If your project isn't an Expo app yet (web-only, native iOS, something else), the CLI scaffolds a fresh `apps/mobile/` you can wire your backend into.
+
+## Requirements
+
+The CLI checks all of this for you, but for reference:
+
+- macOS with Xcode 26 or newer.
+- An iOS 17.2+ simulator. The CLI will list available ones.
+- Node 24.
+- An Apple Developer account, but only when you're ready to test on a real device.
+
+## What this is not
+
+- Not for Android. iOS only.
+- Not a production push service — it ships smoke-test scripts, not infrastructure.
+- Not a no-code tool. You're still writing TypeScript and SwiftUI; this just removes the iOS plumbing you didn't sign up to learn.
 
 ## Docs
 
-- [`docs/architecture.md`](./docs/architecture.md) - contract-first architecture and implementation choice.
-- [`docs/ios-environment.md`](./docs/ios-environment.md) - dev builds, simulator/device testing, APNs, and generated iOS policy.
-- [`docs/compatibility.md`](./docs/compatibility.md) - pinned Expo SDK, React Native, iOS, Xcode, and `@bacons/apple-targets` versions.
-- [`docs/troubleshooting.md`](./docs/troubleshooting.md) - symptom-to-fix recipes for the most common dev-loop snags.
-- [`docs/backend-integration.md`](./docs/backend-integration.md) - domain event → `LiveSurfaceSnapshot` → APNs walkthrough for backend developers.
-- [`docs/roadmap.md`](./docs/roadmap.md) - v0 priorities and future `create-mobile-surfaces` CLI.
+- [Backend integration](./docs/backend-integration.md) — how your server sends pushes.
+- [Architecture](./docs/architecture.md) — the contract, the surfaces, the adapter boundary.
+- [Troubleshooting](./docs/troubleshooting.md) — the silent-failure cookbook.
+- [iOS environment](./docs/ios-environment.md) — simulator vs device, APNs setup.
+- [Compatibility](./docs/compatibility.md) — pinned toolchain row.
+- [Roadmap](./docs/roadmap.md) — what's next, what's intentionally out of scope.
+
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md). Issues and PRs welcome.
+
+## License
+
+MIT
