@@ -7,4 +7,5 @@ Mobile Surfaces is an opinionated Expo iOS starter for Live Activities and Dynam
 - [`compatibility.md`](./compatibility.md) for the pinned Expo SDK / React Native / iOS / Xcode / `@bacons/apple-targets` row.
 - [`troubleshooting.md`](./troubleshooting.md) for symptom-to-fix recipes (Activities supported: no, Lock Screen empty, APNs 403/400, stale Metro/Watchman).
 - [`backend-integration.md`](./backend-integration.md) for the domain event → `LiveSurfaceSnapshot` → APNs walkthrough, including remote `event: "start"` and the three token kinds.
+- [`release.md`](./release.md) for npm trusted publishing and release verification.
 - [`roadmap.md`](./roadmap.md) for the future `create-mobile-surfaces` CLI and post-v0 add-to-existing-repo direction.
