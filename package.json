@@ -3,6 +3,7 @@
   "description": "Opinionated Expo iOS starter for Live Activities and Dynamic Island workflows.",
   "private": true,
   "license": "MIT",
+  "author": "Glendon Chin <glendonchin@gmail.com>",
   "homepage": "https://github.com/glendonC/mobile-surfaces#readme",
   "repository": {
     "type": "git",
@@ -47,6 +48,9 @@
     "minimumXcodeMajor": 16
   },
   "scripts": {
+    "build": "pnpm -r --filter \"./packages/{surface-contracts,design-tokens,live-activity}\" build",
+    "clean": "pnpm -r --filter \"./packages/*\" clean",
+    "preinstall": "npx only-allow pnpm",
     "dev:doctor": "bash scripts/doctor.sh",
     "dev:setup": "bash scripts/setup.sh",
     "surface:check": "node scripts/validate-surface-fixtures.mjs && node scripts/generate-surface-fixtures.mjs --check && node scripts/check-activity-attributes.mjs && node scripts/check-validator-sync.mjs",
@@ -73,6 +77,7 @@
     "typecheck": "pnpm --filter mobile-surfaces-app typecheck"
   },
   "devDependencies": {
-    "@changesets/cli": "2.31.0"
+    "@changesets/cli": "2.31.0",
+    "tsup": "^8.3.5"
   }
 }

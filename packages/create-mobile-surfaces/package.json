@@ -30,8 +30,9 @@
     "src",
     "template"
   ],
+  "author": "Glendon Chin <glendonchin@gmail.com>",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=24.0.0 <25"
   },
   "scripts": {
     "start": "node ./bin/index.mjs",

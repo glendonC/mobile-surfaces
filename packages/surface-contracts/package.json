@@ -22,14 +22,32 @@
     "contract",
     "fixtures"
   ],
+  "author": "Glendon Chin <glendonchin@gmail.com>",
+  "engines": {
+    "node": ">=18"
+  },
+  "sideEffects": false,
   "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./schema": "./schema.json",
+    "./package.json": "./package.json"
   },
   "files": [
-    "src",
+    "dist",
     "schema.json"
-  ]
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "pnpm build"
+  }
 }
