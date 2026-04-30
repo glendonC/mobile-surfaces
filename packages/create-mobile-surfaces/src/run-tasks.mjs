@@ -15,6 +15,12 @@ const execFileAsync = promisify(execFile);
 // so the install log shows exactly what the user needs.
 export const PNPM_MISSING_TAG = "pnpm-missing";
 
+// Tag used by bin/index.mjs to swap the generic "install failed" copy for
+// a specific CocoaPods install pointer. expo prebuild calls pods internally
+// so the failure would otherwise show as a deep-in-prebuild error 60–90s
+// after the spinner starts.
+export const COCOAPODS_MISSING_TAG = "cocoapods-missing";
+
 // Greenfield always installs with pnpm because the template ships a
 // pnpm-lock.yaml. Preflight only warns when pnpm is missing (so the
 // add-to-existing path stays usable on npm/yarn/bun). This guard catches
@@ -31,6 +37,25 @@ export async function ensurePnpmAvailable({ exec = execFileAsync } = {}) {
       "pnpm not found on PATH. The Mobile Surfaces template ships a pnpm-lock.yaml. Enable pnpm with: corepack enable pnpm",
     );
     err.tag = PNPM_MISSING_TAG;
+    err.cause = cause;
+    throw err;
+  }
+}
+
+// CocoaPods is invoked transitively by `expo prebuild`. Preflight only warns
+// when it's missing (so the user can pick installNow=false and proceed); this
+// guard hard-fails before prebuild starts when they did pick installNow,
+// turning a 60–90s in-the-weeds prebuild error into an immediate, actionable
+// "install cocoapods" message. Mirrors ensurePnpmAvailable's shape so
+// bin/index.mjs handles both with one error-tag pattern.
+export async function ensureCocoapodsAvailable({ exec = execFileAsync } = {}) {
+  try {
+    await exec("pod", ["--version"], { timeout: 5000 });
+  } catch (cause) {
+    const err = new Error(
+      "CocoaPods not found on PATH. expo prebuild needs it to install iOS pods. Install with: brew install cocoapods (or sudo gem install cocoapods)",
+    );
+    err.tag = COCOAPODS_MISSING_TAG;
     err.cause = cause;
     throw err;
   }
@@ -56,6 +81,10 @@ export async function runTasks({ config, target }) {
     await task(`Installing dependencies (${packageManager} install) — usually 30–60s`, () =>
       scaffold.runInstall({ target, packageManager }),
     );
+    // Hard-fail before prebuild if CocoaPods is missing. Prebuild would
+    // otherwise spin for 60–90s and surface a generic Pods error; failing
+    // here gives the user the brew/gem install pointer immediately.
+    await ensureCocoapodsAvailable();
     // Expo prebuild internally runs CocoaPods; the label keeps that honest
     // rather than implying CocoaPods is a separate sub-step.
     await task(

@@ -130,6 +130,27 @@ async function checkPnpm() {
   }
 }
 
+// CocoaPods is invoked transitively by `expo prebuild`. Without it the
+// prebuild fails 60–90s in with a generic error that doesn't say "install
+// pods". Surfacing it here turns that into a 200ms warning the user can
+// act on before the spinner even starts. Warn-only because the user might
+// pick installNow=false and never need it; runTasks re-checks and hard-fails
+// before invoking prebuild when installNow is true.
+async function checkCocoapods() {
+  try {
+    const { stdout } = await exec("pod", ["--version"], { timeout: 5000 });
+    return { ok: true, detail: `CocoaPods ${stdout.trim()}` };
+  } catch {
+    return {
+      ok: true,
+      kind: "warn",
+      title: "CocoaPods not found on PATH.",
+      fix: "Install before iOS prebuild: brew install cocoapods (or sudo gem install cocoapods)",
+      detail: "CocoaPods missing",
+    };
+  }
+}
+
 // The required Node major comes from a string like ">=24.0.0 <25". Pull the
 // first major-version-floor we can recognize; anything else means we don't
 // pin the project major and only enforce the absolute CLI floor.
@@ -150,6 +171,7 @@ export async function runPreflight({ manifest }) {
     checkXcode({ minimumMajor: minimumXcode }),
     checkSimulatorRuntime({ minimumIos }),
     checkPnpm(),
+    checkCocoapods(),
   ]);
 
   const failures = results.filter((r) => !r.ok);

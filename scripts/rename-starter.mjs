@@ -316,6 +316,10 @@ function validateBundleId(s) {
     console.error(`--bundle-id must look like com.acme.foo (got ${JSON.stringify(s)})`);
     process.exit(2);
   }
+  if (/^com\.example\./i.test(s)) {
+    console.error(`--bundle-id com.example.* is a placeholder Apple rejects on upload. Use your real reverse-DNS prefix (e.g. com.acme.myapp).`);
+    process.exit(2);
+  }
 }
 function validateSlug(s, label) {
   if (!/^[a-z0-9][a-z0-9-]*$/.test(s)) {

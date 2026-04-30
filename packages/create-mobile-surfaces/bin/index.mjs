@@ -14,7 +14,12 @@ import {
   runPreflight,
 } from "../src/preflight.mjs";
 import { runPrompts } from "../src/prompts.mjs";
-import { PNPM_MISSING_TAG, runExistingTasks, runTasks } from "../src/run-tasks.mjs";
+import {
+  COCOAPODS_MISSING_TAG,
+  PNPM_MISSING_TAG,
+  runExistingTasks,
+  runTasks,
+} from "../src/run-tasks.mjs";
 import { targetDirState } from "../src/scaffold.mjs";
 import { renderExistingSuccess, renderSuccess } from "../src/success.mjs";
 import { loadTemplateManifest } from "../src/template-manifest.mjs";
@@ -117,6 +122,8 @@ try {
     log.warn(errors.installInterrupted(config.projectName));
   } else if (err && err.tag === PNPM_MISSING_TAG) {
     log.error(errors.pnpmMissing(config.projectName));
+  } else if (err && err.tag === COCOAPODS_MISSING_TAG) {
+    log.error(errors.cocoapodsMissing(config.projectName));
   } else {
     log.error(errors.installFailed(config.projectName));
   }

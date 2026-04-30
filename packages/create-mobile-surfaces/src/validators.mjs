@@ -23,6 +23,9 @@ export function validateBundleId(s) {
   if (!/^[A-Za-z][A-Za-z0-9-]*(\.[A-Za-z0-9-]+){1,}$/.test(s)) {
     return "Should look like com.acme.myapp — at least two reverse-DNS segments.";
   }
+  if (/^com\.example\./i.test(s)) {
+    return "com.example.* is a placeholder Apple rejects on upload. Use your real reverse-DNS prefix (e.g. com.acme.myapp).";
+  }
   return undefined;
 }
 
