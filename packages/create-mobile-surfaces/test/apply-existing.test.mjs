@@ -4,12 +4,16 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import {
+  applyWidgetRename,
   buildPatchedAppJson,
+  deriveSwiftPrefixFromEvidence,
   formatPackageSpec,
   installablePackages,
   patchAppJson,
+  renameWidgetFilename,
   renderManualSnippet,
   resolveAppRoot,
+  rewriteContent,
   widgetCopyDecision,
 } from "../src/apply-existing.mjs";
 
@@ -171,6 +175,218 @@ describe("patchAppJson — file I/O", () => {
     assert.equal(reread.expo.ios.bundleIdentifier, "com.acme");
     assert.equal(reread.expo.ios.deploymentTarget, "16.2");
     assert.equal(reread.expo.plugins.length, 2);
+  });
+});
+
+describe("buildPatchedAppJson — appleTeamId", () => {
+  it("writes expo.ios.appleTeamId when given a teamId and the existing config has none", () => {
+    const existing = JSON.stringify({ expo: { name: "Host" } });
+    const patched = JSON.parse(
+      buildPatchedAppJson({ existing, plan: samplePlan, teamId: "ABCDE12345" }),
+    );
+    assert.equal(patched.expo.ios.appleTeamId, "ABCDE12345");
+  });
+
+  it("overwrites the placeholder XXXXXXXXXX team id", () => {
+    const existing = JSON.stringify({
+      expo: { ios: { appleTeamId: "XXXXXXXXXX" } },
+    });
+    const patched = JSON.parse(
+      buildPatchedAppJson({ existing, plan: samplePlan, teamId: "ABCDE12345" }),
+    );
+    assert.equal(patched.expo.ios.appleTeamId, "ABCDE12345");
+  });
+
+  it("does NOT overwrite an existing real team id different from the input", () => {
+    const existing = JSON.stringify({
+      expo: { ios: { appleTeamId: "REALTEAM01" } },
+    });
+    const patched = JSON.parse(
+      buildPatchedAppJson({ existing, plan: samplePlan, teamId: "OTHERTEAM2" }),
+    );
+    assert.equal(patched.expo.ios.appleTeamId, "REALTEAM01");
+  });
+
+  it("leaves appleTeamId untouched when teamId is null", () => {
+    const existing = JSON.stringify({
+      expo: { ios: { appleTeamId: "REALTEAM01" } },
+    });
+    const patched = JSON.parse(
+      buildPatchedAppJson({ existing, plan: samplePlan, teamId: null }),
+    );
+    assert.equal(patched.expo.ios.appleTeamId, "REALTEAM01");
+  });
+});
+
+describe("renderManualSnippet — appleTeamId", () => {
+  it("includes appleTeamId in the ios block when teamId is provided", () => {
+    const snippet = JSON.parse(
+      renderManualSnippet(samplePlan, { teamId: "ABCDE12345" }),
+    );
+    assert.equal(snippet.ios.appleTeamId, "ABCDE12345");
+  });
+
+  it("omits appleTeamId when teamId is null", () => {
+    const snippet = JSON.parse(renderManualSnippet(samplePlan, { teamId: null }));
+    assert.equal(snippet.ios.appleTeamId, undefined);
+  });
+
+  it("creates the ios block solely for appleTeamId when there are no other ios additions", () => {
+    const empty = {
+      ...samplePlan,
+      pluginsToAdd: [],
+      infoPlistToAdd: {},
+      deploymentTargetTo: null,
+    };
+    const snippet = JSON.parse(renderManualSnippet(empty, { teamId: "ABCDE12345" }));
+    assert.deepEqual(snippet, { ios: { appleTeamId: "ABCDE12345" } });
+  });
+});
+
+describe("renameWidgetFilename", () => {
+  it("rewrites the MobileSurfaces prefix only at the start of the basename", () => {
+    assert.equal(renameWidgetFilename("MobileSurfacesWidget.swift", "Acme"), "AcmeWidget.swift");
+    assert.equal(
+      renameWidgetFilename("MobileSurfacesActivityAttributes.swift", "Acme"),
+      "AcmeActivityAttributes.swift",
+    );
+    assert.equal(renameWidgetFilename("MobileSurfacesLiveActivity.swift", "Acme"), "AcmeLiveActivity.swift");
+  });
+
+  it("returns null for files that don't start with MobileSurfaces", () => {
+    assert.equal(renameWidgetFilename("Info.plist", "Acme"), null);
+    assert.equal(renameWidgetFilename("expo-target.config.js", "Acme"), null);
+    assert.equal(renameWidgetFilename("Assets.xcassets", "Acme"), null);
+  });
+});
+
+describe("rewriteContent", () => {
+  it("rewrites struct MobileSurfacesActivityAttributes → struct AcmeActivityAttributes", () => {
+    const source = "struct MobileSurfacesActivityAttributes: ActivityAttributes { }";
+    const out = rewriteContent({
+      source,
+      swiftPrefix: "Acme",
+      widgetTarget: "AcmeWidget",
+    });
+    assert.equal(out, "struct AcmeActivityAttributes: ActivityAttributes { }");
+  });
+
+  it("rewrites the more-specific widget target before the generic prefix", () => {
+    const source =
+      'name: "MobileSurfacesWidget"\nstruct MobileSurfacesWidgetBundle: WidgetBundle { }';
+    const out = rewriteContent({
+      source,
+      swiftPrefix: "Acme",
+      widgetTarget: "AcmeWidget",
+    });
+    assert.match(out, /name: "AcmeWidget"/);
+    assert.match(out, /struct AcmeWidgetBundle: WidgetBundle/);
+  });
+
+  it("is a no-op when the source contains no MobileSurfaces tokens", () => {
+    const source = "import SwiftUI\n// nothing to see here\n";
+    const out = rewriteContent({
+      source,
+      swiftPrefix: "Acme",
+      widgetTarget: "AcmeWidget",
+    });
+    assert.equal(out, source);
+  });
+});
+
+describe("deriveSwiftPrefixFromEvidence", () => {
+  it("prefers expo.name from a json config", () => {
+    const evidence = {
+      packageName: "fallback",
+      config: { kind: "json", parsed: { name: "Acme App" } },
+    };
+    assert.equal(deriveSwiftPrefixFromEvidence(evidence), "AcmeApp");
+  });
+
+  it("falls back to packageName when config is js/ts", () => {
+    const evidence = {
+      packageName: "acme-mobile",
+      config: { kind: "ts", path: "/x/app.config.ts" },
+    };
+    assert.equal(deriveSwiftPrefixFromEvidence(evidence), "AcmeMobile");
+  });
+
+  it("returns null when nothing usable is found", () => {
+    assert.equal(deriveSwiftPrefixFromEvidence({}), null);
+    assert.equal(deriveSwiftPrefixFromEvidence({ packageName: "" }), null);
+  });
+});
+
+describe("applyWidgetRename — filesystem pass", () => {
+  function seedFakeWidget(dir) {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, "MobileSurfacesActivityAttributes.swift"),
+      "struct MobileSurfacesActivityAttributes: ActivityAttributes { }",
+    );
+    fs.writeFileSync(
+      path.join(dir, "MobileSurfacesWidgetBundle.swift"),
+      "struct MobileSurfacesWidgetBundle: WidgetBundle { var body: some Widget { MobileSurfacesLiveActivity() } }",
+    );
+    fs.writeFileSync(
+      path.join(dir, "MobileSurfacesLiveActivity.swift"),
+      'struct MobileSurfacesLiveActivity: Widget { var body: some WidgetConfiguration { ActivityConfiguration(for: MobileSurfacesActivityAttributes.self) { _ in EmptyView() } } }',
+    );
+    fs.writeFileSync(
+      path.join(dir, "expo-target.config.js"),
+      'module.exports = { type: "widget", name: "MobileSurfacesWidget" };',
+    );
+    fs.writeFileSync(path.join(dir, "Info.plist"), "<plist></plist>\n");
+  }
+
+  it("renames MobileSurfacesWidget.swift family to <prefix>... .swift", () => {
+    const dir = path.join(tmp, "targets", "widget");
+    seedFakeWidget(dir);
+    const result = applyWidgetRename({ destDir: dir, swiftPrefix: "Acme" });
+    assert.equal(result.renamed, true);
+    const files = fs.readdirSync(dir).sort();
+    assert.deepEqual(files, [
+      "AcmeActivityAttributes.swift",
+      "AcmeLiveActivity.swift",
+      "AcmeWidgetBundle.swift",
+      "Info.plist",
+      "expo-target.config.js",
+    ]);
+  });
+
+  it("rewrites struct MobileSurfacesActivityAttributes to struct <prefix>ActivityAttributes", () => {
+    const dir = path.join(tmp, "targets", "widget");
+    seedFakeWidget(dir);
+    applyWidgetRename({ destDir: dir, swiftPrefix: "Acme" });
+    const swift = fs.readFileSync(path.join(dir, "AcmeActivityAttributes.swift"), "utf8");
+    assert.match(swift, /struct AcmeActivityAttributes: ActivityAttributes/);
+    assert.equal(/MobileSurfaces/.test(swift), false);
+  });
+
+  it("rewrites name: \"MobileSurfacesWidget\" in expo-target.config.js to <prefix>Widget", () => {
+    const dir = path.join(tmp, "targets", "widget");
+    seedFakeWidget(dir);
+    applyWidgetRename({ destDir: dir, swiftPrefix: "Acme" });
+    const cfg = fs.readFileSync(path.join(dir, "expo-target.config.js"), "utf8");
+    assert.match(cfg, /name: "AcmeWidget"/);
+  });
+
+  it("returns reason=no-swift-prefix when prefix is empty", () => {
+    const dir = path.join(tmp, "targets", "widget");
+    seedFakeWidget(dir);
+    const result = applyWidgetRename({ destDir: dir, swiftPrefix: "" });
+    assert.equal(result.renamed, false);
+    assert.equal(result.reason, "no-swift-prefix");
+    // Files untouched.
+    assert.ok(fs.existsSync(path.join(dir, "MobileSurfacesActivityAttributes.swift")));
+  });
+
+  it("returns reason=already-matches when the user's prefix is already MobileSurfaces", () => {
+    const dir = path.join(tmp, "targets", "widget");
+    seedFakeWidget(dir);
+    const result = applyWidgetRename({ destDir: dir, swiftPrefix: "MobileSurfaces" });
+    assert.equal(result.renamed, false);
+    assert.equal(result.reason, "already-matches");
   });
 });
 

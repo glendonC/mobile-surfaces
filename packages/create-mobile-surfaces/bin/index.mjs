@@ -14,7 +14,7 @@ import {
   runPreflight,
 } from "../src/preflight.mjs";
 import { runPrompts } from "../src/prompts.mjs";
-import { runExistingTasks, runTasks } from "../src/run-tasks.mjs";
+import { PNPM_MISSING_TAG, runExistingTasks, runTasks } from "../src/run-tasks.mjs";
 import { targetDirState } from "../src/scaffold.mjs";
 import { renderExistingSuccess, renderSuccess } from "../src/success.mjs";
 import { loadTemplateManifest } from "../src/template-manifest.mjs";
@@ -77,6 +77,7 @@ if (mode.kind === MODE.EXISTING_EXPO) {
       packageManager,
       installNow: result.installNow,
       manifest,
+      teamId: result.teamId ?? null,
     });
   } catch (err) {
     if (interrupted) {
@@ -114,6 +115,8 @@ try {
 } catch (err) {
   if (interrupted) {
     log.warn(errors.installInterrupted(config.projectName));
+  } else if (err && err.tag === PNPM_MISSING_TAG) {
+    log.error(errors.pnpmMissing(config.projectName));
   } else {
     log.error(errors.installFailed(config.projectName));
   }

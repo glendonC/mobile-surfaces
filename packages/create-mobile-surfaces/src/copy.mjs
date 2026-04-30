@@ -99,6 +99,8 @@ export const errors = {
     `./${dir} already exists and isn't empty.\nChoose a different name, or remove it and run again.`,
   installFailed: (dir) =>
     `pnpm install failed.\n\nYour project is at ./${dir}. The scaffold is complete; only\ndependency installation failed. Try:\n  cd ${dir} && pnpm install\n\nStill failing? See docs/troubleshooting.md.`,
+  pnpmMissing: (dir) =>
+    `pnpm isn't on your PATH, but the Mobile Surfaces template ships a\npnpm-lock.yaml. Your project is at ./${dir}; the scaffold is\ncomplete. Enable pnpm and finish the install with:\n  corepack enable pnpm\n  cd ${dir} && pnpm install`,
   installInterrupted: (dir) =>
     `Stopped. Your project is at ./${dir}, but install didn't\nfinish. Resume with:\n  cd ${dir} && pnpm install`,
   applyFailed:

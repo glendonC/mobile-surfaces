@@ -2,9 +2,39 @@
 // step plus an elapsed-time stamp on success. Errors propagate; the
 // entrypoint maps them to the right user-facing failure copy.
 
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { applyToExisting } from "./apply-existing.mjs";
 import * as scaffold from "./scaffold.mjs";
 import { task } from "./ui.mjs";
+
+const execFileAsync = promisify(execFile);
+
+// Tag used by bin/index.mjs to swap the generic "install failed" copy for
+// a specific corepack pointer. The string lives in the error message itself
+// so the install log shows exactly what the user needs.
+export const PNPM_MISSING_TAG = "pnpm-missing";
+
+// Greenfield always installs with pnpm because the template ships a
+// pnpm-lock.yaml. Preflight only warns when pnpm is missing (so the
+// add-to-existing path stays usable on npm/yarn/bun). This guard catches
+// the greenfield case before we shell out and produce a generic ENOENT.
+//
+// Implemented as a probe rather than a `which` check so we lean on the
+// same execFile path the rest of preflight uses — works the same way on
+// macOS regardless of the user's shell config.
+export async function ensurePnpmAvailable({ exec = execFileAsync } = {}) {
+  try {
+    await exec("pnpm", ["-v"], { timeout: 5000 });
+  } catch (cause) {
+    const err = new Error(
+      "pnpm not found on PATH. The Mobile Surfaces template ships a pnpm-lock.yaml. Enable pnpm with: corepack enable pnpm",
+    );
+    err.tag = PNPM_MISSING_TAG;
+    err.cause = cause;
+    throw err;
+  }
+}
 
 export async function runTasks({ config, target }) {
   await task("Copying template", () => scaffold.copyTemplate({ target }));
@@ -16,6 +46,13 @@ export async function runTasks({ config, target }) {
     // Greenfield always uses pnpm because the template ships pnpm-lock.yaml.
     // Add-mode uses a separate runner that respects the user's detected pm.
     const packageManager = config.packageManager ?? "pnpm";
+
+    // Catch the missing-pnpm case here (not in preflight) so add-to-existing
+    // — which legitimately runs on npm/yarn/bun — never gets blocked by it.
+    if (packageManager === "pnpm") {
+      await ensurePnpmAvailable();
+    }
+
     await task(`Installing dependencies (${packageManager} install) — usually 30–60s`, () =>
       scaffold.runInstall({ target, packageManager }),
     );
@@ -31,7 +68,7 @@ export async function runTasks({ config, target }) {
 // Add-to-existing variant. The plan was already confirmed; this runner
 // narrates the apply phase as one or two grouped tasks. The summary
 // returned drives the success screen and the manual-followups list.
-export async function runExistingTasks({ evidence, plan, packageManager, installNow, manifest }) {
+export async function runExistingTasks({ evidence, plan, packageManager, installNow, manifest, teamId = null }) {
   const installable = plan.packagesToAdd.filter((p) => !p.workspace).length;
   const installLabel = installable > 0
     ? `Adding ${installable} package${installable === 1 ? "" : "s"} (${packageManager} add) — usually under 30s`
@@ -48,6 +85,7 @@ export async function runExistingTasks({ evidence, plan, packageManager, install
       plan,
       packageManager,
       manifest,
+      teamId,
     });
   });
 
