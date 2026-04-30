@@ -2,7 +2,9 @@
   "name": "@mobile-surfaces/design-tokens",
   "version": "0.1.0",
   "description": "Shared design tokens for the Mobile Surfaces React Native app and SwiftUI widget target.",
-  "private": true,
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "MIT",
   "homepage": "https://github.com/glendonC/mobile-surfaces#readme",
   "repository": {
@@ -24,5 +26,9 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts"
-  }
+  },
+  "files": [
+    "src",
+    "tokens.json"
+  ]
 }

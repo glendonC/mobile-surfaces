@@ -2,7 +2,9 @@
   "name": "@mobile-surfaces/surface-contracts",
   "version": "0.1.0",
   "description": "Shared LiveSurfaceSnapshot contract, generated fixtures, and ActivityKit/APNs mapping helpers for Mobile Surfaces.",
-  "private": true,
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "MIT",
   "homepage": "https://github.com/glendonC/mobile-surfaces#readme",
   "repository": {
@@ -25,5 +27,9 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts"
-  }
+  },
+  "files": [
+    "src",
+    "schema.json"
+  ]
 }

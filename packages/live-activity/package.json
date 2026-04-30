@@ -7,7 +7,15 @@
   "exports": {
     ".": "./index.ts"
   },
-  "private": true,
+  "files": [
+    "index.ts",
+    "src",
+    "ios",
+    "expo-module.config.json"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "MIT",
   "homepage": "https://github.com/glendonC/mobile-surfaces#readme",
   "repository": {

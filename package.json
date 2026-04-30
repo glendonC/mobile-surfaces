@@ -71,5 +71,8 @@
     "cli:smoke:existing": "pnpm --filter create-mobile-surfaces smoke:existing",
     "cli:test": "pnpm --filter create-mobile-surfaces test",
     "typecheck": "pnpm --filter mobile-surfaces-app typecheck"
+  },
+  "devDependencies": {
+    "@changesets/cli": "2.31.0"
   }
 }
