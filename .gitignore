@@ -149,3 +149,7 @@ vite.config.ts.timestamp-*
 packages/create-mobile-surfaces/template/template.tgz
 packages/create-mobile-surfaces/template/manifest.json
 
+# rename-starter stamps this in a user's checkout to track the local identity.
+# Never ship it back to upstream when forking.
+.mobile-surfaces-identity.json
+
