@@ -21,6 +21,7 @@ flowchart LR
 
 ```ts
 interface LiveSurfaceSnapshot {
+  schemaVersion: "0";         // discriminator; bumped only on breaking changes
   id: string;                 // unique per snapshot revision (event-scoped)
   surfaceId: string;          // stable across snapshots for the same surface
   state: "queued" | "active" | "paused" | "attention" | "bad_timing" | "completed";
@@ -81,7 +82,18 @@ function snapshotFromJob(job: Job): LiveSurfaceSnapshot {
 }
 ```
 
-Keep this function pure. Validate the output with `LiveSurfaceSnapshot`'s TypeScript shape; the v0 starter does not ship a runtime validator, but the schema at `packages/surface-contracts/schema.json` is the one source of truth and can be wired into Ajv or Zod as a thin guard if you need it.
+Keep this function pure. The package ships a runtime validator built from a Zod source of truth, so you can guard the wire boundary in two lines:
+
+```ts
+import { assertSnapshot, safeParseSnapshot, liveSurfaceSnapshot } from "@mobile-surfaces/surface-contracts";
+
+const snapshot = assertSnapshot(snapshotFromJob(job)); // throws ZodError on invalid
+const result = safeParseSnapshot(input);               // { success, data | error }
+```
+
+The published JSON Schema at [`unpkg.com/@mobile-surfaces/surface-contracts@0/schema.json`](https://unpkg.com/@mobile-surfaces/surface-contracts@0/schema.json) is generated from the same Zod source and pinned to major `0`. Use it for IDE tooling, OpenAPI components, or non-TypeScript validators (Ajv, jsonschema, etc.).
+
+Every snapshot carries a `schemaVersion: "0"` discriminator. The validator defaults the field to `"0"` when missing, so backends written before the field existed continue to parse, but new code should emit it explicitly.
 
 ### 2. Derive the wire payloads
 
@@ -191,6 +203,12 @@ pnpm mobile:push:device:liveactivity -- \
 Or send the full `LiveSurfaceSnapshot`-derived state from a fixture by writing a snapshot file your service emits and pointing `--snapshot-file` at it. See [`scripts/README.md`](../scripts/README.md) for the full set of flags, including `--event=start`, `--stale-date`, `--dismissal-date`, and `--priority`.
 
 When something fails, [`docs/troubleshooting.md`](./troubleshooting.md) maps the most common APNs response codes back to causes.
+
+## Localization (v0 Non-Goal)
+
+All string fields on `LiveSurfaceSnapshot` are pre-rendered for one locale per snapshot. The backend selects the locale (per-user preference, request `Accept-Language`, etc.) and emits the snapshot in that locale. If the locale changes, send a fresh snapshot — there is no in-place locale switch on the client.
+
+A future `LocalizedString` shape (e.g. `{ en: string; "es-MX"?: string }`) would arrive in v1 and bump `schemaVersion` to `"1"`. v0 stays string-only on purpose; ActivityKit content states are size-bound (4 KB) and shipping every translation per push wastes that budget.
 
 ## What Stays Stable
 

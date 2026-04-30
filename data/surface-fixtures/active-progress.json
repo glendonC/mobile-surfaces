@@ -1,4 +1,6 @@
 {
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@0/schema.json",
+  "schemaVersion": "0",
   "id": "fixture-active-progress",
   "surfaceId": "surface-active-progress",
   "state": "active",

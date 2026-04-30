@@ -135,9 +135,22 @@ Run:
 pnpm surface:check
 ```
 
-This validates JSON fixtures, checks generated TypeScript fixtures for drift, and verifies the duplicated ActivityKit attribute definitions remain byte-identical:
+The flow:
 
-- `packages/live-activity/ios/MobileSurfacesActivityAttributes.swift`
-- `apps/mobile/targets/widget/MobileSurfacesActivityAttributes.swift`
+1. **Zod is the single source of truth.** `packages/surface-contracts/src/schema.ts` defines `liveSurfaceSnapshot` (and the activity / alert payload shapes) as Zod v4 objects. The TypeScript types are inferred from the schema (`z.infer<typeof liveSurfaceSnapshot>`); there is no second hand-written interface to drift.
+2. **JSON Schema is generated.** `scripts/build-schema.mjs` calls `z.toJSONSchema` and writes the result to `packages/surface-contracts/schema.json`. `surface:check` runs the generator with `--check` so a stale committed file fails CI.
+3. **Fixtures are validated by the same Zod schema.** `scripts/validate-surface-fixtures.mjs` parses every JSON under `data/surface-fixtures/` through `liveSurfaceSnapshot.safeParse`. Fixtures carry a `$schema` pointer for IDE tooling; the validator strips it before parsing because the wire payload itself never carries `$schema`.
+4. **Generated TypeScript fixtures are checked for drift** against the JSON via `scripts/generate-surface-fixtures.mjs --check`.
+5. **Duplicated ActivityKit attribute files** must stay byte-identical:
+   - `packages/live-activity/ios/MobileSurfacesActivityAttributes.swift`
+   - `apps/mobile/targets/widget/MobileSurfacesActivityAttributes.swift`
 
-The duplication is intentional. The app module and widget extension compile in separate Swift modules, and ActivityKit relies on matching Codable shapes.
+The Swift duplication is intentional: the app module and widget extension compile in separate Swift modules, and ActivityKit relies on matching Codable shapes.
+
+### Schema Evolution
+
+`LiveSurfaceSnapshot` carries a `schemaVersion: "0"` literal. The rule:
+
+- **Bump `schemaVersion` only on a breaking change.** Renaming a field, removing a field, changing a type, tightening a constraint (e.g. an enum drops a value, a string gains a regex it did not have before), or anything that would make a previously valid payload fail to parse.
+- **Additive optional fields are non-breaking.** Adding a new `actionLabel`-style optional field does not require a bump. Existing payloads still parse; new clients can read the new field when present.
+- **The `unpkg.com/@mobile-surfaces/surface-contracts@0/schema.json` URL pins to major `0`.** Backends point IDE tooling and external validators at it; a future v1 contract would publish at the corresponding major URL.

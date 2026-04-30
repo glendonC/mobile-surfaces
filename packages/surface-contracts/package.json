@@ -49,5 +49,8 @@
     "dev": "tsup --watch",
     "clean": "rm -rf dist",
     "prepublishOnly": "pnpm build"
+  },
+  "dependencies": {
+    "zod": "^4"
   }
 }

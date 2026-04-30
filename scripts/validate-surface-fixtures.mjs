@@ -1,48 +1,47 @@
 #!/usr/bin/env node
-import fs from "node:fs";
-import path from "node:path";
+// Validates every JSON fixture under data/surface-fixtures against the Zod
+// liveSurfaceSnapshot. The shared schema is the single source of truth for both
+// the published JSON Schema and runtime parsing. Fixtures carry a $schema
+// pointer for IDE tooling; we strip it before parsing because the wire payload
+// itself does not carry $schema.
+import { readFileSync, readdirSync } from "node:fs";
+import { resolve, join } from "node:path";
+import { liveSurfaceSnapshot } from "../packages/surface-contracts/src/schema.ts";
 
-const fixtureDir = path.resolve("data/surface-fixtures");
-const indexPath = path.join(fixtureDir, "index.json");
-const schemaPath = path.resolve("packages/surface-contracts/schema.json");
-const entries = JSON.parse(fs.readFileSync(indexPath, "utf8"));
-const schema = JSON.parse(fs.readFileSync(schemaPath, "utf8"));
+const fixtureDir = resolve("data/surface-fixtures");
+const indexPath = join(fixtureDir, "index.json");
+const entries = JSON.parse(readFileSync(indexPath, "utf8"));
 
-const requiredString = schema.requiredStringFields;
-const validStages = new Set(schema.liveSurfaceStages);
-const validStates = new Set(schema.liveSurfaceStates);
+let failed = 0;
 
-const errors = [];
 for (const entry of entries) {
-  const file = path.resolve(fixtureDir, entry);
-  const fixture = JSON.parse(fs.readFileSync(file, "utf8"));
-  const label = path.relative(process.cwd(), file);
-
-  for (const key of requiredString) {
-    if (typeof fixture[key] !== "string" || fixture[key].length === 0) {
-      errors.push(`${label}: ${key} must be a non-empty string`);
+  const filename = entry.replace(/^\.\//, "");
+  const file = resolve(fixtureDir, filename);
+  const fixture = JSON.parse(readFileSync(file, "utf8"));
+  const { $schema: _ignored, ...rest } = fixture;
+  const result = liveSurfaceSnapshot.safeParse(rest);
+  if (!result.success) {
+    failed += 1;
+    console.error(`✗ ${filename}`);
+    for (const issue of result.error.issues) {
+      const path = issue.path.length ? issue.path.join(".") : "(root)";
+      console.error(`  ${path}: ${issue.message}`);
     }
   }
-  if (!validStates.has(fixture.state)) {
-    errors.push(`${label}: state is not a known live surface state`);
-  }
-  if (!validStages.has(fixture.stage)) {
-    errors.push(`${label}: stage must be prompted, inProgress, or completing`);
-  }
-  if (typeof fixture.progress !== "number" || fixture.progress < 0 || fixture.progress > 1) {
-    errors.push(`${label}: progress must be a number from 0 to 1`);
-  }
-  if (!Number.isInteger(fixture.estimatedSeconds) || fixture.estimatedSeconds < 0) {
-    errors.push(`${label}: estimatedSeconds must be a non-negative integer`);
-  }
-  if (!Number.isInteger(fixture.morePartsCount) || fixture.morePartsCount < 0) {
-    errors.push(`${label}: morePartsCount must be a non-negative integer`);
+}
+
+const onDisk = readdirSync(fixtureDir).filter(
+  (f) => f.endsWith(".json") && f !== "index.json",
+);
+const indexed = new Set(entries.map((e) => e.replace(/^\.\//, "")));
+for (const f of onDisk) {
+  if (!indexed.has(f)) {
+    failed += 1;
+    console.error(`✗ ${f}: present on disk but missing from index.json`);
   }
 }
 
-if (errors.length > 0) {
-  console.error(errors.join("\n"));
+if (failed > 0) {
   process.exit(1);
 }
-
 console.log(`Validated ${entries.length} surface fixtures.`);

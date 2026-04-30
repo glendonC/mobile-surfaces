@@ -1,64 +1,27 @@
-import schema from "../schema.json";
+export {
+  liveSurfaceSnapshot,
+  liveSurfaceState,
+  liveSurfaceStage,
+  liveSurfaceActivityContentState,
+  liveSurfaceAlertPayload,
+  liveSurfaceStates,
+  liveSurfaceStages,
+  assertSnapshot,
+  safeParseSnapshot,
+} from "./schema.js";
+export type {
+  LiveSurfaceSnapshot,
+  LiveSurfaceState,
+  LiveSurfaceStage,
+  LiveSurfaceActivityContentState,
+  LiveSurfaceAlertPayload,
+} from "./schema.js";
 
-export const liveSurfaceStates = schema.liveSurfaceStates as unknown as readonly [
-  "queued",
-  "active",
-  "paused",
-  "attention",
-  "bad_timing",
-  "completed",
-];
-
-export type LiveSurfaceState = (typeof liveSurfaceStates)[number];
-
-export const liveSurfaceStages = schema.liveSurfaceStages as unknown as readonly [
-  "prompted",
-  "inProgress",
-  "completing",
-];
-
-export type LiveSurfaceStage = (typeof liveSurfaceStages)[number];
-
-export interface LiveSurfaceSnapshot {
-  id: string;
-  surfaceId: string;
-  state: LiveSurfaceState;
-  modeLabel: string;
-  contextLabel: string;
-  statusLine: string;
-  primaryText: string;
-  secondaryText: string;
-  actionLabel?: string;
-  estimatedSeconds: number;
-  morePartsCount: number;
-  progress: number;
-  stage: LiveSurfaceStage;
-  deepLink: string;
-}
-
-export interface LiveSurfaceActivityContentState {
-  headline: string;
-  subhead: string;
-  progress: number;
-  stage: LiveSurfaceStage;
-}
-
-export interface LiveSurfaceAlertPayload {
-  aps: {
-    alert: {
-      title: string;
-      body: string;
-    };
-    sound?: "default";
-  };
-  liveSurface: {
-    kind: "surface_snapshot";
-    snapshotId: string;
-    surfaceId: string;
-    state: LiveSurfaceState;
-    deepLink: string;
-  };
-}
+import type {
+  LiveSurfaceSnapshot,
+  LiveSurfaceActivityContentState,
+  LiveSurfaceAlertPayload,
+} from "./schema.js";
 
 export function toLiveActivityContentState(
   snapshot: LiveSurfaceSnapshot,
@@ -90,4 +53,4 @@ export function toAlertPayload(snapshot: LiveSurfaceSnapshot): LiveSurfaceAlertP
   };
 }
 
-export { surfaceFixtureSnapshots } from "./fixtures";
+export { surfaceFixtureSnapshots } from "./fixtures.js";

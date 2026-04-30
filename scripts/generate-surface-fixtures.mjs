@@ -18,6 +18,9 @@ const fixtures = Object.fromEntries(
   entries.map((entry) => {
     const filename = entry.replace(/^\.\//, "");
     const fixture = JSON.parse(fs.readFileSync(path.join(fixtureDir, filename), "utf8"));
+    // Strip $schema before generating the TS literal: it is JSON-only metadata
+    // for IDE tooling and would not satisfy LiveSurfaceSnapshot (strict).
+    delete fixture.$schema;
     return [toCamelKey(filename.replace(/\.json$/, "")), fixture];
   }),
 );
