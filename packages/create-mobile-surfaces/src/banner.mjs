@@ -1,40 +1,23 @@
 import pc from "picocolors";
-import { tagline } from "./copy.mjs";
+import { splashLines } from "./copy.mjs";
 import { getCliVersion } from "./template-manifest.mjs";
+import { rail } from "./ui.mjs";
 
-// A small phone pictogram — outer frame, inner Lock Screen, one notification
-// dot. Editable in place: the source looks like the rendered shape.
-const pictogram = `
-┌─────────┐
-│┌───────┐│
-││  ●    ││
-│└───────┘│
-└─────────┘
-`.trim().split("\n");
-
-// Compose two columns side by side: the cyan pictogram on the left, and the
-// wordmark / subtitle pinned to specific rows on the right. Other rows on
-// the right are blank so the pictogram stands alone there.
-function compose({ left, right, padding, gutter }) {
-  return left
-    .map((row, i) => {
-      const rightCol = right[i] ?? "";
-      return padding + pc.cyan(row) + (rightCol ? gutter + rightCol : "");
-    })
-    .join("\n");
-}
-
+// The banner opens the visual flow with `┌  mobile surfaces · v0.1.0`.
+// Everything that follows hangs off the same rail, so the screen reads as
+// one continuous column of content rather than a pile of independent blocks.
+// Inquirer prompts have their own visual treatment; the brief rail-break
+// they introduce reads as "your turn".
 export function renderBanner() {
-  const right = new Array(pictogram.length).fill("");
-  right[2] = pc.bold("MOBILE SURFACES");
-  right[3] = pc.dim(`${tagline} · v${getCliVersion()}`);
+  const wordmark = pc.bold("mobile surfaces");
+  const version = pc.dim(`v${getCliVersion()}`);
+  const sep = pc.dim("·");
 
-  const banner = compose({
-    left: pictogram,
-    right,
-    padding: "   ",
-    gutter: "   ",
+  process.stdout.write("\n");
+  rail.open(`${wordmark}  ${sep}  ${version}`);
+  rail.blank();
+  splashLines.forEach((line, i) => {
+    rail.line(i === 0 ? line : pc.dim(line));
   });
-
-  process.stdout.write(banner + "\n\n");
+  rail.blank();
 }

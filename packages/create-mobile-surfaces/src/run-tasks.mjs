@@ -1,104 +1,64 @@
-// Drives the scaffold steps through clack's tasks() so the user sees a
-// named checklist with per-step elapsed time. Errors propagate; the
+// Drives the scaffold steps as ora spinners so the user sees a label per
+// step plus an elapsed-time stamp on success. Errors propagate; the
 // entrypoint maps them to the right user-facing failure copy.
 
-import { tasks } from "@clack/prompts";
-import pc from "picocolors";
 import { applyToExisting } from "./apply-existing.mjs";
 import * as scaffold from "./scaffold.mjs";
-
-function formatElapsed(ms) {
-  const s = Math.round(ms / 1000);
-  if (s < 60) return `${s}s`;
-  return `${Math.floor(s / 60)}m ${s % 60}s`;
-}
-
-// Wraps a task so its completion line includes a dim elapsed-time stamp.
-// The label is what shows on success; the spinner during work shows the title.
-function timed(label, fn) {
-  return async () => {
-    const start = Date.now();
-    await fn();
-    return `${label}  ${pc.dim(`(${formatElapsed(Date.now() - start)})`)}`;
-  };
-}
+import { task } from "./ui.mjs";
 
 export async function runTasks({ config, target }) {
-  const steps = [
-    {
-      title: "Copying template",
-      task: timed("Copied template", () => scaffold.copyTemplate({ target })),
-    },
-    {
-      title: `Renaming to ${config.projectName}`,
-      task: timed(`Renamed to ${config.projectName}`, () =>
-        scaffold.renameIdentity({ target, config }),
-      ),
-    },
-  ];
+  await task("Copying template", () => scaffold.copyTemplate({ target }));
+  await task(`Renaming to ${config.projectName}`, () =>
+    scaffold.renameIdentity({ target, config }),
+  );
 
   if (config.installNow) {
     // Greenfield always uses pnpm because the template ships pnpm-lock.yaml.
-    // Add-mode (separate task runner) will pass the user's detected manager.
+    // Add-mode uses a separate runner that respects the user's detected pm.
     const packageManager = config.packageManager ?? "pnpm";
-    steps.push({
-      title: `Installing dependencies (${packageManager} install)`,
-      task: timed("Installed dependencies", () =>
-        scaffold.runInstall({ target, packageManager }),
-      ),
-    });
-    // Expo prebuild internally runs CocoaPods; we keep the label honest about
-    // the full scope rather than implying CocoaPods is a separate sub-step.
-    steps.push({
-      title: "Preparing iOS (expo prebuild + CocoaPods)",
-      task: timed("Prepared iOS", () =>
-        scaffold.prebuildIos({ target, packageManager }),
-      ),
-    });
+    await task(`Installing dependencies (${packageManager} install) — usually 30–60s`, () =>
+      scaffold.runInstall({ target, packageManager }),
+    );
+    // Expo prebuild internally runs CocoaPods; the label keeps that honest
+    // rather than implying CocoaPods is a separate sub-step.
+    await task(
+      "Preparing iOS (expo prebuild + CocoaPods) — usually 60–120s on a fresh checkout",
+      () => scaffold.prebuildIos({ target, packageManager }),
+    );
   }
-
-  await tasks(steps);
 }
 
-// Add-to-existing variant. The plan was already confirmed by the user; this
-// runner narrates the apply phase as a single grouped task so the spinner
-// shows progress against the work that's actually happening (install,
-// patch, copy, prebuild) and the summary returned can drive the success
-// screen and the manual-followups list.
+// Add-to-existing variant. The plan was already confirmed; this runner
+// narrates the apply phase as one or two grouped tasks. The summary
+// returned drives the success screen and the manual-followups list.
 export async function runExistingTasks({ evidence, plan, packageManager, installNow, manifest }) {
   const installable = plan.packagesToAdd.filter((p) => !p.workspace).length;
   const installLabel = installable > 0
-    ? `Adding ${installable} package${installable === 1 ? "" : "s"} (${packageManager} add)`
+    ? `Adding ${installable} package${installable === 1 ? "" : "s"} (${packageManager} add) — usually under 30s`
     : `Skipping install (no installable packages)`;
 
   let summary;
-  await tasks([
-    {
-      title: installLabel,
-      task: timed(installable > 0 ? "Added packages" : "No packages to add", async () => {
-        // The single applyToExisting() call covers all four steps. We bunch
-        // them under one spinner because they run quickly (compared to
-        // install/prebuild) and splitting would make the output noisy.
-        summary = await applyToExisting({
-          evidence,
-          plan,
-          packageManager,
-          manifest,
-        });
-      }),
-    },
-  ]);
+  // The applyToExisting() call covers install + patch + copy as a single
+  // chunk. Splitting them produces a noisy spinner cascade; bundling keeps
+  // the screen tight. Prebuild is its own task so its longer wait gets a
+  // dedicated spinner with elapsed time.
+  await task(installLabel, async () => {
+    summary = await applyToExisting({
+      evidence,
+      plan,
+      packageManager,
+      manifest,
+    });
+  });
 
   if (installNow && !plan.appConfigManual) {
-    await tasks([
-      {
-        title: "Preparing iOS (expo prebuild + CocoaPods)",
-        task: timed("Prepared iOS", async () => {
-          await scaffold.prebuildIos({ target: evidence.cwd, packageManager });
-          summary.prebuilt = true;
-        }),
+    await task(
+      "Preparing iOS (expo prebuild + CocoaPods) — usually 60–120s on a fresh checkout",
+      async () => {
+        await scaffold.prebuildIos({ target: evidence.cwd, packageManager });
+        summary.prebuilt = true;
       },
-    ]);
+    );
   } else if (installNow && plan.appConfigManual) {
     // Don't run prebuild against an unpatched config — it would regenerate
     // the iOS tree without the new plugins and Info.plist keys, which is

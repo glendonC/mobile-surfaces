@@ -159,26 +159,30 @@ export async function runPreflight({ manifest }) {
   return { failures, warnings, passed };
 }
 
+// Rendered through the shared rail so the toolchain status threads into the
+// same vertical column as the banner, prompts, and recap. Each row is its own
+// rail.line so the prefix starts at column 0 even if a long detail wraps.
+import { rail } from "./ui.mjs";
+
 export function renderFailures(failures) {
-  const header = errors.toolchainHeader(failures.length);
-  process.stdout.write(pc.red("✗  ") + header + "\n\n");
+  rail.blank();
+  rail.line(pc.red("✗") + "  " + errors.toolchainHeader(failures.length));
+  rail.blank();
   for (const f of failures) {
-    process.stdout.write("   " + pc.red("✗  ") + f.title + "\n");
-    process.stdout.write("      " + pc.dim(f.fix) + "\n\n");
+    rail.line(pc.red("✗") + "  " + f.title);
+    rail.line("   " + pc.dim(f.fix));
+    rail.blank();
   }
 }
 
 export function renderPassed(passed) {
   const summary = passed.map((p) => p.detail).filter(Boolean).join(" · ");
-  process.stdout.write(
-    pc.gray("◇  ") + pc.green("✓  ") + "Toolchain ready.  " + pc.dim(summary) + "\n",
-  );
+  rail.line(pc.green("✓") + "  Toolchain ready  " + pc.dim(summary));
 }
 
 export function renderWarnings(warnings) {
   for (const w of warnings) {
-    process.stdout.write(pc.gray("│\n"));
-    process.stdout.write(pc.gray("◇  ") + pc.yellow("▲  ") + w.title + "\n");
-    process.stdout.write(pc.gray("│  ") + pc.dim(w.fix) + "\n");
+    rail.line(pc.yellow("⚠") + "  " + w.title);
+    rail.line("   " + pc.dim(w.fix));
   }
 }

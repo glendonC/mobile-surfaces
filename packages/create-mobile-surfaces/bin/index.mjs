@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { intro, log } from "@clack/prompts";
 import { parseArgs } from "node:util";
 import path from "node:path";
 import pc from "picocolors";
@@ -19,6 +18,7 @@ import { runExistingTasks, runTasks } from "../src/run-tasks.mjs";
 import { targetDirState } from "../src/scaffold.mjs";
 import { renderExistingSuccess, renderSuccess } from "../src/success.mjs";
 import { loadTemplateManifest } from "../src/template-manifest.mjs";
+import { log, rail } from "../src/ui.mjs";
 
 // Don't crash when output is piped to a reader that closes early.
 process.stdout.on("error", (err) => {
@@ -40,17 +40,20 @@ const initialName = positionals[0]
 const manifest = loadTemplateManifest();
 
 renderBanner();
-intro(pc.bold(welcome));
+rail.line(pc.bold(welcome));
+rail.blank();
 
 const preflight = await runPreflight({ manifest });
 if (preflight.failures.length > 0) {
   renderFailures(preflight.failures);
   process.exit(1);
 }
+rail.step(1, 4, "Toolchain");
 renderPassed(preflight.passed);
 if (preflight.warnings.length > 0) {
   renderWarnings(preflight.warnings);
 }
+rail.blank();
 
 const mode = detectMode({ cwd: process.cwd(), targetName: initialName });
 
@@ -65,6 +68,7 @@ if (mode.kind === MODE.EXISTING_EXPO) {
 
   logger.open();
 
+  rail.step(4, 4, "Apply");
   let summary;
   try {
     summary = await runExistingTasks({
@@ -104,6 +108,7 @@ if (!dirState.ok) {
 
 logger.open();
 
+rail.step(4, 4, "Build");
 try {
   await runTasks({ config, target: dirState.target });
 } catch (err) {

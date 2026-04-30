@@ -9,9 +9,10 @@ import {
   successSections,
   successTitle,
 } from "./copy.mjs";
+import { rail } from "./ui.mjs";
 
-const indent = "   ";
-const inner = "     ";
+const indent = "  ";
+const inner = "    ";
 
 function section(title, lines) {
   return [
@@ -26,15 +27,15 @@ export function renderSuccess(config) {
 
   const blocks = [
     "",
-    pc.cyan("◆  ") + pc.bold(successTitle),
+    pc.green("✓") + "  " + pc.bold(successTitle),
     section("What's in the box", s.inTheBox.split("\n")),
     section("Try it now", s.tryItNow),
     section("When you're ready", s.whenReady),
     section("Learn more", s.learnMore),
-    "",
   ];
 
-  process.stdout.write(blocks.join("\n") + "\n");
+  rail.block(blocks.join("\n"));
+  rail.close(pc.dim("Happy shipping."));
 }
 
 // Add-mode success: shows what landed in the user's project, surfaces any
@@ -45,7 +46,7 @@ export function renderSuccess(config) {
 export function renderExistingSuccess({ summary, evidence, packageManager, plan }) {
   const projectName = evidence.packageName;
 
-  const blocks = ["", pc.cyan("◆  ") + pc.bold(existingSuccessTitle)];
+  const blocks = ["", pc.green("✓") + "  " + pc.bold(existingSuccessTitle)];
 
   // What we did — only show non-empty subsections so the screen stays tight.
   const did = [];
@@ -87,7 +88,7 @@ export function renderExistingSuccess({ summary, evidence, packageManager, plan 
   const next = existingSuccessSections({ projectName, packageManager });
   blocks.push(section("Try it now", next.tryItNow));
   blocks.push(section("Learn more", next.learnMore));
-  blocks.push("");
 
-  process.stdout.write(blocks.join("\n") + "\n");
+  rail.block(blocks.join("\n"));
+  rail.close(pc.dim("Happy shipping."));
 }

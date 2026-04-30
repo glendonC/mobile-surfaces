@@ -8,28 +8,11 @@
 // deployment target, widget files) is read from the template manifest at
 // runtime — never duplicated here.
 
-import { cancel, isCancel, note, select, text } from "@clack/prompts";
 import path from "node:path";
 import pc from "picocolors";
 import { cancelled, prompts as copy } from "./copy.mjs";
+import { askConfirm, askSelect, askText, log, rail } from "./ui.mjs";
 import { validateTeamId } from "./validators.mjs";
-
-function bail(value) {
-  if (isCancel(value)) {
-    cancel(cancelled);
-    process.exit(0);
-  }
-  return value;
-}
-
-function buildMessage({ message, helper }) {
-  if (!helper) return message;
-  const railed = helper
-    .split("\n")
-    .map((line) => pc.gray("│  ") + pc.dim(line))
-    .join("\n");
-  return `${message}\n${railed}`;
-}
 
 export function planChanges({ evidence, manifest }) {
   const plan = {
@@ -94,70 +77,83 @@ function configLabel(config) {
   return `app.config.${config.kind}`;
 }
 
+// Rail-prefixed recap. Rendered as a single rail.block so even if the terminal
+// is narrow, the column-zero rail prefix is preserved on every row.
 function renderFoundRecap(evidence) {
   const config = evidence.config;
   const lines = [
-    `Project       ${pc.bold(evidence.packageName)}`,
-    `Expo          ${pc.bold(evidence.expoVersion ?? "unknown")}`,
-    `Bundle id     ${pc.bold(config?.bundleId ?? "(not set)")}`,
-    `Package mgr   ${pc.bold(evidence.packageManager ?? "unknown")}`,
-    `Config        ${pc.bold(configLabel(config))}`,
-    `ios/ folder   ${evidence.hasIosDir ? pc.bold("present") : pc.dim("not present")}`,
+    pc.bold("What we found"),
+    "",
+    `  Project       ${pc.bold(evidence.packageName)}`,
+    `  Expo          ${pc.bold(evidence.expoVersion ?? "unknown")}`,
+    `  Bundle id     ${pc.bold(config?.bundleId ?? "(not set)")}`,
+    `  Package mgr   ${pc.bold(evidence.packageManager ?? "unknown")}`,
+    `  Config        ${pc.bold(configLabel(config))}`,
+    `  ios/ folder   ${evidence.hasIosDir ? pc.bold("present") : pc.dim("not present")}`,
   ];
   if (evidence.pluginsPresent.length > 0) {
-    lines.push(`Plugins       ${pc.dim(evidence.pluginsPresent.join(", "))}`);
+    lines.push(`  Plugins       ${pc.dim(evidence.pluginsPresent.join(", "))}`);
   }
-  note(lines.join("\n"), "What we found");
+  lines.push("");
+  rail.block(lines.join("\n"));
 }
 
 function renderPlanRecap(plan) {
-  const sections = [];
+  const lines = [pc.bold("What I'll add"), ""];
 
   if (plan.packagesToAdd.length > 0) {
-    sections.push(
-      `Packages\n${plan.packagesToAdd
-        .map((p) => "  " + pc.bold(p.name))
-        .join("\n")}`,
-    );
+    lines.push("  " + pc.bold("Packages"));
+    for (const p of plan.packagesToAdd) {
+      lines.push("    " + p.name);
+    }
+    lines.push("");
   }
 
   const appLines = [];
   for (const p of plan.pluginsToAdd) {
-    appLines.push(`  + plugins: ${pc.bold(p.name)}`);
+    appLines.push(`+ plugins: ${pc.bold(p.name)}`);
   }
   if (plan.deploymentTargetTo) {
-    appLines.push(`  + ios.deploymentTarget: ${pc.bold(plan.deploymentTargetTo)}`);
+    appLines.push(`+ ios.deploymentTarget: ${pc.bold(plan.deploymentTargetTo)}`);
   }
   for (const [k, v] of Object.entries(plan.infoPlistToAdd)) {
     const valStr = Array.isArray(v) ? `[${v.map(String).join(", ")}]` : String(v);
-    appLines.push(`  + ios.infoPlist.${k}: ${pc.bold(valStr)}`);
+    appLines.push(`+ ios.infoPlist.${k}: ${pc.bold(valStr)}`);
   }
   if (appLines.length > 0) {
-    const header = plan.appConfigManual
-      ? `${pc.dim("(diff for " + configLabel({ kind: plan.appConfigKind }) + " — apply by hand)")}\n`
-      : "";
-    sections.push(`In your app config\n${header}${appLines.join("\n")}`);
+    const heading = plan.appConfigManual
+      ? `In your app config ${pc.dim(`(apply by hand to ${configLabel({ kind: plan.appConfigKind })})`)}`
+      : "In your app config";
+    lines.push("  " + pc.bold(heading));
+    for (const l of appLines) lines.push("    " + l);
+    lines.push("");
   }
 
   if (plan.widgetFilesToCopy.length > 0) {
-    sections.push(
-      `New files\n${plan.widgetFilesToCopy
-        .map((f) => "  " + pc.bold(path.posix.relative(path.posix.dirname(plan.widgetTargetDir), f)))
-        .join("\n")}`,
-    );
+    const widgetParent = path.posix.dirname(plan.widgetTargetDir);
+    lines.push("  " + pc.bold("New files"));
+    for (const f of plan.widgetFilesToCopy) {
+      lines.push("    " + path.posix.relative(widgetParent, f));
+    }
+    lines.push("");
   }
 
   if (plan.willPrebuild) {
-    sections.push(`Then\n  ${pc.bold("expo prebuild --platform ios")}`);
+    lines.push("  " + pc.bold("Then"));
+    lines.push("    expo prebuild --platform ios");
+    lines.push("");
   }
 
-  note(sections.join("\n\n"), "What I'll add");
+  rail.block(lines.join("\n"));
 }
 
 export async function runExistingExpoPrompts({ evidence, manifest }) {
+  rail.step(2, 4, "Detection");
   renderFoundRecap(evidence);
 
   const plan = planChanges({ evidence, manifest });
+
+  rail.step(3, 4, "Plan");
 
   // Apple Team ID — ask only if we don't already have a real (non-placeholder)
   // value in app.json. JS/TS configs can't be read safely so we always ask.
@@ -170,43 +166,33 @@ export async function runExistingExpoPrompts({ evidence, manifest }) {
 
   let teamId = knownTeamId;
   if (!knownTeamId) {
-    teamId = bail(
-      await text({
-        message: buildMessage(copy.teamId),
-        placeholder: "(skip)",
-        validate: validateTeamId,
-      }),
-    );
+    teamId = await askText({
+      message: copy.teamId.message,
+      defaultValue: "",
+      validate: validateTeamId,
+    });
     teamId = teamId || null;
   }
 
-  const installNow = bail(
-    await select({
-      message: buildMessage(copy.installExisting),
-      initialValue: true,
-      options: [
-        { value: true, label: copy.installExisting.yes },
-        { value: false, label: copy.installExisting.no },
-      ],
-    }),
-  );
+  const installNow = await askSelect({
+    message: copy.installExisting.message,
+    defaultValue: true,
+    options: [
+      { value: true, label: copy.installExisting.yes, hint: copy.installExisting.yesHint },
+      { value: false, label: copy.installExisting.no },
+    ],
+  });
 
   // Plan recap, then a single confirm before any change is applied.
   renderPlanRecap(plan);
 
-  const proceed = bail(
-    await select({
-      message: "Apply these changes?",
-      initialValue: true,
-      options: [
-        { value: true, label: "Looks good, apply" },
-        { value: false, label: "Cancel" },
-      ],
-    }),
-  );
+  const proceed = await askConfirm({
+    message: "Apply these changes?",
+    defaultValue: true,
+  });
 
   if (!proceed) {
-    cancel(cancelled);
+    log.message(pc.dim(cancelled));
     process.exit(0);
   }
 

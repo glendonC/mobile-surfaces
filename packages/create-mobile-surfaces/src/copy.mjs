@@ -2,44 +2,47 @@
 // Voice rules: direct, calm, second-person. No exclamation marks. Sentences
 // not bullet fragments. Plain English the first time a technical term appears.
 
-export const tagline = "live activities for expo iOS";
+// The splash subtitle. First line says what it is, second line says
+// what's wired so a stranger gets the value in under three seconds.
+// Kept short so it renders on any terminal width. Plain strings — the
+// banner module decides which gets bold vs dim.
+export const splashLines = [
+  "Expo iOS starter for Live Activities and Dynamic Island.",
+  "ActivityKit, WidgetKit, and push wiring already done.",
+];
+
+// Kept for any one-liner usage.
+export const tagline = "live activities and dynamic island for expo iOS";
 
 export const welcome = "Let's set up your Live Activity starter. About 90 seconds.";
 
+// Each prompt's `message` is the exact text Inquirer renders before the
+// `›` cursor. Inquirer renders `(default)` automatically when a default is
+// passed, so suggested values come for free; explanatory hints go in the
+// message itself for the prompts that need them.
 export const prompts = {
   projectName: {
-    message: "Project name",
-    helper:
-      "Used as the folder name and the default display name in iOS Settings.\nLowercase, words-and-dashes only. You can change this later.",
-    placeholder: "lockscreen-demo",
+    message: "Project name (folder + iOS Settings display name)",
   },
   scheme: {
-    message: "URL scheme",
-    helper:
-      "Lets your app be opened from links like lockscreendemo://surface/123.\nLowercase letters and digits, starts with a letter.",
+    message: "URL scheme (used in deep links like myapp://…)",
   },
   bundleId: {
-    message: "Bundle identifier",
-    helper:
-      "How iOS identifies your app. Reverse-DNS, lowercase.\ncom.<your-domain>.<app> if you have a domain, com.example.<app> if not.",
+    message: "Bundle identifier (reverse-DNS, lowercase)",
   },
   teamId: {
-    message: "Apple Team ID",
-    helper:
-      "Required to sign builds for a real iPhone. Skip if you'll only\nuse the simulator for now. Find it at developer.apple.com → Membership.",
+    message: "Apple Team ID (skip if simulator-only)",
   },
   install: {
     message: "Install dependencies and prepare iOS now?",
-    helper:
-      "Runs pnpm install and expo prebuild. Adds about a minute.",
     yes: "Yes, install and prepare",
+    yesHint: "runs pnpm install + expo prebuild (about a minute)",
     no: "No, I'll run them myself",
   },
   installExisting: {
     message: "Run expo prebuild now to wire iOS up?",
-    helper:
-      "Packages get added either way. Prebuild generates the iOS\nproject from your app config. Adds about a minute.",
     yes: "Yes, run prebuild after",
+    yesHint: "packages get added either way; prebuild adds about a minute",
     no: "No, I'll run prebuild myself",
   },
   confirm: {
