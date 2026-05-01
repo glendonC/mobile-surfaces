@@ -26,16 +26,16 @@ The starter identity is intentionally generic:
 - Example bundle id: `com.example.mobilesurfaces`
 - Widget target: `MobileSurfacesWidget`
 
-## V0 Implementation Choice
+## Current Native Implementation Choice
 
-Use the existing local Expo ActivityKit module for v0, with `@bacons/apple-targets` generating and linking the WidgetKit target during Expo prebuild.
+Use the existing local Expo ActivityKit module, with `@bacons/apple-targets` generating and linking the WidgetKit target during Expo prebuild.
 
 Why:
 
 - The local module is already small and purpose-built: start, update, list, and end ActivityKit activities, plus push token and state events.
 - `@bacons/apple-targets` keeps SwiftUI widget source in `apps/mobile/targets/widget/`, outside generated `apps/mobile/ios/`, which fits Continuous Native Generation.
 - `software-mansion-labs/expo-live-activity` is a credible future option, but switching now would add dependency churn without improving the starter's contract boundary.
-- `expo-widgets` is promising for React-authored widgets and Live Activities, but it is still alpha and has active rendering/runtime rough edges. Treat it as an experiment, not the v0 default.
+- `expo-widgets` is promising for React-authored widgets and Live Activities, but it is still alpha and has active rendering/runtime rough edges. Treat it as an experiment, not the default starter path.
 
 The code should keep an adapter boundary around Live Activity operations so a future branch can swap the local module for `expo-live-activity` or `expo-widgets` without changing fixtures, docs, or product mapping code.
 
@@ -118,7 +118,7 @@ Six async methods (`areActivitiesEnabled`, `start`, `update`, `end`, `listActive
 
 ## Research Findings
 
-- `expo-widgets`: alpha, iOS-only, dev-build only, and subject to breaking changes. It can create widgets and Live Activities with Expo UI, but recent reports include blank widget bundles and intermittent Live Activity spinner overlays. Not stable enough for the default v0 starter path.
+- `expo-widgets`: alpha, iOS-only, dev-build only, and subject to breaking changes. It can create widgets and Live Activities with Expo UI, but recent reports include blank widget bundles and intermittent Live Activity spinner overlays. Not stable enough for the default starter path.
 - `software-mansion-labs/expo-live-activity`: a focused Expo module for iOS Live Activities with start, update, stop, and optional push support. It is a good adapter candidate once this starter has a clean boundary, but adopting it now is not required.
 - `@bacons/apple-targets`: current best fit for a SwiftUI WidgetKit target in an Expo project. It keeps target source outside generated `ios/` and links it during prebuild.
 - Native ActivityKit / WidgetKit: Live Activities update through the app or APNs, cannot do their own network fetches, have a 4 KB data limit, and require all Lock Screen and Dynamic Island layouts to be handled by the widget extension.
@@ -192,11 +192,11 @@ The flow:
 - **A v0 → v1 migration codec ships in the package.** `liveSurfaceSnapshotV0`, `migrateV0ToV1(parsed)`, and `safeParseAnyVersion(value)` let consumers promote stored payloads without manual editing. See [`schema-migration.md`](./schema-migration.md) for the full story.
 - **Bump `schemaVersion` only on a breaking change.** Renaming a field, removing a field, changing a type, tightening a constraint (e.g. an enum drops a value, a string gains a regex it did not have before), or anything that would make a previously valid payload fail to parse.
 - **Additive optional fields are non-breaking.** Adding a new `actionLabel`-style optional field does not require a bump. Existing payloads still parse; new clients can read the new field when present.
-- **The `unpkg.com/@mobile-surfaces/surface-contracts@1.1/schema.json` URL pins to major.minor.** This lets a future minor that adds a discriminated-union variant publish a new URL without yanking what consumers already reference. `scripts/build-schema.mjs` is the source of this `$id`.
+- **The `unpkg.com/@mobile-surfaces/surface-contracts@1.2/schema.json` URL pins to major.minor.** This lets a future minor that adds a discriminated-union variant publish a new URL without yanking what consumers already reference. `scripts/build-schema.mjs` is the source of this `$id`.
 
 ### Standard Schema Interop
 
-Zod 4.3.6 implements [Standard Schema](https://standardschema.dev) on every exported schema. `liveSurfaceSnapshot["~standard"]` returns `{ vendor: "zod", version: 1, validate, jsonSchema }`, so consumers can pass the contract to any Standard-Schema-aware library (Valibot, ArkType, `@standard-schema/spec` runners) without depending on Zod at runtime. A live test in `packages/surface-contracts` pins this; do not remove the assertion. See [`schema-migration.md`](./schema-migration.md) for a Valibot-style consumer example.
+Zod 4.x implements [Standard Schema](https://standardschema.dev) on every exported schema. `liveSurfaceSnapshot["~standard"]` returns `{ vendor: "zod", version: 1, validate, jsonSchema }`, so consumers can pass the contract to any Standard-Schema-aware library (Valibot, ArkType, `@standard-schema/spec` runners) without depending on Zod at runtime. A live test in `packages/surface-contracts` pins this; do not remove the assertion. See [`schema-migration.md`](./schema-migration.md) for a Valibot-style consumer example.
 
 ### Linked Release Group
 

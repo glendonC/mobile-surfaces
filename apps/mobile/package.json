@@ -15,7 +15,7 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
-    "android": "echo \"Android is out of scope for v0. Use an iOS dev build.\" && exit 1",
+    "android": "echo \"Android is out of scope for Mobile Surfaces. Use an iOS dev build.\" && exit 1",
     "ios": "expo run:ios",
     "prebuild:ios": "expo prebuild --platform ios",
     "run:ios": "expo run:ios",

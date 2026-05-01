@@ -1,6 +1,8 @@
 # Backend Integration
 
-How a backend service turns a domain event into an APNs push that this starter can render. Mobile Surfaces ships only the local pieces, fixtures, the contract package, the Node SDK, the harness, and APNs smoke scripts. A real production push service is intentionally [out of scope](../README.md#what-this-is-not); the goal of this doc is to make the integration shape obvious so you can build the production half against a stable contract.
+How a backend service turns a domain event into an APNs push that this starter can render.
+
+In plain English: your backend describes what is happening once, validates that shape, and sends the right projection to Apple Push Notification service (APNs). Mobile Surfaces ships the local pieces, fixtures, the contract package, the Node SDK, the harness, and APNs smoke scripts. A real production push service is intentionally [out of scope](../README.md#what-this-is-not); the goal of this doc is to make the integration shape obvious so you can build the production half against a stable contract.
 
 For the full push surface (token taxonomy, channel management, error responses, retry policy, smoke-script flag combinations), see [`docs/push.md`](./push.md). This page is the high-level "how does it work end-to-end" piece; the push doc is the "how do I drive the wire layer" piece.
 
@@ -132,7 +134,7 @@ if (versioned.success) {
 
 `safeParseAnyVersion` is the migration path documented in [`docs/schema-migration.md`](./schema-migration.md). Use it whenever you read snapshots from a store that may still hold v0 payloads.
 
-The published JSON Schema at [`unpkg.com/@mobile-surfaces/surface-contracts@1.1/schema.json`](https://unpkg.com/@mobile-surfaces/surface-contracts@1.1/schema.json) is generated from the same Zod source and pinned to `major.minor`. Use it for IDE tooling, OpenAPI components, or non-TypeScript validators (Ajv, jsonschema, etc.). Standard Schema interop is automatic, every exported Zod schema implements the `~standard` getter (`{ vendor: "zod", version: 1, validate, jsonSchema }`), so the contract drops directly into Standard-Schema-aware libraries (Valibot runners, ArkType, `@standard-schema/spec`) without depending on Zod at runtime.
+The published JSON Schema at [`unpkg.com/@mobile-surfaces/surface-contracts@1.2/schema.json`](https://unpkg.com/@mobile-surfaces/surface-contracts@1.2/schema.json) is generated from the same Zod source and pinned to `major.minor`. Use it for IDE tooling, OpenAPI components, or non-TypeScript validators (Ajv, jsonschema, etc.). Standard Schema interop is automatic, every exported Zod schema implements the `~standard` getter (`{ vendor: "zod", version: 1, validate, jsonSchema }`), so the contract drops directly into Standard-Schema-aware libraries (Valibot runners, ArkType, `@standard-schema/spec`) without depending on Zod at runtime.
 
 ### 3. Send the APNs request
 
@@ -288,7 +290,7 @@ node scripts/send-apns.mjs --channel-action=delete --channel-id=<base64> --env=d
 
 For the full set of flags, including `--event=start`, `--push-to-start-token`, `--stale-date`, `--dismissal-date`, `--priority`, and `--storage-policy`, see [`scripts/README.md`](../scripts/README.md) and the script reference in [`docs/push.md#smoke-script-reference`](./push.md#smoke-script-reference). When something fails, [`docs/troubleshooting.md`](./troubleshooting.md) maps the most common APNs response codes back to causes.
 
-## Localization (v0 Non-Goal)
+## Localization Policy
 
 All string fields on `LiveSurfaceSnapshot` are pre-rendered for one locale per snapshot. The backend selects the locale (per-user preference, request `Accept-Language`, etc.) and emits the snapshot in that locale. If the locale changes, send a fresh snapshot. There is no in-place locale switch on the client.
 

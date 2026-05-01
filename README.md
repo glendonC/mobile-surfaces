@@ -125,7 +125,7 @@ flowchart LR
   Snapshot --> Future["Notification/StandBy projections"]
 ```
 
-Change the snapshot once, every surface updates together. They cannot drift, because they are all reading from the same shape. The shape is defined in TypeScript with a runtime validator (Zod-backed `z.discriminatedUnion("kind", [...])`), so your editor and your CI both catch mistakes before they ship.
+Change the snapshot once, every surface updates together. They cannot drift, because they are all reading from the same shape. The shape is defined in TypeScript with a runtime validator: `kind` picks which branch is valid, and Zod checks that the matching fields are present. Your editor and your CI both catch mistakes before they ship.
 
 ## Use it without the starter
 
@@ -181,7 +181,7 @@ await client.update(activityToken, snapshot);
 ## What is actually in the box
 
 - A working Expo app with every surface already wired up: Lock Screen Live Activity, Dynamic Island, home-screen widget, iOS 18 control widget.
-- The shared `LiveSurfaceSnapshot` contract: one TypeScript type, one Zod-backed `z.discriminatedUnion("kind", [...])`, one published JSON Schema (`oneOf`-shaped per the discriminator), kind-gated projection helpers, and `safeParseAnyVersion` for v0 to v1 migration. Standard Schema is exposed via Zod 4's built-in `~standard` getter so consumers can drop the Zod runtime dependency.
+- The shared `LiveSurfaceSnapshot` contract: one TypeScript type, one runtime-checked union where `kind` selects the valid branch, one published JSON Schema (`oneOf`-shaped per the discriminator), kind-gated projection helpers, and `safeParseAnyVersion` for schema v0 to v1 migration. Standard Schema is exposed via Zod 4's built-in `~standard` getter so consumers can drop the Zod runtime dependency.
 - `@mobile-surfaces/push`. A Node SDK for APNs with zero npm runtime dependencies, supporting alerts, Live Activity start/update/end, **push-to-start (iOS 17.2+)** and **broadcast channels (iOS 18+)**, plus channel management.
 - A SwiftUI WidgetKit (Apple's framework for widgets and Live Activities) extension for Lock Screen, Dynamic Island, home-screen widget, and iOS 18 control layouts. You can restyle it. You do not have to write it from scratch.
 - APNs scripts with JWT signing, development and production environment routing, and translated error messages.
@@ -216,6 +216,8 @@ The iOS 17.2 floor is deliberate so push-to-start tokens (`Activity<…>.pushToS
 
 ## Docs
 
+Start with the [docs hub](./docs/README.md) if you are not sure where to go next. It has reading paths for trying the starter, adding to an existing Expo app, writing a backend, debugging silent failures, and maintaining releases.
+
 - [Backend integration](./docs/backend-integration.md). Domain event to snapshot to APNs.
 - [Push](./docs/push.md). Wire-layer reference, SDK, smoke script, token taxonomy, error reasons, channel push.
 - [Multi-surface](./docs/multi-surface.md). Every `kind` value, what ships today, when to emit each.
@@ -224,6 +226,7 @@ The iOS 17.2 floor is deliberate so push-to-start tokens (`Activity<…>.pushToS
 - [Troubleshooting](./docs/troubleshooting.md). The silent-failure cookbook.
 - [iOS environment](./docs/ios-environment.md). Simulator vs device, APNs setup.
 - [Compatibility](./docs/compatibility.md). Pinned toolchain row.
+- [Release](./docs/release.md). Changesets release PRs and npm trusted publishing.
 - [Roadmap](./docs/roadmap.md). What is next, what is intentionally out of scope.
 
 For AI coding assistants working in this repo, see [`AGENTS.md`](./AGENTS.md) (or [`CLAUDE.md`](./CLAUDE.md) for Claude Code).

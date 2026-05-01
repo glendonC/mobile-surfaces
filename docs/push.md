@@ -1,5 +1,7 @@
 # Push
 
+In plain English: this page explains how bytes travel from your backend to Apple's push servers, which token to use for each kind of push, and what to do when APNs rejects or accepts a request.
+
 Deep reference for the wire layer: what `@mobile-surfaces/push` does, what tokens flow through it, where the APNs requests actually go, how to drive the iOS 18 broadcast/channel surface, and what every error reason means. The SDK is the recommended entry point; `scripts/send-apns.mjs` is the protocol-reference script kept self-contained so you can read the exact same wire shape top-to-bottom in a single file. Both target the same APNs endpoints and produce byte-equivalent payloads.
 
 For the high-level "domain event → snapshot → APNs" tour, see [`docs/backend-integration.md`](./backend-integration.md). For the multi-kind contract and projection helpers, see [`docs/multi-surface.md`](./multi-surface.md).

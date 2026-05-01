@@ -60,6 +60,8 @@ await client.deleteChannel(channel.channelId);
 await client.close();
 ```
 
+Tokens in this example come from different places: `deviceToken` from normal APNs notification registration, `activityToken` from an active Live Activity, and `pushToStartToken` from ActivityKit's push-to-start token stream. See [`docs/push.md`](../../docs/push.md#token-taxonomy) for the full token lifecycle and [`docs/ios-environment.md`](../../docs/ios-environment.md#apns-environment) for matching `environment` to development vs production builds.
+
 ## Environment routing
 
 - `development` → `api.development.push.apple.com:443` (sends), `api-manage-broadcast.sandbox.push.apple.com:2195` (channel management).
@@ -118,3 +120,9 @@ createPushClient({
 A single long-lived HTTP/2 session per (origin) is multiplexed across concurrent requests. The session auto-reconnects on `goaway` or socket close. After `idleTimeoutMs` (default 60s) of no in-flight requests, the session is closed; the next send re-opens it.
 
 `client.close()` flushes in-flight requests, sets the client to closed, and tears down both sessions (send + management). Subsequent calls throw `ClientClosedError`.
+
+## Next steps
+
+- Read [`docs/backend-integration.md`](../../docs/backend-integration.md) for the full domain event to snapshot to APNs flow.
+- Read [`docs/push.md`](../../docs/push.md) for retry policy, APNs hosts, token taxonomy, and smoke-script flags.
+- Read [`docs/troubleshooting.md`](../../docs/troubleshooting.md) when APNs returns 200 but nothing appears on the Lock Screen.

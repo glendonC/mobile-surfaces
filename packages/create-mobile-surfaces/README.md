@@ -38,7 +38,7 @@ The installer detects whether the current directory is empty (greenfield) or an 
 
 ## Links
 
-- [Mobile Surfaces docs](https://github.com/glendonC/mobile-surfaces#readme)
+- [Mobile Surfaces docs hub](https://github.com/glendonC/mobile-surfaces/blob/main/docs/README.md)
 - [Architecture](https://github.com/glendonC/mobile-surfaces/blob/main/docs/architecture.md)
 - [Backend integration](https://github.com/glendonC/mobile-surfaces/blob/main/docs/backend-integration.md)
 - [Troubleshooting](https://github.com/glendonC/mobile-surfaces/blob/main/docs/troubleshooting.md)

@@ -64,7 +64,7 @@ The validator runs once at the boundary; everything downstream consumes a typed 
 
 ## The discriminated union
 
-`liveSurfaceSnapshot` is a true `z.discriminatedUnion("kind", […])` over six branches at `schemaVersion: "1"`:
+`liveSurfaceSnapshot` is a discriminated union: `kind` picks which branch is valid, and the validator rejects fields that belong to the wrong branch. It covers six branches at `schemaVersion: "1"`:
 
 | `kind` | Renders as | Slice |
 | --- | --- | --- |
@@ -120,7 +120,7 @@ Backends that aren't on TypeScript can validate against the published JSON Schem
 The canonical URL is pinned to **major.minor** so a future minor that adds a `kind` branch publishes at a new URL without invalidating existing references:
 
 ```text
-https://unpkg.com/@mobile-surfaces/surface-contracts@1.1/schema.json
+https://unpkg.com/@mobile-surfaces/surface-contracts@1.2/schema.json
 ```
 
 Ajv 2020 example:
@@ -130,7 +130,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 
 const ajv = new Ajv2020();
 const schema = await fetch(
-  "https://unpkg.com/@mobile-surfaces/surface-contracts@1.1/schema.json",
+  "https://unpkg.com/@mobile-surfaces/surface-contracts@1.2/schema.json",
 ).then((r) => r.json());
 
 const validate = ajv.compile(schema);
@@ -147,7 +147,7 @@ import schema from "@mobile-surfaces/surface-contracts/schema";
 
 ## v0 → v1 migration
 
-`schemaVersion: "0"` was the pre-multi-projection shape (single Live-Activity-shaped object, no `kind`). v1 added the discriminator and per-kind slices. Use `safeParseAnyVersion` at wire edges that may see either version:
+`schemaVersion: "0"` was the pre-multi-projection shape (single Live-Activity-shaped object, no `kind`). v1 added the discriminator and per-kind slices. This schema version is separate from npm package versions like `1.2.0`. Use `safeParseAnyVersion` at wire edges that may see either schema shape:
 
 ```ts
 import { safeParseAnyVersion } from "@mobile-surfaces/surface-contracts";

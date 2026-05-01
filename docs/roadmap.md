@@ -22,8 +22,8 @@ See [`compatibility.md`](./compatibility.md) for the canonical pinned row.
 - The published JSON Schema is `oneOf` with `const`-discriminated branches, proper kind ↔ slice enforcement, not a loose union.
 - A `.preprocess()` shim defaults missing-`kind` payloads to `"liveActivity"` so externally stored snapshots from before the discriminator still parse. Authored fixtures in this repo always set `kind` explicitly.
 - Migration codec ships in `packages/surface-contracts`: `liveSurfaceSnapshotV0`, `migrateV0ToV1`, `safeParseAnyVersion`. See [`schema-migration.md`](./schema-migration.md).
-- `$id` pins to `https://unpkg.com/@mobile-surfaces/surface-contracts@1.1/schema.json` (major.minor) so a future minor that adds a discriminated-union variant can publish a new URL without yanking what consumers reference.
-- Standard Schema interop is live: Zod 4.3.6 implements `~standard` (`{ vendor: "zod", version: 1, validate, jsonSchema }`) on every exported schema. A fixture-validation test pins this so it cannot regress.
+- `$id` pins to `https://unpkg.com/@mobile-surfaces/surface-contracts@1.2/schema.json` (major.minor) so a future minor that adds a discriminated-union variant can publish a new URL without yanking what consumers reference.
+- Standard Schema interop is live: Zod 4.x implements `~standard` (`{ vendor: "zod", version: 1, validate, jsonSchema }`) on every exported schema. A fixture-validation test pins this so it cannot regress.
 
 ### Phase 3: Home widget + iOS 18 control widget
 
@@ -41,9 +41,9 @@ Lock-screen accessory, notification content extension, and StandBy variants are 
 - `scripts/send-apns.mjs` extended with `--push-to-start-token`, `--channel-id`, `--channel-action={create,list,delete}`, `--storage-policy`. Channel-management requests hit `api-manage-broadcast.{sandbox.,}push.apple.com:2195/2196` with the sandbox/prod split per Apple docs.
 - APNs reason translator extended with `MissingChannelId`, `BadChannelId`, `ChannelNotRegistered`, `CannotCreateChannelConfig`, `InvalidPushType`, `FeatureNotEnabled`, `MissingPushType`, verified verbatim against current Apple docs.
 
-### Phase 6 (partial): `@mobile-surfaces/push` Node SDK
+### Phase 6: `@mobile-surfaces/push` Node SDK
 
-`packages/push/` ships at `0.1.0`:
+`packages/push/` ships with the linked package release group:
 
 - `PushClient` / `createPushClient(...)` with connection-pooled HTTP/2.
 - Typed error hierarchy (per APNs reason); ES256 JWT cache; HTTP/2 reconnect; exponential-backoff retry policy.
@@ -63,7 +63,7 @@ Lock-screen accessory, notification content extension, and StandBy variants are 
 
 ### Phase 7: Docs + CLI updates
 
-This roadmap rewrite is part of Phase 7. Remaining work: a multi-surface walkthrough doc and a dedicated push-SDK doc; CLI surface picks (home widget alone, control widget alone) for the add-to-existing flow.
+This roadmap rewrite is part of Phase 7. Shipped docs now cover the multi-surface contract and push SDK. Remaining work: CLI surface picks (home widget alone, control widget alone) for the add-to-existing flow, plus ongoing docs polish from install-path testing.
 
 ## Deferred (with reason)
 
@@ -99,4 +99,4 @@ Explicitly out of scope unless a real use case surfaces. Listed here so the opti
 - Android. iOS-only by design.
 - Expo Go. Dev client only.
 - A universal patcher for arbitrary existing app layouts. The add-to-existing CLI targets recognizable Expo projects; truly bespoke layouts should clone the starter and adapt manually.
-- An adapter abstraction layer that swaps to `software-mansion-labs/expo-live-activity` or `expo-widgets`. The adapter boundary at `apps/mobile/src/liveActivity/index.ts` is preserved (and enforced by `scripts/check-adapter-boundary.mjs`) so a future branch can experiment, but the local module remains the v0 default.
+- An adapter abstraction layer that swaps to `software-mansion-labs/expo-live-activity` or `expo-widgets`. The adapter boundary at `apps/mobile/src/liveActivity/index.ts` is preserved (and enforced by `scripts/check-adapter-boundary.mjs`) so a future branch can experiment, but the local module remains the default starter path.
