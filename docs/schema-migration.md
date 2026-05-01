@@ -11,7 +11,7 @@
 | `kind` field | Did not exist | Required: `"liveActivity" \| "widget" \| "control" \| "lockAccessory" \| "standby" \| "notification"` |
 | Per-kind slices | None | `widget`, `control`, and `notification` branches carry strict slices |
 | JSON Schema output | Single object | `oneOf` with `const`-discriminated branches |
-| `$id` | `…@0/schema.json` | `https://unpkg.com/@mobile-surfaces/surface-contracts@1.0/schema.json` (major.minor) |
+| `$id` | `…@0/schema.json` | `https://unpkg.com/@mobile-surfaces/surface-contracts@1.1/schema.json` (major.minor) |
 
 The base fields shared by every v1 branch are identical to the v0 fields (`id`, `surfaceId`, `state`, `modeLabel`, `contextLabel`, `statusLine`, `primaryText`, `secondaryText`, `actionLabel?`, `estimatedSeconds`, `morePartsCount`, `progress`, `stage`, `deepLink`). v0 → v1 promotion is therefore lossless: every v0 payload becomes a v1 `kind: "liveActivity"` snapshot with no slice attached.
 
@@ -90,10 +90,10 @@ A snapshot missing `kind` parses as a `liveActivity` branch. Authored fixtures i
 `scripts/build-schema.mjs` pins `$id` to **major.minor**:
 
 ```text
-https://unpkg.com/@mobile-surfaces/surface-contracts@1.0/schema.json
+https://unpkg.com/@mobile-surfaces/surface-contracts@1.1/schema.json
 ```
 
-Pinning to `1.0` rather than `1` lets a future minor that adds a discriminated-union variant (e.g. a `kind: "interactiveAlert"` branch) publish at `@1.1/schema.json` without invalidating the URL existing consumers reference. Backends that want to track the latest minor automatically can pin to `@1/schema.json` (unpkg resolves the major), but the canonical `$id` stamped into the schema is the major.minor URL.
+Pinning to `1.1` rather than `1` lets a future minor that adds a discriminated-union variant (e.g. a `kind: "interactiveAlert"` branch) publish at `@1.2/schema.json` without invalidating the URL existing consumers reference. Backends that want to track the latest minor automatically can pin to `@1/schema.json` (unpkg resolves the major), but the canonical `$id` stamped into the schema is the major.minor URL.
 
 ## Future evolution policy
 

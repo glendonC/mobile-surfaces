@@ -20,7 +20,7 @@ If this PR adds a new abstraction (helper, type, contract field, adapter slot, c
 
 ## Non-goals check
 
-- [ ] This PR does not add anything from the [Non-Goals](../README.md#non-goals) list.
+- [ ] This PR does not add anything from the [What this is not](../README.md#what-this-is-not) list.
 
 ## Local checks
 

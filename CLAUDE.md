@@ -267,11 +267,11 @@ Both pushTokenUpdates and pushToStartTokenUpdates may emit fresh values at any m
 
 **severity:** error  •  **detection:** static (script-checkable)  •  **tags:** live-activity, swift, contract  •  **enforced by:** `scripts/check-activity-attributes.mjs`
 
-Custom content-state files used with --state-file (or hand-rolled push payloads) must use the same key names and types as MobileSurfacesActivityAttributes.ContentState.
+The Zod ActivityKit projection and MobileSurfacesActivityAttributes.ContentState must use the same JSON keys and value types; custom state files must mirror that shared shape.
 
 **Symptom.** APNs returns 200, but the Lock Screen stays on the prior content state. The Codable decoder silently fails on a key mismatch and ActivityKit drops the update.
 
-**Fix.** Project through toLiveActivityContentState rather than hand-rolling JSON. If you must hand-roll, mirror the Swift struct verbatim: { headline, subhead, progress, stage }.
+**Fix.** Project through toLiveActivityContentState rather than hand-rolling JSON. If you add or rename a content-state field, update the Zod source and both Swift attribute files in lockstep.
 
 ### MS024: Project must depend on @mobile-surfaces/surface-contracts (and push, when sending)
 

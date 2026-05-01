@@ -22,7 +22,7 @@ See [`compatibility.md`](./compatibility.md) for the canonical pinned row.
 - The published JSON Schema is `oneOf` with `const`-discriminated branches, proper kind ↔ slice enforcement, not a loose union.
 - A `.preprocess()` shim defaults missing-`kind` payloads to `"liveActivity"` so externally stored snapshots from before the discriminator still parse. Authored fixtures in this repo always set `kind` explicitly.
 - Migration codec ships in `packages/surface-contracts`: `liveSurfaceSnapshotV0`, `migrateV0ToV1`, `safeParseAnyVersion`. See [`schema-migration.md`](./schema-migration.md).
-- `$id` pins to `https://unpkg.com/@mobile-surfaces/surface-contracts@1.0/schema.json` (major.minor) so a future minor that adds a discriminated-union variant can publish a new URL without yanking what consumers reference.
+- `$id` pins to `https://unpkg.com/@mobile-surfaces/surface-contracts@1.1/schema.json` (major.minor) so a future minor that adds a discriminated-union variant can publish a new URL without yanking what consumers reference.
 - Standard Schema interop is live: Zod 4.3.6 implements `~standard` (`{ vendor: "zod", version: 1, validate, jsonSchema }`) on every exported schema. A fixture-validation test pins this so it cannot regress.
 
 ### Phase 3: Home widget + iOS 18 control widget

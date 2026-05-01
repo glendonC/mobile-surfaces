@@ -64,10 +64,10 @@ This is the most realistic alternative in 2026. You open Claude Code, Cursor, or
 
 The demo will look like it works in the simulator. Then you ship to a real device and discover what AI assistants do not know:
 
-- The byte-identical Swift requirement (your activity will silently never appear).
+- The Swift shape parity this repo enforces with byte-identical attributes (your activity can silently never appear).
 - The App Group entitlement matching (your widget will read placeholder data forever).
 - The dev/prod token environment split (you will get a confusing 400 with no useful error message).
-- The Live Activity payload size limit of 4 KB (oversize payloads are silently dropped).
+- The Live Activity payload size limit of 4 KB (oversize payloads are rejected or dropped before users see them).
 - Apple's push priority budgets (your updates will land for the first few minutes, then mysteriously stop).
 - An open Apple bug where push-to-start tokens stop emitting after the user force-quits the app, with no client-side workaround.
 

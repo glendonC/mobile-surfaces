@@ -268,9 +268,9 @@
       "severity": "error",
       "detection": "static",
       "tags": ["live-activity", "swift", "contract"],
-      "summary": "Custom content-state files used with --state-file (or hand-rolled push payloads) must use the same key names and types as MobileSurfacesActivityAttributes.ContentState.",
+      "summary": "The Zod ActivityKit projection and MobileSurfacesActivityAttributes.ContentState must use the same JSON keys and value types; custom state files must mirror that shared shape.",
       "symptom": "APNs returns 200, but the Lock Screen stays on the prior content state. The Codable decoder silently fails on a key mismatch and ActivityKit drops the update.",
-      "fix": "Project through toLiveActivityContentState rather than hand-rolling JSON. If you must hand-roll, mirror the Swift struct verbatim: { headline, subhead, progress, stage }.",
+      "fix": "Project through toLiveActivityContentState rather than hand-rolling JSON. If you add or rename a content-state field, update the Zod source and both Swift attribute files in lockstep.",
       "enforcement": { "script": "scripts/check-activity-attributes.mjs" },
       "since": "1.0.0"
     },

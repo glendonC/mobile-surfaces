@@ -23,7 +23,7 @@ Mobile Surfaces follows a two-consumer rule: a new abstraction lands only when t
 
 ## Non-goals check
 
-This request is not on the [Non-Goals](../../README.md#non-goals) list (Android, SwiftUI-only starter, add-to-existing-repo patcher, production push service / backend, MCP runtime, multi-tenant theming, replacing the local ActivityKit module before v0, anchoring on alpha `expo-widgets`, broadcast push). Confirm:
+This request is not on the [What this is not](../../README.md#what-this-is-not) list (Android, a production push service, or a no-code tool). Confirm:
 
 - [ ] Confirmed.
 
