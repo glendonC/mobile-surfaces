@@ -1,7 +1,7 @@
 {
-  "name": "@mobile-surfaces/surface-contracts",
-  "version": "1.1.0",
-  "description": "Shared LiveSurfaceSnapshot contract, generated fixtures, and ActivityKit/APNs mapping helpers for Mobile Surfaces.",
+  "name": "@mobile-surfaces/push",
+  "version": "0.1.0",
+  "description": "Node SDK for sending Mobile Surfaces snapshots to Apple Push Notification service (APNs) — Live Activities, Dynamic Island, broadcast channels, and channel management.",
   "publishConfig": {
     "access": "public"
   },
@@ -10,21 +10,22 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/glendonC/mobile-surfaces.git",
-    "directory": "packages/surface-contracts"
+    "directory": "packages/push"
   },
   "bugs": {
     "url": "https://github.com/glendonC/mobile-surfaces/issues"
   },
   "keywords": [
     "mobile-surfaces",
+    "apns",
     "live-activity",
     "activitykit",
-    "contract",
-    "fixtures"
+    "push",
+    "broadcast"
   ],
   "author": "Glendon Chin <glendonchin@gmail.com>",
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "sideEffects": false,
   "type": "module",
@@ -37,20 +38,19 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./schema": "./schema.json",
     "./package.json": "./package.json"
   },
   "files": [
-    "dist",
-    "schema.json"
+    "dist"
   ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
     "clean": "rm -rf dist",
+    "test": "node --test test/*.test.mjs",
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "zod": "^4"
+    "@mobile-surfaces/surface-contracts": "workspace:*"
   }
 }

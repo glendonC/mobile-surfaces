@@ -15,7 +15,11 @@ const { values } = parseArgs({
 });
 
 const schema = z.toJSONSchema(liveSurfaceSnapshot, { target: "draft-2020-12" });
-schema.$id = "https://unpkg.com/@mobile-surfaces/surface-contracts@1/schema.json";
+// Pin $id to major.minor so a future minor that adds a discriminated-union
+// variant can ship a new schema URL without yanking what consumers already
+// reference. Round 1 only updates the generator; doc/fixture pins move in a
+// later round.
+schema.$id = "https://unpkg.com/@mobile-surfaces/surface-contracts@1.0/schema.json";
 schema.title = "LiveSurfaceSnapshot";
 
 const out = JSON.stringify(schema, null, 2) + "\n";

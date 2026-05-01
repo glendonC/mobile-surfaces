@@ -31,6 +31,7 @@ export function LiveActivityHarness() {
   const [active, setActive] = useState<LiveActivitySnapshot[]>([]);
   const [activityId, setActivityId] = useState<string | null>(null);
   const [pushToken, setPushToken] = useState<string | null>(null);
+  const [pushToStartToken, setPushToStartToken] = useState<string | null>(null);
   const [apnsToken, setApnsToken] = useState<string | null>(null);
   const [surfaceStatus, setSurfaceStatus] = useState<string | null>(null);
   const [controlOn, setControlOn] = useState(false);
@@ -77,13 +78,23 @@ export function LiveActivityHarness() {
         }
       }
     });
+    // Push-to-start tokens are app-level (iOS 17.2+), not tied to a specific
+    // activity — surface whatever Apple last handed us regardless of which
+    // activity is currently in focus.
+    const pushToStartSub = LiveActivity.addListener("onPushToStartToken", ({ token }) => {
+      setPushToStartToken(token);
+    });
 
     return () => {
       tokenSub.remove();
       stateSub.remove();
+      pushToStartSub.remove();
     };
   }, [refreshActive]);
 
+  // Channel-push starts (iOS 18+) are exercised through scripts/send-apns.mjs,
+  // not from the harness UI: channel mode is server-driven (one publish fans
+  // out to N devices), so the device side just chooses pushType at start.
   const handleStart = useCallback(async (key: keyof typeof activityFixtureStates) => {
     setBusy(true);
     setError(null);
@@ -263,6 +274,12 @@ export function LiveActivityHarness() {
         </Text>
         <Text style={styles.value} selectable>
           push token: {pushToken ?? "(arrives async; long-press to copy)"}
+        </Text>
+      </Section>
+
+      <Section label="Push-to-start token">
+        <Text style={styles.value} selectable>
+          {pushToStartToken ?? "(iOS 17.2+; arrives via system stream — long-press to copy)"}
         </Text>
       </Section>
 

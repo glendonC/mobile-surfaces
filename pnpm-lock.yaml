@@ -111,6 +111,12 @@ importers:
         specifier: '>=0.83'
         version: 0.83.6(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0)
 
+  packages/push:
+    dependencies:
+      '@mobile-surfaces/surface-contracts':
+        specifier: workspace:*
+        version: link:../surface-contracts
+
   packages/surface-contracts:
     dependencies:
       zod:

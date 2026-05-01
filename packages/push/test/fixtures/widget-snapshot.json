@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "1",
+  "kind": "widget",
+  "id": "fixture-widget",
+  "surfaceId": "surface-widget",
+  "state": "active",
+  "modeLabel": "active",
+  "contextLabel": "progress",
+  "statusLine": "active 50%",
+  "primaryText": "Widget headline",
+  "secondaryText": "Widget subhead",
+  "estimatedSeconds": 360,
+  "morePartsCount": 0,
+  "progress": 0.5,
+  "stage": "inProgress",
+  "deepLink": "mobilesurfaces://surface/surface-widget",
+  "widget": { "family": "systemMedium", "reloadPolicy": "afterDate" }
+}

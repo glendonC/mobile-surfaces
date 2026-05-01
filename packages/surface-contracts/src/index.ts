@@ -1,5 +1,12 @@
 export {
   liveSurfaceSnapshot,
+  liveSurfaceSnapshotLiveActivity,
+  liveSurfaceSnapshotWidget,
+  liveSurfaceSnapshotControl,
+  liveSurfaceSnapshotNotification,
+  liveSurfaceSnapshotLockAccessory,
+  liveSurfaceSnapshotStandby,
+  liveSurfaceSnapshotV0,
   liveSurfaceState,
   liveSurfaceStage,
   liveSurfaceKind,
@@ -13,9 +20,18 @@ export {
   liveSurfaceKinds,
   assertSnapshot,
   safeParseSnapshot,
+  migrateV0ToV1,
+  safeParseAnyVersion,
 } from "./schema.ts";
 export type {
   LiveSurfaceSnapshot,
+  LiveSurfaceSnapshotLiveActivity,
+  LiveSurfaceSnapshotWidget,
+  LiveSurfaceSnapshotControl,
+  LiveSurfaceSnapshotNotification,
+  LiveSurfaceSnapshotLockAccessory,
+  LiveSurfaceSnapshotStandby,
+  LiveSurfaceSnapshotV0,
   LiveSurfaceState,
   LiveSurfaceStage,
   LiveSurfaceKind,
@@ -24,10 +40,17 @@ export type {
   LiveSurfaceNotificationSlice,
   LiveSurfaceActivityContentState,
   LiveSurfaceAlertPayload,
+  SafeParseAnyVersionResult,
+  SafeParseAnyVersionSuccess,
+  SafeParseAnyVersionFailure,
 } from "./schema.ts";
 
 import type {
   LiveSurfaceSnapshot,
+  LiveSurfaceSnapshotWidget,
+  LiveSurfaceSnapshotControl,
+  LiveSurfaceSnapshotNotification,
+  LiveSurfaceSnapshotLiveActivity,
   LiveSurfaceKind,
   LiveSurfaceWidgetSlice,
   LiveSurfaceActivityContentState,
@@ -51,7 +74,7 @@ export interface LiveSurfaceControlValueProvider {
   kind: "control";
   snapshotId: string;
   surfaceId: string;
-  controlKind: NonNullable<LiveSurfaceSnapshot["control"]>["kind"];
+  controlKind: LiveSurfaceSnapshotControl["control"]["kind"];
   value: boolean | null;
   intent: string | null;
   label: string;
@@ -80,31 +103,37 @@ export interface LiveSurfaceNotificationContentPayload {
 export function toLiveActivityContentState(
   snapshot: LiveSurfaceSnapshot,
 ): LiveSurfaceActivityContentState {
-  assertSnapshotKind(snapshot, "liveActivity");
+  const live: LiveSurfaceSnapshotLiveActivity = assertSnapshotKind(
+    snapshot,
+    "liveActivity",
+  );
   return {
-    headline: snapshot.primaryText,
-    subhead: snapshot.secondaryText,
-    progress: snapshot.progress,
-    stage: snapshot.stage,
+    headline: live.primaryText,
+    subhead: live.secondaryText,
+    progress: live.progress,
+    stage: live.stage,
   };
 }
 
 export function toAlertPayload(snapshot: LiveSurfaceSnapshot): LiveSurfaceAlertPayload {
-  assertSnapshotKind(snapshot, "liveActivity");
+  const live: LiveSurfaceSnapshotLiveActivity = assertSnapshotKind(
+    snapshot,
+    "liveActivity",
+  );
   return {
     aps: {
       alert: {
-        title: snapshot.primaryText,
-        body: snapshot.secondaryText,
+        title: live.primaryText,
+        body: live.secondaryText,
       },
       sound: "default",
     },
     liveSurface: {
       kind: "surface_snapshot",
-      snapshotId: snapshot.id,
-      surfaceId: snapshot.surfaceId,
-      state: snapshot.state,
-      deepLink: snapshot.deepLink,
+      snapshotId: live.id,
+      surfaceId: live.surfaceId,
+      state: live.state,
+      deepLink: live.deepLink,
     },
   };
 }
@@ -112,78 +141,98 @@ export function toAlertPayload(snapshot: LiveSurfaceSnapshot): LiveSurfaceAlertP
 export function toWidgetTimelineEntry(
   snapshot: LiveSurfaceSnapshot,
 ): LiveSurfaceWidgetTimelineEntry {
-  assertSnapshotKind(snapshot, "widget");
+  const widgetSnap: LiveSurfaceSnapshotWidget = assertSnapshotKind(
+    snapshot,
+    "widget",
+  );
   return {
     kind: "widget",
-    snapshotId: snapshot.id,
-    surfaceId: snapshot.surfaceId,
-    state: snapshot.state,
-    family: snapshot.widget?.family,
-    reloadPolicy: snapshot.widget?.reloadPolicy,
-    headline: snapshot.primaryText,
-    subhead: snapshot.secondaryText,
-    progress: snapshot.progress,
-    deepLink: snapshot.deepLink,
+    snapshotId: widgetSnap.id,
+    surfaceId: widgetSnap.surfaceId,
+    state: widgetSnap.state,
+    family: widgetSnap.widget.family,
+    reloadPolicy: widgetSnap.widget.reloadPolicy,
+    headline: widgetSnap.primaryText,
+    subhead: widgetSnap.secondaryText,
+    progress: widgetSnap.progress,
+    deepLink: widgetSnap.deepLink,
   };
 }
 
 export function toControlValueProvider(
   snapshot: LiveSurfaceSnapshot,
 ): LiveSurfaceControlValueProvider {
-  assertSnapshotKind(snapshot, "control");
-  const control = snapshot.control;
-  if (!control) {
-    throw new Error('Cannot project control snapshot without a "control" slice.');
-  }
+  const controlSnap: LiveSurfaceSnapshotControl = assertSnapshotKind(
+    snapshot,
+    "control",
+  );
+  const control = controlSnap.control;
   return {
     kind: "control",
-    snapshotId: snapshot.id,
-    surfaceId: snapshot.surfaceId,
+    snapshotId: controlSnap.id,
+    surfaceId: controlSnap.surfaceId,
     controlKind: control.kind,
     value: control.state ?? null,
     intent: control.intent ?? null,
-    label: snapshot.actionLabel ?? snapshot.primaryText,
-    deepLink: snapshot.deepLink,
+    label: controlSnap.actionLabel ?? controlSnap.primaryText,
+    deepLink: controlSnap.deepLink,
   };
 }
 
 export function toNotificationContentPayload(
   snapshot: LiveSurfaceSnapshot,
 ): LiveSurfaceNotificationContentPayload {
-  assertSnapshotKind(snapshot, "notification");
+  const note: LiveSurfaceSnapshotNotification = assertSnapshotKind(
+    snapshot,
+    "notification",
+  );
   return {
     aps: {
       alert: {
-        title: snapshot.primaryText,
-        body: snapshot.secondaryText,
+        title: note.primaryText,
+        body: note.secondaryText,
       },
       sound: "default",
-      ...(snapshot.notification?.category
-        ? { category: snapshot.notification.category }
+      ...(note.notification.category
+        ? { category: note.notification.category }
         : {}),
-      ...(snapshot.notification?.threadId
-        ? { "thread-id": snapshot.notification.threadId }
+      ...(note.notification.threadId
+        ? { "thread-id": note.notification.threadId }
         : {}),
     },
     liveSurface: {
       kind: "surface_notification",
-      snapshotId: snapshot.id,
-      surfaceId: snapshot.surfaceId,
-      state: snapshot.state,
-      deepLink: snapshot.deepLink,
+      snapshotId: note.id,
+      surfaceId: note.surfaceId,
+      state: note.state,
+      deepLink: note.deepLink,
     },
   };
 }
 
-function assertSnapshotKind(
+// Defense-in-depth runtime narrowing utility. The discriminated union now
+// makes invalid-kind payloads unparseable up front, so this function should
+// rarely throw — but we keep it so callers that receive an already-parsed
+// LiveSurfaceSnapshot can narrow the union without re-validating.
+type SnapshotByKind = {
+  liveActivity: Extract<LiveSurfaceSnapshot, { kind: "liveActivity" }>;
+  widget: Extract<LiveSurfaceSnapshot, { kind: "widget" }>;
+  control: Extract<LiveSurfaceSnapshot, { kind: "control" }>;
+  notification: Extract<LiveSurfaceSnapshot, { kind: "notification" }>;
+  lockAccessory: Extract<LiveSurfaceSnapshot, { kind: "lockAccessory" }>;
+  standby: Extract<LiveSurfaceSnapshot, { kind: "standby" }>;
+};
+
+export function assertSnapshotKind<K extends LiveSurfaceKind>(
   snapshot: LiveSurfaceSnapshot,
-  expected: LiveSurfaceKind,
-): void {
+  expected: K,
+): SnapshotByKind[K] {
   if (snapshot.kind !== expected) {
     throw new Error(
       `Cannot project ${snapshot.kind} snapshot as ${expected}.`,
     );
   }
+  return snapshot as SnapshotByKind[K];
 }
 
 export { surfaceFixtureSnapshots } from "./fixtures.ts";

@@ -51,13 +51,14 @@
     "minimumXcodeMajor": 26
   },
   "scripts": {
-    "build": "pnpm -r --filter \"./packages/{surface-contracts,design-tokens,live-activity}\" build",
+    "build": "pnpm -r --filter \"./packages/{surface-contracts,design-tokens,live-activity,push}\" build",
     "clean": "pnpm -r --filter \"./packages/*\" clean",
     "preinstall": "npx only-allow pnpm",
     "dev:doctor": "bash scripts/doctor.sh",
     "dev:setup": "bash scripts/setup.sh",
-    "surface:check": "node --experimental-strip-types scripts/validate-surface-fixtures.mjs && node --experimental-strip-types scripts/build-schema.mjs --check && node scripts/generate-surface-fixtures.mjs --check && node --experimental-strip-types scripts/check-activity-attributes.mjs && node scripts/check-validator-sync.mjs",
+    "surface:check": "node --experimental-strip-types scripts/validate-surface-fixtures.mjs && node --experimental-strip-types scripts/build-schema.mjs --check && node scripts/generate-surface-fixtures.mjs --check && node --experimental-strip-types scripts/check-activity-attributes.mjs && node scripts/check-validator-sync.mjs && node scripts/check-adapter-boundary.mjs",
     "test:scripts": "node --test scripts/*.test.mjs",
+    "test:push": "pnpm --filter @mobile-surfaces/push test",
     "surface:rename": "node scripts/rename-starter.mjs",
     "mobile:dev": "pnpm --dir apps/mobile exec expo start --host lan",
     "mobile:dev-client": "pnpm --dir apps/mobile exec expo start --dev-client --host lan",

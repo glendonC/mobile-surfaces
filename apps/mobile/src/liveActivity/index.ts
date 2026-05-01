@@ -3,6 +3,7 @@
 // future swap (e.g. to expo-live-activity or expo-widgets) is a one-file edit.
 export { default as liveActivityAdapter } from "@mobile-surfaces/live-activity";
 export type {
+  LiveActivityChannelStartResult,
   LiveActivityContentState,
   LiveActivityEvents,
   LiveActivitySnapshot,

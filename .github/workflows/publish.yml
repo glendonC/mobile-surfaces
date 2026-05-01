@@ -33,6 +33,7 @@ jobs:
       - run: pnpm surface:check
       - run: pnpm typecheck
       - run: pnpm test:scripts
+      - run: pnpm test:push
       - run: pnpm cli:test
       - run: pnpm cli:smoke:existing
       - run: pnpm changeset publish

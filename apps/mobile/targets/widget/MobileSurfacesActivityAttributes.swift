@@ -9,15 +9,15 @@
 
 import ActivityKit
 
-struct MobileSurfacesActivityAttributes: ActivityAttributes {
-  public struct ContentState: Codable, Hashable {
+struct MobileSurfacesActivityAttributes: ActivityAttributes, Sendable {
+  public struct ContentState: Codable, Hashable, Sendable {
     var headline: String
     var subhead: String
     var progress: Double
     var stage: Stage
   }
 
-  enum Stage: String, Codable, Hashable {
+  enum Stage: String, Codable, Hashable, Sendable {
     case prompted
     case inProgress
     case completing

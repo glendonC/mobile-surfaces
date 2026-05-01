@@ -6,6 +6,8 @@ Thanks for helping improve Mobile Surfaces. By participating you agree to follow
 
 Do not add a new abstraction (helper, type, contract field, adapter slot, config knob) until two real call sites in this repo need it. One consumer is a special case; two is a pattern. This rule is the main way Mobile Surfaces resists starter rot — most "wouldn't it be cleaner if…" PRs should be deferred until a second consumer materializes.
 
+"Real consumer" means an actual call site in this repo: the harness (`apps/mobile/`), the contract package (`packages/surface-contracts/`), the live-activity bridge (`packages/live-activity/`), the **push SDK (`packages/push/`)**, the CLI (`packages/create-mobile-surfaces/`), or a checked-in script / fixture / test. The push SDK is third-party-facing — it ships to npm as `@mobile-surfaces/push` — so the rule applies with extra weight to its public surface: when adding a field, error class, or method, hold the change until two real callers need it (the smoke script in `scripts/send-apns.mjs` plus at least one real backend consumer or test fixture). One consumer is a special case; two is a pattern; "future user" is not a consumer.
+
 ## Local Checks
 
 Run these before opening a pull request:
@@ -14,6 +16,7 @@ Run these before opening a pull request:
 pnpm dev:setup
 pnpm surface:check
 pnpm typecheck
+pnpm test:push
 ```
 
 Use an Expo development build for native testing. Expo Go cannot exercise the local ActivityKit module, WidgetKit target, APNs behavior, or Dynamic Island surfaces.
