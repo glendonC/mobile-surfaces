@@ -58,7 +58,9 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
       cleanup();
       resolve();
     }, ms);
-    timer.unref?.();
+    if (typeof timer === "object" && "unref" in timer && typeof timer.unref === "function") {
+      timer.unref();
+    }
     const onAbort = () => {
       cleanup();
       reject(signal?.reason ?? new Error("Aborted"));
