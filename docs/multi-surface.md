@@ -1,6 +1,6 @@
 # Multi-Surface
 
-`LiveSurfaceSnapshot` is one shape with a `kind` discriminator. Every iOS surface — Lock Screen Live Activity, Dynamic Island, home-screen widget, iOS 18 control widget, notification, lock-screen accessory, StandBy — derives its render input from the same snapshot through a `kind`-gated projection helper. This page walks every `kind` value, what it represents on iOS, what ships today, and how a backend would emit it.
+`LiveSurfaceSnapshot` is one shape with a `kind` discriminator. Every iOS surface (Lock Screen Live Activity, Dynamic Island, home-screen widget, iOS 18 control widget, notification, lock-screen accessory, StandBy) derives its render input from the same snapshot through a `kind`-gated projection helper. This page walks every `kind` value, what it represents on iOS, what ships today, and how a backend would emit it.
 
 For the high-level integration tour, see [`docs/backend-integration.md`](./backend-integration.md). For the wire layer (SDK + smoke script + APNs reference), see [`docs/push.md`](./push.md). For the schema-evolution policy, see [`docs/schema-migration.md`](./schema-migration.md).
 
@@ -34,7 +34,7 @@ flowchart LR
   N --> Notification["Notification content"]
 ```
 
-Projection helpers are kind-gated: `toLiveActivityContentState` rejects a `widget`-kind snapshot at runtime, `toWidgetTimelineEntry` rejects a `liveActivity`-kind snapshot, etc. (see `assertSnapshotKind` in `packages/surface-contracts/src/index.ts`). The discriminated union also makes invalid kind/slice combinations unparseable up front — a `kind: "control"` snapshot without a `control` slice fails at `liveSurfaceSnapshot.safeParse`.
+Projection helpers are kind-gated: `toLiveActivityContentState` rejects a `widget`-kind snapshot at runtime, `toWidgetTimelineEntry` rejects a `liveActivity`-kind snapshot, etc. (see `assertSnapshotKind` in `packages/surface-contracts/src/index.ts`). The discriminated union also makes invalid kind/slice combinations unparseable up front; a `kind: "control"` snapshot without a `control` slice fails at `liveSurfaceSnapshot.safeParse`.
 
 ## `kind: "liveActivity"`
 
@@ -42,18 +42,18 @@ The default. Renders as a Lock Screen Live Activity and Dynamic Island compact /
 
 **Status: shipped.** Eight fixtures cover the state machine:
 
-- `data/surface-fixtures/queued.json` — initial state, `progress: 0`.
-- `data/surface-fixtures/attention.json` — alert-worthy, `state: "attention"`.
-- `data/surface-fixtures/active-progress.json` — running, `progress: 0.5`.
-- `data/surface-fixtures/active-countdown.json` — running, time-sensitive.
-- `data/surface-fixtures/active-details.json` — running, `morePartsCount: 2`.
-- `data/surface-fixtures/paused.json` — paused without noisy updates.
-- `data/surface-fixtures/bad-timing.json` — suppressed, `state: "bad_timing"`.
-- `data/surface-fixtures/completed.json` — done, `state: "completed"`, `progress: 1`.
+- `data/surface-fixtures/queued.json`: initial state, `progress: 0`.
+- `data/surface-fixtures/attention.json`: alert-worthy, `state: "attention"`.
+- `data/surface-fixtures/active-progress.json`: running, `progress: 0.5`.
+- `data/surface-fixtures/active-countdown.json`: running, time-sensitive.
+- `data/surface-fixtures/active-details.json`: running, `morePartsCount: 2`.
+- `data/surface-fixtures/paused.json`: paused without noisy updates.
+- `data/surface-fixtures/bad-timing.json`: suppressed, `state: "bad_timing"`.
+- `data/surface-fixtures/completed.json`: done, `state: "completed"`, `progress: 1`.
 
 Projection helpers: `toLiveActivityContentState` (returns `{ headline, subhead, progress, stage }`) and `toAlertPayload` (returns the APNs alert + `liveSurface` sidecar).
 
-Native: `apps/mobile/targets/widget/MobileSurfacesLiveActivity.swift` declares the `ActivityConfiguration(for: MobileSurfacesActivityAttributes.self)`. `MobileSurfacesActivityAttributes.swift` is duplicated byte-for-byte across the Expo module (`packages/live-activity/ios/`) and the widget target — `scripts/check-activity-attributes.mjs` enforces the byte-identity until SPM-shared Swift lands (Phase 5, deferred upstream-blocked; see [`docs/roadmap.md`](./roadmap.md)).
+Native: `apps/mobile/targets/widget/MobileSurfacesLiveActivity.swift` declares the `ActivityConfiguration(for: MobileSurfacesActivityAttributes.self)`. `MobileSurfacesActivityAttributes.swift` is duplicated byte-for-byte across the Expo module (`packages/live-activity/ios/`) and the widget target; `scripts/check-activity-attributes.mjs` enforces the byte-identity until SPM-shared Swift lands (Phase 5, deferred upstream-blocked; see [`docs/roadmap.md`](./roadmap.md)).
 
 ### When to emit
 
@@ -124,7 +124,7 @@ Widget snapshots flow through the shared App Group (`group.com.example.mobilesur
 
 - A persistent home-screen surface with a known reload cadence.
 - A surface whose state changes are too slow for a Live Activity but should still propagate without a network round-trip.
-- Multi-family widgets where the same snapshot drives small / medium / large renders — the `widget.family` field is a hint that lets the timeline entry carry the chosen size.
+- Multi-family widgets where the same snapshot drives small / medium / large renders; the `widget.family` field is a hint that lets the timeline entry carry the chosen size.
 
 ### Code example
 
@@ -150,7 +150,7 @@ const entry = toWidgetTimelineEntry(snapshot);
 //   }
 ```
 
-Widget surfaces do not flow through APNs in this starter — they update via App Group writes from the host app and a WidgetKit reload. A backend that wants to drive widget state remotely would push a regular alert containing the snapshot, then the host app projects it through `toWidgetTimelineEntry` and writes it through `surfaceStorage`.
+Widget surfaces do not flow through APNs in this starter; they update via App Group writes from the host app and a WidgetKit reload. A backend that wants to drive widget state remotely would push a regular alert containing the snapshot, then the host app projects it through `toWidgetTimelineEntry` and writes it through `surfaceStorage`.
 
 ## `kind: "control"`
 
@@ -168,7 +168,7 @@ Control snapshots use the same App Group as widgets, with `surface.control.curre
 - State that the user can flip without unlocking the device.
 - Anything backed by an `AppIntent` shared between the app and the widget extension. The control widget calls the intent; the app reflects the result back through `surfaceStorage`.
 
-iOS < 18 has no control widget. Older OS versions still build the snapshot fine — the widget extension simply does not register the control widget.
+iOS < 18 has no control widget. Older OS versions still build the snapshot fine; the widget extension simply does not register the control widget.
 
 ### Code example
 
@@ -198,7 +198,7 @@ Control surfaces, like widgets, do not flow through APNs directly. The host app 
 
 A notification content payload. Drives the standard alert UI on the Lock Screen / Notification Center, with optional `category` and `threadId` slots.
 
-**Status: contract shipped, fixture and native renderer not yet shipping.** No fixture under `data/surface-fixtures/` today. Projection helper: `toNotificationContentPayload` (returns `{ aps: { alert, sound, category?, "thread-id"? }, liveSurface: { kind, snapshotId, surfaceId, state, deepLink } }`). The starter does not register a notification content extension; a future Phase 4 follow-up adds one. See [`docs/roadmap.md`](./roadmap.md) ("Lock-screen accessory, notification content extension, StandBy" — deferred until Phase 3 has soak time).
+**Status: contract shipped, fixture and native renderer not yet shipping.** No fixture under `data/surface-fixtures/` today. Projection helper: `toNotificationContentPayload` (returns `{ aps: { alert, sound, category?, "thread-id"? }, liveSurface: { kind, snapshotId, surfaceId, state, deepLink } }`). The starter does not register a notification content extension; a future Phase 4 follow-up adds one. See [`docs/roadmap.md`](./roadmap.md) ("Lock-screen accessory, notification content extension, StandBy", deferred until Phase 3 has soak time).
 
 ### When to emit
 
@@ -245,13 +245,13 @@ const payload = toNotificationContentPayload(snapshot);
 //   }
 ```
 
-Until the notification content extension lands, you can ship a `kind: "liveActivity"` snapshot and project through `toAlertPayload` instead — the `liveSurface` sidecar shape is similar (`kind: "surface_snapshot"` rather than `"surface_notification"`).
+Until the notification content extension lands, you can ship a `kind: "liveActivity"` snapshot and project through `toAlertPayload` instead; the `liveSurface` sidecar shape is similar (`kind: "surface_snapshot"` rather than `"surface_notification"`).
 
 ## `kind: "lockAccessory"`
 
 A lock-screen accessory widget (the inline / circular / rectangular Lock Screen complications introduced in iOS 16). Renders next to the clock.
 
-**Status: forward-compat scaffolding only.** The contract parses cleanly — `liveSurfaceSnapshotLockAccessory` is a real branch of the discriminated union — but there is no projection helper, no fixture, and no native renderer in the widget target. Phase 4 of the 2026-04 refactor adds the SwiftUI surface and harness wiring; until then, snapshots with `kind: "lockAccessory"` will validate but have no rendering path. See [`docs/roadmap.md`](./roadmap.md) for the deferred work.
+**Status: forward-compat scaffolding only.** The contract parses cleanly (`liveSurfaceSnapshotLockAccessory` is a real branch of the discriminated union), but there is no projection helper, no fixture, and no native renderer in the widget target. Phase 4 of the 2026-04 refactor adds the SwiftUI surface and harness wiring; until then, snapshots with `kind: "lockAccessory"` will validate but have no rendering path. See [`docs/roadmap.md`](./roadmap.md) for the deferred work.
 
 ### When (eventually) to emit
 
@@ -287,7 +287,7 @@ const parsed = liveSurfaceSnapshotLockAccessory.parse({
 
 The iOS 17+ StandBy mode (large idle clock view when the phone is charging on its side). Renders existing widget content with a different rendering hint.
 
-**Status: forward-compat scaffolding only.** Same as `lockAccessory`: the contract parses cleanly via `liveSurfaceSnapshotStandby`, but there is no projection helper, no fixture, and no native renderer. Listed under [`docs/roadmap.md`](./roadmap.md) "Frontier — iOS 26 (Phase 8)" as a `levelOfDetail` rendering hint — it lands when a real use case surfaces.
+**Status: forward-compat scaffolding only.** Same as `lockAccessory`: the contract parses cleanly via `liveSurfaceSnapshotStandby`, but there is no projection helper, no fixture, and no native renderer. Listed under [`docs/roadmap.md`](./roadmap.md) "Frontier: iOS 26 (Phase 8)" as a `levelOfDetail` rendering hint; it lands when a real use case surfaces.
 
 ### When (eventually) to emit
 
@@ -331,9 +331,9 @@ A typical pattern: `id = ${surfaceId}@${revision}` where `revision` is your doma
 
 `deepLink` is validated as a URL with a scheme prefix (`/^[a-z][a-z0-9+\-.]*:\/\//`). The starter ships with the `mobilesurfaces://` scheme by default; rename via `pnpm surface:rename` (which patches `apps/mobile/app.json`'s `expo.scheme` and the Swift constants). Examples:
 
-- `mobilesurfaces://surface/surface-active-progress` — open the surface detail view.
-- `mobilesurfaces://today` — used by `data/surface-fixtures/bad-timing.json` to land on a non-surface destination when the surface is suppressed.
-- `mobilesurfaces://settings` — anything; the host app routes it.
+- `mobilesurfaces://surface/surface-active-progress`: open the surface detail view.
+- `mobilesurfaces://today`: used by `data/surface-fixtures/bad-timing.json` to land on a non-surface destination when the surface is suppressed.
+- `mobilesurfaces://settings`: anything; the host app routes it.
 
 The `deepLink` field is propagated into every projection: it lands in `LiveSurfaceAlertPayload.liveSurface.deepLink`, `LiveSurfaceWidgetTimelineEntry.deepLink`, `LiveSurfaceControlValueProvider.deepLink`, and the notification sidecar. The widget extension uses it as the `widgetURL(_:)` value; tapping the widget opens the host app to that scheme.
 
@@ -345,7 +345,7 @@ The `deepLink` field is propagated into every projection: it lands in `LiveSurfa
 | Persistent status visible at a glance, infrequent updates | `widget` |
 | Single-tap interaction reachable from Control Center / Lock Screen | `control` |
 | Standalone notification with category / thread routing | `notification` |
-| Lock Screen complication next to the clock | `lockAccessory` (forward-compat — no native renderer yet) |
-| StandBy-specific rendering hint | `standby` (forward-compat — no native renderer yet) |
+| Lock Screen complication next to the clock | `lockAccessory` (forward-compat, no native renderer yet) |
+| StandBy-specific rendering hint | `standby` (forward-compat, no native renderer yet) |
 
-A single domain event can fan out to multiple kinds — emit one snapshot per surface the user has opted in to. The base fields stay equivalent across kinds; only the projection slice and the projection helper change.
+A single domain event can fan out to multiple kinds; emit one snapshot per surface the user has opted in to. The base fields stay equivalent across kinds; only the projection slice and the projection helper change.

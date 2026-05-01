@@ -59,7 +59,7 @@ Behavior:
 2. On v1 failure, try v0; on success, promote via `migrateV0ToV1` and attach a `deprecationWarning` string so callers can log telemetry.
 3. On both failures, return the v1 `ZodError` (the more informative message for new producers).
 
-The codec is the only blessed migration entry point. Do not write your own `if (payload.schemaVersion === "0")` ladder — that branch will multiply when v2 lands.
+The codec is the only blessed migration entry point. Do not write your own `if (payload.schemaVersion === "0")` ladder, since that branch will multiply when v2 lands.
 
 ## Missing-`kind` back-compat
 
@@ -83,7 +83,7 @@ export const liveSurfaceSnapshot = z.preprocess(
 );
 ```
 
-A snapshot missing `kind` parses as a `liveActivity` branch. Authored fixtures in this repo always set `kind` explicitly, and the projection helpers (`toLiveActivityContentState`, `toWidgetTimelineEntry`, etc.) all narrow on `kind` — so the shim is a one-way back-compat ramp, not a license to omit the field in new code.
+A snapshot missing `kind` parses as a `liveActivity` branch. Authored fixtures in this repo always set `kind` explicitly, and the projection helpers (`toLiveActivityContentState`, `toWidgetTimelineEntry`, etc.) all narrow on `kind`, so the shim is a one-way back-compat ramp, not a license to omit the field in new code.
 
 ## JSON Schema `$id` pinning
 
@@ -130,4 +130,4 @@ const snapshot = validate(liveSurfaceSnapshot, await request.json());
 
 The same call works for any consumer that speaks Standard Schema: Valibot's `safeParse`, ArkType's `~standard` interop, `@standard-schema/spec` runners, etc. Backends that prefer Valibot or ArkType internally can still validate Mobile Surfaces payloads against the canonical Zod-defined contract; they just consume the `~standard` surface instead of importing `zod`.
 
-A live assertion in the package's test suite pins this behavior. Do not remove it — Standard Schema is the public boundary the contract commits to.
+A live assertion in the package's test suite pins this behavior. Do not remove it, since Standard Schema is the public boundary the contract commits to.

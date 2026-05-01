@@ -1,6 +1,6 @@
 # create-mobile-surfaces
 
-Guided installer for [Mobile Surfaces](https://github.com/glendonC/mobile-surfaces), an opinionated Expo iOS starter for Live Activities and Dynamic Island workflows.
+Guided installer for [Mobile Surfaces](https://github.com/glendonC/mobile-surfaces), an Expo iOS starter for Live Activities, Dynamic Island, home-screen widgets, and iOS 18 control widgets.
 
 ## Usage
 
@@ -25,7 +25,7 @@ The installer detects whether the current directory is empty (greenfield) or an 
 **Add-to-existing Expo**
 
 1. Detects the existing `app.json` / `app.config.{js,ts}`, plugins, deployment target, and Apple Team ID.
-2. Plans which packages, plugins, Info.plist keys, and widget files to add — surfaces a recap before any change is applied.
+2. Plans which packages, plugins, Info.plist keys, and widget files to add. Surfaces a recap before any change is applied.
 3. Patches `app.json` in place (or stages a paste-ready snippet for JS/TS configs), copies the SwiftUI widget target with names rewritten to your project's identity, and optionally runs `expo prebuild`.
 
 ## Requirements

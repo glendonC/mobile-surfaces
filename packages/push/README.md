@@ -8,7 +8,7 @@ Node SDK for sending Mobile Surfaces snapshots to Apple Push Notification servic
 - iOS 18 broadcast pushes
 - channel-management (create / list / delete)
 
-Zero npm runtime dependencies — only the workspace `surface-contracts` package. Uses `node:http2`, `node:crypto`, and `node:fs` directly.
+Zero npm runtime dependencies, only the workspace `surface-contracts` package. Uses `node:http2`, `node:crypto`, and `node:fs` directly.
 
 ## Install
 
@@ -65,7 +65,7 @@ await client.close();
 - `development` → `api.development.push.apple.com:443` (sends), `api-manage-broadcast.sandbox.push.apple.com:2195` (channel management).
 - `production` → `api.push.apple.com:443` (sends), `api-manage-broadcast.push.apple.com:2196` (channel management).
 
-Note the port split on management traffic — `2195` for sandbox, `2196` for production. Verified against Apple's "Sending channel management requests to APNs" documentation.
+Note the port split on management traffic: `2195` for sandbox, `2196` for production. Verified against Apple's "Sending channel management requests to APNs" documentation.
 
 ## Error taxonomy
 

@@ -1,8 +1,8 @@
 # Backend Integration
 
-How a backend service turns a domain event into an APNs push that this starter can render. Mobile Surfaces ships only the local pieces — fixtures, the contract package, the Node SDK, the harness, and APNs smoke scripts. A real production push service is intentionally [out of scope](../README.md#non-goals); the goal of this doc is to make the integration shape obvious so you can build the production half against a stable contract.
+How a backend service turns a domain event into an APNs push that this starter can render. Mobile Surfaces ships only the local pieces, fixtures, the contract package, the Node SDK, the harness, and APNs smoke scripts. A real production push service is intentionally [out of scope](../README.md#non-goals); the goal of this doc is to make the integration shape obvious so you can build the production half against a stable contract.
 
-For the full push surface — token taxonomy, channel management, error responses, retry policy, smoke-script flag combinations — see [`docs/push.md`](./push.md). This page is the high-level "how does it work end-to-end" piece; the push doc is the "how do I drive the wire layer" piece.
+For the full push surface (token taxonomy, channel management, error responses, retry policy, smoke-script flag combinations), see [`docs/push.md`](./push.md). This page is the high-level "how does it work end-to-end" piece; the push doc is the "how do I drive the wire layer" piece.
 
 ## Mental Model
 
@@ -53,7 +53,7 @@ interface LiveSurfaceSnapshotBase {
 //   kind: "liveActivity" | "lockAccessory" | "standby" → no extra slice
 ```
 
-`kind` selects the projection path (the schema is a true `z.discriminatedUnion("kind", …)` — invalid kind/slice combinations fail at parse time). `state` is the canonical state machine: drive the lifecycle from the backend; `stage` is a UI-facing axis (whether the surface is being prompted, actively running, or wrapping up). `progress` is independent of either.
+`kind` selects the projection path (the schema is a true `z.discriminatedUnion("kind", …)`, invalid kind/slice combinations fail at parse time). `state` is the canonical state machine: drive the lifecycle from the backend; `stage` is a UI-facing axis (whether the surface is being prompted, actively running, or wrapping up). `progress` is independent of either.
 
 For a tour of every `kind` value and the projection it drives, see [`docs/multi-surface.md`](./multi-surface.md). Look at `data/surface-fixtures/*.json` for committed examples of every state and kind.
 
@@ -132,7 +132,7 @@ if (versioned.success) {
 
 `safeParseAnyVersion` is the migration path documented in [`docs/schema-migration.md`](./schema-migration.md). Use it whenever you read snapshots from a store that may still hold v0 payloads.
 
-The published JSON Schema at [`unpkg.com/@mobile-surfaces/surface-contracts@1.0/schema.json`](https://unpkg.com/@mobile-surfaces/surface-contracts@1.0/schema.json) is generated from the same Zod source and pinned to `major.minor`. Use it for IDE tooling, OpenAPI components, or non-TypeScript validators (Ajv, jsonschema, etc.). Standard Schema interop is automatic — every exported Zod schema implements the `~standard` getter (`{ vendor: "zod", version: 1, validate, jsonSchema }`), so the contract drops directly into Standard-Schema-aware libraries (Valibot runners, ArkType, `@standard-schema/spec`) without depending on Zod at runtime.
+The published JSON Schema at [`unpkg.com/@mobile-surfaces/surface-contracts@1.0/schema.json`](https://unpkg.com/@mobile-surfaces/surface-contracts@1.0/schema.json) is generated from the same Zod source and pinned to `major.minor`. Use it for IDE tooling, OpenAPI components, or non-TypeScript validators (Ajv, jsonschema, etc.). Standard Schema interop is automatic, every exported Zod schema implements the `~standard` getter (`{ vendor: "zod", version: 1, validate, jsonSchema }`), so the contract drops directly into Standard-Schema-aware libraries (Valibot runners, ArkType, `@standard-schema/spec`) without depending on Zod at runtime.
 
 ### 3. Send the APNs request
 
@@ -241,10 +241,10 @@ For the iOS 18 broadcast / channel-management endpoints (different host, differe
 
 ### 4. Manage tokens
 
-Three token kinds, three lifetimes. The backend is responsible for storing and rotating them. (The full lifecycle table — where each token comes from in the harness and how to store each on a backend — lives in [`docs/push.md#token-taxonomy`](./push.md#token-taxonomy).)
+Three token kinds, three lifetimes. The backend is responsible for storing and rotating them. (The full lifecycle table (where each token comes from in the harness and how to store each on a backend) lives in [`docs/push.md#token-taxonomy`](./push.md#token-taxonomy).)
 
 - **Device APNs token**: per device, per app install. Used for plain `alert` pushes via `client.alert(deviceToken, snapshot)`. Rotates rarely. Persist by `deviceId`.
-- **Push-to-start token**: per user / per `Activity<Attributes>` type, returned from `Activity<…>.pushToStartTokenUpdates` (iOS 17.2+). Used to send `event: "start"` via `client.start(pushToStartToken, snapshot, attributes)`. Subscribe at app mount and re-store whenever a new value arrives. Caveat (FB21158660, Apple-reported): a push-to-start token issued before the user force-quits the app remains valid against APNs but the OS will not actually start the activity until the user re-launches the app. There is no client workaround — plan rollouts and customer-support scripts accordingly.
+- **Push-to-start token**: per user / per `Activity<Attributes>` type, returned from `Activity<…>.pushToStartTokenUpdates` (iOS 17.2+). Used to send `event: "start"` via `client.start(pushToStartToken, snapshot, attributes)`. Subscribe at app mount and re-store whenever a new value arrives. Caveat (FB21158660, Apple-reported): a push-to-start token issued before the user force-quits the app remains valid against APNs but the OS will not actually start the activity until the user re-launches the app. There is no client workaround. Plan rollouts and customer-support scripts accordingly.
 - **Per-activity push token**: returned from `Activity.pushTokenUpdates` once iOS issues it after `Activity.request`. Used for `event: "update"` / `event: "end"` via `client.update` / `client.end`. Discard the token when the activity ends.
 
 The harness in this repo surfaces all three for inspection: the bottom row shows the device APNs token; "All active activities" shows the per-activity push token as it streams in; the push-to-start token is logged through `liveActivityAdapter`'s `onPushToStartToken` event.
@@ -290,7 +290,7 @@ For the full set of flags, including `--event=start`, `--push-to-start-token`, `
 
 ## Localization (v0 Non-Goal)
 
-All string fields on `LiveSurfaceSnapshot` are pre-rendered for one locale per snapshot. The backend selects the locale (per-user preference, request `Accept-Language`, etc.) and emits the snapshot in that locale. If the locale changes, send a fresh snapshot — there is no in-place locale switch on the client.
+All string fields on `LiveSurfaceSnapshot` are pre-rendered for one locale per snapshot. The backend selects the locale (per-user preference, request `Accept-Language`, etc.) and emits the snapshot in that locale. If the locale changes, send a fresh snapshot. There is no in-place locale switch on the client.
 
 A future `LocalizedString` shape (e.g. `{ en: string; "es-MX"?: string }`) would arrive in a future major and bump `schemaVersion` again. v1 stays string-only on purpose; ActivityKit content states are size-bound (4 KB) and shipping every translation per push wastes that budget.
 
@@ -303,6 +303,6 @@ A future `LocalizedString` shape (e.g. `{ en: string; "es-MX"?: string }`) would
 
 What can change without notice:
 
-- The Swift `MobileSurfacesActivityAttributes.ContentState` shape — it must agree with `toLiveActivityContentState`'s output, but adding a field is a coordinated change in this repo.
-- The smoke script's CLI flags — match the documented set in [`scripts/README.md`](../scripts/README.md), do not parse the script itself.
+- The Swift `MobileSurfacesActivityAttributes.ContentState` shape: it must agree with `toLiveActivityContentState`'s output, but adding a field is a coordinated change in this repo.
+- The smoke script's CLI flags: match the documented set in [`scripts/README.md`](../scripts/README.md), do not parse the script itself.
 - The Live Activity adapter at `packages/live-activity/` (`@mobile-surfaces/live-activity`). Production backends should not depend on its internals; they depend only on the snapshot contract and APNs.

@@ -1,6 +1,6 @@
 # Architecture
 
-Mobile Surfaces is contract-first. Product data should map into one portable `LiveSurfaceSnapshot`; every surface then derives its own view or payload from that snapshot. The starter is opinionated about the native implementation, but the snapshot contract is intentionally stable.
+Mobile Surfaces is contract-first. Product data should map into one portable `LiveSurfaceSnapshot`; every surface then derives its own view or payload from that snapshot. The starter ships a specific native implementation, but the snapshot contract is intentionally stable.
 
 ```mermaid
 flowchart LR
@@ -43,7 +43,7 @@ The harness imports the adapter from `apps/mobile/src/liveActivity/index.ts` as 
 
 ## Adapter Contract
 
-Any Live Activity adapter exported from `apps/mobile/src/liveActivity/index.ts` must implement this surface. Future swaps (`expo-live-activity`, `expo-widgets`, a different local module) only need to satisfy it; nothing else under `apps/mobile/src/` should change. The harness boundary is enforced by `scripts/check-adapter-boundary.mjs` — no call site under `apps/mobile/src/` may import `@mobile-surfaces/live-activity` directly.
+Any Live Activity adapter exported from `apps/mobile/src/liveActivity/index.ts` must implement this surface. Future swaps (`expo-live-activity`, `expo-widgets`, a different local module) only need to satisfy it; nothing else under `apps/mobile/src/` should change. The harness boundary is enforced by `scripts/check-adapter-boundary.mjs`. No call site under `apps/mobile/src/` may import `@mobile-surfaces/live-activity` directly.
 
 The shape below mirrors `packages/live-activity/src/index.ts` verbatim:
 
@@ -133,7 +133,7 @@ Six async methods (`areActivitiesEnabled`, `start`, `update`, `end`, `listActive
 - `data/surface-fixtures/` stores deterministic JSON snapshots used by previews, harness flows, validation, and push smoke tests. TypeScript fixtures are generated from this directory.
 - `apps/mobile/` contains the Expo dev-client app and the harness screen.
 - `apps/mobile/targets/widget/` contains the SwiftUI WidgetKit extension: Lock Screen Live Activity, Dynamic Island, home-screen widget, and iOS 18 control widget.
-- `scripts/` contains doctor, setup, APNs (`scripts/send-apns.mjs` — kept self-contained as a protocol-reference script, intentionally not refactored to import from `@mobile-surfaces/push`), simulator push, schema-build, adapter-boundary, byte-identical-Swift, and surface validation commands.
+- `scripts/` contains doctor, setup, APNs (`scripts/send-apns.mjs`, kept self-contained as a protocol-reference script, intentionally not refactored to import from `@mobile-surfaces/push`), simulator push, schema-build, adapter-boundary, byte-identical-Swift, and surface validation commands.
 
 ## Contract Rules
 
@@ -181,7 +181,7 @@ The flow:
    - `packages/live-activity/ios/MobileSurfacesActivityAttributes.swift`
    - `apps/mobile/targets/widget/MobileSurfacesActivityAttributes.swift`
 
-   The Swift duplication is intentional: the app module and widget extension compile in separate Swift modules, and ActivityKit relies on matching Codable shapes. The intended fix is a local Swift Package shared between both targets (Phase 5 of the 2026-04 refactor) — that work is **deferred upstream-blocked**: `@bacons/apple-targets` 4.0.6 has no local-SPM-package configuration (PR #122 closed, replacement PR #177 unmerged), and React Native 0.83.6 lacks `spm_dependency` for local paths (lands in RN 0.84). Revisit when Expo SDK 56 ships. Until then, the duplication and the byte-identity guard stay.
+   The Swift duplication is intentional: the app module and widget extension compile in separate Swift modules, and ActivityKit relies on matching Codable shapes. The intended fix is a local Swift Package shared between both targets (Phase 5 of the 2026-04 refactor). That work is **deferred upstream-blocked**: `@bacons/apple-targets` 4.0.6 has no local-SPM-package configuration (PR #122 closed, replacement PR #177 unmerged), and React Native 0.83.6 lacks `spm_dependency` for local paths (lands in RN 0.84). Revisit when Expo SDK 56 ships. Until then, the duplication and the byte-identity guard stay.
 
 ### Schema Evolution
 
@@ -196,7 +196,7 @@ The flow:
 
 ### Standard Schema Interop
 
-Zod 4.3.6 implements [Standard Schema](https://standardschema.dev) on every exported schema. `liveSurfaceSnapshot["~standard"]` returns `{ vendor: "zod", version: 1, validate, jsonSchema }` — consumers can pass the contract to any Standard-Schema-aware library (Valibot, ArkType, `@standard-schema/spec` runners) without depending on Zod at runtime. A live test in `packages/surface-contracts` pins this; do not remove the assertion. See [`schema-migration.md`](./schema-migration.md) for a Valibot-style consumer example.
+Zod 4.3.6 implements [Standard Schema](https://standardschema.dev) on every exported schema. `liveSurfaceSnapshot["~standard"]` returns `{ vendor: "zod", version: 1, validate, jsonSchema }`, so consumers can pass the contract to any Standard-Schema-aware library (Valibot, ArkType, `@standard-schema/spec` runners) without depending on Zod at runtime. A live test in `packages/surface-contracts` pins this; do not remove the assertion. See [`schema-migration.md`](./schema-migration.md) for a Valibot-style consumer example.
 
 ### Linked Release Group
 

@@ -1,6 +1,6 @@
 # @mobile-surfaces/surface-contracts
 
-The wire format for iOS Live Activity payloads. Works with any bridge — [`expo-live-activity`](https://github.com/software-mansion-labs/expo-live-activity), `@mobile-surfaces/live-activity`, or a hand-rolled native module — validates at the backend boundary, ships JSON Schema for non-TS validators and LLM tool use, and exposes [Standard Schema](https://standardschema.dev) so consumers can drop the Zod runtime dependency entirely.
+The wire format for iOS Live Activity payloads. Works with any bridge ([`expo-live-activity`](https://github.com/software-mansion-labs/expo-live-activity), `@mobile-surfaces/live-activity`, or a hand-rolled native module), validates at the backend boundary, ships JSON Schema for non-TS validators and LLM tool use, and exposes [Standard Schema](https://standardschema.dev) so consumers can drop the Zod runtime dependency entirely.
 
 This package is the contract. It does not depend on any iOS bridge, harness app, or push library. Pair it with whichever bridge and APNs library you already use.
 
@@ -68,7 +68,7 @@ The validator runs once at the boundary; everything downstream consumes a typed 
 
 | `kind` | Renders as | Slice |
 | --- | --- | --- |
-| `liveActivity` | Lock Screen Live Activity, Dynamic Island | (none — base shape) |
+| `liveActivity` | Lock Screen Live Activity, Dynamic Island | (none, base shape) |
 | `widget` | Home-screen widget | `widget: { family?, reloadPolicy? }` |
 | `control` | iOS 18 control widget | `control: { kind, state?, intent? }` |
 | `notification` | Notification content | `notification: { category?, threadId? }` |
@@ -111,7 +111,7 @@ if (result.issues) {
 const snapshot = result.value; // typed LiveSurfaceSnapshot
 ```
 
-The same `~standard` surface is consumable from Valibot, ArkType, `@standard-schema/spec` runners — any library that speaks Standard Schema. A live assertion in this package's test suite pins this behavior, so the interop is a public boundary, not an accident.
+The same `~standard` surface is consumable from Valibot, ArkType, `@standard-schema/spec` runners, any library that speaks Standard Schema. A live assertion in this package's test suite pins this behavior, so the interop is a public boundary, not an accident.
 
 ## JSON Schema
 
@@ -168,9 +168,9 @@ For stored payloads, `migrateV0ToV1` is a pure transform that promotes a parsed 
 
 ## Pairing options
 
-- **Use with `expo-live-activity`** — validate at the backend boundary with `assertSnapshot`, project via `toLiveActivityContentState`, and hand the content state to your existing push library. Nothing in this package imports any bridge.
-- **Use with the Mobile Surfaces starter** — the harness already validates, projects, writes shared App Group state, and ships the matching widget extension. Run `npm create mobile-surfaces@latest` and you don't write any of the boilerplate above.
-- **Use with the Mobile Surfaces push SDK** — pair with [`@mobile-surfaces/push`](https://www.npmjs.com/package/@mobile-surfaces/push) for an APNs client that consumes `LiveSurfaceSnapshot` directly: alerts, Live Activity start/update/end, push-to-start (iOS 17.2+), and broadcast channels (iOS 18+) with zero npm runtime deps.
+- **Use with `expo-live-activity`**: validate at the backend boundary with `assertSnapshot`, project via `toLiveActivityContentState`, and hand the content state to your existing push library. Nothing in this package imports any bridge.
+- **Use with the Mobile Surfaces starter**: the harness already validates, projects, writes shared App Group state, and ships the matching widget extension. Run `npm create mobile-surfaces@latest` and you don't write any of the boilerplate above.
+- **Use with the Mobile Surfaces push SDK**: pair with [`@mobile-surfaces/push`](https://www.npmjs.com/package/@mobile-surfaces/push) for an APNs client that consumes `LiveSurfaceSnapshot` directly: alerts, Live Activity start/update/end, push-to-start (iOS 17.2+), and broadcast channels (iOS 18+) with zero npm runtime deps.
 
 ## License
 

@@ -1,10 +1,10 @@
 # Roadmap
 
-Mobile Surfaces is an opinionated Expo iOS reference architecture for ActivityKit, WidgetKit, and APNs. The current effort is the 2026-04 architectural refactor — see `notes/refactor-2026-04.md` for the working ledger. This page summarizes what has shipped, what is in flight, what is deferred (and why), and the iOS 26 frontier.
+Mobile Surfaces is an Expo iOS reference architecture for ActivityKit, WidgetKit, and APNs. The current effort is the 2026-04 architectural refactor; see `notes/refactor-2026-04.md` for the working ledger. This page summarizes what has shipped, what is in flight, what is deferred (and why), and the iOS 26 frontier.
 
 ## Shipped
 
-### Phase 1 — Modern toolchain floor
+### Phase 1: Modern toolchain floor
 
 Pinned row, verified end-to-end:
 
@@ -15,33 +15,33 @@ Pinned row, verified end-to-end:
 
 See [`compatibility.md`](./compatibility.md) for the canonical pinned row.
 
-### Phase 2 — Multi-projection contract
+### Phase 2: Multi-projection contract
 
 `LiveSurfaceSnapshot` is a true `z.discriminatedUnion("kind", […])` at `schemaVersion: "1"` with six members: `liveActivity`, `widget`, `control`, `lockAccessory`, `standby`, `notification`. Per-kind slices (`widget`, `control`, `notification`) are strict objects attached to their respective branches.
 
-- The published JSON Schema is `oneOf` with `const`-discriminated branches — proper kind ↔ slice enforcement, not a loose union.
+- The published JSON Schema is `oneOf` with `const`-discriminated branches, proper kind ↔ slice enforcement, not a loose union.
 - A `.preprocess()` shim defaults missing-`kind` payloads to `"liveActivity"` so externally stored snapshots from before the discriminator still parse. Authored fixtures in this repo always set `kind` explicitly.
 - Migration codec ships in `packages/surface-contracts`: `liveSurfaceSnapshotV0`, `migrateV0ToV1`, `safeParseAnyVersion`. See [`schema-migration.md`](./schema-migration.md).
 - `$id` pins to `https://unpkg.com/@mobile-surfaces/surface-contracts@1.0/schema.json` (major.minor) so a future minor that adds a discriminated-union variant can publish a new URL without yanking what consumers reference.
 - Standard Schema interop is live: Zod 4.3.6 implements `~standard` (`{ vendor: "zod", version: 1, validate, jsonSchema }`) on every exported schema. A fixture-validation test pins this so it cannot regress.
 
-### Phase 3 — Home widget + iOS 18 control widget
+### Phase 3: Home widget + iOS 18 control widget
 
-- One WidgetKit extension under `apps/mobile/targets/widget/` hosts the Lock Screen Live Activity, the home-screen widget (`MobileSurfacesHomeWidget` — small/medium/large), and the iOS 18 control widget (`MobileSurfacesControlWidget`).
+- One WidgetKit extension under `apps/mobile/targets/widget/` hosts the Lock Screen Live Activity, the home-screen widget (`MobileSurfacesHomeWidget`, small/medium/large), and the iOS 18 control widget (`MobileSurfacesControlWidget`).
 - Widget and control state flows through a shared App Group (`group.com.example.mobilesurfaces`) keyed on `surface.snapshot.<surfaceId>`, with `surface.widget.currentSurfaceId` / `surface.control.currentSurfaceId` pointing at the active entries.
 - Harness wires "Refresh widget" and "Toggle control state" actions; fixtures for `kind: "widget"` and `kind: "control"` ship under `data/surface-fixtures/`.
 - `_shared` AppIntent files give intents both app and extension target membership via `@bacons/apple-targets`.
 
 Lock-screen accessory, notification content extension, and StandBy variants are intentionally not included in this slice; they are listed under In flight / Frontier below.
 
-### Phase 4 — Modern APNs
+### Phase 4: Modern APNs
 
 - `Activity<MobileSurfacesActivityAttributes>.pushToStartTokenUpdates` (iOS 17.2+) exposed via the `onPushToStartToken` event on `@mobile-surfaces/live-activity`. `getPushToStartToken()` exists for adapter-contract symmetry but always resolves `null` (Apple does not expose a synchronous query).
 - Optional `channelId` argument on `start()` routes ActivityKit through `pushType: .channel(...)` for iOS 18+ broadcast push. iOS < 18 throws `ACTIVITY_UNSUPPORTED_FEATURE` rather than silently degrading.
 - `scripts/send-apns.mjs` extended with `--push-to-start-token`, `--channel-id`, `--channel-action={create,list,delete}`, `--storage-policy`. Channel-management requests hit `api-manage-broadcast.{sandbox.,}push.apple.com:2195/2196` with the sandbox/prod split per Apple docs.
-- APNs reason translator extended with `MissingChannelId`, `BadChannelId`, `ChannelNotRegistered`, `CannotCreateChannelConfig`, `InvalidPushType`, `FeatureNotEnabled`, `MissingPushType` — verified verbatim against current Apple docs.
+- APNs reason translator extended with `MissingChannelId`, `BadChannelId`, `ChannelNotRegistered`, `CannotCreateChannelConfig`, `InvalidPushType`, `FeatureNotEnabled`, `MissingPushType`, verified verbatim against current Apple docs.
 
-### Phase 6 (partial) — `@mobile-surfaces/push` Node SDK
+### Phase 6 (partial): `@mobile-surfaces/push` Node SDK
 
 `packages/push/` ships at `0.1.0`:
 
@@ -61,13 +61,13 @@ Lock-screen accessory, notification content extension, and StandBy variants are 
 
 ## In flight
 
-### Phase 7 — Docs + CLI updates
+### Phase 7: Docs + CLI updates
 
 This roadmap rewrite is part of Phase 7. Remaining work: a multi-surface walkthrough doc and a dedicated push-SDK doc; CLI surface picks (home widget alone, control widget alone) for the add-to-existing flow.
 
 ## Deferred (with reason)
 
-### Phase 5 — SPM-shared Swift
+### Phase 5: SPM-shared Swift
 
 **Status: deferred upstream-blocked.** The byte-identical Swift duplication is still present today:
 
@@ -85,7 +85,7 @@ Revisit when Expo SDK 56 ships. Until then, the duplication and the byte-identit
 
 The contract already accommodates `kind: "lockAccessory"`, `kind: "standby"`, and `kind: "notification"` (with projection helper `toNotificationContentPayload`), but the SwiftUI surfaces and harness wiring do not exist yet. Fixtures and renderers are out of scope until the Phase 3 home/control work has soak time on real devices.
 
-## Frontier — iOS 26 (Phase 8)
+## Frontier: iOS 26 (Phase 8)
 
 Explicitly out of scope unless a real use case surfaces. Listed here so the option is visible, not as a commitment:
 

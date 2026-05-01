@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Symptoms and fixes for the most common Mobile Surfaces dev-loop snags. Run `pnpm dev:doctor` first — it covers Node, pnpm, Xcode, the default simulator, and the Apple Team ID placeholder.
+Symptoms and fixes for the most common Mobile Surfaces dev-loop snags. Run `pnpm dev:doctor` first; it covers Node, pnpm, Xcode, the default simulator, and the Apple Team ID placeholder.
 
 ## "Activities supported: no" in the harness
 
@@ -26,7 +26,7 @@ Simulator support for Live Activities is partial.
 
 - Confirm the simulator model is iPhone 14 Pro or newer (compact and minimal regions only render on Dynamic Island-capable hardware).
 - The expanded layout shows when the activity is invoked from a long press. Compact appears next to the camera; minimal shows when another activity is also active.
-- If only the Lock Screen presentation works, the widget bundle compiled but the `DynamicIsland` block in `apps/mobile/targets/widget/MobileSurfacesLiveActivity.swift` may be unreachable. Check `pnpm surface:check` — it verifies the `MobileSurfacesActivityAttributes.swift` files are byte-identical, which is the most common silent break.
+- If only the Lock Screen presentation works, the widget bundle compiled but the `DynamicIsland` block in `apps/mobile/targets/widget/MobileSurfacesLiveActivity.swift` may be unreachable. Check `pnpm surface:check`, which verifies the `MobileSurfacesActivityAttributes.swift` files are byte-identical, which is the most common silent break.
 
 ## Home widget or control widget shows placeholder state
 
@@ -50,7 +50,7 @@ The APNs response body carries the actual reason. `pnpm mobile:push:device:livea
 ## APNs returns 400
 
 - `BadPriority`: priority is not `5` or `10`. Use `--priority=5` or `--priority=10` (the default for Live Activity is `5`).
-- `BadExpirationDate` / `BadDate`: `--stale-date` or `--dismissal-date` is not a positive unix-seconds integer. The script validates these — if you see the APNs error, the value reached APNs through some other path.
+- `BadExpirationDate` / `BadDate`: `--stale-date` or `--dismissal-date` is not a positive unix-seconds integer. The script validates these, so if you see the APNs error, the value reached APNs through some other path.
 - `MissingTopic` or `TopicDisallowed`: see the 403 entry above.
 
 ## A Live Activity push returns 200 but nothing changes on device

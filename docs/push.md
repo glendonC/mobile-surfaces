@@ -10,23 +10,23 @@ ActivityKit and APNs use three distinct token kinds. They are not interchangeabl
 
 | Token | Source on iOS | iOS gate | Used for | Lifetime |
 | --- | --- | --- | --- | --- |
-| Device APNs token | `Notifications` permission grant + standard APNs registration | All supported versions | `client.alert(deviceToken, snapshot)` — plain alerts | Per device + app install. Rotates rarely. |
-| Push-to-start token | `Activity<Attributes>.pushToStartTokenUpdates` async sequence | iOS 17.2+ | `client.start(pushToStartToken, snapshot, attributes)` — remote start | Per user / per `ActivityAttributes` type. May be re-issued at any time (cold launch, system rotation). |
+| Device APNs token | `Notifications` permission grant + standard APNs registration | All supported versions | `client.alert(deviceToken, snapshot)`: plain alerts | Per device + app install. Rotates rarely. |
+| Push-to-start token | `Activity<Attributes>.pushToStartTokenUpdates` async sequence | iOS 17.2+ | `client.start(pushToStartToken, snapshot, attributes)`: remote start | Per user / per `ActivityAttributes` type. May be re-issued at any time (cold launch, system rotation). |
 | Per-activity push token | `activity.pushTokenUpdates` once iOS issues it after `Activity.request` | iOS 16.2+ (start), 17.2+ (remote start) | `client.update(activityToken, snapshot)`, `client.end(activityToken, snapshot)` | Per activity instance. Discard when the activity ends. |
 
 ### Where each token comes from in the harness
 
-- **Device APNs token** — registered by the Expo runtime once notifications are granted. The harness shows it in the bottom row labeled "Device APNs token".
-- **Push-to-start token** — the live-activity adapter (`apps/mobile/src/liveActivity/index.ts`) subscribes to `onPushToStartToken` at mount time and logs every value through. The contract for this event is documented in [`docs/architecture.md#adapter-contract`](./architecture.md#adapter-contract). Apple does not expose a synchronous query, so `getPushToStartToken()` always resolves `null`; production code subscribes to the event stream.
-- **Per-activity push token** — emitted on `onPushToken` for each active `Activity` instance. The harness "All active activities" panel renders the token as it streams in.
+- **Device APNs token**: registered by the Expo runtime once notifications are granted. The harness shows it in the bottom row labeled "Device APNs token".
+- **Push-to-start token**: the live-activity adapter (`apps/mobile/src/liveActivity/index.ts`) subscribes to `onPushToStartToken` at mount time and logs every value through. The contract for this event is documented in [`docs/architecture.md#adapter-contract`](./architecture.md#adapter-contract). Apple does not expose a synchronous query, so `getPushToStartToken()` always resolves `null`; production code subscribes to the event stream.
+- **Per-activity push token**: emitted on `onPushToken` for each active `Activity` instance. The harness "All active activities" panel renders the token as it streams in.
 
 ### How a backend stores them
 
 - Keyed by user / device id. A single user may have multiple devices and therefore multiple device tokens and push-to-start tokens.
-- Re-store on every event — both `pushToStartTokenUpdates` and `pushTokenUpdates` may emit fresh values at any time. Treat the latest event as the authoritative value.
-- Drop per-activity tokens when `onActivityStateChange` reports `"ended"` / `"dismissed"`. Sending to a finished activity is accepted by APNs and silently dropped by iOS — the backend stops paying for it but iOS will not surface anything.
+- Re-store on every event; both `pushToStartTokenUpdates` and `pushTokenUpdates` may emit fresh values at any time. Treat the latest event as the authoritative value.
+- Drop per-activity tokens when `onActivityStateChange` reports `"ended"` / `"dismissed"`. Sending to a finished activity is accepted by APNs and silently dropped by iOS; the backend stops paying for it but iOS will not surface anything.
 
-### FB21158660 — push-to-start after force-quit
+### FB21158660: push-to-start after force-quit
 
 Apple-reported bug: after a user force-quits the app, `pushToStartTokenUpdates` may stop emitting on subsequent launches until the next OS push delivery wakes the app. Tokens issued before the force-quit remain valid against APNs (the request returns 200), but the OS will not actually start the activity until the user re-launches the app at least once.
 
@@ -41,7 +41,7 @@ The SDK and the script route to four distinct hosts depending on environment and
 | `development` | `api.development.push.apple.com:443` | `api-manage-broadcast.sandbox.push.apple.com:2195` |
 | `production` | `api.push.apple.com:443` | `api-manage-broadcast.push.apple.com:2196` |
 
-Note the **port split** on management traffic: `2195` for sandbox, `2196` for production. This is verified against Apple's "Sending channel management requests to APNs" documentation. It is a different host *and* a different port from the standard send endpoints — the SDK keeps two separate HTTP/2 sessions for this reason.
+Note the **port split** on management traffic: `2195` for sandbox, `2196` for production. This is verified against Apple's "Sending channel management requests to APNs" documentation. It is a different host *and* a different port from the standard send endpoints; the SDK keeps two separate HTTP/2 sessions for this reason.
 
 Every request authenticates with an ES256 JWT signed by your `.p8` auth key. The SDK's `JwtCache` mints tokens once and refreshes them on the 50-minute mark (Apple rejects JWTs older than 1 hour). Local clock skew greater than ~1 hour will surface as `ExpiredProviderToken`; `scripts/send-apns.mjs` prints a warning when the response `Date` header diverges from local time by more than 5 minutes.
 
@@ -106,7 +106,7 @@ await client.update(activityToken, surfaceFixtureSnapshots.activeProgress, {
 
 ### `start(pushToStartToken, snapshot, attributes, options?)`
 
-iOS 17.2+ remote start. Snapshot must be `kind: "liveActivity"`; `attributes` is the static `ActivityAttributes` payload your widget extension's `ActivityConfiguration(for:)` is keyed on. The default `attributesType` is `"MobileSurfacesActivityAttributes"` — override after `pnpm surface:rename`.
+iOS 17.2+ remote start. Snapshot must be `kind: "liveActivity"`; `attributes` is the static `ActivityAttributes` payload your widget extension's `ActivityConfiguration(for:)` is keyed on. The default `attributesType` is `"MobileSurfacesActivityAttributes"`; override after `pnpm surface:rename`.
 
 ```ts
 await client.start(
@@ -252,7 +252,7 @@ await client.broadcast(channelId, snapshot, {
 });
 ```
 
-Channels only support **update** semantics — `start` and `end` are not valid against a channel. Broadcast payloads are bounded at 5 KB (vs 4 KB per-activity).
+Channels only support **update** semantics; `start` and `end` are not valid against a channel. Broadcast payloads are bounded at 5 KB (vs 4 KB per-activity).
 
 ### Channel management
 
@@ -293,19 +293,19 @@ The full mapping mirrors `packages/push/src/reasons.ts` and `scripts/send-apns.m
 | Reason | Cause | Fix |
 | --- | --- | --- |
 | `BadDeviceToken` | Token / environment mismatch. | Use `environment: "development"` for dev-client / `expo run:ios` builds, `"production"` only for TestFlight / App Store builds. Tokens from one environment do not authenticate against the other. |
-| `InvalidProviderToken` | JWT rejected by APNs. | Confirm `keyId` (10 chars), `teamId` (10 chars), and the `.p8` at `keyPath` all match the same auth key. JWTs are also rejected when local clock skew > ~1 hour — sync system time. |
+| `InvalidProviderToken` | JWT rejected by APNs. | Confirm `keyId` (10 chars), `teamId` (10 chars), and the `.p8` at `keyPath` all match the same auth key. JWTs are also rejected when local clock skew > ~1 hour; sync system time. |
 | `ExpiredProviderToken` | JWT older than 1 hour. | The SDK refreshes JWTs every 50 minutes; this is almost always clock skew. Sync NTP and retry. |
 | `TopicDisallowed` | Auth key not enabled for this bundle id, or `bundleId` is wrong. | For Live Activity pushes the topic is auto-suffixed with `.push-type.liveactivity`. Do not include that suffix in `bundleId`. |
 | `Forbidden` | Auth key revoked. | Generate a new APNs auth key in the Apple Developer portal and update `keyPath` / `keyId`. |
 | `BadPriority` | Priority is not 5 or 10. | Use priority 5 (default for Live Activity) or 10 (immediate user-visible). |
-| `BadExpirationDate` | `expirationSeconds` is malformed. | Pass a positive unix-seconds integer. For broadcast on a No-Message-Stored channel, `apns-expiration` must be 0 — Apple rejects nonzero expirations there (the SDK's `broadcast()` already sets 0). |
-| `BadDate` | A timestamp field is malformed. | Same as `BadExpirationDate` — confirm `staleDateSeconds` / `dismissalDateSeconds` are unix-seconds integers. |
+| `BadExpirationDate` | `expirationSeconds` is malformed. | Pass a positive unix-seconds integer. For broadcast on a No-Message-Stored channel, `apns-expiration` must be 0; Apple rejects nonzero expirations there (the SDK's `broadcast()` already sets 0). |
+| `BadDate` | A timestamp field is malformed. | Same as `BadExpirationDate`; confirm `staleDateSeconds` / `dismissalDateSeconds` are unix-seconds integers. |
 | `MissingTopic` | `apns-topic` header missing. | Set `bundleId` to your bundle identifier (without the `.push-type.liveactivity` suffix; the SDK appends it). |
 | `PayloadTooLarge` | Activity payload > 4 KB (5 KB for broadcast). | Trim snapshot fields. ActivityKit content states are bounded; localization or long secondary text are the usual offenders. |
-| `TooManyRequests` | Apple is rate-limiting your bundle id (or the Live Activity priority budget is exhausted). | Back off. Live Activity priority 10 has aggressive budgets — drop to 5 unless the update must be visible immediately. The SDK retries with `Retry-After` automatically when the header is present. |
+| `TooManyRequests` | Apple is rate-limiting your bundle id (or the Live Activity priority budget is exhausted). | Back off. Live Activity priority 10 has aggressive budgets; drop to 5 unless the update must be visible immediately. The SDK retries with `Retry-After` automatically when the header is present. |
 | `MissingChannelId` | `apns-channel-id` header is missing. | Pass `channelId` to `broadcast()` or `deleteChannel()`. The header is set automatically when the argument is provided. |
 | `BadChannelId` | `apns-channel-id` is malformed or oversized. | Channel ids are base64-encoded strings returned by `createChannel()`. Don't truncate, URL-decode, or re-encode them; pass the value through as-is. |
-| `ChannelNotRegistered` | The channel id does not exist. | Channels are environment-scoped — a channel created in `development` cannot be reached in `production`. Re-create in the target environment, or `listChannels()` to confirm. |
+| `ChannelNotRegistered` | The channel id does not exist. | Channels are environment-scoped; a channel created in `development` cannot be reached in `production`. Re-create in the target environment, or `listChannels()` to confirm. |
 | `InvalidPushType` | `apns-push-type` is wrong. | Channel sends require `liveactivity`. The SDK always sets this; if you reach this from a custom payload, drop the override. |
 | `CannotCreateChannelConfig` | 10,000-channel limit reached. | Audit with `listChannels()` and `deleteChannel()` stale ones before creating new channels. |
 | `FeatureNotEnabled` | Broadcast capability not enabled for this bundle id. | Enable broadcast for the auth key in the Apple Developer portal (Certificates, Identifiers & Profiles > Keys). The capability is per-key, not per-app. |
@@ -324,19 +324,19 @@ The full mapping mirrors `packages/push/src/reasons.ts` and `scripts/send-apns.m
 | Live Activity remote start | `--type=liveactivity --push-to-start-token=<hex>` | `--event=start --attributes-file=…` | `POST /3/device/<token>` |
 | Broadcast | `--type=liveactivity --channel-id=<base64>` | `--event=update` | `POST /4/broadcasts/apps/<bundle-id>` |
 | Channel: create | `--channel-action=create` | (`--storage-policy=no-storage|most-recent-message`) | `POST /1/apps/<bundle>/channels` on management host |
-| Channel: list | `--channel-action=list` | — | `GET /1/apps/<bundle>/all-channels` on management host |
+| Channel: list | `--channel-action=list` | - | `GET /1/apps/<bundle>/all-channels` on management host |
 | Channel: delete | `--channel-action=delete` | `--channel-id=<base64>` | `DELETE /1/apps/<bundle>/channels` on management host |
 
 ### Common flags
 
-- `--env=development|production` — picks the host pair (default `development`).
-- `--snapshot-file=./data/surface-fixtures/active-progress.json` — load a `LiveSurfaceSnapshot` from disk; the script projects it through `toAlertPayload` or `toLiveActivityContentState` as appropriate.
-- `--state-file=./scripts/sample-state.json` — bypass the projection and ship a raw ActivityKit `content-state` JSON. Useful for testing renderer behavior without going through the contract.
-- `--attributes-file=…` — required for `--event=start`. JSON file with `surfaceId` and `modeLabel`. The surface fixtures match this shape.
-- `--attributes-type=MobileSurfacesActivityAttributes` — override the type name after `pnpm surface:rename`.
-- `--stale-date=<unix-seconds>` — ActivityKit `stale-date` aps field.
-- `--dismissal-date=<unix-seconds>` — ActivityKit `dismissal-date`. Defaults to now on `--event=end`.
-- `--priority=5|10` — `apns-priority`. Defaults: 5 for `liveactivity`, 10 for `alert`.
+- `--env=development|production`: picks the host pair (default `development`).
+- `--snapshot-file=./data/surface-fixtures/active-progress.json`: load a `LiveSurfaceSnapshot` from disk; the script projects it through `toAlertPayload` or `toLiveActivityContentState` as appropriate.
+- `--state-file=./scripts/sample-state.json`: bypass the projection and ship a raw ActivityKit `content-state` JSON. Useful for testing renderer behavior without going through the contract.
+- `--attributes-file=…`: required for `--event=start`. JSON file with `surfaceId` and `modeLabel`. The surface fixtures match this shape.
+- `--attributes-type=MobileSurfacesActivityAttributes`: override the type name after `pnpm surface:rename`.
+- `--stale-date=<unix-seconds>`: ActivityKit `stale-date` aps field.
+- `--dismissal-date=<unix-seconds>`: ActivityKit `dismissal-date`. Defaults to now on `--event=end`.
+- `--priority=5|10`: `apns-priority`. Defaults: 5 for `liveactivity`, 10 for `alert`.
 
 ### Worked example: end-to-end remote start
 
@@ -371,6 +371,6 @@ The script prints the HTTP status, request topic, push-type, payload, and any AP
 
 ## Anti-goals
 
-- **No production-shaped backend example.** That belongs in [`packages/push/README.md`](../packages/push/README.md). This page is the reference for what the SDK and the script *do* — wiring the SDK into a queue, retry queue, or CDC pipeline is application-specific.
-- **No restating ActivityKit concepts the SDK already abstracts.** The SDK builds correct `aps` blocks, picks topics and priorities, sets `apns-expiration`, and chooses dismissal defaults — the doc does not relitigate those.
+- **No production-shaped backend example.** That belongs in [`packages/push/README.md`](../packages/push/README.md). This page is the reference for what the SDK and the script *do*; wiring the SDK into a queue, retry queue, or CDC pipeline is application-specific.
+- **No restating ActivityKit concepts the SDK already abstracts.** The SDK builds correct `aps` blocks, picks topics and priorities, sets `apns-expiration`, and chooses dismissal defaults; the doc does not relitigate those.
 - **No paraphrasing of Apple's docs.** Every reason string and endpoint here is verified against current Apple documentation; the reason text is consistent with `packages/push/src/reasons.ts` (the canonical local copy).

@@ -236,3 +236,18 @@ export function assertSnapshotKind<K extends LiveSurfaceKind>(
 }
 
 export { surfaceFixtureSnapshots } from "./fixtures.ts";
+
+export {
+  trapSeverity,
+  trapDetection,
+  trapTag,
+  trapEntry,
+  trapCatalog,
+} from "./traps.ts";
+export type {
+  TrapSeverity,
+  TrapDetection,
+  TrapTag,
+  TrapEntry,
+  TrapCatalog,
+} from "./traps.ts";
