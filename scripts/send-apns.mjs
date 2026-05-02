@@ -71,11 +71,17 @@ import http2 from "node:http2";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { loadEnvFile } from "./lib/load-env.mjs";
 import {
   assertSnapshot,
   toAlertPayload,
   toLiveActivityContentState,
 } from "../packages/surface-contracts/src/index.ts";
+
+// Pick up APNs creds written by `pnpm surface:setup-apns`. Existing shell
+// exports still win — loadEnvFile only fills unset keys. Silent no-op when
+// no .env exists.
+loadEnvFile(".env");
 
 // Apple's APNs returns a JSON body with a `reason` enum on every non-2xx.
 // docs/troubleshooting.md (#31-44) maps these to causes; mirror the table here

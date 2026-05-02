@@ -90,6 +90,7 @@ export const successSections = (projectName) => ({
     "tap Start in the harness, then ⌘L in the simulator to see your Live Activity on the Lock Screen",
   ],
   whenReady: [
+    "pnpm surface:setup-apns                 wire APNs creds with a guided wizard",
     "pnpm mobile:push:sim                    send a test push to the simulator",
     "pnpm mobile:run:ios:device              run it on your iPhone",
     "pnpm mobile:push:device:liveactivity    push a real Live Activity update",

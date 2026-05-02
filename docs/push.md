@@ -47,6 +47,18 @@ Note the **port split** on management traffic: `2195` for sandbox, `2196` for pr
 
 Every request authenticates with an ES256 JWT signed by your `.p8` auth key. The SDK's `JwtCache` mints tokens once and refreshes them on the 50-minute mark (Apple rejects JWTs older than 1 hour). Local clock skew greater than ~1 hour will surface as `ExpiredProviderToken`; `scripts/send-apns.mjs` prints a warning when the response `Date` header diverges from local time by more than 5 minutes.
 
+## Setup
+
+```bash
+pnpm surface:setup-apns
+```
+
+Interactive wizard. Prompts for the `.p8` path, key id, team id, bundle id, and environment, then validates the credentials end-to-end against APNs sandbox before writing a `.env` (mode `0600`) at the repo root. The push smoke scripts (`mobile:push:sim`, `mobile:push:device:liveactivity`, `send-apns.mjs`) auto-load that `.env` so you don't have to source it manually. Existing shell exports still win.
+
+Pass `--skip-validate` on offline machines to write the `.env` without the APNs round-trip; pass `--no-write` to dry-run the prompts and see the resolved contents instead.
+
+If you'd rather configure by hand, the four `APNS_*` env vars below the SDK reference are all you need; the wizard is just a guided alternative.
+
 ## SDK reference
 
 Install:
