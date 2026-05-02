@@ -12,19 +12,29 @@ import { liveActivityAdapter as LiveActivity, LiveActivitySnapshot } from "../li
 import { diagnoseSupport } from "../liveActivity/diagnoseSupport";
 import {
   activityFixtureStates,
+  // SURFACE-BEGIN: control-widget
   controlSurfaceFixtures,
+  // SURFACE-END: control-widget
   surfaceFixtures,
+  // SURFACE-BEGIN: home-widget
   widgetSurfaceFixtures,
+  // SURFACE-END: home-widget
 } from "../fixtures/surfaceFixtures";
 import {
   canRequestPushToken,
   getDeviceApnsToken,
   requestNotificationPermissions,
 } from "../notifications";
+// SURFACE-BEGIN: home-widget control-widget
 import {
+  // SURFACE-BEGIN: home-widget
   refreshWidgetSurface,
+  // SURFACE-END: home-widget
+  // SURFACE-BEGIN: control-widget
   toggleControlSurface,
+  // SURFACE-END: control-widget
 } from "../surfaceStorage";
+// SURFACE-END: home-widget control-widget
 import { SetupStatusPanel } from "../components/SetupStatusPanel";
 import { TrapErrorCard } from "../components/TrapErrorCard";
 
@@ -35,8 +45,12 @@ export function LiveActivityHarness() {
   const [pushToken, setPushToken] = useState<string | null>(null);
   const [pushToStartToken, setPushToStartToken] = useState<string | null>(null);
   const [apnsToken, setApnsToken] = useState<string | null>(null);
+  // SURFACE-BEGIN: home-widget control-widget
   const [surfaceStatus, setSurfaceStatus] = useState<string | null>(null);
+  // SURFACE-END: home-widget control-widget
+  // SURFACE-BEGIN: control-widget
   const [controlOn, setControlOn] = useState(false);
+  // SURFACE-END: control-widget
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown | null>(null);
   // Bumped on adapter events that would change a setup probe outcome
@@ -192,6 +206,7 @@ export function LiveActivityHarness() {
     }
   }, []);
 
+  // SURFACE-BEGIN: home-widget
   const handleRefreshWidget = useCallback(async () => {
     const snapshot = Object.values(widgetSurfaceFixtures)[0];
     if (!snapshot) {
@@ -209,7 +224,9 @@ export function LiveActivityHarness() {
       setBusy(false);
     }
   }, []);
+  // SURFACE-END: home-widget
 
+  // SURFACE-BEGIN: control-widget
   const handleToggleControl = useCallback(async () => {
     const snapshot = Object.values(controlSurfaceFixtures)[0];
     if (!snapshot) {
@@ -229,6 +246,7 @@ export function LiveActivityHarness() {
       setBusy(false);
     }
   }, [controlOn]);
+  // SURFACE-END: control-widget
 
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
@@ -315,13 +333,16 @@ export function LiveActivityHarness() {
         <Btn label="refresh" onPress={refreshActive} disabled={busy} />
       </Section>
 
+      {/* SURFACE-BEGIN: home-widget */}
       <Section label="Home widget">
         <Text style={styles.value}>
           Writes the widget fixture into the App Group and reloads the timeline.
         </Text>
         <Btn label="refresh widget" onPress={handleRefreshWidget} disabled={busy} />
       </Section>
+      {/* SURFACE-END: home-widget */}
 
+      {/* SURFACE-BEGIN: control-widget */}
       <Section label="Control widget">
         <Text style={styles.value}>
           Writes the control fixture into the App Group and reloads iOS 18 controls.
@@ -332,12 +353,15 @@ export function LiveActivityHarness() {
           disabled={busy}
         />
       </Section>
+      {/* SURFACE-END: control-widget */}
 
+      {/* SURFACE-BEGIN: home-widget control-widget */}
       {surfaceStatus ? (
         <Section label="Widget/control status">
           <Text style={styles.value}>{surfaceStatus}</Text>
         </Section>
       ) : null}
+      {/* SURFACE-END: home-widget control-widget */}
 
       <Section label="APNs device token (for regular alerts)">
         <Text style={styles.value} selectable>

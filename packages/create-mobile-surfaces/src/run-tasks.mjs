@@ -6,7 +6,16 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { applyToExisting } from "./apply-existing.mjs";
 import * as scaffold from "./scaffold.mjs";
+import { applyStripGreenfield } from "./strip.mjs";
 import { task } from "./ui.mjs";
+
+// Defaults preserve pre-3A behavior for any caller that doesn't thread the
+// surface picker through (e.g. legacy tests). The CLI prompts always supply
+// a real selection.
+const DEFAULT_SURFACES = Object.freeze({
+  homeWidget: true,
+  controlWidget: true,
+});
 
 const execFileAsync = promisify(execFile);
 
@@ -63,6 +72,16 @@ export async function ensureCocoapodsAvailable({ exec = execFileAsync } = {}) {
 
 export async function runTasks({ config, target }) {
   await task("Copying template", () => scaffold.copyTemplate({ target }));
+
+  // Strip the freshly-extracted tree to match the surface picker. Always
+  // runs — even with every surface selected, this pass removes the
+  // SURFACE-BEGIN/END marker comments so users never see them in their
+  // generated project.
+  const surfaces = config.surfaces ?? DEFAULT_SURFACES;
+  await task("Trimming to selected surfaces", async () => {
+    applyStripGreenfield({ rootDir: target, surfaces });
+  });
+
   await task(`Renaming to ${config.projectName}`, () =>
     scaffold.renameIdentity({ target, config }),
   );

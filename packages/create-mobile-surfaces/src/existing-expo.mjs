@@ -14,7 +14,28 @@ import { cancelled, prompts as copy } from "./copy.mjs";
 import { askConfirm, askSelect, askText, log, rail } from "./ui.mjs";
 import { validateTeamId } from "./validators.mjs";
 
-export function planChanges({ evidence, manifest }) {
+// Default selections preserve pre-3A behavior: every surface ships unless
+// the caller explicitly opts out. Greenfield reads the selections from the
+// surface picker; existing-expo asks the same picker before it calls in.
+const DEFAULT_SURFACES = Object.freeze({
+  homeWidget: true,
+  controlWidget: true,
+});
+
+// Map a surface id to the widget-target swift file that materializes it.
+// Used to filter manifest.widgetFiles down to what'll actually be copied.
+const WIDGET_FILE_BY_SURFACE = Object.freeze({
+  homeWidget: "MobileSurfacesHomeWidget.swift",
+  controlWidget: "MobileSurfacesControlWidget.swift",
+});
+
+export function planChanges({ evidence, manifest, surfaces = DEFAULT_SURFACES }) {
+  const widgetFilesToCopy = manifest.widgetFiles.filter((p) => {
+    for (const [id, swiftBasename] of Object.entries(WIDGET_FILE_BY_SURFACE)) {
+      if (!surfaces[id] && path.posix.basename(p) === swiftBasename) return false;
+    }
+    return true;
+  });
   const plan = {
     packagesToAdd: [...manifest.addPackages],
     appConfigKind: evidence.config?.kind ?? "missing",
@@ -25,9 +46,10 @@ export function planChanges({ evidence, manifest }) {
     deploymentTargetTo: null,
     appConfigManual: false,
     widgetTargetDir: manifest.widgetTargetDir,
-    widgetFilesToCopy: [...manifest.widgetFiles],
+    widgetFilesToCopy,
     willPrebuild: true,
     manualFollowups: [],
+    surfaces: { ...surfaces },
   };
 
   if (evidence.config?.kind === "json" && evidence.config.parsed) {
@@ -161,12 +183,29 @@ function renderPlanRecap(plan) {
 }
 
 export async function runExistingExpoPrompts({ evidence, manifest }) {
-  rail.step(2, 4, "Detection");
+  rail.step(2, 5, "Detection");
   renderFoundRecap(evidence);
 
-  const plan = planChanges({ evidence, manifest });
+  rail.step(3, 5, "Surfaces");
 
-  rail.step(3, 4, "Plan");
+  // Same picker as greenfield. Live Activity + Dynamic Island always ship.
+  const homeWidget = await askConfirm({
+    message: copy.surfaces.homeWidget.message,
+    defaultValue: true,
+  });
+
+  const controlWidget = await askConfirm({
+    message: copy.surfaces.controlWidget.message,
+    defaultValue: true,
+  });
+
+  const plan = planChanges({
+    evidence,
+    manifest,
+    surfaces: { homeWidget, controlWidget },
+  });
+
+  rail.step(4, 5, "Plan");
 
   // Apple Team ID — ask only if we don't already have a real (non-placeholder)
   // value in app.json. JS/TS configs can't be read safely so we always ask.

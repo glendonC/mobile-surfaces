@@ -15,7 +15,7 @@ import {
 } from "./validators.mjs";
 
 export async function runPrompts({ initialName }) {
-  rail.step(2, 4, "Project basics");
+  rail.step(2, 5, "Project basics");
 
   const projectName = await askText({
     message: copy.projectName.message,
@@ -41,6 +41,22 @@ export async function runPrompts({ initialName }) {
     validate: validateTeamId,
   });
 
+  rail.step(3, 5, "Surfaces");
+
+  // Live Activity + Dynamic Island always ship — they're the load-bearing
+  // surface this template was built around. Home and control widgets are
+  // independent opt-ins; deselecting them strips their Swift target files,
+  // fixtures, harness sections, and (in add-to-existing) entitlements.
+  const homeWidget = await askConfirm({
+    message: copy.surfaces.homeWidget.message,
+    defaultValue: true,
+  });
+
+  const controlWidget = await askConfirm({
+    message: copy.surfaces.controlWidget.message,
+    defaultValue: true,
+  });
+
   const installNow = await askSelect({
     message: copy.install.message,
     defaultValue: true,
@@ -50,15 +66,17 @@ export async function runPrompts({ initialName }) {
     ],
   });
 
-  rail.step(3, 4, "Confirm");
+  rail.step(4, 5, "Confirm");
 
   // Recap — single stdout.write block. Cannot be redrawn over.
   const recapBody = [
-    `name        ${pc.bold(projectName)}`,
-    `scheme      ${pc.bold(scheme)}`,
-    `bundle      ${pc.bold(bundleId)}`,
-    `team id     ${teamId ? pc.bold(teamId) : pc.dim("skip — set later in app.json")}`,
-    `install     ${installNow ? pc.bold("yes") : pc.dim("no")}`,
+    `name          ${pc.bold(projectName)}`,
+    `scheme        ${pc.bold(scheme)}`,
+    `bundle        ${pc.bold(bundleId)}`,
+    `team id       ${teamId ? pc.bold(teamId) : pc.dim("skip — set later in app.json")}`,
+    `home widget   ${homeWidget ? pc.bold("yes") : pc.dim("no")}`,
+    `control       ${controlWidget ? pc.bold("yes") : pc.dim("no")}`,
+    `install       ${installNow ? pc.bold("yes") : pc.dim("no")}`,
   ].join("\n");
   section("Recap", recapBody);
 
@@ -77,6 +95,7 @@ export async function runPrompts({ initialName }) {
     scheme,
     bundleId,
     teamId: teamId || null,
+    surfaces: { homeWidget, controlWidget },
     installNow,
   };
 }

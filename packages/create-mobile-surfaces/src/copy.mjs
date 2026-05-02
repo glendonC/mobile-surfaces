@@ -33,6 +33,14 @@ export const prompts = {
   teamId: {
     message: "Apple Team ID (skip if simulator-only)",
   },
+  surfaces: {
+    homeWidget: {
+      message: "Include home-screen widget?",
+    },
+    controlWidget: {
+      message: "Include iOS 18 control widget?",
+    },
+  },
   install: {
     message: "Install dependencies and prepare iOS now?",
     yes: "Yes, install and prepare",

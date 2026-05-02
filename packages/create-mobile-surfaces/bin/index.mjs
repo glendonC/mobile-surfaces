@@ -53,7 +53,7 @@ if (preflight.failures.length > 0) {
   renderFailures(preflight.failures);
   process.exit(1);
 }
-rail.step(1, 4, "Toolchain");
+rail.step(1, 5, "Toolchain");
 renderPassed(preflight.passed);
 if (preflight.warnings.length > 0) {
   renderWarnings(preflight.warnings);
@@ -73,7 +73,7 @@ if (mode.kind === MODE.EXISTING_EXPO) {
 
   logger.open();
 
-  rail.step(4, 4, "Apply");
+  rail.step(5, 5, "Apply");
   let summary;
   try {
     summary = await runExistingTasks({
@@ -114,7 +114,7 @@ if (!dirState.ok) {
 
 logger.open();
 
-rail.step(4, 4, "Build");
+rail.step(5, 5, "Build");
 try {
   await runTasks({ config, target: dirState.target });
 } catch (err) {

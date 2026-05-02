@@ -25,6 +25,23 @@ const sampleManifest = {
   widgetFiles: ["apps/mobile/targets/widget/Widget.swift"],
 };
 
+// Manifest variant matching the real shape: Live Activity + Home + Control
+// widget swift files. Used by the surface-picker tests below to verify
+// per-selection filtering.
+const fullWidgetManifest = {
+  ...sampleManifest,
+  widgetFiles: [
+    "apps/mobile/targets/widget/Assets.xcassets",
+    "apps/mobile/targets/widget/Info.plist",
+    "apps/mobile/targets/widget/MobileSurfacesActivityAttributes.swift",
+    "apps/mobile/targets/widget/MobileSurfacesControlWidget.swift",
+    "apps/mobile/targets/widget/MobileSurfacesHomeWidget.swift",
+    "apps/mobile/targets/widget/MobileSurfacesLiveActivity.swift",
+    "apps/mobile/targets/widget/MobileSurfacesWidgetBundle.swift",
+    "apps/mobile/targets/widget/expo-target.config.js",
+  ],
+};
+
 function evidenceWithJsonConfig(parsed) {
   return {
     cwd: "/test",
@@ -200,5 +217,76 @@ describe("planChanges — ios/ folder warning", () => {
     assert.ok(
       plan.manualFollowups.some((f) => f.includes("ios/ folder will be regenerated")),
     );
+  });
+});
+
+describe("planChanges — surface picker", () => {
+  it("defaults to all surfaces when no selection is provided", () => {
+    const evidence = evidenceWithJsonConfig({ ios: { bundleIdentifier: "x" } });
+    const plan = planChanges({ evidence, manifest: fullWidgetManifest });
+    assert.deepEqual(plan.surfaces, { homeWidget: true, controlWidget: true });
+    assert.ok(
+      plan.widgetFilesToCopy.some((p) => p.endsWith("MobileSurfacesHomeWidget.swift")),
+    );
+    assert.ok(
+      plan.widgetFilesToCopy.some((p) => p.endsWith("MobileSurfacesControlWidget.swift")),
+    );
+  });
+
+  it("drops MobileSurfacesHomeWidget.swift from widgetFilesToCopy when homeWidget is off", () => {
+    const evidence = evidenceWithJsonConfig({ ios: { bundleIdentifier: "x" } });
+    const plan = planChanges({
+      evidence,
+      manifest: fullWidgetManifest,
+      surfaces: { homeWidget: false, controlWidget: true },
+    });
+    assert.equal(
+      plan.widgetFilesToCopy.some((p) => p.endsWith("MobileSurfacesHomeWidget.swift")),
+      false,
+    );
+    assert.ok(
+      plan.widgetFilesToCopy.some((p) => p.endsWith("MobileSurfacesControlWidget.swift")),
+    );
+  });
+
+  it("drops MobileSurfacesControlWidget.swift when controlWidget is off", () => {
+    const evidence = evidenceWithJsonConfig({ ios: { bundleIdentifier: "x" } });
+    const plan = planChanges({
+      evidence,
+      manifest: fullWidgetManifest,
+      surfaces: { homeWidget: true, controlWidget: false },
+    });
+    assert.ok(
+      plan.widgetFilesToCopy.some((p) => p.endsWith("MobileSurfacesHomeWidget.swift")),
+    );
+    assert.equal(
+      plan.widgetFilesToCopy.some((p) => p.endsWith("MobileSurfacesControlWidget.swift")),
+      false,
+    );
+  });
+
+  it("keeps the LiveActivity, ActivityAttributes, and bundle Swift files regardless of selection", () => {
+    const evidence = evidenceWithJsonConfig({ ios: { bundleIdentifier: "x" } });
+    const plan = planChanges({
+      evidence,
+      manifest: fullWidgetManifest,
+      surfaces: { homeWidget: false, controlWidget: false },
+    });
+    const remainingBaseNames = plan.widgetFilesToCopy.map((p) =>
+      p.split("/").pop(),
+    );
+    assert.ok(remainingBaseNames.includes("MobileSurfacesActivityAttributes.swift"));
+    assert.ok(remainingBaseNames.includes("MobileSurfacesLiveActivity.swift"));
+    assert.ok(remainingBaseNames.includes("MobileSurfacesWidgetBundle.swift"));
+  });
+
+  it("threads the selections through to plan.surfaces", () => {
+    const evidence = evidenceWithJsonConfig({ ios: { bundleIdentifier: "x" } });
+    const plan = planChanges({
+      evidence,
+      manifest: fullWidgetManifest,
+      surfaces: { homeWidget: false, controlWidget: true },
+    });
+    assert.deepEqual(plan.surfaces, { homeWidget: false, controlWidget: true });
   });
 });

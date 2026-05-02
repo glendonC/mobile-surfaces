@@ -9,7 +9,13 @@ import fs from "node:fs";
 import path from "node:path";
 import * as logger from "./logger.mjs";
 import { prepareSourceTree, runAddPackages } from "./scaffold.mjs";
+import { applyStripWidgetDir } from "./strip.mjs";
 import { toSwiftPrefix } from "./validators.mjs";
+
+const DEFAULT_SURFACES = Object.freeze({
+  homeWidget: true,
+  controlWidget: true,
+});
 
 // Format a manifest package entry as the spec string a package manager's
 // `add` subcommand expects. Workspace/file deps can't yet resolve from npm,
@@ -347,9 +353,12 @@ export async function applyToExisting({ evidence, plan, packageManager, manifest
   }
 
   // 3) Copy the widget target dir from the template into the user's app,
-  //    then rename the bundled MobileSurfaces* identity to the user's app
-  //    identity so they don't end up with `MobileSurfacesWidget` wired
-  //    into their (e.g.) "Acme" project.
+  //    strip it to match the surface picker (deletes deselected widget
+  //    Swift files; trims marker regions in the bundle), then rename the
+  //    bundled MobileSurfaces* identity to the user's app identity so they
+  //    don't end up with `MobileSurfacesWidget` wired into their (e.g.)
+  //    "Acme" project. Strip runs before rename so deletion paths stay on
+  //    the original "MobileSurfaces*" names.
   const source = await prepareSourceTree();
   try {
     const result = copyWidgetTarget({
@@ -360,6 +369,9 @@ export async function applyToExisting({ evidence, plan, packageManager, manifest
     summary.widgetDestDir = result.destDir;
     if (result.copied) {
       summary.widgetCopied = true;
+
+      const surfaces = plan.surfaces ?? DEFAULT_SURFACES;
+      applyStripWidgetDir({ widgetDir: result.destDir, surfaces });
 
       const swiftPrefix = deriveSwiftPrefixFromEvidence(evidence);
       if (swiftPrefix) {
