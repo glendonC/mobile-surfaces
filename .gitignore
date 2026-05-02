@@ -47,6 +47,10 @@ web_modules/
 # TypeScript cache
 *.tsbuildinfo
 
+# surface:diagnose bundle output (paste-ready, never committed)
+mobile-surfaces-diagnose-*.json
+mobile-surfaces-diagnose-*.md
+
 # Optional npm cache directory
 .npm
 

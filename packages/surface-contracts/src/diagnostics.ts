@@ -95,3 +95,48 @@ export function rollupDiagnosticStatus(
   if (statuses.includes("warn")) return "warn";
   return "ok";
 }
+
+// ---------------------------------------------------------------------------
+// Bundle: aggregate of many DiagnosticReports (one envelope per
+// `surface:diagnose` invocation).
+//
+// Designed to be safe to paste into a public GitHub issue. The producer
+// (scripts/diagnose.mjs) is responsible for never embedding secret values;
+// the schema accepts only structured, redacted summaries.
+// ---------------------------------------------------------------------------
+
+export const diagnosticEnvironment = z
+  .object({
+    os: z.string().min(1),
+    osRelease: z.string().optional(),
+    arch: z.string().min(1),
+    node: z.string().min(1),
+    pnpm: z.string().optional(),
+    xcode: z.string().optional(),
+  })
+  .strict();
+export type DiagnosticEnvironment = z.infer<typeof diagnosticEnvironment>;
+
+// Project-config snapshot. Kept open-ended (z.record) on purpose: the
+// diagnose bundle composes contributions from multiple probes and the exact
+// keys evolve faster than this schema should. Producers must never put raw
+// secret values here — the redaction policy lives in scripts/diagnose.mjs.
+export const diagnosticConfig = z.record(z.string(), z.unknown());
+export type DiagnosticConfig = z.infer<typeof diagnosticConfig>;
+
+export const diagnosticBundle = z
+  .object({
+    schemaVersion: z.literal("1"),
+    // Random short id (e.g. UUID v4 first segment) per bundle invocation,
+    // so a maintainer can correlate the .json and .md outputs.
+    bundleId: z.string().min(1),
+    generatedAt: z.iso.datetime(),
+    // Rolled-up status across all reports. Same precedence as the
+    // per-report rollup: any fail → fail, any warn → warn, else ok.
+    status: diagnosticReportStatus,
+    environment: diagnosticEnvironment,
+    config: diagnosticConfig,
+    reports: z.array(diagnosticReport).min(1),
+  })
+  .strict();
+export type DiagnosticBundle = z.infer<typeof diagnosticBundle>;

@@ -10,7 +10,7 @@ Pinned row, verified end-to-end:
 
 - Expo SDK `~55.0.18`, React Native `0.83.6`, React `19.2.0`.
 - iOS deployment target `17.2` (deliberately above SDK 55's 15.1 floor so push-to-start lands without `if #available` ceremony).
-- Xcode 26 (`scripts/doctor.sh` enforces the major). Swift 6.2 in toolchain.
+- Xcode 26 (`scripts/doctor.mjs` enforces the major). Swift 6.2 in toolchain.
 - `@bacons/apple-targets` exact-pinned at `4.0.6`.
 
 See [`compatibility.md`](./compatibility.md) for the canonical pinned row.

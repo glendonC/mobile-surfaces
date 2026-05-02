@@ -25,6 +25,8 @@ import {
   refreshWidgetSurface,
   toggleControlSurface,
 } from "../surfaceStorage";
+import { SetupStatusPanel } from "../components/SetupStatusPanel";
+import { TrapErrorCard } from "../components/TrapErrorCard";
 
 export function LiveActivityHarness() {
   const [supported, setSupported] = useState<boolean | null>(null);
@@ -36,7 +38,11 @@ export function LiveActivityHarness() {
   const [surfaceStatus, setSurfaceStatus] = useState<string | null>(null);
   const [controlOn, setControlOn] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown | null>(null);
+  // Bumped on adapter events that would change a setup probe outcome
+  // (push-to-start token, activity start/end). Lets SetupStatusPanel rerun
+  // its probes without us reaching across components.
+  const [setupRefreshKey, setSetupRefreshKey] = useState(0);
   const fixtureKeys = Object.keys(activityFixtureStates) as Array<
     keyof typeof activityFixtureStates
   >;
@@ -53,7 +59,7 @@ export function LiveActivityHarness() {
       const list = await LiveActivity.listActive();
       setActive(list);
     } catch (e) {
-      setError(formatError(e));
+      setError(e);
     }
   }, []);
 
@@ -76,6 +82,7 @@ export function LiveActivityHarness() {
           setActivityId(null);
           setPushToken(null);
         }
+        setSetupRefreshKey((k) => k + 1);
       }
     });
     // Push-to-start tokens are app-level (iOS 17.2+), not tied to a specific
@@ -83,6 +90,7 @@ export function LiveActivityHarness() {
     // activity is currently in focus.
     const pushToStartSub = LiveActivity.addListener("onPushToStartToken", ({ token }) => {
       setPushToStartToken(token);
+      setSetupRefreshKey((k) => k + 1);
     });
 
     return () => {
@@ -107,9 +115,10 @@ export function LiveActivityHarness() {
       );
       setActivityId(result.id);
       setPushToken(null);
+      setSetupRefreshKey((k) => k + 1);
       await refreshActive();
     } catch (e) {
-      setError(formatError(e));
+      setError(e);
     } finally {
       setBusy(false);
     }
@@ -123,7 +132,7 @@ export function LiveActivityHarness() {
       await LiveActivity.update(activityId, activityFixtureStates[key]);
       await refreshActive();
     } catch (e) {
-      setError(formatError(e));
+      setError(e);
     } finally {
       setBusy(false);
     }
@@ -139,7 +148,7 @@ export function LiveActivityHarness() {
       setPushToken(null);
       await refreshActive();
     } catch (e) {
-      setError(formatError(e));
+      setError(e);
     } finally {
       setBusy(false);
     }
@@ -155,7 +164,7 @@ export function LiveActivityHarness() {
       setPushToken(null);
       await refreshActive();
     } catch (e) {
-      setError(formatError(e));
+      setError(e);
     } finally {
       setBusy(false);
     }
@@ -177,7 +186,7 @@ export function LiveActivityHarness() {
       const token = await getDeviceApnsToken();
       setApnsToken(token);
     } catch (e) {
-      setError(formatError(e));
+      setError(e);
     } finally {
       setBusy(false);
     }
@@ -195,7 +204,7 @@ export function LiveActivityHarness() {
       const entry = await refreshWidgetSurface(snapshot);
       setSurfaceStatus(`Widget refreshed: ${entry.headline}`);
     } catch (e) {
-      setError(formatError(e));
+      setError(e);
     } finally {
       setBusy(false);
     }
@@ -215,7 +224,7 @@ export function LiveActivityHarness() {
       setControlOn(next);
       setSurfaceStatus(`Control ${entry.value ? "on" : "off"}: ${entry.label}`);
     } catch (e) {
-      setError(formatError(e));
+      setError(e);
     } finally {
       setBusy(false);
     }
@@ -224,6 +233,11 @@ export function LiveActivityHarness() {
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
       <Text style={styles.title}>Surface Harness</Text>
+      <SetupStatusPanel
+        pushToStartToken={pushToStartToken}
+        activeActivityId={activityId}
+        refreshKey={setupRefreshKey}
+      />
       <Text style={styles.subtitle}>
         Start, update, end, and push-test generic Live Activity snapshots.
       </Text>
@@ -332,11 +346,7 @@ export function LiveActivityHarness() {
         <Btn label="fetch APNs token" onPress={handleFetchApns} disabled={busy} />
       </Section>
 
-      {error ? (
-        <View style={styles.error}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      ) : null}
+      <TrapErrorCard error={error} onDismiss={() => setError(null)} />
       {busy ? <ActivityIndicator style={styles.spinner} /> : null}
     </ScrollView>
   );
@@ -369,12 +379,6 @@ function Btn({ label, onPress, disabled }: { label: string; onPress: () => void;
       <Text style={styles.btnLabel}>{label}</Text>
     </Pressable>
   );
-}
-
-function formatError(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  if (typeof e === "string") return e;
-  return JSON.stringify(e);
 }
 
 const styles = StyleSheet.create({
@@ -441,15 +445,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: surfaceColors.surface,
-  },
-  error: {
-    padding: 12,
-    backgroundColor: surfaceColors.dangerSurface,
-    borderRadius: 10,
-  },
-  errorText: {
-    color: surfaceColors.dangerText,
-    fontSize: 13,
   },
   spinner: {
     marginTop: 12,

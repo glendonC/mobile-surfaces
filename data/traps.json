@@ -120,7 +120,7 @@
       "summary": "pnpm dev:doctor verifies Node 24, pnpm 10, Xcode major 26+, and simulator availability before iOS work begins.",
       "symptom": "Builds fail with confusing Swift compiler errors, simulator launches that hang, or pnpm refusing to install. None of which point at the actual cause (a stale toolchain row).",
       "fix": "Run pnpm dev:doctor. Update Xcode and re-run if the major version is below 26. Use Node 24.",
-      "enforcement": { "script": "scripts/doctor.sh" },
+      "enforcement": { "script": "scripts/doctor.mjs" },
       "since": "1.0.0"
     },
     {

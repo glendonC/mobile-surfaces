@@ -252,6 +252,8 @@ export type {
   TrapCatalog,
 } from "./traps.ts";
 
+export { traps, findTrap, findTrapByErrorClass } from "./traps-data.ts";
+
 export {
   diagnosticCheckStatus,
   diagnosticReportStatus,
@@ -259,6 +261,9 @@ export {
   diagnosticDetail,
   diagnosticCheck,
   diagnosticReport,
+  diagnosticEnvironment,
+  diagnosticConfig,
+  diagnosticBundle,
   rollupDiagnosticStatus,
 } from "./diagnostics.ts";
 export type {
@@ -268,4 +273,7 @@ export type {
   DiagnosticDetail,
   DiagnosticCheck,
   DiagnosticReport,
+  DiagnosticEnvironment,
+  DiagnosticConfig,
+  DiagnosticBundle,
 } from "./diagnostics.ts";

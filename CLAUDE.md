@@ -347,7 +347,7 @@ CNG-managed directories must not be checked into version control; commits will f
 
 ### MS010: Toolchain preflight (Node 24, pnpm, Xcode 26+)
 
-**severity:** warning  •  **detection:** config (declarative file)  •  **tags:** toolchain  •  **enforced by:** `scripts/doctor.sh`
+**severity:** warning  •  **detection:** config (declarative file)  •  **tags:** toolchain  •  **enforced by:** `scripts/doctor.mjs`
 
 pnpm dev:doctor verifies Node 24, pnpm 10, Xcode major 26+, and simulator availability before iOS work begins.
 

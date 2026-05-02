@@ -23,7 +23,9 @@ assignees: ""
 
 ## Environment
 
-Run `pnpm dev:doctor` and paste the output, or fill in manually:
+Run `pnpm surface:diagnose` and attach the generated `mobile-surfaces-diagnose-<timestamp>.md` file to this issue. The output is designed to be safe to paste publicly: APNs auth values are reported only as `set`/`unset`, paths are rewritten to be home-relative, and any token-shaped or PEM content is stripped.
+
+If you can't run `surface:diagnose` for some reason, fill in manually:
 
 - macOS version:
 - Xcode version:
