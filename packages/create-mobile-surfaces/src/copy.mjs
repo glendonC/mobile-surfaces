@@ -81,12 +81,16 @@ export const existingSuccessSections = ({ projectName, packageManager }) => ({
 export const successSections = (projectName) => ({
   inTheBox:
     "Live Activity harness, Dynamic Island layouts, push smoke scripts,\ncontract-first fixtures, doctor checks.",
+  // tryItNow stays push-free so first-run users get a working Live Activity
+  // before any APNs setup. Push commands graduate to "when you're ready"
+  // since they need APNs env vars.
   tryItNow: [
     `cd ${projectName}`,
     "pnpm mobile:sim          build & launch on the simulator",
-    "pnpm mobile:push:sim     send a test push to the simulator",
+    "tap Start in the harness, then ⌘L in the simulator to see your Live Activity on the Lock Screen",
   ],
   whenReady: [
+    "pnpm mobile:push:sim                    send a test push to the simulator",
     "pnpm mobile:run:ios:device              run it on your iPhone",
     "pnpm mobile:push:device:liveactivity    push a real Live Activity update",
     "pnpm dev:doctor                         re-check your toolchain anytime",

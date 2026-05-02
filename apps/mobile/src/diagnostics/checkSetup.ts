@@ -176,14 +176,17 @@ function probePushToStartToken(token: string | null): DiagnosticCheck {
       summary: "Push-to-start token received this session.",
     };
   }
+  // Status stays "warn" so backend integrators wiring real remote-start
+  // notice the row, but the copy leads with the demo-mode reassurance —
+  // most users hit this row first and don't yet have an APNs backend.
   return {
     id: "push-to-start-token",
     status: "warn",
     trapId: "MS016",
-    summary: "No push-to-start token received yet.",
+    summary: "Push-to-start token: not received (optional for local testing).",
     detail: {
       message:
-        "iOS only delivers push-to-start tokens via an async sequence. The harness subscribes at mount; if no token arrives, force-quit the app and reopen, or wait for the system to rotate.",
+        "Only matters if a backend will start Live Activities remotely. Activities you start from inside this app work either way — try the Start buttons below. If you do want remote-start, force-quit the app and reopen, or wait for the system to rotate.",
     },
   };
 }

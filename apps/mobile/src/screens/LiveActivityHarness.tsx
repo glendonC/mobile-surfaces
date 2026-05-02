@@ -35,6 +35,7 @@ import {
   // SURFACE-END: control-widget
 } from "../surfaceStorage";
 // SURFACE-END: home-widget control-widget
+import { DemoModeCard } from "../components/DemoModeCard";
 import { SetupStatusPanel } from "../components/SetupStatusPanel";
 import { TrapErrorCard } from "../components/TrapErrorCard";
 
@@ -251,6 +252,7 @@ export function LiveActivityHarness() {
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
       <Text style={styles.title}>Surface Harness</Text>
+      <DemoModeCard />
       <SetupStatusPanel
         pushToStartToken={pushToStartToken}
         activeActivityId={activityId}
