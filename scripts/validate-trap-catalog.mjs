@@ -6,12 +6,28 @@
 // data.
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { resolve } from "node:path";
+import { parseArgs } from "node:util";
 import { trapCatalog } from "../packages/surface-contracts/src/traps.ts";
+import { buildReport, emitDiagnosticReport } from "./lib/diagnostics.mjs";
 
+const { values } = parseArgs({
+  options: { json: { type: "boolean", default: false } },
+});
+
+const TOOL = "validate-trap-catalog";
 const target = resolve("data/traps.json");
+
 if (!existsSync(target)) {
-  console.error(`✗ data/traps.json missing at ${target}`);
-  process.exit(1);
+  emitDiagnosticReport(
+    buildReport(TOOL, [
+      {
+        id: "load-traps",
+        status: "fail",
+        summary: `data/traps.json missing at ${target}`,
+      },
+    ]),
+    { json: values.json },
+  );
 }
 
 const raw = readFileSync(target, "utf8");
@@ -19,40 +35,66 @@ let parsed;
 try {
   parsed = JSON.parse(raw);
 } catch (error) {
-  console.error("✗ data/traps.json is not valid JSON.");
-  console.error(`  ${error.message}`);
-  process.exit(1);
+  emitDiagnosticReport(
+    buildReport(TOOL, [
+      {
+        id: "parse-traps",
+        status: "fail",
+        summary: "data/traps.json is not valid JSON.",
+        detail: { message: error.message ?? String(error) },
+      },
+    ]),
+    { json: values.json },
+  );
 }
 
 const result = trapCatalog.safeParse(parsed);
+const checks = [];
+
 if (!result.success) {
-  console.error("✗ data/traps.json failed Zod validation:");
-  for (const issue of result.error.issues) {
-    const path = issue.path.length ? issue.path.join(".") : "(root)";
-    console.error(`  ${path}: ${issue.message}`);
-  }
-  process.exit(1);
+  checks.push({
+    id: "trap-catalog-zod",
+    status: "fail",
+    summary: "data/traps.json failed Zod validation.",
+    detail: {
+      issues: result.error.issues.map((issue) => ({
+        path: issue.path.length ? issue.path.join(".") : "(root)",
+        message: issue.message,
+      })),
+    },
+  });
+  emitDiagnosticReport(buildReport(TOOL, checks), { json: values.json });
 }
 
-// Cross-check: every enforcement.script path must exist on disk. A rule that
-// claims an enforcement script that has been moved or deleted is worse than
-// no rule at all — it makes the catalog lie.
+checks.push({
+  id: "trap-catalog-zod",
+  status: "ok",
+  summary: `Validated ${result.data.entries.length} trap entries.`,
+});
+
 const missingScripts = [];
 for (const entry of result.data.entries) {
   if (entry.enforcement) {
     const scriptPath = resolve(entry.enforcement.script);
     if (!existsSync(scriptPath) || !statSync(scriptPath).isFile()) {
-      missingScripts.push({ id: entry.id, script: entry.enforcement.script });
+      missingScripts.push({
+        path: entry.id,
+        message: `enforcement.script does not exist: ${entry.enforcement.script}`,
+      });
     }
   }
 }
 
-if (missingScripts.length > 0) {
-  console.error("✗ Catalog references enforcement scripts that do not exist:");
-  for (const { id, script } of missingScripts) {
-    console.error(`  ${id}: ${script}`);
-  }
-  process.exit(1);
-}
+checks.push({
+  id: "enforcement-scripts-exist",
+  status: missingScripts.length === 0 ? "ok" : "fail",
+  summary:
+    missingScripts.length === 0
+      ? "Every cited enforcement script resolves to a real file."
+      : `${missingScripts.length} trap${missingScripts.length === 1 ? "" : "s"} cite a missing enforcement script.`,
+  ...(missingScripts.length > 0
+    ? { detail: { issues: missingScripts } }
+    : {}),
+});
 
-console.log(`Validated ${result.data.entries.length} trap entries.`);
+emitDiagnosticReport(buildReport(TOOL, checks), { json: values.json });

@@ -14,6 +14,9 @@ export type {
   LiveActivityStartOptions,
   SendResponse,
   ChannelInfo,
+  PushHooks,
+  PushHookContext,
+  PushHookOperation,
 } from "./client.ts";
 
 export type { RetryPolicy } from "./retry.ts";
@@ -44,4 +47,11 @@ export {
   UnknownApnsError,
   InvalidSnapshotError,
   ClientClosedError,
+  MissingApnsConfigError,
 } from "./errors.ts";
+
+export {
+  TRAP_ID_BY_ERROR_CLASS,
+  trapIdForErrorClass,
+} from "./trap-bindings.ts";
+export type { TrapBoundErrorClassName } from "./trap-bindings.ts";

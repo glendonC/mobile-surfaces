@@ -11,6 +11,7 @@ const {
   TooManyRequestsError,
   InvalidSnapshotError,
   ClientClosedError,
+  MissingApnsConfigError,
 } = await import("../dist/index.js");
 
 import { generateEs256Pem, writeTempP8 } from "./fixtures/setup-cert.mjs";
@@ -328,6 +329,158 @@ test("end() defaults dismissal-date to now", async (t) => {
   const dismissal = payload.aps["dismissal-date"];
   assert.ok(typeof dismissal === "number");
   assert.ok(dismissal >= before && dismissal <= after + 1);
+});
+
+// --- hooks + config validation -------------------------------------------
+
+test("createPushClient throws MissingApnsConfigError when required options are missing", () => {
+  const baseConfig = {
+    keyId: "ABC1234567",
+    teamId: "TEAM123456",
+    keyPath: KEY.file,
+    bundleId: "com.example.test",
+    environment: "development",
+  };
+  for (const field of ["keyId", "teamId", "bundleId"]) {
+    assert.throws(
+      () => createPushClient({ ...baseConfig, [field]: "" }),
+      (err) => {
+        assert.ok(err instanceof MissingApnsConfigError, `${field} empty`);
+        assert.deepEqual(err.missing, [field]);
+        assert.equal(err.trapId, "MS028");
+        return true;
+      },
+    );
+  }
+  assert.throws(
+    () => createPushClient({ ...baseConfig, keyPath: "" }),
+    (err) => err instanceof MissingApnsConfigError && err.missing[0] === "keyPath",
+  );
+});
+
+test("hooks.onResponse fires with operation, snapshotId, and apnsId on success", async (t) => {
+  const mock = await startMockApns(() => ({
+    status: 200,
+    headers: { "apns-id": "fixed-resp-1" },
+  }));
+  const calls = [];
+  const client = createPushClient({
+    keyId: "ABC1234567",
+    teamId: "TEAM123456",
+    keyPath: KEY.file,
+    bundleId: "com.example.test",
+    environment: "development",
+    idleTimeoutMs: 1_000,
+    hooks: {
+      onResponse: (ctx) => calls.push(ctx),
+    },
+    [TEST_TRANSPORT_OVERRIDE]: { sendOrigin: mock.origin },
+  });
+  teardown(t, client, mock);
+
+  await client.update("a".repeat(64), SNAPSHOT, { apnsId: "fixed-resp-1" });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].operation, "update");
+  assert.equal(calls[0].snapshotId, SNAPSHOT.id);
+  assert.equal(calls[0].apnsId, "fixed-resp-1");
+  assert.equal(calls[0].status, 200);
+  assert.equal(calls[0].attempt, 0);
+  assert.equal(calls[0].isFinalAttempt, true);
+  assert.ok(typeof calls[0].durationMs === "number");
+});
+
+test("hooks.onError fires per-attempt with isFinalAttempt true on the giving-up attempt", async (t) => {
+  const mock = await startMockApns(() => ({
+    status: 503,
+    body: { reason: "ServiceUnavailable" },
+  }));
+  const errors = [];
+  const client = createPushClient({
+    keyId: "ABC1234567",
+    teamId: "TEAM123456",
+    keyPath: KEY.file,
+    bundleId: "com.example.test",
+    environment: "development",
+    idleTimeoutMs: 1_000,
+    retryPolicy: { maxRetries: 2, baseDelayMs: 1, maxDelayMs: 2, jitter: false },
+    hooks: {
+      onError: (err, ctx) => errors.push({ err, ctx }),
+    },
+    [TEST_TRANSPORT_OVERRIDE]: { sendOrigin: mock.origin },
+  });
+  teardown(t, client, mock);
+
+  await assert.rejects(() => client.alert("b".repeat(64), SNAPSHOT));
+  // 1 initial + 2 retries = 3 errors fired.
+  assert.equal(errors.length, 3);
+  assert.equal(errors[0].ctx.attempt, 0);
+  assert.equal(errors[0].ctx.isFinalAttempt, false);
+  assert.equal(errors[1].ctx.attempt, 1);
+  assert.equal(errors[1].ctx.isFinalAttempt, false);
+  assert.equal(errors[2].ctx.attempt, 2);
+  assert.equal(errors[2].ctx.isFinalAttempt, true);
+  // Every error sees the typed APNs class with status populated on the context.
+  for (const { err, ctx } of errors) {
+    assert.equal(err.reason, "ServiceUnavailable");
+    assert.equal(ctx.status, 503);
+    assert.equal(ctx.operation, "alert");
+  }
+});
+
+test("hooks that throw cannot break the send", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = createPushClient({
+    keyId: "ABC1234567",
+    teamId: "TEAM123456",
+    keyPath: KEY.file,
+    bundleId: "com.example.test",
+    environment: "development",
+    idleTimeoutMs: 1_000,
+    hooks: {
+      onResponse: () => {
+        throw new Error("hook intentionally throws");
+      },
+      onError: () => {
+        throw new Error("hook intentionally throws");
+      },
+    },
+    [TEST_TRANSPORT_OVERRIDE]: { sendOrigin: mock.origin },
+  });
+  teardown(t, client, mock);
+
+  // If the hook were not isolated, this would reject with the hook's error
+  // instead of resolving with a normal SendResponse.
+  const res = await client.update("c".repeat(64), SNAPSHOT);
+  assert.equal(res.status, 200);
+});
+
+test("hooks.onError surfaces APNs trapId for bound error classes", async (t) => {
+  const mock = await startMockApns(() => ({
+    status: 400,
+    headers: { "apns-id": "trap-1" },
+    body: { reason: "TopicDisallowed" },
+  }));
+  let received;
+  const client = createPushClient({
+    keyId: "ABC1234567",
+    teamId: "TEAM123456",
+    keyPath: KEY.file,
+    bundleId: "com.example.test",
+    environment: "development",
+    idleTimeoutMs: 1_000,
+    hooks: {
+      onError: (err) => {
+        received = err;
+      },
+    },
+    [TEST_TRANSPORT_OVERRIDE]: { sendOrigin: mock.origin },
+  });
+  teardown(t, client, mock);
+
+  await assert.rejects(() => client.alert("d".repeat(64), SNAPSHOT));
+  assert.ok(received);
+  assert.equal(received.reason, "TopicDisallowed");
+  assert.equal(received.trapId, "MS018");
 });
 
 // --- cleanup --------------------------------------------------------------

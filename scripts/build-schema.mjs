@@ -9,11 +9,16 @@ import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { z } from "zod";
 import { liveSurfaceSnapshot } from "../packages/surface-contracts/src/schema.ts";
+import { buildReport, emitDiagnosticReport } from "./lib/diagnostics.mjs";
 
 const { values } = parseArgs({
-  options: { check: { type: "boolean", default: false } },
+  options: {
+    check: { type: "boolean", default: false },
+    json: { type: "boolean", default: false },
+  },
 });
 
+const TOOL = "build-schema";
 const schema = z.toJSONSchema(liveSurfaceSnapshot, { target: "draft-2020-12" });
 // Pin $id to major.minor so a future minor that adds a discriminated-union
 // variant can ship a new schema URL without yanking what consumers already
@@ -26,13 +31,42 @@ const target = resolve("packages/surface-contracts/schema.json");
 
 if (values.check) {
   const current = existsSync(target) ? readFileSync(target, "utf8") : "";
-  if (current !== out) {
-    console.error("packages/surface-contracts/schema.json is out of sync.");
-    console.error("Run: node --experimental-strip-types scripts/build-schema.mjs");
-    process.exit(1);
-  }
-  console.log("JSON Schema is in sync with Zod source.");
+  const inSync = current === out;
+  emitDiagnosticReport(
+    buildReport(TOOL, [
+      {
+        id: "schema-sync",
+        status: inSync ? "ok" : "fail",
+        summary: inSync
+          ? "JSON Schema is in sync with Zod source."
+          : "packages/surface-contracts/schema.json is out of sync.",
+        trapId: "MS006",
+        ...(inSync
+          ? {}
+          : {
+              detail: {
+                message:
+                  "Run: node --experimental-strip-types scripts/build-schema.mjs",
+              },
+            }),
+      },
+    ]),
+    { json: values.json },
+  );
 } else {
   writeFileSync(target, out);
-  console.log("Wrote packages/surface-contracts/schema.json.");
+  if (values.json) {
+    emitDiagnosticReport(
+      buildReport(TOOL, [
+        {
+          id: "schema-write",
+          status: "ok",
+          summary: "Wrote packages/surface-contracts/schema.json.",
+        },
+      ]),
+      { json: true },
+    );
+  } else {
+    console.log("Wrote packages/surface-contracts/schema.json.");
+  }
 }

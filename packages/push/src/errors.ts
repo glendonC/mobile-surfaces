@@ -4,6 +4,7 @@
 // reasons should add an entry there and a class below in alphabetical order.
 
 import { APNS_REASON_GUIDE } from "./reasons.ts";
+import { trapIdForErrorClass } from "./trap-bindings.ts";
 
 export interface ApnsErrorInit {
   reason: string;
@@ -23,6 +24,10 @@ export interface ApnsErrorInit {
  * - `apnsId`: the `apns-id` response header (set on every error for log
  *   correlation).
  * - `timestamp`: when the error was observed (defaults to now).
+ * - `trapId`: catalog entry id (MS\d{3}) for the trap this error surfaces, or
+ *   undefined when the class has no catalog binding. Resolved from the live
+ *   subclass `name` via the generated trap-bindings table; subclasses never
+ *   hand-stamp it.
  */
 export class ApnsError extends Error {
   readonly reason: string;
@@ -40,6 +45,14 @@ export class ApnsError extends Error {
     this.status = init.status;
     this.apnsId = init.apnsId;
     this.timestamp = init.timestamp ?? new Date();
+  }
+
+  // Resolved lazily off `this.name` so subclasses get the right trap id
+  // without each constructor having to stamp it. Subclasses set `name` after
+  // super() returns; the getter reads the post-assignment value on every
+  // access. trapIdForErrorClass returns undefined for unbound classes.
+  get trapId(): string | undefined {
+    return trapIdForErrorClass(this.name);
   }
 }
 
@@ -213,6 +226,31 @@ export class ClientClosedError extends Error {
   constructor(message = "PushClient has been closed; refusing new requests.") {
     super(message);
     this.name = "ClientClosedError";
+  }
+}
+
+/**
+ * Thrown by `createPushClient` when one or more required config values are
+ * missing or empty. The catalog (data/traps.json MS028) promises the SDK
+ * "validates presence; rejects fast if any are missing" — this class is the
+ * concrete carrier for that contract. `missing` lists the option names that
+ * were rejected; the binding to MS028 resolves through the same lazy getter
+ * the APNs error classes use.
+ */
+export class MissingApnsConfigError extends Error {
+  readonly missing: readonly string[];
+
+  constructor(missing: readonly string[]) {
+    const list = missing.join(", ");
+    super(
+      `createPushClient: missing required config — ${list}. See data/traps.json MS028.`,
+    );
+    this.name = "MissingApnsConfigError";
+    this.missing = missing;
+  }
+
+  get trapId(): string | undefined {
+    return trapIdForErrorClass(this.name);
   }
 }
 

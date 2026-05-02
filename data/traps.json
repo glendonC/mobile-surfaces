@@ -137,7 +137,8 @@
         "https://developer.apple.com/documentation/usernotifications/sending-notification-requests-to-apns"
       ],
       "docs": ["docs/push.md#error-responses"],
-      "since": "1.0.0"
+      "since": "1.0.0",
+      "errorClasses": ["PayloadTooLargeError"]
     },
     {
       "id": "MS012",
@@ -174,7 +175,8 @@
       "symptom": "APNs responds 400 BadDeviceToken. The token is valid; it just belongs to the other environment.",
       "fix": "Use environment: 'development' for dev-client and expo run:ios builds, environment: 'production' only for TestFlight and App Store builds. Track which environment minted each token.",
       "docs": ["docs/push.md#error-responses"],
-      "since": "1.0.0"
+      "since": "1.0.0",
+      "errorClasses": ["BadDeviceTokenError"]
     },
     {
       "id": "MS015",
@@ -186,7 +188,8 @@
       "symptom": "Updates land for the first few pushes then mysteriously stop arriving on the device. APNs returns 200; iOS still drops them. Logs show TooManyRequests bursts.",
       "fix": "Default to priority 5 for Live Activity content-state updates. Reserve priority 10 for state transitions the user must see immediately (queued→active, completed).",
       "docs": ["docs/push.md#error-responses"],
-      "since": "1.0.0"
+      "since": "1.0.0",
+      "errorClasses": ["TooManyRequestsError"]
     },
     {
       "id": "MS016",
@@ -223,7 +226,8 @@
       "symptom": "APNs responds 400 TopicDisallowed even though your auth key is correctly enabled for the app. The topic header has the suffix doubled or in the wrong position.",
       "fix": "Set APNS_BUNDLE_ID to the bare bundle id (e.g. com.example.mobilesurfaces). The SDK and scripts/send-apns.mjs both handle the suffix internally.",
       "docs": ["docs/push.md#error-responses"],
-      "since": "1.0.0"
+      "since": "1.0.0",
+      "errorClasses": ["TopicDisallowedError"]
     },
     {
       "id": "MS019",
@@ -345,7 +349,8 @@
       "symptom": "Throw at construction time (createPushClient) or at the first send. Often hidden inside a deployment whose env vars never made it into the runtime.",
       "fix": "Verify each env var on startup. The SDK's createPushClient validates presence; reject fast if any are missing.",
       "docs": ["docs/push.md#sdk-reference"],
-      "since": "1.0.0"
+      "since": "1.0.0",
+      "errorClasses": ["MissingApnsConfigError"]
     },
     {
       "id": "MS029",

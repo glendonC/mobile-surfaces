@@ -56,7 +56,7 @@
     "preinstall": "npx only-allow pnpm",
     "dev:doctor": "bash scripts/doctor.sh",
     "dev:setup": "bash scripts/setup.sh",
-    "surface:check": "node --experimental-strip-types scripts/validate-surface-fixtures.mjs && node --experimental-strip-types scripts/build-schema.mjs --check && node scripts/generate-surface-fixtures.mjs --check && node --experimental-strip-types scripts/check-activity-attributes.mjs && node scripts/check-validator-sync.mjs && node scripts/check-adapter-boundary.mjs && node --test scripts/surface-contracts.test.mjs && node --experimental-strip-types scripts/validate-trap-catalog.mjs && node --experimental-strip-types scripts/build-agents-md.mjs --check",
+    "surface:check": "node --experimental-strip-types scripts/validate-surface-fixtures.mjs && node --experimental-strip-types scripts/build-schema.mjs --check && node --experimental-strip-types scripts/generate-surface-fixtures.mjs --check && node --experimental-strip-types scripts/check-activity-attributes.mjs && node --experimental-strip-types scripts/check-validator-sync.mjs && node --experimental-strip-types scripts/check-adapter-boundary.mjs && node --test scripts/surface-contracts.test.mjs && node --experimental-strip-types scripts/validate-trap-catalog.mjs && node --experimental-strip-types scripts/check-trap-error-binding.mjs && node --experimental-strip-types scripts/generate-trap-bindings.mjs --check && node --experimental-strip-types scripts/build-agents-md.mjs --check",
     "agents:build": "node --experimental-strip-types scripts/build-agents-md.mjs",
     "agents:check": "node --experimental-strip-types scripts/build-agents-md.mjs --check",
     "traps:check": "node --experimental-strip-types scripts/validate-trap-catalog.mjs",

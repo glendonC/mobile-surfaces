@@ -6,13 +6,20 @@
 // itself does not carry $schema.
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve, join } from "node:path";
+import { parseArgs } from "node:util";
 import { liveSurfaceSnapshot } from "../packages/surface-contracts/src/schema.ts";
+import { buildReport, emitDiagnosticReport } from "./lib/diagnostics.mjs";
 
+const { values } = parseArgs({
+  options: { json: { type: "boolean", default: false } },
+});
+
+const TOOL = "validate-surface-fixtures";
 const fixtureDir = resolve("data/surface-fixtures");
 const indexPath = join(fixtureDir, "index.json");
 const entries = JSON.parse(readFileSync(indexPath, "utf8"));
 
-let failed = 0;
+const fixtureIssues = [];
 
 for (const entry of entries) {
   const filename = entry.replace(/^\.\//, "");
@@ -21,11 +28,12 @@ for (const entry of entries) {
   const { $schema: _ignored, ...rest } = fixture;
   const result = liveSurfaceSnapshot.safeParse(rest);
   if (!result.success) {
-    failed += 1;
-    console.error(`✗ ${filename}`);
     for (const issue of result.error.issues) {
-      const path = issue.path.length ? issue.path.join(".") : "(root)";
-      console.error(`  ${path}: ${issue.message}`);
+      const issuePath = issue.path.length ? issue.path.join(".") : "(root)";
+      fixtureIssues.push({
+        path: `${filename}:${issuePath}`,
+        message: issue.message,
+      });
     }
   }
 }
@@ -34,14 +42,36 @@ const onDisk = readdirSync(fixtureDir).filter(
   (f) => f.endsWith(".json") && f !== "index.json",
 );
 const indexed = new Set(entries.map((e) => e.replace(/^\.\//, "")));
+const orphanIssues = [];
 for (const f of onDisk) {
   if (!indexed.has(f)) {
-    failed += 1;
-    console.error(`✗ ${f}: present on disk but missing from index.json`);
+    orphanIssues.push({
+      path: f,
+      message: "present on disk but missing from index.json",
+    });
   }
 }
 
-if (failed > 0) {
-  process.exit(1);
-}
-console.log(`Validated ${entries.length} surface fixtures.`);
+const checks = [
+  {
+    id: "fixtures-parse",
+    status: fixtureIssues.length === 0 ? "ok" : "fail",
+    summary:
+      fixtureIssues.length === 0
+        ? `All ${entries.length} indexed fixtures parse against liveSurfaceSnapshot.`
+        : `${fixtureIssues.length} fixture issue${fixtureIssues.length === 1 ? "" : "s"} blocking parse.`,
+    trapId: "MS007",
+    ...(fixtureIssues.length > 0 ? { detail: { issues: fixtureIssues } } : {}),
+  },
+  {
+    id: "fixtures-indexed",
+    status: orphanIssues.length === 0 ? "ok" : "fail",
+    summary:
+      orphanIssues.length === 0
+        ? "Every fixture on disk is referenced from index.json."
+        : `${orphanIssues.length} fixture file${orphanIssues.length === 1 ? "" : "s"} not referenced from index.json.`,
+    ...(orphanIssues.length > 0 ? { detail: { issues: orphanIssues } } : {}),
+  },
+];
+
+emitDiagnosticReport(buildReport(TOOL, checks), { json: values.json });

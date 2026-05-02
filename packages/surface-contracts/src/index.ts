@@ -251,3 +251,21 @@ export type {
   TrapEntry,
   TrapCatalog,
 } from "./traps.ts";
+
+export {
+  diagnosticCheckStatus,
+  diagnosticReportStatus,
+  diagnosticIssue,
+  diagnosticDetail,
+  diagnosticCheck,
+  diagnosticReport,
+  rollupDiagnosticStatus,
+} from "./diagnostics.ts";
+export type {
+  DiagnosticCheckStatus,
+  DiagnosticReportStatus,
+  DiagnosticIssue,
+  DiagnosticDetail,
+  DiagnosticCheck,
+  DiagnosticReport,
+} from "./diagnostics.ts";

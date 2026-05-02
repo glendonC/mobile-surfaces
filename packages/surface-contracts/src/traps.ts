@@ -78,6 +78,16 @@ export const trapEntry = z
     since: z.string().regex(/^\d+\.\d+\.\d+$/),
     // Set when the rule has been retired but the id is reserved.
     deprecated: z.boolean().optional(),
+    // Names of typed error classes (in `@mobile-surfaces/push`) that surface
+    // this trap at runtime. Lets the SDK stamp `trapId` on errors without
+    // hand-maintaining a parallel mapping; lets consumer log aggregators
+    // bucket by trap. The forward direction (cited classes exist) and
+    // uniqueness (one class → at most one trap) are enforced by
+    // scripts/check-trap-error-binding.mjs. The reverse direction is
+    // intentionally not strict: not every error class warrants a catalog
+    // entry (e.g. BadPriority, MissingTopic are SDK self-correctness issues,
+    // not silent-failure traps).
+    errorClasses: z.array(z.string().min(1)).optional(),
   })
   .strict();
 export type TrapEntry = z.infer<typeof trapEntry>;
@@ -90,6 +100,7 @@ export const trapCatalog = z
   .strict()
   .superRefine((catalog, ctx) => {
     const seen = new Set<string>();
+    const errorClassToTrap = new Map<string, string>();
     catalog.entries.forEach((entry, index) => {
       if (seen.has(entry.id)) {
         ctx.addIssue({
@@ -99,6 +110,19 @@ export const trapCatalog = z
         });
       }
       seen.add(entry.id);
+      if (entry.errorClasses) {
+        entry.errorClasses.forEach((className, classIndex) => {
+          const existing = errorClassToTrap.get(className);
+          if (existing && existing !== entry.id) {
+            ctx.addIssue({
+              code: "custom",
+              path: ["entries", index, "errorClasses", classIndex],
+              message: `Error class ${className} is already bound to ${existing}; each class may be cited by at most one trap.`,
+            });
+          }
+          errorClassToTrap.set(className, entry.id);
+        });
+      }
     });
   });
 export type TrapCatalog = z.infer<typeof trapCatalog>;

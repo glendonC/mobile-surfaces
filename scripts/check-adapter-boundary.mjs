@@ -6,36 +6,63 @@
 // swap (expo-live-activity, expo-widgets, etc.) stays a one-file edit.
 import fs from "node:fs";
 import path from "node:path";
+import { parseArgs } from "node:util";
+import {
+  buildReport,
+  emitDiagnosticReport,
+} from "./lib/diagnostics.mjs";
 
+const { values } = parseArgs({
+  options: { json: { type: "boolean", default: false } },
+});
+
+const TOOL = "check-adapter-boundary";
 const ROOT = path.resolve("apps/mobile/src");
 const ADAPTER_FILE = path.join(ROOT, "liveActivity", "index.ts");
 const TARGET_PACKAGE = "@mobile-surfaces/live-activity";
 
 if (!fs.existsSync(ROOT)) {
-  console.error(`apps/mobile/src not found — run from repo root.`);
-  process.exit(1);
+  emitDiagnosticReport(
+    buildReport(TOOL, [
+      {
+        id: "load-source",
+        status: "fail",
+        summary: "apps/mobile/src not found — run from repo root.",
+      },
+    ]),
+    { json: values.json },
+  );
 }
 
 const violations = [];
 let scanned = 0;
 walk(ROOT);
 
-if (violations.length > 0) {
-  console.error(
-    `Adapter boundary violated. ${violations.length} file(s) import "${TARGET_PACKAGE}" outside the adapter:`,
-  );
-  for (const v of violations) {
-    console.error(`- ${path.relative(process.cwd(), v.file)}:${v.line}`);
-  }
-  console.error(
-    `\nRoute imports through ${path.relative(process.cwd(), ADAPTER_FILE)} (re-exports liveActivityAdapter and types).`,
-  );
-  process.exit(1);
-}
+const adapterRel = path.relative(process.cwd(), ADAPTER_FILE);
+const checks = [
+  {
+    id: "adapter-boundary",
+    status: violations.length === 0 ? "ok" : "fail",
+    summary:
+      violations.length === 0
+        ? `Adapter boundary intact (${scanned} file(s) scanned, only ${adapterRel} imports "${TARGET_PACKAGE}").`
+        : `${violations.length} file(s) import "${TARGET_PACKAGE}" outside ${adapterRel}.`,
+    trapId: "MS001",
+    ...(violations.length > 0
+      ? {
+          detail: {
+            message: `Route imports through ${adapterRel} (re-exports liveActivityAdapter and types).`,
+            issues: violations.map((v) => ({
+              path: `${path.relative(process.cwd(), v.file)}:${v.line}`,
+              message: `imports ${TARGET_PACKAGE} directly`,
+            })),
+          },
+        }
+      : {}),
+  },
+];
 
-console.log(
-  `Adapter boundary intact (${scanned} file(s) scanned, only ${path.relative(process.cwd(), ADAPTER_FILE)} imports "${TARGET_PACKAGE}").`,
-);
+emitDiagnosticReport(buildReport(TOOL, checks), { json: values.json });
 
 function walk(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {

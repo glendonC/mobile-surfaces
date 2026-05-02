@@ -18,6 +18,7 @@ import {
   ApnsError,
   ClientClosedError,
   InvalidSnapshotError,
+  MissingApnsConfigError,
   TooManyRequestsError,
   reasonToError,
 } from "./errors.ts";
@@ -44,10 +45,77 @@ export interface CreatePushClientOptions {
   /** ms with no in-flight requests before the HTTP/2 session is closed. Default 60_000. */
   idleTimeoutMs?: number;
   /**
+   * Optional observability hooks fired per-attempt for every send and channel
+   * management operation. Use these to wire your own Sentry / PostHog / log
+   * aggregator without re-implementing APNs error parsing. The SDK never
+   * forwards data anywhere on its own; both fields default to no-op.
+   *
+   * Hooks run inside an internal try/catch — a hook that throws can never
+   * break the send. Hooks fire on every attempt (so retries are observable)
+   * with `attempt` (0-indexed) and `isFinalAttempt` populated on the context.
+   *
+   * Tokens are passed through unredacted; consumers should redact in the
+   * hook before forwarding to any aggregator. APNs push tokens are not
+   * secrets but they are the only credential needed to send to a device.
+   */
+  hooks?: PushHooks;
+  /**
    * Internal: override the http2 connect factory and/or session options for
    * tests. Production callers should not touch these; they're keyed on a
    * `Symbol.for` so they don't show up in TypeScript's IntelliSense.
    */
+}
+
+/**
+ * Discriminator for which PushClient method originated a hook event. Stable
+ * identifiers; new operations append rather than rename.
+ */
+export type PushHookOperation =
+  | "alert"
+  | "update"
+  | "start"
+  | "end"
+  | "broadcast"
+  | "createChannel"
+  | "listChannels"
+  | "deleteChannel";
+
+export interface PushHookContext {
+  operation: PushHookOperation;
+  /** Zero-indexed retry attempt: 0 on the first try, 1 on the second, etc. */
+  attempt: number;
+  /**
+   * True when the SDK will not retry this attempt. Lets a hook defer alerting
+   * until the SDK has actually given up (and rethrown) rather than firing on
+   * every transient retryable error.
+   */
+  isFinalAttempt: boolean;
+  /** APNs `apns-id` of the request (UUID v4 unless the caller overrode it). */
+  apnsId?: string;
+  /** HTTP status from APNs when a response was received. Undefined on transport errors. */
+  status?: number;
+  /**
+   * Device or push-to-start token, channel id, or undefined for management
+   * operations that do not target a specific channel. Passed through
+   * unredacted; redact in the hook before logging.
+   */
+  token?: string;
+  /** liveSurfaceSnapshot.id for sends; undefined for management ops. */
+  snapshotId?: string;
+  /** Wall-clock ms from request issue to response (or thrown error). */
+  durationMs: number;
+}
+
+export interface PushHooks {
+  /** Fires after every 2xx response, once per attempt. */
+  onResponse?: (context: PushHookContext) => void;
+  /**
+   * Fires after every thrown error (transport or APNs non-2xx), once per
+   * attempt. `isFinalAttempt: false` fires for retryable errors before the
+   * SDK retries; `isFinalAttempt: true` fires on the error the caller will
+   * actually see.
+   */
+  onError?: (error: unknown, context: PushHookContext) => void;
 }
 
 export interface SendOptions {
@@ -170,6 +238,47 @@ function isTransportError(err: unknown): boolean {
   return RETRYABLE_TRANSPORT_CODES.has(code);
 }
 
+// Per MS028: createPushClient validates presence of every required option and
+// rejects fast. Empty strings are treated as missing — config files that read
+// "${MISSING_VAR}" or similar would otherwise pass a typeof check.
+function assertConfigComplete(options: CreatePushClientOptions): void {
+  const missing: string[] = [];
+  if (!isNonEmpty(options.keyId)) missing.push("keyId");
+  if (!isNonEmpty(options.teamId)) missing.push("teamId");
+  if (!isNonEmpty(options.bundleId)) missing.push("bundleId");
+  if (options.keyPath === undefined || options.keyPath === null) {
+    missing.push("keyPath");
+  } else if (typeof options.keyPath === "string" && !isNonEmpty(options.keyPath)) {
+    missing.push("keyPath");
+  } else if (Buffer.isBuffer(options.keyPath) && options.keyPath.length === 0) {
+    missing.push("keyPath");
+  }
+  if (options.environment !== "development" && options.environment !== "production") {
+    missing.push("environment");
+  }
+  if (missing.length > 0) {
+    throw new MissingApnsConfigError(missing);
+  }
+}
+
+function isNonEmpty(value: unknown): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+// Hook invocation isolation: a thrown hook must never break the send. Errors
+// from hooks are swallowed silently; the contract is documented on PushHooks.
+function safeInvokeHook<Args extends unknown[]>(
+  fn: ((...args: Args) => void) | undefined,
+  ...args: Args
+): void {
+  if (!fn) return;
+  try {
+    fn(...args);
+  } catch {
+    // Intentional: hook failures cannot affect the SDK's behavior.
+  }
+}
+
 function snapshotMustBeLiveActivity(
   snapshot: LiveSurfaceSnapshot,
   method: string,
@@ -210,9 +319,11 @@ export class PushClient {
   readonly #jwt: JwtCache;
   readonly #send: Http2Client;
   readonly #manage: Http2Client;
+  readonly #hooks: PushHooks;
   #closed = false;
 
   constructor(options: CreatePushClientOptions) {
+    assertConfigComplete(options);
     this.#options = {
       keyId: options.keyId,
       teamId: options.teamId,
@@ -220,6 +331,7 @@ export class PushClient {
       environment: options.environment,
     };
     this.#retryPolicy = { ...DEFAULT_RETRY_POLICY, ...(options.retryPolicy ?? {}) };
+    this.#hooks = options.hooks ?? {};
 
     const keyPem = resolveKeyPem(options.keyPath);
     this.#jwt = new JwtCache({
@@ -257,9 +369,11 @@ export class PushClient {
   ): Promise<SendResponse> {
     this.#assertOpen();
     const validated = validateSnapshot(snapshot);
-    snapshotMustBeLiveActivity(validated, "alert()");
+    const live = snapshotMustBeLiveActivity(validated, "alert()");
     const payload = JSON.stringify(toAlertPayload(validated));
     return this.#sendDevice({
+      operation: "alert",
+      snapshotId: live.id,
       token: deviceToken,
       payload,
       pushType: "alert",
@@ -285,6 +399,8 @@ export class PushClient {
       this.#buildActivityPayload(live, "update", undefined, options),
     );
     return this.#sendDevice({
+      operation: "update",
+      snapshotId: live.id,
       token: activityToken,
       payload,
       pushType: "liveactivity",
@@ -313,6 +429,8 @@ export class PushClient {
       this.#buildActivityPayload(live, "start", { attributesType, attributes }, options),
     );
     return this.#sendDevice({
+      operation: "start",
+      snapshotId: live.id,
       token: pushToStartToken,
       payload,
       pushType: "liveactivity",
@@ -343,6 +461,8 @@ export class PushClient {
       }),
     );
     return this.#sendDevice({
+      operation: "end",
+      snapshotId: live.id,
       token: activityToken,
       payload,
       pushType: "liveactivity",
@@ -380,7 +500,11 @@ export class PushClient {
       "apns-expiration": "0",
       "content-type": "application/json",
     };
-    return this.#performWithRetry(this.#send, headers, payload, apnsId);
+    return this.#performWithRetry(this.#send, headers, payload, apnsId, {
+      operation: "broadcast",
+      snapshotId: live.id,
+      token: channelId,
+    });
   }
 
   /**
@@ -400,7 +524,9 @@ export class PushClient {
       authorization: `bearer ${this.#jwt.get()}`,
       "content-type": "application/json",
     };
-    const res = await this.#performManage(headers, body);
+    const res = await this.#performManage(headers, body, {
+      operation: "createChannel",
+    });
     const channelId =
       pickHeader(res.headers, "apns-channel-id") ??
       tryParseChannelIdFromBody(res.body);
@@ -423,7 +549,9 @@ export class PushClient {
       ":path": `/1/apps/${this.#options.bundleId}/all-channels`,
       authorization: `bearer ${this.#jwt.get()}`,
     };
-    const res = await this.#performManage(headers, undefined);
+    const res = await this.#performManage(headers, undefined, {
+      operation: "listChannels",
+    });
     const parsed = tryParseJson(res.body);
     const channels = extractChannelList(parsed);
     return channels.map((entry) => normalizeChannelEntry(entry));
@@ -441,7 +569,10 @@ export class PushClient {
       authorization: `bearer ${this.#jwt.get()}`,
       "apns-channel-id": channelId,
     };
-    await this.#performManage(headers, undefined);
+    await this.#performManage(headers, undefined, {
+      operation: "deleteChannel",
+      token: channelId,
+    });
   }
 
   /**
@@ -491,6 +622,8 @@ export class PushClient {
   }
 
   async #sendDevice(args: {
+    operation: PushHookOperation;
+    snapshotId: string;
     token: string;
     payload: string;
     pushType: "alert" | "liveactivity";
@@ -512,31 +645,50 @@ export class PushClient {
       "apns-expiration": expiration,
       "content-type": "application/json",
     };
-    return this.#performWithRetry(this.#send, headers, args.payload, apnsId);
+    return this.#performWithRetry(this.#send, headers, args.payload, apnsId, {
+      operation: args.operation,
+      snapshotId: args.snapshotId,
+      token: args.token,
+    });
   }
 
   async #performManage(
     headers: Record<string, string>,
     body: string | undefined,
+    hookMeta: { operation: PushHookOperation; token?: string },
   ): Promise<ChannelManageResponse> {
     let attempt = 0;
-    let lastError: unknown;
     while (true) {
       this.#assertOpen();
+      const startedAt = Date.now();
       try {
         const res = await this.#manage.request({ headers, body });
+        const durationMs = Date.now() - startedAt;
+        const apnsId = pickHeader(res.headers, "apns-id");
         if (res.status >= 200 && res.status < 300) {
-          return {
+          this.#fireResponseHook({
+            ...hookMeta,
+            attempt,
+            isFinalAttempt: true,
+            apnsId,
             status: res.status,
-            headers: res.headers,
-            body: res.body,
-          };
+            durationMs,
+          });
+          return { status: res.status, headers: res.headers, body: res.body };
         }
         const apnsError = this.#errorFromResponse(res);
-        if (
+        const willRetry =
           this.#shouldRetry(apnsError, attempt) &&
-          attempt < this.#retryPolicy.maxRetries
-        ) {
+          attempt < this.#retryPolicy.maxRetries;
+        this.#fireErrorHook(apnsError, {
+          ...hookMeta,
+          attempt,
+          isFinalAttempt: !willRetry,
+          apnsId,
+          status: res.status,
+          durationMs,
+        });
+        if (willRetry) {
           await this.#waitForRetry(apnsError, attempt);
           attempt += 1;
           // Refresh JWT in case the rejection was provider-token-related.
@@ -548,11 +700,15 @@ export class PushClient {
         if (err instanceof ApnsError) {
           throw err;
         }
-        if (
-          isTransportError(err) &&
-          attempt < this.#retryPolicy.maxRetries
-        ) {
-          lastError = err;
+        const willRetry =
+          isTransportError(err) && attempt < this.#retryPolicy.maxRetries;
+        this.#fireErrorHook(err, {
+          ...hookMeta,
+          attempt,
+          isFinalAttempt: !willRetry,
+          durationMs: Date.now() - startedAt,
+        });
+        if (willRetry) {
           await sleep(computeBackoffMs(attempt, this.#retryPolicy));
           attempt += 1;
           continue;
@@ -567,24 +723,43 @@ export class PushClient {
     headers: Record<string, string>,
     body: string,
     apnsId: string,
+    hookMeta: {
+      operation: PushHookOperation;
+      snapshotId?: string;
+      token?: string;
+    },
   ): Promise<SendResponse> {
     let attempt = 0;
     while (true) {
       this.#assertOpen();
+      const startedAt = Date.now();
       try {
         const res = await transport.request({ headers, body });
+        const durationMs = Date.now() - startedAt;
         if (res.status >= 200 && res.status < 300) {
-          return {
+          this.#fireResponseHook({
+            ...hookMeta,
+            attempt,
+            isFinalAttempt: true,
             apnsId,
             status: res.status,
-            timestamp: new Date(),
-          };
+            durationMs,
+          });
+          return { apnsId, status: res.status, timestamp: new Date() };
         }
         const apnsError = this.#errorFromResponse(res);
-        if (
+        const willRetry =
           this.#shouldRetry(apnsError, attempt) &&
-          attempt < this.#retryPolicy.maxRetries
-        ) {
+          attempt < this.#retryPolicy.maxRetries;
+        this.#fireErrorHook(apnsError, {
+          ...hookMeta,
+          attempt,
+          isFinalAttempt: !willRetry,
+          apnsId,
+          status: res.status,
+          durationMs,
+        });
+        if (willRetry) {
           await this.#waitForRetry(apnsError, attempt);
           attempt += 1;
           headers.authorization = `bearer ${this.#jwt.get()}`;
@@ -595,10 +770,16 @@ export class PushClient {
         if (err instanceof ApnsError) {
           throw err;
         }
-        if (
-          isTransportError(err) &&
-          attempt < this.#retryPolicy.maxRetries
-        ) {
+        const willRetry =
+          isTransportError(err) && attempt < this.#retryPolicy.maxRetries;
+        this.#fireErrorHook(err, {
+          ...hookMeta,
+          attempt,
+          isFinalAttempt: !willRetry,
+          apnsId,
+          durationMs: Date.now() - startedAt,
+        });
+        if (willRetry) {
           await sleep(computeBackoffMs(attempt, this.#retryPolicy));
           attempt += 1;
           continue;
@@ -606,6 +787,14 @@ export class PushClient {
         throw err;
       }
     }
+  }
+
+  #fireResponseHook(context: PushHookContext): void {
+    safeInvokeHook(this.#hooks.onResponse, context);
+  }
+
+  #fireErrorHook(error: unknown, context: PushHookContext): void {
+    safeInvokeHook(this.#hooks.onError, error, context);
   }
 
   #errorFromResponse(res: { status: number; headers: Record<string, string | string[] | undefined>; body: string }): ApnsError {

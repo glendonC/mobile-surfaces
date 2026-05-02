@@ -4,8 +4,14 @@
 // the other; this script is the CI guard that catches that.
 
 import fs from "node:fs";
-import path from "node:path";
+import { parseArgs } from "node:util";
+import { buildReport, emitDiagnosticReport } from "./lib/diagnostics.mjs";
 
+const { values } = parseArgs({
+  options: { json: { type: "boolean", default: false } },
+});
+
+const TOOL = "check-validator-sync";
 const renamePath = "scripts/rename-starter.mjs";
 const cliPath = "packages/create-mobile-surfaces/src/validators.mjs";
 
@@ -25,10 +31,6 @@ function extractFunctionBody(source, fnName) {
   const declRe = new RegExp(`function\\s+${fnName}\\b`);
   const m = declRe.exec(source);
   if (!m) return null;
-  // Walk forward from the function keyword, find the opening brace, then
-  // balance braces to the close. Cheap-and-cheerful: comments/strings
-  // containing braces would fool this, but the rename script and CLI
-  // validators are short and brace-clean.
   const start = source.indexOf("{", m.index);
   if (start === -1) return null;
   let depth = 0;
@@ -46,9 +48,6 @@ function extractFunctionBody(source, fnName) {
 function extractAllRegexes(source, fnName) {
   const body = extractFunctionBody(source, fnName);
   if (body == null) return null;
-  // Match regex literals that follow positions where a regex is legal.
-  // Validator bodies are simple — just look for /…/flags after `(` or `!`
-  // or whitespace, which is how all our checks read .test(s).
   const out = [];
   const re = /(^|[\s(!=,;:])(\/(?:\\.|[^\/\n\\])+\/[gimsuy]*)/g;
   let m;
@@ -58,53 +57,53 @@ function extractAllRegexes(source, fnName) {
   return out;
 }
 
-let ok = true;
+const checks = [];
+
 for (const [cliName, renameName] of PAIRS) {
   const cliRegexes = extractAllRegexes(cliSrc, cliName);
   const renameRegexes = extractAllRegexes(renameSrc, renameName);
 
+  const issues = [];
   if (!cliRegexes || cliRegexes.length === 0) {
-    console.error(`✗ Couldn't find ${cliName} in ${cliPath}`);
-    ok = false;
-    continue;
+    issues.push({
+      path: `${cliPath}#${cliName}`,
+      message: `Couldn't find ${cliName} in ${cliPath}`,
+    });
   }
   if (!renameRegexes || renameRegexes.length === 0) {
-    console.error(`✗ Couldn't find ${renameName} in ${renamePath}`);
-    ok = false;
-    continue;
+    issues.push({
+      path: `${renamePath}#${renameName}`,
+      message: `Couldn't find ${renameName} in ${renamePath}`,
+    });
   }
-
-  if (cliRegexes.length !== renameRegexes.length) {
-    console.error(
-      `✗ Regex count differs between ${cliPath}#${cliName} (${cliRegexes.length}) and ${renamePath}#${renameName} (${renameRegexes.length}). Both functions must hold the same set of structural and placeholder checks.`,
-    );
-    console.error(`    CLI:    ${cliRegexes.join("  ")}`);
-    console.error(`    rename: ${renameRegexes.join("  ")}`);
-    ok = false;
-    continue;
-  }
-
-  let pairOk = true;
-  for (let i = 0; i < cliRegexes.length; i += 1) {
-    if (cliRegexes[i] !== renameRegexes[i]) {
-      console.error(
-        `✗ Regex drift between ${cliPath}#${cliName} and ${renamePath}#${renameName} (regex #${i + 1}):`,
-      );
-      console.error(`    CLI:    ${cliRegexes[i]}`);
-      console.error(`    rename: ${renameRegexes[i]}`);
-      ok = false;
-      pairOk = false;
+  if (cliRegexes && renameRegexes) {
+    if (cliRegexes.length !== renameRegexes.length) {
+      issues.push({
+        path: `${cliName}↔${renameName}`,
+        message: `Regex count differs (${cliRegexes.length} vs ${renameRegexes.length}). CLI: ${cliRegexes.join("  ")} | rename: ${renameRegexes.join("  ")}`,
+      });
+    } else {
+      for (let i = 0; i < cliRegexes.length; i += 1) {
+        if (cliRegexes[i] !== renameRegexes[i]) {
+          issues.push({
+            path: `${cliName}↔${renameName}#${i + 1}`,
+            message: `CLI: ${cliRegexes[i]} | rename: ${renameRegexes[i]}`,
+          });
+        }
+      }
     }
   }
-  if (pairOk) {
-    console.log(`✓ ${cliName} ↔ ${renameName}: ${cliRegexes.join("  ")}`);
-  }
+
+  checks.push({
+    id: `pair-${cliName}`,
+    status: issues.length === 0 ? "ok" : "fail",
+    trapId: "MS005",
+    summary:
+      issues.length === 0
+        ? `${cliName} ↔ ${renameName}: ${cliRegexes.join("  ")}`
+        : `${cliName} ↔ ${renameName} drift detected.`,
+    ...(issues.length > 0 ? { detail: { issues } } : {}),
+  });
 }
 
-if (!ok) {
-  console.error(
-    "\nValidator regexes have drifted. Update both files together so the CLI and the rename script agree.",
-  );
-  process.exit(1);
-}
-console.log("\nValidator regexes are in sync.");
+emitDiagnosticReport(buildReport(TOOL, checks), { json: values.json });

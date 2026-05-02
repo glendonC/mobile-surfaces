@@ -21,6 +21,9 @@ const {
   MissingPushTypeError,
   TooManyRequestsError,
   UnknownApnsError,
+  MissingApnsConfigError,
+  trapIdForErrorClass,
+  TRAP_ID_BY_ERROR_CLASS,
 } = await import("../dist/index.js");
 
 const { reasonToError } = await import("../dist/errors.js");
@@ -68,3 +71,44 @@ test("TooManyRequestsError carries retryAfterSeconds", () => {
   assert.ok(err instanceof TooManyRequestsError);
   assert.equal(err.retryAfterSeconds, 12);
 });
+
+test("typed errors expose trapId from the generated bindings", () => {
+  // These bindings are load-bearing for the harness UI, the diagnose bundle,
+  // and any consumer log aggregator. Drift here means the catalog and the
+  // runtime disagree about which trap a failure surfaces.
+  const expected = [
+    [PayloadTooLargeError, "MS011"],
+    [BadDeviceTokenError, "MS014"],
+    [TooManyRequestsError, "MS015"],
+    [TopicDisallowedError, "MS018"],
+    [MissingApnsConfigError, "MS028"],
+  ];
+  for (const [Klass, trapId] of expected) {
+    const err =
+      Klass === MissingApnsConfigError
+        ? new MissingApnsConfigError(["keyId"])
+        : Klass === TooManyRequestsError
+          ? reasonToError("TooManyRequests", { status: 429 })
+          : reasonToError(klassToReason(Klass), { status: 400 });
+    assert.equal(err.trapId, trapId, `${Klass.name} should map to ${trapId}`);
+  }
+});
+
+test("unbound error classes return undefined trapId", () => {
+  const err = reasonToError("BadPriority", { status: 400 });
+  assert.equal(err.trapId, undefined);
+});
+
+test("trapIdForErrorClass and TRAP_ID_BY_ERROR_CLASS agree", () => {
+  for (const [name, trapId] of Object.entries(TRAP_ID_BY_ERROR_CLASS)) {
+    assert.equal(trapIdForErrorClass(name), trapId);
+  }
+  assert.equal(trapIdForErrorClass("DefinitelyNotAClass"), undefined);
+});
+
+function klassToReason(Klass) {
+  // The reasonToError table is keyed by APNs reason; recover it from the
+  // class name. The reverse map is intentionally local to keep tests
+  // independent of the production reason table layout.
+  return Klass.name.replace(/Error$/, "");
+}

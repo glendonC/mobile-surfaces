@@ -3,6 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
+import { buildReport, emitDiagnosticReport } from "./lib/diagnostics.mjs";
+
+const TOOL = "generate-surface-fixtures";
 
 // Convert a fixture source filename (no extension) into the camelCase key used
 // in the generated TS export. Note that hyphenated and already-camelCased
@@ -37,6 +40,7 @@ function main() {
   const { values } = parseArgs({
     options: {
       check: { type: "boolean", default: false },
+      json: { type: "boolean", default: false },
     },
   });
 
@@ -49,13 +53,23 @@ function main() {
   // produce the same camelCase export key.
   const collisions = detectCollisions(entries);
   if (collisions.length > 0) {
-    console.error("Fixture filename collision detected:");
-    for (const c of collisions) {
-      console.error(
-        `- key "${c.key}" produced by both "${c.files[0]}.json" and "${c.files[1]}.json" (the second would shadow the first)`,
-      );
-    }
-    process.exit(1);
+    emitDiagnosticReport(
+      buildReport(TOOL, [
+        {
+          id: "fixture-collisions",
+          status: "fail",
+          summary: `${collisions.length} fixture filename collision${collisions.length === 1 ? "" : "s"} detected.`,
+          trapId: "MS009",
+          detail: {
+            issues: collisions.map((c) => ({
+              path: c.key,
+              message: `produced by both ${c.files[0]}.json and ${c.files[1]}.json (the second would shadow the first)`,
+            })),
+          },
+        },
+      ]),
+      { json: values.json },
+    );
   }
 
   // The order of `entries` is product-meaningful (curated to surface the
@@ -81,17 +95,44 @@ export const surfaceFixtureSnapshots = ${JSON.stringify(fixtures, null, 2)} as c
 
   if (values.check) {
     const current = fs.existsSync(outputPath) ? fs.readFileSync(outputPath, "utf8") : "";
-    if (current !== source) {
-      console.error(
-        "packages/surface-contracts/src/fixtures.ts is out of sync with data/surface-fixtures.",
-      );
-      console.error("Run: node scripts/generate-surface-fixtures.mjs");
-      process.exit(1);
-    }
-    console.log("Generated TS fixtures are in sync with JSON fixtures.");
+    const inSync = current === source;
+    emitDiagnosticReport(
+      buildReport(TOOL, [
+        {
+          id: "fixtures-sync",
+          status: inSync ? "ok" : "fail",
+          summary: inSync
+            ? "Generated TS fixtures are in sync with JSON fixtures."
+            : "packages/surface-contracts/src/fixtures.ts is out of sync with data/surface-fixtures.",
+          trapId: "MS009",
+          ...(inSync
+            ? {}
+            : {
+                detail: {
+                  message:
+                    "Run: node --experimental-strip-types scripts/generate-surface-fixtures.mjs",
+                },
+              }),
+        },
+      ]),
+      { json: values.json },
+    );
   } else {
     fs.writeFileSync(outputPath, source);
-    console.log(`Wrote ${path.relative(process.cwd(), outputPath)}.`);
+    if (values.json) {
+      emitDiagnosticReport(
+        buildReport(TOOL, [
+          {
+            id: "fixtures-write",
+            status: "ok",
+            summary: `Wrote ${path.relative(process.cwd(), outputPath)}.`,
+          },
+        ]),
+        { json: true },
+      );
+    } else {
+      console.log(`Wrote ${path.relative(process.cwd(), outputPath)}.`);
+    }
   }
 }
 
