@@ -27,6 +27,15 @@ import { mintApnsJwt } from "./lib/jwt.mjs";
 import { askChoice, askText, askYesNo, isCancelled } from "./lib/prompts.mjs";
 import { redactHomePath, redactTokenLike } from "./lib/redact.mjs";
 import { buildReport, emitDiagnosticReport } from "./lib/diagnostics.mjs";
+import {
+  banner,
+  bold,
+  cyan,
+  dim,
+  green,
+  hyperlink,
+  yellow,
+} from "./lib/style.mjs";
 
 const TOOL = "setup-apns";
 
@@ -269,16 +278,56 @@ function parseCliArgs(argv) {
   });
 }
 
+const APNS_KEYS_URL = "https://developer.apple.com/account/resources/authkeys/list";
+
+// One-time pre-flight: tell the user what they need before we start
+// asking for it. Without this, the first prompt drops a stranger into
+// "give me a .p8 path" with no context. Skipped when --json is set so
+// scripted use isn't polluted with prose.
+function printIntro() {
+  const lines = [
+    "",
+    banner("APNs setup"),
+    "",
+    "Wires APNs credentials so a backend can push to your Live Activity.",
+    `${dim("Demo mode (Start/Update/End, widget, control) already works without push.")}`,
+    "",
+    bold("You'll need three things"),
+    `  ${green("•")} An Apple Developer account.`,
+    `  ${green("•")} A ${bold(".p8 APNs auth key")}: ${hyperlink("developer.apple.com → Keys → +", APNS_KEYS_URL)}.`,
+    `    ${dim("Apple lets you download the file once — save it somewhere safe.")}`,
+    `  ${green("•")} Your 10-character ${bold("Team ID")} and ${bold("Key ID")} ${dim("(both shown on the Keys page)")}.`,
+    "",
+    bold("Not sure how?") +
+      " " +
+      dim("Paste the line below to your AI assistant (Claude, ChatGPT, Cursor):"),
+    "  " +
+      cyan(
+        `"I need to create an APNs auth key (.p8) on developer.apple.com to set up iOS push notifications. Walk me through it step by step."`,
+      ),
+    "  " + dim("Then come back here once you have the .p8 file downloaded."),
+    "",
+    `${yellow("⚑")} ${dim("Don't have these yet? Press Ctrl-C — the harness works without them.")}`,
+    dim(`Re-run anytime with: ${bold("pnpm surface:setup-apns")}`),
+    "",
+  ];
+  process.stdout.write(lines.join("\n") + "\n");
+}
+
 async function runWizard({ skipValidate, noWrite, json }) {
   const checks = [];
   const note = (status, summary, extra = {}) => {
     checks.push({ id: extra.id ?? `step-${checks.length + 1}`, status, summary, ...extra });
   };
 
+  if (!json) printIntro();
+
   // --- Inputs ---
+  // No default path — the user's .p8 lives wherever they downloaded it
+  // (most browsers drop it in ~/Downloads as AuthKey_<keyid>.p8). A made-up
+  // default path was the wrong help; the location hint goes in the prompt.
   const keyPathRaw = await askText({
-    message: "Path to .p8 file",
-    defaultValue: "~/.mobile-surfaces/AuthKey.p8",
+    message: "Path to your .p8 file (e.g. ~/Downloads/AuthKey_ABCD1234EF.p8)",
     validate: validateP8Path,
   });
   if (isCancelled(keyPathRaw)) return { cancelled: true, checks };
@@ -404,10 +453,6 @@ async function main() {
     process.stdout.write(HELP);
     process.exit(0);
   }
-
-  process.stdout.write(
-    "Wire APNs credentials.  Press Ctrl-C to cancel at any prompt.\n\n",
-  );
 
   let outcome;
   try {
