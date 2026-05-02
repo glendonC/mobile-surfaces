@@ -1,0 +1,24 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Island from "../components/Island.astro";
+---
+
+<Layout>
+  <main class="island-stage">
+    <Island />
+  </main>
+</Layout>
+
+<style>
+  /* The stage centers the main island and gives the side island a
+     positioned ancestor so it can anchor to the right of the cluster. */
+  .island-stage {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 100vw;
+    height: 100vh;
+    padding: 16px;
+    box-sizing: border-box;
+  }
+</style>

@@ -1,0 +1,1071 @@
+---
+// The site is a single Dynamic Island. Three states animate between
+// each other on click:
+//   compact  — manager picker + install command + copy + expand chip
+//   expanded — DEFAULT. Adds title + tagline above the install row.
+//   full     — adds a 29-trap preview and doc list below the install row.
+//
+// State lives in a [data-state] attribute on the root; CSS transitions
+// drive the size/radius and content layers cross-fade. Vanilla JS wires
+// click handlers, sliding tab indicator, cmd crossfade, copy morph.
+
+import Icon from "./Icon.astro";
+
+const REPO = "https://github.com/glendonC/mobile-surfaces";
+
+// Q-chip questions for the full state. Clicking one opens the side
+// island with the matching answer. Icons echo the chip's mood; href
+// adds a "View on GitHub" CTA in the side island when present.
+const questions = [
+  {
+    id: "what",
+    icon: "blueprint" as const,
+    label: "What is this?",
+    title: "What is Mobile Surfaces?",
+    body: "A complete iPhone surface starter. You get Live Activities, Dynamic Island, widgets, and controls all wired up. Working harness, push SDK, contract types, demo mode. The iOS gotchas that usually take a week to find are already debugged.",
+  },
+  {
+    id: "start",
+    icon: "arrow-diagonal" as const,
+    label: "How fast can I ship?",
+    title: "Up and running in minutes.",
+    body: "Run the install command, follow the wizard, and a Live Activity shows up on your simulator. The wizard auto-configures APNs, demo mode, and the harness. No Xcode plumbing required.",
+  },
+  {
+    id: "bugs",
+    icon: "trap" as const,
+    label: "What if I hit a bug?",
+    title: "29 silent failures, mapped out.",
+    body: "Push tokens, payload limits, byte-identity, iOS version checks. We've cataloged 29 silent-failure modes that usually take a week to debug. Each one has a fix and an enforcement script in the repo.",
+    href: `${REPO}/blob/main/CLAUDE.md`,
+    hrefLabel: "Read the catalog",
+  },
+  {
+    id: "docs",
+    icon: "docs" as const,
+    label: "Where are the docs?",
+    title: "Docs live in the repo.",
+    body: "Architecture, push, multi-surface, troubleshooting, backend integration. Long-form docs sit alongside the code so you can read them next to what you're building.",
+    href: `${REPO}/tree/main/docs`,
+    hrefLabel: "Open docs",
+  },
+];
+
+const managers = ["npm", "pnpm", "yarn", "bun"];
+const defaultMgr = "pnpm";
+const cmd = (mgr: string) => `${mgr} create mobile-surfaces`;
+---
+
+<div class="island" data-island data-state="expanded">
+  {/* COMPACT — manager picker + install row, all in a single pill */}
+  <div class="island-layer island-compact">
+    <div class="mgr-tabs" role="tablist" aria-label="Package manager">
+      <span class="mgr-indicator" aria-hidden="true"></span>
+      {
+        managers.map((m) => (
+          <button
+            type="button"
+            class:list={["mgr-tab", m === defaultMgr && "is-active"]}
+            data-mgr={m}
+            role="tab"
+            aria-selected={m === defaultMgr ? "true" : "false"}
+          >
+            {m}
+          </button>
+        ))
+      }
+    </div>
+    <code class="island-compact-cmd cmd-anim" data-cmd>{cmd(defaultMgr)}</code>
+    <button
+      type="button"
+      class="chip-ghost copy-chip"
+      data-copy-dynamic
+      data-copy={cmd(defaultMgr)}
+      aria-label="Copy install command"
+    >
+      <span class="copy-icons">
+        <span class="copy-icon copy-icon-default">
+          <Icon name="copy" class="h-[14px] w-[14px]" />
+        </span>
+        <span class="copy-icon copy-icon-success">
+          <Icon name="check" class="h-[14px] w-[14px]" />
+        </span>
+      </span>
+    </button>
+    <button
+      type="button"
+      class="chip-solid"
+      data-state-target="expanded"
+      aria-label="Expand details"
+    >
+      <Icon name="arrow-diagonal" class="h-[14px] w-[14px]" />
+    </button>
+  </div>
+
+  {/* EXPANDED — title + tagline + install row */}
+  <div class="island-layer island-expanded">
+    <header class="island-head">
+      <span class="island-eyebrow">Mobile Surfaces</span>
+      <button
+        type="button"
+        class="chip-ghost"
+        data-state-target="compact"
+        aria-label="Collapse"
+      >
+        <Icon name="close" class="h-[14px] w-[14px]" />
+      </button>
+    </header>
+
+    <div class="island-body">
+      <h1 class="island-title">
+        Live Activities for<br />Expo iOS.
+      </h1>
+      <p class="island-tagline">
+        The fastest way to ship Live Activities, Dynamic Island, widgets,
+        and controls on iPhone. Run one command and start building. iOS
+        17.2 and up.
+      </p>
+    </div>
+
+    <div class="install-row">
+      <div class="mgr-tabs" role="tablist" aria-label="Package manager">
+        <span class="mgr-indicator" aria-hidden="true"></span>
+        {
+          managers.map((m) => (
+            <button
+              type="button"
+              class:list={["mgr-tab", m === defaultMgr && "is-active"]}
+              data-mgr={m}
+              role="tab"
+              aria-selected={m === defaultMgr ? "true" : "false"}
+            >
+              {m}
+            </button>
+          ))
+        }
+      </div>
+      <code class="install-cmd cmd-anim" data-cmd>{cmd(defaultMgr)}</code>
+      <button
+        type="button"
+        class="chip-ghost copy-chip"
+        data-copy-dynamic
+        data-copy={cmd(defaultMgr)}
+        aria-label="Copy install command"
+      >
+        <span class="copy-icons">
+          <span class="copy-icon copy-icon-default">
+            <Icon name="copy" class="h-[14px] w-[14px]" />
+          </span>
+          <span class="copy-icon copy-icon-success">
+            <Icon name="check" class="h-[14px] w-[14px]" />
+          </span>
+        </span>
+      </button>
+    </div>
+
+    <footer class="island-foot">
+      <a
+        href={REPO}
+        class="github-link"
+        aria-label="GitHub repository"
+        target="_blank"
+        rel="noreferrer"
+      >
+        <Icon name="github" class="h-[20px] w-[20px]" />
+      </a>
+      <button
+        type="button"
+        class="chip-solid chip-solid-pill"
+        data-state-target="full"
+      >
+        More
+        <Icon name="arrow-diagonal" class="h-[12px] w-[12px]" />
+      </button>
+    </footer>
+  </div>
+
+  {/* FULL — adds Q-list + answer panel */}
+  <div class="island-layer island-full">
+    <header class="island-head">
+      <div class="head-lead">
+        <span class="island-eyebrow">Mobile Surfaces</span>
+        <a
+          href={REPO}
+          class="github-link github-link-inline"
+          aria-label="GitHub repository"
+          target="_blank"
+          rel="noreferrer"
+        >
+          <Icon name="github" class="h-[16px] w-[16px]" />
+        </a>
+      </div>
+      <button
+        type="button"
+        class="chip-ghost"
+        data-state-target="compact"
+        aria-label="Collapse"
+      >
+        <Icon name="close" class="h-[14px] w-[14px]" />
+      </button>
+    </header>
+
+    <div class="island-body">
+      <h1 class="island-title island-title-sm">
+        Live Activities for<br />Expo iOS.
+      </h1>
+      <p class="island-tagline">
+        The fastest way to ship Live Activities, Dynamic Island, widgets,
+        and controls on iPhone. Run one command and start building. iOS
+        17.2 and up.
+      </p>
+    </div>
+
+    <div class="install-row">
+      <div class="mgr-tabs" role="tablist" aria-label="Package manager">
+        <span class="mgr-indicator" aria-hidden="true"></span>
+        {
+          managers.map((m) => (
+            <button
+              type="button"
+              class:list={["mgr-tab", m === defaultMgr && "is-active"]}
+              data-mgr={m}
+              role="tab"
+              aria-selected={m === defaultMgr ? "true" : "false"}
+            >
+              {m}
+            </button>
+          ))
+        }
+      </div>
+      <code class="install-cmd cmd-anim" data-cmd>{cmd(defaultMgr)}</code>
+      <button
+        type="button"
+        class="chip-ghost copy-chip"
+        data-copy-dynamic
+        data-copy={cmd(defaultMgr)}
+        aria-label="Copy install command"
+      >
+        <span class="copy-icons">
+          <span class="copy-icon copy-icon-default">
+            <Icon name="copy" class="h-[14px] w-[14px]" />
+          </span>
+          <span class="copy-icon copy-icon-success">
+            <Icon name="check" class="h-[14px] w-[14px]" />
+          </span>
+        </span>
+      </button>
+    </div>
+
+    {/* Two columns inside the same squircle: Q-list on the left, answer
+        on the right. Mirrors how a real Dynamic Island Live Activity
+        splits info side-by-side inside one container. */}
+    <div class="q-cols">
+      <ul class="q-list" role="tablist">
+        {
+          questions.map((q, i) => (
+            <li>
+              <button
+                type="button"
+                class:list={["q-chip", i === 0 && "is-active"]}
+                data-q={q.id}
+                role="tab"
+                aria-selected={i === 0 ? "true" : "false"}
+              >
+                <span class="q-chip-icon-tile">
+                  <Icon name={q.icon} class="h-[14px] w-[14px]" />
+                </span>
+                <span class="q-chip-label">{q.label}</span>
+              </button>
+            </li>
+          ))
+        }
+      </ul>
+
+      <div class="q-answer" data-answer>
+        <h3 class="q-answer-title" data-answer-title>{questions[0].title}</h3>
+        <p class="q-answer-body" data-answer-body>{questions[0].body}</p>
+        <a
+          class="q-answer-cta"
+          data-answer-link
+          href={questions[0].href ?? "#"}
+          target="_blank"
+          rel="noreferrer"
+          hidden={!questions[0].href}
+        >
+          <span data-answer-link-label>{questions[0].hrefLabel ?? ""}</span>
+          <Icon name="arrow-diagonal" class="h-[12px] w-[12px]" />
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+{/* Answer data, rendered server-side and read by the client script.
+    Single source of truth for the inline answer panel. */}
+<script
+  id="mobile-surfaces-answers"
+  type="application/json"
+  set:html={JSON.stringify(
+    Object.fromEntries(
+      questions.map((q) => [
+        q.id,
+        {
+          title: q.title,
+          body: q.body,
+          href: q.href,
+          hrefLabel: q.hrefLabel,
+        },
+      ]),
+    ),
+  )}
+/>
+
+<style>
+  /* Root: a dark squircle that interpolates its dimensions per state.
+     iOS-style ease (cubic-bezier 0.32, 0.72, 0, 1) gives the squishy
+     feel. Content layers stack absolutely and cross-fade. */
+  .island {
+    --ink: #0a0a0a;
+    --paper: #fafaf7;
+    --hairline: rgba(250, 250, 247, 0.07);
+    --hairline-strong: rgba(250, 250, 247, 0.13);
+    --muted: rgba(250, 250, 247, 0.55);
+    --muted-strong: rgba(250, 250, 247, 0.78);
+    --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
+
+    position: relative;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: var(--font-sans);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.05) inset,
+      0 30px 60px -20px rgba(10, 10, 10, 0.45),
+      0 8px 24px -8px rgba(10, 10, 10, 0.25);
+    overflow: hidden;
+    transition:
+      width 520ms var(--ease-ios),
+      height 520ms var(--ease-ios),
+      border-radius 520ms var(--ease-ios);
+    will-change: width, height, border-radius;
+  }
+
+  /* Compact width is JS-measured to match content (so longer cmds like
+     "yarn create mobile-surfaces" don't ellipsis-truncate). The fallback
+     covers the moment before fonts load and JS measures. */
+  .island[data-state="compact"] {
+    width: min(var(--compact-w, 540px), calc(100vw - 32px));
+    height: 56px;
+    border-radius: 28px;
+  }
+  .island[data-state="expanded"] {
+    width: min(560px, calc(100vw - 32px));
+    height: min(340px, calc(100vh - 32px));
+    border-radius: 32px;
+  }
+  .island[data-state="full"] {
+    width: min(780px, calc(100vw - 32px));
+    height: min(480px, calc(100vh - 32px));
+    border-radius: 36px;
+  }
+
+  .island-layer {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 240ms ease;
+    transition-delay: 0ms;
+  }
+  .island[data-state="compact"] .island-compact,
+  .island[data-state="expanded"] .island-expanded,
+  .island[data-state="full"] .island-full {
+    opacity: 1;
+    pointer-events: auto;
+    transition-delay: 220ms;
+  }
+
+  /* COMPACT — single-row pill. Padding == gap so all visual gaps match. */
+  .island-compact {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 0 14px;
+    width: 100%;
+    height: 100%;
+  }
+  .island-compact-cmd {
+    /* No ellipsis here: the pill width is JS-fitted to the cmd's
+       natural width, so the cmd should never need to truncate. Keeping
+       flex-shrink:0 means offsetWidth always reports the real width
+       (truncated content would lie about its size and break the fit). */
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--paper);
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding: 0;
+  }
+
+  /* MANAGER TABS — segmented control with a sliding indicator pill that
+     animates between the active tab on every state. The indicator is a
+     position:absolute element whose left/width are set in JS based on
+     the active tab's offset; CSS handles the actual tween. */
+  .mgr-tabs {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    background: var(--hairline);
+    border-radius: 999px;
+    padding: 3px;
+    flex-shrink: 0;
+  }
+  .mgr-indicator {
+    position: absolute;
+    top: 3px;
+    bottom: 3px;
+    left: 0;
+    width: 0;
+    background: var(--hairline-strong);
+    border-radius: 999px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  /* Gate the transition behind the first JS measurement so the initial
+     paint doesn't slide from left:0 / width:0 to the active tab. */
+  .mgr-indicator.is-ready {
+    transition:
+      left 360ms var(--ease-ios),
+      width 360ms var(--ease-ios),
+      opacity 200ms ease;
+  }
+  .mgr-tab {
+    position: relative;
+    z-index: 1;
+    padding: 5px 11px;
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 1;
+    border-radius: 999px;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: color 220ms ease;
+    font-family: var(--font-sans);
+  }
+  .mgr-tab:hover {
+    color: var(--paper);
+  }
+  .mgr-tab.is-active {
+    color: var(--paper);
+  }
+
+  /* CHIPS — circular icon buttons; ghost (muted bg) and solid (paper) */
+  .chip-ghost,
+  .chip-solid {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    border: 0;
+    cursor: pointer;
+    text-decoration: none;
+    transition:
+      background 200ms ease,
+      color 200ms ease,
+      transform 220ms var(--ease-ios);
+    font-family: var(--font-sans);
+    flex-shrink: 0;
+  }
+  .chip-ghost {
+    background: var(--hairline);
+    color: var(--muted);
+  }
+  .chip-ghost:hover {
+    background: var(--hairline-strong);
+    color: var(--paper);
+  }
+  .chip-solid {
+    background: var(--paper);
+    color: var(--ink);
+  }
+  .chip-solid:hover {
+    background: #fff;
+    transform: scale(1.04);
+  }
+  .chip-solid:active {
+    transform: scale(0.97);
+  }
+  .chip-solid-pill {
+    width: auto;
+    padding: 0 14px 0 16px;
+    gap: 6px;
+    height: 32px;
+    font-size: 12.5px;
+    font-weight: 500;
+  }
+  /* GitHub link — plain icon, no chip background. Sized so its hit area
+     and visual height match the More pill on the same baseline. */
+  .github-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 32px;
+    width: 32px;
+    color: var(--paper);
+    opacity: 0.78;
+    text-decoration: none;
+    transition: opacity 200ms ease, transform 200ms var(--ease-ios);
+  }
+  .github-link:hover {
+    opacity: 1;
+  }
+  .github-link:active {
+    transform: scale(0.95);
+  }
+
+  /* COPY CHIP — stacked icons swap (copy <-> check) on success, and the
+     chip flashes a green-tinted background. */
+  .copy-icons {
+    position: relative;
+    display: inline-flex;
+    width: 14px;
+    height: 14px;
+  }
+  .copy-icon {
+    position: absolute;
+    inset: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+      opacity 220ms var(--ease-ios),
+      transform 260ms var(--ease-ios);
+  }
+  .copy-icon-success {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+  .copy-chip.is-copied {
+    background: rgba(95, 208, 123, 0.22);
+    color: #b8efc6;
+  }
+  .copy-chip.is-copied .copy-icon-default {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+  .copy-chip.is-copied .copy-icon-success {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  /* CMD CROSSFADE — tiny vertical lift when the manager swaps. */
+  .cmd-anim {
+    transition:
+      opacity 200ms var(--ease-ios),
+      transform 220ms var(--ease-ios);
+  }
+  .cmd-anim.is-changing {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  /* SHARED (expanded + full) */
+  .island-expanded,
+  .island-full {
+    display: flex;
+    flex-direction: column;
+    padding: 18px 18px 18px 22px;
+    gap: 18px;
+  }
+  .island-full {
+    padding: 20px 24px 20px 28px;
+    gap: 20px;
+  }
+
+  .island-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .head-lead {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .island-eyebrow {
+    font-size: 12px;
+    color: var(--muted-strong);
+    letter-spacing: 0;
+  }
+  /* Inline GitHub icon (used in the full-state head). Same opacity
+     scheme as the standalone github-link, just smaller and with a
+     tighter hit area since it lives next to text. */
+  .github-link-inline {
+    width: 22px;
+    height: 22px;
+  }
+
+  .island-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .island-title {
+    font-size: 30px;
+    font-weight: 500;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    color: var(--paper);
+    margin: 0;
+  }
+  .island-title-sm {
+    font-size: 26px;
+  }
+  .island-tagline {
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--muted);
+    max-width: 44ch;
+    margin: 0;
+  }
+
+  /* INSTALL ROW (expanded + full) — content-fit pill, centered. The
+     cmd doesn't stretch; the row hugs its children so the empty space
+     on either side reads as breathing room rather than wasted width. */
+  .install-row {
+    display: inline-flex;
+    align-self: center;
+    align-items: center;
+    gap: 10px;
+    background: var(--hairline);
+    border-radius: 16px;
+    padding: 6px;
+    width: fit-content;
+    max-width: 100%;
+  }
+  .install-row .mgr-tabs {
+    background: transparent;
+    padding: 0;
+  }
+  .install-row .mgr-indicator {
+    top: 0;
+    bottom: 0;
+  }
+  .install-cmd {
+    flex: 0 0 auto;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--paper);
+    white-space: nowrap;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  /* FOOTER */
+  .island-foot {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  /* FULL — two columns inside the same squircle. Q-list left, answer
+     right. Mirrors a real Dynamic Island Live Activity that splits info
+     side-by-side inside one container. */
+  .q-cols {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) 1.2fr;
+    gap: 28px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* Q-LIST — vertical stack of icon-tile + label rows. No row backgrounds
+     because the chips are part of the island, not separate cards. The
+     icon tile gives each row a tappable affordance; the label stays
+     muted until the row is active or hovered. */
+  .q-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .q-chip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 8px 6px;
+    background: transparent;
+    border: 0;
+    border-radius: 10px;
+    color: inherit;
+    font-family: var(--font-sans);
+    font-size: 13.5px;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+    transition:
+      background 180ms ease,
+      color 180ms ease;
+  }
+  .q-chip:hover {
+    background: var(--hairline);
+  }
+  .q-chip-icon-tile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: var(--hairline);
+    color: var(--muted-strong);
+    flex-shrink: 0;
+    transition:
+      background 180ms ease,
+      color 180ms ease,
+      transform 200ms var(--ease-ios);
+  }
+  .q-chip:hover .q-chip-icon-tile {
+    background: var(--hairline-strong);
+    color: var(--paper);
+    transform: scale(1.04);
+  }
+  .q-chip.is-active .q-chip-icon-tile {
+    background: var(--paper);
+    color: var(--ink);
+  }
+  .q-chip-label {
+    color: var(--muted-strong);
+    line-height: 1.2;
+    transition: color 180ms ease;
+  }
+  .q-chip:hover .q-chip-label,
+  .q-chip.is-active .q-chip-label {
+    color: var(--paper);
+  }
+
+  /* Q-ANSWER — title, body, optional CTA. Crossfades between answers
+     so switching rows feels alive. */
+  .q-answer {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+  }
+  .q-answer-title,
+  .q-answer-body,
+  .q-answer-cta {
+    transition:
+      opacity 200ms var(--ease-ios),
+      transform 220ms var(--ease-ios);
+  }
+  .q-answer.is-changing .q-answer-title,
+  .q-answer.is-changing .q-answer-body,
+  .q-answer.is-changing .q-answer-cta {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  .q-answer-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--paper);
+    letter-spacing: -0.01em;
+  }
+  .q-answer-body {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--muted-strong);
+  }
+  .q-answer-cta {
+    display: inline-flex;
+    align-self: flex-start;
+    align-items: center;
+    gap: 6px;
+    margin-top: auto;
+    padding-top: 4px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--paper);
+    text-decoration: none;
+  }
+  .q-answer-cta:hover {
+    opacity: 0.7;
+  }
+  .q-answer-cta[hidden] {
+    display: none;
+  }
+
+  /* Mobile shrinkage */
+  @media (max-width: 600px) {
+    .island-expanded,
+    .island-full {
+      padding: 16px 14px 14px 18px;
+      gap: 14px;
+    }
+    .island-title {
+      font-size: 24px;
+    }
+    .island-title-sm {
+      font-size: 22px;
+    }
+    .q-cols {
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    .island[data-state="full"] {
+      height: min(640px, calc(100vh - 24px));
+    }
+    .install-row {
+      flex-wrap: wrap;
+    }
+    .install-cmd {
+      flex-basis: 100%;
+      order: 3;
+      padding: 4px 4px 6px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .island,
+    .island-layer,
+    .chip-ghost,
+    .chip-solid,
+    .mgr-indicator,
+    .cmd-anim,
+    .copy-icon {
+      transition: none !important;
+    }
+  }
+</style>
+
+<script>
+  type State = "compact" | "expanded" | "full";
+
+  type QuestionRecord = {
+    title: string;
+    body: string;
+    href?: string;
+    hrefLabel?: string;
+  };
+
+  function wireIsland() {
+    document.querySelectorAll<HTMLElement>("[data-island]").forEach((root) => {
+      if (root.dataset.wired === "1") return;
+      root.dataset.wired = "1";
+
+      // Inline answer panel: title/body/CTA elements rendered inside the
+      // full state. Updated in place when a q-chip is clicked.
+      const answer = root.querySelector<HTMLElement>("[data-answer]");
+      const answerTitle = answer?.querySelector<HTMLElement>("[data-answer-title]");
+      const answerBody = answer?.querySelector<HTMLElement>("[data-answer-body]");
+      const answerLink = answer?.querySelector<HTMLAnchorElement>("[data-answer-link]");
+      const answerLinkLabel = answer?.querySelector<HTMLElement>(
+        "[data-answer-link-label]",
+      );
+
+      const setState = (next: State) => {
+        root.dataset.state = next;
+        // Re-measure indicators after the state change settles, since the
+        // layer that just became visible may have laid out at a different
+        // origin. RAF gives the browser a frame to paint.
+        requestAnimationFrame(() => requestAnimationFrame(positionIndicators));
+      };
+
+      const positionIndicators = () => {
+        root.querySelectorAll<HTMLElement>(".mgr-tabs").forEach((tabs) => {
+          const active = tabs.querySelector<HTMLElement>(".mgr-tab.is-active");
+          const indicator = tabs.querySelector<HTMLElement>(".mgr-indicator");
+          if (!active || !indicator) return;
+          indicator.style.left = active.offsetLeft + "px";
+          indicator.style.width = active.offsetWidth + "px";
+        });
+      };
+
+      // Compact pill width is fitted to its actual content. We sum each
+      // direct child's natural width + the gaps + the pill paddings.
+      // max-content on the parent doesn't help here because the parent
+      // has an explicit width and we want to derive it from the content.
+      // Using Math.max(offsetWidth, scrollWidth) so a child that's been
+      // forced into ellipsis truncation still reports its real width.
+      const syncCompactWidth = () => {
+        const compact = root.querySelector<HTMLElement>(".island-compact");
+        if (!compact) return;
+        const children = Array.from(compact.children) as HTMLElement[];
+        if (children.length === 0) return;
+        let total = 28; // 14px padding * 2
+        total += (children.length - 1) * 14; // 14px gap between siblings
+        children.forEach((c) => {
+          total += Math.max(c.offsetWidth, c.scrollWidth);
+        });
+        root.style.setProperty("--compact-w", `${Math.ceil(total)}px`);
+      };
+
+      // Initial pass. Wait for fonts so measurements aren't off; then
+      // mark indicators ready so subsequent updates actually animate.
+      const init = () => {
+        positionIndicators();
+        syncCompactWidth();
+        root
+          .querySelectorAll<HTMLElement>(".mgr-indicator")
+          .forEach((el) => el.classList.add("is-ready"));
+      };
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(() => requestAnimationFrame(init));
+      } else {
+        requestAnimationFrame(init);
+      }
+      window.addEventListener("resize", () => {
+        positionIndicators();
+        syncCompactWidth();
+      });
+
+      // State-target buttons (expand chip, More, ×).
+      root.querySelectorAll<HTMLElement>("[data-state-target]").forEach((el) => {
+        el.addEventListener("click", (event) => {
+          event.stopPropagation();
+          const target = el.dataset.stateTarget as State | undefined;
+          if (target) setState(target);
+        });
+      });
+
+      // Manager picker — swap displayed command and copy payload across
+      // every state's tabs. Cmd text crossfades, indicator slides.
+      const tabs = root.querySelectorAll<HTMLButtonElement>("[data-mgr]");
+      let cmdAnimToken = 0;
+      tabs.forEach((tab) => {
+        tab.addEventListener("click", (event) => {
+          event.stopPropagation();
+          const mgr = tab.dataset.mgr;
+          if (!mgr) return;
+
+          const currentlyActive = tab.classList.contains("is-active");
+          tabs.forEach((t) => {
+            const active = t.dataset.mgr === mgr;
+            t.classList.toggle("is-active", active);
+            t.setAttribute("aria-selected", active ? "true" : "false");
+          });
+          positionIndicators();
+
+          // Update copy payload immediately; defer cmd text swap so the
+          // crossfade lands in the middle of the transition.
+          const next = `${mgr} create mobile-surfaces`;
+          root
+            .querySelectorAll<HTMLElement>("[data-copy-dynamic]")
+            .forEach((b) => b.setAttribute("data-copy", next));
+
+          if (currentlyActive) return;
+
+          const cmds = root.querySelectorAll<HTMLElement>("[data-cmd]");
+          cmds.forEach((c) => c.classList.add("is-changing"));
+          const token = ++cmdAnimToken;
+          window.setTimeout(() => {
+            if (token !== cmdAnimToken) return;
+            cmds.forEach((c) => {
+              c.textContent = next;
+            });
+            requestAnimationFrame(() => {
+              cmds.forEach((c) => c.classList.remove("is-changing"));
+              // The cmd's rendered width changed; resync the compact
+              // pill width so it grows/shrinks with the new text.
+              syncCompactWidth();
+            });
+          }, 180);
+        });
+      });
+
+      // Q-chips — open the side island with the matching answer. The
+      // answer data ships as a JSON script tag (rendered server-side
+      // from the frontmatter `questions`) so the chips stay a single
+      // source of truth.
+      const answers: Record<string, QuestionRecord> = {};
+      const answersScript = document.querySelector<HTMLScriptElement>(
+        "#mobile-surfaces-answers",
+      );
+      if (answersScript) {
+        try {
+          Object.assign(answers, JSON.parse(answersScript.textContent || "{}"));
+        } catch {
+          /* malformed JSON — leave answers empty, chips become no-ops */
+        }
+      }
+
+      // Crossfade the inline answer panel: fade out, swap content, fade
+      // back in. A token guards against rapid clicks racing each other.
+      let answerToken = 0;
+      const swapAnswer = (id: string) => {
+        if (!answer || !answerTitle || !answerBody) return;
+        const a = answers[id];
+        if (!a) return;
+        const token = ++answerToken;
+        answer.classList.add("is-changing");
+        window.setTimeout(() => {
+          if (token !== answerToken) return;
+          answerTitle.textContent = a.title;
+          answerBody.textContent = a.body;
+          if (answerLink && answerLinkLabel) {
+            if (a.href) {
+              answerLink.href = a.href;
+              answerLinkLabel.textContent = a.hrefLabel ?? "Open";
+              answerLink.hidden = false;
+            } else {
+              answerLink.hidden = true;
+            }
+          }
+          requestAnimationFrame(() => {
+            if (token !== answerToken) return;
+            answer.classList.remove("is-changing");
+          });
+        }, 180);
+      };
+
+      root.querySelectorAll<HTMLButtonElement>(".q-chip").forEach((chip) => {
+        chip.addEventListener("click", (event) => {
+          event.stopPropagation();
+          const id = chip.dataset.q;
+          if (!id) return;
+          if (chip.classList.contains("is-active")) return;
+          root.querySelectorAll<HTMLElement>(".q-chip").forEach((c) => {
+            const active = c === chip;
+            c.classList.toggle("is-active", active);
+            c.setAttribute("aria-selected", active ? "true" : "false");
+          });
+          swapAnswer(id);
+        });
+      });
+
+      // Copy buttons — morph icon to a check, tint background green for ~1s.
+      const copyTimers = new WeakMap<HTMLElement, number>();
+      root.querySelectorAll<HTMLElement>("[data-copy]").forEach((btn) => {
+        btn.addEventListener("click", async (event) => {
+          event.stopPropagation();
+          const text = btn.getAttribute("data-copy") ?? "";
+          try {
+            await navigator.clipboard.writeText(text);
+          } catch {
+            /* clipboard refused; nothing more to do */
+          }
+          btn.classList.add("is-copied");
+          const prev = copyTimers.get(btn);
+          if (prev) window.clearTimeout(prev);
+          const timer = window.setTimeout(
+            () => btn.classList.remove("is-copied"),
+            1100,
+          );
+          copyTimers.set(btn, timer);
+        });
+      });
+    });
+  }
+
+  wireIsland();
+</script>

@@ -149,6 +149,9 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
+# Astro generated cache (apps/site)
+.astro/
+
 # create-mobile-surfaces build outputs
 packages/create-mobile-surfaces/template/template.tgz
 packages/create-mobile-surfaces/template/manifest.json

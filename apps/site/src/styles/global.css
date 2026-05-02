@@ -1,0 +1,43 @@
+/* Tailwind v4 entrypoint. Custom design tokens (palette, radii, fonts)
+ * live in the @theme block so utilities like bg-cream / rounded-tile
+ * compose without us reaching for arbitrary values everywhere.
+ *
+ * Palette is a soft pastel set + a deep black, intentionally limited so
+ * the bento grid reads as a system rather than a swatch dump. Radii
+ * follow the squircle convention (≥ 24px on tiles, 16px on inner cards). */
+
+@import "tailwindcss";
+
+/* Self-hosted Geist via fontsource. Variable fonts so we get every weight
+ * out of one file each — keeps the bundle lean. */
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+@theme {
+  --color-ink: #0a0a0a;
+  --color-paper: #fafaf7;
+  --color-cream: #f5efe0;
+  --color-coral: #ffd6cc;
+  --color-mint: #d6efd9;
+  --color-lavender: #e0d8f4;
+  --color-rose: #fcd6e3;
+  --color-sky: #d4e4f7;
+
+  --radius-tile: 28px;
+  --radius-card: 16px;
+
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+html {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  margin: 0;
+}

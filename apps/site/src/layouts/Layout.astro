@@ -1,0 +1,65 @@
+---
+import "../styles/global.css";
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title = "Mobile Surfaces",
+  description = "Expo iOS reference architecture for Live Activities, Dynamic Island, widgets, and controls.",
+} = Astro.props;
+
+// schema.org structured data so AI agents and search engines can
+// classify the site at a glance. SoftwareSourceCode is the closest
+// fit since the product is a code starter, not an article.
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareSourceCode",
+  name: "Mobile Surfaces",
+  description,
+  codeRepository: "https://github.com/glendonC/mobile-surfaces",
+  url: "https://mobile-surfaces.com",
+  programmingLanguage: ["TypeScript", "Swift"],
+  runtimePlatform: "iOS 17.2+",
+  applicationCategory: "DeveloperApplication",
+  operatingSystem: "iOS",
+  author: {
+    "@type": "Person",
+    name: "Glendon Chin",
+  },
+};
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+
+    {/* LLM-friendly indexes. Convention from llmstxt.org: /llms.txt is
+        the short index, /llms-full.txt is the canonical content. */}
+    <link
+      rel="alternate"
+      type="text/markdown"
+      href="/llms.txt"
+      title="LLM index (llms.txt)"
+    />
+    <link
+      rel="alternate"
+      type="text/markdown"
+      href="/llms-full.txt"
+      title="LLM full content (CLAUDE.md mirror)"
+    />
+
+    {/* Structured data for AI agents and search engines. */}
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+  </head>
+  <body class="grid h-screen w-screen place-items-center overflow-hidden">
+    <slot />
+  </body>
+</html>

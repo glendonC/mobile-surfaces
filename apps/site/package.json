@@ -1,0 +1,21 @@
+{
+  "name": "@mobile-surfaces/site",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Marketing + docs site for Mobile Surfaces.",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@fontsource-variable/geist": "^5.2.8",
+    "@fontsource-variable/geist-mono": "^5.2.7",
+    "@tailwindcss/vite": "^4.0.0",
+    "astro": "^5.0.0",
+    "tailwindcss": "^4.0.0"
+  }
+}

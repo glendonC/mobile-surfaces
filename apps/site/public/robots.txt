@@ -1,0 +1,30 @@
+# Mobile Surfaces is a reference architecture meant to be consumed by
+# AI coding assistants. We explicitly welcome AI crawlers in addition
+# to the default allow-all wildcard.
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: cohere-ai
+Allow: /
+
+User-agent: Bytespider
+Allow: /
+
+User-agent: *
+Allow: /
