@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 290">
+  <!--
+    Stacked lockup: the favicon's Dynamic Island silhouette + the
+    "Mobile Surfaces" wordmark below. All three colors swap together
+    via prefers-color-scheme so the lockup reads on light or dark
+    backgrounds. Stacked (not horizontal) so it sits well in square
+    contexts: avatars, README hero, deck title slide.
+  -->
+  <style>
+    .squircle { fill: #0a0a0a; }
+    .pill { fill: #fafaf7; }
+    .wordmark { fill: #0a0a0a; }
+    @media (prefers-color-scheme: dark) {
+      .squircle { fill: #fafaf7; }
+      .pill { fill: #0a0a0a; }
+      .wordmark { fill: #fafaf7; }
+    }
+  </style>
+
+  <g transform="translate(20, 10)">
+    <rect class="squircle" width="200" height="200" rx="44"/>
+    <rect class="pill" x="62" y="47" width="76" height="30" rx="15"/>
+  </g>
+
+  <text class="wordmark" x="120" y="263"
+        font-family="Geist, ui-sans-serif, system-ui, sans-serif"
+        font-size="26" font-weight="500"
+        letter-spacing="-0.5" text-anchor="middle">Mobile Surfaces</text>
+</svg>

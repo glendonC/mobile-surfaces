@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="180" height="180">
+  <!--
+    Source SVG for apple-touch-icon.png (rasterized by `pnpm og`).
+    iOS rounds the square corners automatically and does not honor
+    transparency, so this is intentionally a solid dark fill with a
+    centered light pill — the Dynamic Island silhouette in the
+    home-screen idiom.
+  -->
+  <rect width="180" height="180" fill="#0a0a0a"/>
+  <rect x="55" y="79" width="70" height="22" rx="11" fill="#fafaf7"/>
+</svg>

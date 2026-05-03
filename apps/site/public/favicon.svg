@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <style>
+    .squircle { fill: #0a0a0a; }
+    .pill { fill: #fafaf7; }
+    @media (prefers-color-scheme: dark) {
+      .squircle { fill: #fafaf7; }
+      .pill { fill: #0a0a0a; }
+    }
+  </style>
+  <rect class="squircle" x="3" y="3" width="26" height="26" rx="7" />
+  <rect class="pill" x="11" y="9" width="10" height="4" rx="2" />
+</svg>

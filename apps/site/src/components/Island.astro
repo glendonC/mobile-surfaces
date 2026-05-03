@@ -59,7 +59,7 @@ const cmd = (mgr: string) => `${mgr} create mobile-surfaces`;
 <div class="island" data-island data-state="expanded">
   {/* COMPACT — manager picker + install row, all in a single pill */}
   <div class="island-layer island-compact">
-    <div class="mgr-tabs" role="tablist" aria-label="Package manager">
+    <div class="mgr-tabs" role="group" aria-label="Package manager">
       <span class="mgr-indicator" aria-hidden="true"></span>
       {
         managers.map((m) => (
@@ -67,8 +67,7 @@ const cmd = (mgr: string) => `${mgr} create mobile-surfaces`;
             type="button"
             class:list={["mgr-tab", m === defaultMgr && "is-active"]}
             data-mgr={m}
-            role="tab"
-            aria-selected={m === defaultMgr ? "true" : "false"}
+            aria-current={m === defaultMgr ? "true" : "false"}
           >
             {m}
           </button>
@@ -128,7 +127,7 @@ const cmd = (mgr: string) => `${mgr} create mobile-surfaces`;
     </div>
 
     <div class="install-row">
-      <div class="mgr-tabs" role="tablist" aria-label="Package manager">
+      <div class="mgr-tabs" role="group" aria-label="Package manager">
         <span class="mgr-indicator" aria-hidden="true"></span>
         {
           managers.map((m) => (
@@ -136,8 +135,7 @@ const cmd = (mgr: string) => `${mgr} create mobile-surfaces`;
               type="button"
               class:list={["mgr-tab", m === defaultMgr && "is-active"]}
               data-mgr={m}
-              role="tab"
-              aria-selected={m === defaultMgr ? "true" : "false"}
+              aria-current={m === defaultMgr ? "true" : "false"}
             >
               {m}
             </button>
@@ -221,7 +219,7 @@ const cmd = (mgr: string) => `${mgr} create mobile-surfaces`;
     </div>
 
     <div class="install-row">
-      <div class="mgr-tabs" role="tablist" aria-label="Package manager">
+      <div class="mgr-tabs" role="group" aria-label="Package manager">
         <span class="mgr-indicator" aria-hidden="true"></span>
         {
           managers.map((m) => (
@@ -229,8 +227,7 @@ const cmd = (mgr: string) => `${mgr} create mobile-surfaces`;
               type="button"
               class:list={["mgr-tab", m === defaultMgr && "is-active"]}
               data-mgr={m}
-              role="tab"
-              aria-selected={m === defaultMgr ? "true" : "false"}
+              aria-current={m === defaultMgr ? "true" : "false"}
             >
               {m}
             </button>
@@ -260,7 +257,7 @@ const cmd = (mgr: string) => `${mgr} create mobile-surfaces`;
         on the right. Mirrors how a real Dynamic Island Live Activity
         splits info side-by-side inside one container. */}
     <div class="q-cols">
-      <ul class="q-list" role="tablist">
+      <ul class="q-list" aria-label="Frequently asked">
         {
           questions.map((q, i) => (
             <li>
@@ -268,8 +265,7 @@ const cmd = (mgr: string) => `${mgr} create mobile-surfaces`;
                 type="button"
                 class:list={["q-chip", i === 0 && "is-active"]}
                 data-q={q.id}
-                role="tab"
-                aria-selected={i === 0 ? "true" : "false"}
+                aria-current={i === 0 ? "true" : "false"}
               >
                 <span class="q-chip-icon-tile">
                   <Icon name={q.icon} class="h-[14px] w-[14px]" />
@@ -281,7 +277,7 @@ const cmd = (mgr: string) => `${mgr} create mobile-surfaces`;
         }
       </ul>
 
-      <div class="q-answer" data-answer>
+      <div class="q-answer" data-answer aria-live="polite" aria-atomic="true">
         <h3 class="q-answer-title" data-answer-title>{questions[0].title}</h3>
         <p class="q-answer-body" data-answer-body>{questions[0].body}</p>
         <a
@@ -459,6 +455,18 @@ const cmd = (mgr: string) => `${mgr} create mobile-surfaces`;
   }
   .mgr-tab.is-active {
     color: var(--paper);
+  }
+
+  /* Keyboard focus rings. :focus-visible (not :focus) so mouse clicks
+     don't show a ring. The 2px paper outline reads on the dark island;
+     2px offset keeps it from clipping the chip border. */
+  .mgr-tab:focus-visible,
+  .chip-ghost:focus-visible,
+  .chip-solid:focus-visible,
+  .q-chip:focus-visible,
+  .github-link:focus-visible {
+    outline: 2px solid var(--paper);
+    outline-offset: 2px;
   }
 
   /* CHIPS — circular icon buttons; ghost (muted bg) and solid (paper) */
@@ -835,15 +843,18 @@ const cmd = (mgr: string) => `${mgr} create mobile-surfaces`;
     }
   }
 
+  /* Comprehensive coverage: every transition or animation inside the
+     island shortens to ~instantaneous. 0.01ms instead of `none` keeps
+     transitionend events firing so JS swap-timeouts (cmd crossfade,
+     answer crossfade) still complete cleanly. */
   @media (prefers-reduced-motion: reduce) {
     .island,
-    .island-layer,
-    .chip-ghost,
-    .chip-solid,
-    .mgr-indicator,
-    .cmd-anim,
-    .copy-icon {
-      transition: none !important;
+    .island *,
+    .island *::before,
+    .island *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
     }
   }
 </style>
@@ -863,6 +874,21 @@ const cmd = (mgr: string) => `${mgr} create mobile-surfaces`;
       if (root.dataset.wired === "1") return;
       root.dataset.wired = "1";
 
+      const layers = root.querySelectorAll<HTMLElement>(".island-layer");
+
+      // Make non-active layers inert immediately. Without this, the tab
+      // order spills into hidden state and screen readers read all three
+      // layers' content sequentially. Done before init() so it isn't
+      // gated on document.fonts.ready.
+      const applyInert = (active: State) => {
+        layers.forEach((layer) => {
+          const isActive = layer.classList.contains(`island-${active}`);
+          if (isActive) layer.removeAttribute("inert");
+          else layer.setAttribute("inert", "");
+        });
+      };
+      applyInert(root.dataset.state as State);
+
       // Inline answer panel: title/body/CTA elements rendered inside the
       // full state. Updated in place when a q-chip is clicked.
       const answer = root.querySelector<HTMLElement>("[data-answer]");
@@ -875,6 +901,19 @@ const cmd = (mgr: string) => `${mgr} create mobile-surfaces`;
 
       const setState = (next: State) => {
         root.dataset.state = next;
+        applyInert(next);
+
+        // Move focus into the now-active layer so keyboard users don't
+        // land on an inert button. Prefer the back/close affordance
+        // (data-state-target="compact"); fall back to the expand chip on
+        // compact, then to any focusable element.
+        const layer = root.querySelector<HTMLElement>(`.island-${next}`);
+        const focusTarget =
+          layer?.querySelector<HTMLElement>('[data-state-target="compact"]') ??
+          layer?.querySelector<HTMLElement>('[data-state-target="expanded"]') ??
+          layer?.querySelector<HTMLElement>("button, a");
+        focusTarget?.focus({ preventScroll: true });
+
         // Re-measure indicators after the state change settles, since the
         // layer that just became visible may have laid out at a different
         // origin. RAF gives the browser a frame to paint.
@@ -952,7 +991,7 @@ const cmd = (mgr: string) => `${mgr} create mobile-surfaces`;
           tabs.forEach((t) => {
             const active = t.dataset.mgr === mgr;
             t.classList.toggle("is-active", active);
-            t.setAttribute("aria-selected", active ? "true" : "false");
+            t.setAttribute("aria-current", active ? "true" : "false");
           });
           positionIndicators();
 
@@ -1037,7 +1076,7 @@ const cmd = (mgr: string) => `${mgr} create mobile-surfaces`;
           root.querySelectorAll<HTMLElement>(".q-chip").forEach((c) => {
             const active = c === chip;
             c.classList.toggle("is-active", active);
-            c.setAttribute("aria-selected", active ? "true" : "false");
+            c.setAttribute("aria-current", active ? "true" : "false");
           });
           swapAnswer(id);
         });

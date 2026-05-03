@@ -1,0 +1,116 @@
+---
+// Custom 404 in the brand's compact-island idiom. Astro emits
+// dist/404.html and Cloudflare Pages serves it on any unknown path
+// with a real 404 status — replaces the SPA-fallback that returned
+// the homepage with HTTP 200 on misses.
+//
+// Standalone styles instead of importing Island.astro: the state
+// machine isn't useful here, and copying a single pill's styling
+// keeps this page resilient to future changes in the main island.
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout
+  title="Page not found — Mobile Surfaces"
+  description="Page not found."
+>
+  <main class="stage">
+    <div class="island">
+      <span class="status">404</span>
+      <span class="dot" aria-hidden="true"></span>
+      <span class="message">Page not found</span>
+      <a class="home" href="/">Home</a>
+    </div>
+  </main>
+</Layout>
+
+<style>
+  .stage {
+    display: grid;
+    place-items: center;
+    width: 100vw;
+    height: 100vh;
+    padding: 16px;
+    box-sizing: border-box;
+  }
+
+  /* Mirrors the compact-state island geometry: 56px tall pill, the
+     same dark surface, hairline highlight, and squircle radius. */
+  .island {
+    display: inline-flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0 8px 0 22px;
+    height: 56px;
+    background: #0a0a0a;
+    color: #fafaf7;
+    border-radius: 28px;
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.05) inset,
+      0 30px 60px -20px rgba(10, 10, 10, 0.45),
+      0 8px 24px -8px rgba(10, 10, 10, 0.25);
+    max-width: calc(100vw - 32px);
+    font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
+  }
+
+  .status {
+    font-family: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
+    font-size: 13px;
+    color: rgba(250, 250, 247, 0.78);
+  }
+
+  .dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(250, 250, 247, 0.35);
+  }
+
+  .message {
+    font-size: 13.5px;
+    color: rgba(250, 250, 247, 0.78);
+  }
+
+  .home {
+    display: inline-flex;
+    align-items: center;
+    height: 40px;
+    padding: 0 16px;
+    background: #fafaf7;
+    color: #0a0a0a;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 500;
+    text-decoration: none;
+    transition:
+      transform 220ms cubic-bezier(0.32, 0.72, 0, 1),
+      background 200ms ease;
+  }
+  .home:hover {
+    background: #ffffff;
+    transform: scale(1.04);
+  }
+  .home:active {
+    transform: scale(0.97);
+  }
+  .home:focus-visible {
+    outline: 2px solid #fafaf7;
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .home {
+      transition-duration: 0.01ms;
+    }
+  }
+
+  @media (max-width: 540px) {
+    .island {
+      flex-wrap: wrap;
+      height: auto;
+      padding: 14px 14px 14px 18px;
+      border-radius: 22px;
+      gap: 10px;
+    }
+  }
+</style>

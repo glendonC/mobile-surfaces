@@ -1,5 +1,10 @@
 ---
 import "../styles/global.css";
+// Imported as ?url so Vite hashes the woff2 path. Hardcoding paths here
+// would silently 404 every time the font package upgrades. Latin subset
+// only — that's what the page actually renders for English copy.
+import geistLatin from "@fontsource-variable/geist/files/geist-latin-wght-normal.woff2?url";
+import geistMonoLatin from "@fontsource-variable/geist-mono/files/geist-mono-latin-wght-normal.woff2?url";
 
 interface Props {
   title?: string;
@@ -10,6 +15,15 @@ const {
   title = "Mobile Surfaces",
   description = "Expo iOS reference architecture for Live Activities, Dynamic Island, widgets, and controls.",
 } = Astro.props;
+
+// Canonical absolute URLs for OG/Twitter cards. Astro.site is set in
+// astro.config.mjs; falls back gracefully on previews where it's unset.
+const canonicalUrl = Astro.site
+  ? new URL(Astro.url.pathname, Astro.site).href
+  : undefined;
+const ogImageUrl = Astro.site
+  ? new URL("/og.png", Astro.site).href
+  : "/og.png";
 
 // schema.org structured data so AI agents and search engines can
 // classify the site at a glance. SoftwareSourceCode is the closest
@@ -38,8 +52,51 @@ const jsonLd = {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    {/* Preload the variable fonts that Fontsource self-hosts. Without
+        this, the browser only discovers them after parsing CSS, which
+        delays document.fonts.ready (Island.astro waits on it before
+        measuring the compact pill) and lengthens FOUT. */}
+    <link
+      rel="preload"
+      href={geistLatin}
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href={geistMonoLatin}
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
     <title>{title}</title>
     <meta name="description" content={description} />
+    {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
+
+    {/* Open Graph + Twitter Card. Twitter falls back to og:* when
+        twitter:* is absent, so a single OG block plus twitter:card
+        covers every major link-preview surface. og:image points at a
+        static 1200×630 PNG; missing image fails open (preview just
+        omits the image), so this is safe to ship before og.png lands. */}
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Mobile Surfaces" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    {canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
+    <meta property="og:image" content={ogImageUrl} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Mobile Surfaces — Live Activities for Expo iOS"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImageUrl} />
 
     {/* LLM-friendly indexes. Convention from llmstxt.org: /llms.txt is
         the short index, /llms-full.txt is the canonical content. */}

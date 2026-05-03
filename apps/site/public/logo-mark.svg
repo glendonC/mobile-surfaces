@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <!--
+    Logo mark (icon-only). The favicon's Dynamic Island silhouette
+    scaled up — same single light pill in a dark squircle, just sized
+    for marketing/avatar use. Adapts to the viewer's color scheme via
+    @media (prefers-color-scheme: dark) so the same SVG reads cleanly
+    on light or dark backgrounds when rendered in a browser.
+  -->
+  <style>
+    .squircle { fill: #0a0a0a; }
+    .pill { fill: #fafaf7; }
+    @media (prefers-color-scheme: dark) {
+      .squircle { fill: #fafaf7; }
+      .pill { fill: #0a0a0a; }
+    }
+  </style>
+  <rect class="squircle" width="200" height="200" rx="44"/>
+  <rect class="pill" x="62" y="47" width="76" height="30" rx="15"/>
+</svg>
