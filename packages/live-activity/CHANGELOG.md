@@ -1,5 +1,16 @@
 # @mobile-surfaces/live-activity
 
+## 1.3.0
+
+### Minor Changes
+
+- b717416: Add APNs setup wizard, surface picker, and observability foundations
+
+### Patch Changes
+
+- Updated dependencies [b717416]
+  - @mobile-surfaces/surface-contracts@1.3.0
+
 ## 1.2.0
 
 ### Minor Changes
