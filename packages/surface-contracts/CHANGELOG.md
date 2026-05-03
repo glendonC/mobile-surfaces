@@ -1,5 +1,11 @@
 # @mobile-surfaces/surface-contracts
 
+## 1.3.0
+
+### Minor Changes
+
+- b717416: Add APNs setup wizard, surface picker, and observability foundations
+
 ## 1.2.0
 
 ### Minor Changes
