@@ -5,22 +5,45 @@
 // Consumers build the report object, then call emitDiagnosticReport(report,
 // { json }). The helper validates against the Zod schema, prints the
 // appropriate output, and exits with the right code on failures.
-import {
-  diagnosticReport,
-  rollupDiagnosticStatus,
-} from "../../packages/surface-contracts/src/diagnostics.ts";
+//
+// Schema validation is best-effort: in fresh-scaffold contexts (the
+// create-mobile-surfaces strip step runs generate-surface-fixtures.mjs
+// before `pnpm install`), zod isn't yet on disk, so importing
+// packages/surface-contracts throws ERR_MODULE_NOT_FOUND. We swallow that
+// at module load and skip the runtime validation — the public API stays
+// synchronous so callers don't need to thread `await` through their flows.
+
+let diagnosticReportSchema = null;
+try {
+  ({ diagnosticReport: diagnosticReportSchema } = await import(
+    "../../packages/surface-contracts/src/diagnostics.ts"
+  ));
+} catch {
+  // Surface-contracts not resolvable (likely a fresh scaffold pre-install).
+  // Validation is best-effort; the human/JSON emit still works.
+}
+
+function rollup(statuses) {
+  if (statuses.includes("fail")) return "fail";
+  if (statuses.includes("warn")) return "warn";
+  return "ok";
+}
 
 /**
  * Emit a DiagnosticReport in either JSON or human form. Validates against the
- * Zod schema before output so a malformed report can never leak. Calls
- * process.exit(1) when the rolled-up status is "fail" — never returns in that
- * case. Otherwise returns void.
+ * Zod schema before output when the schema is available so a malformed
+ * report can't leak; in scaffold contexts where the schema can't be
+ * imported, the emit proceeds without validation. Calls process.exit(1)
+ * when the rolled-up status is "fail" — never returns in that case.
+ * Otherwise returns void.
  *
  * @param {object} report  Object matching DiagnosticReport (pre-validation).
  * @param {{ json: boolean }} options
  */
 export function emitDiagnosticReport(report, options) {
-  const validated = diagnosticReport.parse(report);
+  const validated = diagnosticReportSchema
+    ? diagnosticReportSchema.parse(report)
+    : report;
   if (options.json) {
     process.stdout.write(JSON.stringify(validated) + "\n");
   } else {
@@ -41,7 +64,7 @@ export function buildReport(tool, checks) {
     schemaVersion: "1",
     tool,
     timestamp: new Date().toISOString(),
-    status: rollupDiagnosticStatus(checks.map((c) => c.status)),
+    status: rollup(checks.map((c) => c.status)),
     checks,
   };
 }

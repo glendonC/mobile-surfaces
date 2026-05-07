@@ -16,6 +16,10 @@
 //   --app-package-name foo-app     (defaults: ${slug}-app)
 //   --force                        (run on a dirty git tree)
 //   --dry-run                      (print would-be changes without writing)
+//   --skip-verify                  (skip the post-rename surface:check pass —
+//                                  used by the create-mobile-surfaces
+//                                  scaffolder, which runs rename before
+//                                  pnpm install)
 
 import { execSync } from "node:child_process";
 import fs from "node:fs";
@@ -197,6 +201,7 @@ function main() {
       "app-package-name": { type: "string" },
       force: { type: "boolean", default: false },
       "dry-run": { type: "boolean", default: false },
+      "skip-verify": { type: "boolean", default: false },
       help: { type: "boolean", default: false },
     },
     strict: true,
@@ -300,14 +305,22 @@ function main() {
   }
 
   // Regenerate fixtures.ts so the deepLink scheme rewrite is reflected in
-  // the committed TS surface.
+  // the committed TS surface. Pure JSON-to-TS codegen — no zod, no workspace
+  // package imports — so it runs cleanly even before `pnpm install`.
   console.log("regenerating fixtures.ts ...");
   execSync("node scripts/generate-surface-fixtures.mjs", { stdio: "inherit" });
 
-  console.log("verifying surface:check ...");
-  execSync("node scripts/validate-surface-fixtures.mjs", { stdio: "inherit" });
-  execSync("node scripts/generate-surface-fixtures.mjs --check", { stdio: "inherit" });
-  execSync("node scripts/check-activity-attributes.mjs", { stdio: "inherit" });
+  // The verify pass imports from packages/surface-contracts, which depends on
+  // zod. In a freshly-scaffolded project (where rename runs before install),
+  // those imports fail. Callers who pass --skip-verify are responsible for
+  // running `pnpm surface:check` themselves once dependencies are installed —
+  // typically the user's first `pnpm install` and `pnpm surface:check`.
+  if (!values["skip-verify"]) {
+    console.log("verifying surface:check ...");
+    execSync("node scripts/validate-surface-fixtures.mjs", { stdio: "inherit" });
+    execSync("node scripts/generate-surface-fixtures.mjs --check", { stdio: "inherit" });
+    execSync("node scripts/check-activity-attributes.mjs", { stdio: "inherit" });
+  }
 
   // Stamp the manifest so the next run knows what identity is on disk.
   const manifest = {
@@ -390,7 +403,11 @@ Optional:
   --swift-prefix Foo            Defaults to --widget-target without "Widget".
   --app-package-name foo-app    Defaults to \${slug}-app.
   --force                       Run on a dirty git tree.
-  --dry-run                     Print every substitution and rename without writing.`);
+  --dry-run                     Print every substitution and rename without writing.
+  --skip-verify                 Skip the post-rename surface:check pass. Pass this
+                                from a scaffolder where rename runs before
+                                \`pnpm install\` (so workspace-package imports
+                                aren't yet resolvable).`);
 }
 
 // Only run the CLI when this file is the entry point. Test files import the
