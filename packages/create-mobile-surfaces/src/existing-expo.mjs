@@ -11,6 +11,7 @@
 import path from "node:path";
 import pc from "picocolors";
 import { cancelled, prompts as copy } from "./copy.mjs";
+import { EXIT_CODES } from "./exit-codes.mjs";
 import { askConfirm, askSelect, askText, log, rail } from "./ui.mjs";
 import { validateTeamId } from "./validators.mjs";
 
@@ -265,7 +266,7 @@ export async function runExistingExpoPrompts({ evidence, manifest, overrides = {
 
     if (!proceed) {
       log.message(pc.dim(cancelled));
-      process.exit(0);
+      process.exit(EXIT_CODES.SUCCESS);
     }
   }
 

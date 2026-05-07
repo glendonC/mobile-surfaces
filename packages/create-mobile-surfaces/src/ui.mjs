@@ -10,6 +10,7 @@
 // active prompt actually reads as "your turn" rather than as inconsistency.
 
 import { cursorHide } from "@inquirer/ansi";
+import { EXIT_CODES } from "./exit-codes.mjs";
 import {
   createPrompt,
   isEnterKey,
@@ -135,7 +136,7 @@ async function guard(fn) {
       err?.code === "ERR_USE_AFTER_CLOSE"
     ) {
       process.stdout.write("\n" + pc.dim("Cancelled. No files written.") + "\n");
-      process.exit(0);
+      process.exit(EXIT_CODES.SUCCESS);
     }
     throw err;
   }
