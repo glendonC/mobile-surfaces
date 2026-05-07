@@ -14,6 +14,38 @@ bun  create mobile-surfaces
 
 The installer detects whether the current directory is empty (greenfield) or an existing Expo app (add-to-existing) and runs the matching flow.
 
+### Scripted (non-interactive)
+
+Pass `--yes` plus the required fields to skip every prompt. Useful for CI, AI agents, and `expect`-free automation:
+
+```bash
+npm create mobile-surfaces@latest --yes \
+  --name my-app --bundle-id com.acme.myapp \
+  --no-install
+```
+
+| Flag | Description |
+|------|-------------|
+| `--name <slug>` | Project name. Required with `--yes`. |
+| `--scheme <scheme>` | URL scheme. Defaults to slugified project name. |
+| `--bundle-id <id>` | iOS bundle id. **Required with `--yes`** because the default `com.example.<slug>` is rejected by Apple on upload. |
+| `--team-id <id>` | Apple Team ID. Optional. |
+| `--home-widget` / `--no-home-widget` | Include the home-screen widget surface (default: yes). |
+| `--control-widget` / `--no-control-widget` | Include the iOS 18 control widget (default: yes). |
+| `--install` / `--no-install` | Run `pnpm install` + `expo prebuild` after scaffold (default: yes). |
+| `--yes`, `-y` | Non-interactive: accept defaults, skip the recap. |
+| `--help`, `-h` | Show help. |
+
+Run `npm create mobile-surfaces@latest --help` for the canonical reference.
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success. |
+| `1` | Error — bad flag value, missing `--name` with `--yes`, target dir not empty, install failure. |
+| `2` | Cannot scaffold here — current dir is non-Expo and isn't empty. |
+
 ## What it does
 
 **Greenfield**
