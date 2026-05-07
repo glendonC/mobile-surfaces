@@ -5,6 +5,7 @@ import { errors, welcome } from "../src/copy.mjs";
 import { HELP_TEXT, parseCliFlags, resolveYesConfig, validateOverrides } from "../src/flags.mjs";
 import * as logger from "../src/logger.mjs";
 import { runExistingExpoPrompts } from "../src/existing-expo.mjs";
+import { runMonorepoPrompts } from "../src/existing-monorepo.mjs";
 import { detectMode, MODE, renderRefuse } from "../src/mode.mjs";
 import {
   renderFailures,
@@ -17,10 +18,15 @@ import {
   COCOAPODS_MISSING_TAG,
   PNPM_MISSING_TAG,
   runExistingTasks,
+  runMonorepoTasks,
   runTasks,
 } from "../src/run-tasks.mjs";
 import { targetDirState } from "../src/scaffold.mjs";
-import { renderExistingSuccess, renderSuccess } from "../src/success.mjs";
+import {
+  renderExistingSuccess,
+  renderMonorepoSuccess,
+  renderSuccess,
+} from "../src/success.mjs";
 import { loadTemplateManifest } from "../src/template-manifest.mjs";
 import { log, rail } from "../src/ui.mjs";
 
@@ -83,6 +89,50 @@ const mode = detectMode({ cwd: process.cwd(), targetName: initialName });
 if (mode.kind === MODE.EXISTING_NON_EXPO) {
   renderRefuse(mode);
   process.exit(2);
+}
+
+if (mode.kind === MODE.EXISTING_MONOREPO_NO_EXPO) {
+  const result = await runMonorepoPrompts({
+    evidence: mode.evidence,
+    manifest,
+    overrides,
+    yes,
+  });
+  const packageManager = result.evidence.packageManager ?? "pnpm";
+
+  logger.open();
+
+  rail.step(5, 5, "Apply");
+  let summary;
+  try {
+    summary = await runMonorepoTasks({
+      evidence: result.evidence,
+      plan: result.plan,
+      manifest,
+      config: result.config,
+      packageManager,
+    });
+  } catch (err) {
+    if (interrupted) {
+      log.warn(errors.applyInterrupted);
+    } else if (err && err.tag === PNPM_MISSING_TAG) {
+      log.error(err.message);
+    } else if (err && err.tag === COCOAPODS_MISSING_TAG) {
+      log.error(err.message);
+    } else {
+      log.error(errors.applyFailed);
+    }
+    log.message(pc.dim(`Full log: ${logger.getPath()}`));
+    process.exit(1);
+  }
+
+  renderMonorepoSuccess({
+    summary,
+    evidence: result.evidence,
+    config: result.config,
+    packageManager,
+  });
+  process.exit(0);
 }
 
 if (mode.kind === MODE.EXISTING_EXPO) {

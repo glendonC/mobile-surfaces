@@ -184,3 +184,13 @@ export async function prebuildIos({ target, packageManager = "pnpm" }) {
   const [cmd, args] = commandsFor(packageManager).runScript("mobile:prebuild:ios");
   await runStreamed(cmd, args, { cwd: target });
 }
+
+// Prebuild for the existing-monorepo-no-Expo flow: the host has no
+// mobile:prebuild:ios script, so invoke expo directly inside apps/mobile/.
+// runStreamed inherits PATH so npx finds whichever expo the install just put
+// in node_modules.
+export async function prebuildIosInAppsMobile({ appsMobileRoot }) {
+  await runStreamed("npx", ["expo", "prebuild", "--platform", "ios", "--clean"], {
+    cwd: appsMobileRoot,
+  });
+}

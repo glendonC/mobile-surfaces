@@ -5,6 +5,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { applyToExisting } from "./apply-existing.mjs";
+import { applyMonorepo } from "./apply-monorepo.mjs";
 import * as scaffold from "./scaffold.mjs";
 import { applyStripGreenfield } from "./strip.mjs";
 import { task } from "./ui.mjs";
@@ -153,6 +154,45 @@ export async function runExistingTasks({ evidence, plan, packageManager, install
       `Skipped expo prebuild because your app config wasn't patched (manual). Apply the snippet above, then run: npx expo prebuild --platform ios`,
     );
   }
+
+  return summary;
+}
+
+// Existing-monorepo-no-Expo variant. Scaffold apps/mobile/ inside the host
+// workspace, merge workspace globs, optionally run install + prebuild. The
+// install always runs from the host root because that's where the user's
+// lockfile lives.
+export async function runMonorepoTasks({ evidence, plan, manifest, config, packageManager }) {
+  let summary;
+  await task(
+    `Scaffolding apps/mobile/ in your workspace`,
+    async () => {
+      summary = await applyMonorepo({ evidence, config, manifest, packageManager });
+    },
+  );
+
+  if (!config.installNow) return summary;
+
+  if (packageManager === "pnpm") {
+    await ensurePnpmAvailable();
+  }
+  await task(
+    `Installing workspace dependencies (${packageManager} install) — usually 30–90s`,
+    async () => {
+      await scaffold.runInstall({ target: evidence.cwd, packageManager });
+      summary.installed = true;
+    },
+  );
+  await ensureCocoapodsAvailable();
+  await task(
+    "Preparing iOS (expo prebuild + CocoaPods) — usually 60–120s on a fresh checkout",
+    async () => {
+      await scaffold.prebuildIosInAppsMobile({
+        appsMobileRoot: summary.appsMobileRoot,
+      });
+      summary.prebuilt = true;
+    },
+  );
 
   return summary;
 }

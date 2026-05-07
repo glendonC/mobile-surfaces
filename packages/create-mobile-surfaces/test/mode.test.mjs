@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { detectMode, MODE } from "../src/mode.mjs";
+import { detectMode, MODE, parsePnpmWorkspaceGlobs } from "../src/mode.mjs";
 
 let tmp;
 let savedUserAgent;
@@ -74,6 +74,86 @@ describe("detectMode — non-Expo refusals", () => {
     assert.equal(mode.kind, MODE.EXISTING_NON_EXPO);
     assert.equal(mode.evidence.reason, "no-expo-dep");
     assert.equal(mode.evidence.packageName, "rn-app");
+  });
+
+  it("flags a workspace whose apps/mobile/ already exists", () => {
+    // A pnpm workspace with apps/mobile/ already on disk means the user has
+    // either already scaffolded Mobile Surfaces or is sitting at the wrong
+    // root. Either way, the right next step is `cd apps/mobile && run again`.
+    write("package.json", JSON.stringify({ name: "host" }));
+    write("pnpm-workspace.yaml", "packages:\n  - 'apps/*'\n  - 'packages/*'\n");
+    fs.mkdirSync(path.join(tmp, "apps", "mobile"), { recursive: true });
+    const mode = detectMode({ cwd: tmp });
+    assert.equal(mode.kind, MODE.EXISTING_NON_EXPO);
+    assert.equal(mode.evidence.reason, "apps-mobile-exists");
+  });
+});
+
+describe("detectMode — existing monorepo, no Expo", () => {
+  it("detects pnpm workspace + no expo + no apps/mobile/", () => {
+    write("package.json", JSON.stringify({ name: "host", devDependencies: { typescript: "^5" } }));
+    write("pnpm-workspace.yaml", "packages:\n  - 'apps/*'\n  - 'packages/*'\n");
+    write("apps/api/package.json", JSON.stringify({ name: "api" }));
+    const mode = detectMode({ cwd: tmp });
+    assert.equal(mode.kind, MODE.EXISTING_MONOREPO_NO_EXPO);
+    assert.equal(mode.evidence.workspaceKind, "pnpm-workspace");
+    assert.deepEqual(mode.evidence.workspaceGlobs, ["apps/*", "packages/*"]);
+    assert.equal(mode.evidence.packageName, "host");
+  });
+
+  it("detects npm/yarn workspace via package.json `workspaces` array", () => {
+    write(
+      "package.json",
+      JSON.stringify({ name: "host", workspaces: ["apps/*", "lib/*"] }),
+    );
+    const mode = detectMode({ cwd: tmp });
+    assert.equal(mode.kind, MODE.EXISTING_MONOREPO_NO_EXPO);
+    assert.equal(mode.evidence.workspaceKind, "package-json");
+    assert.deepEqual(mode.evidence.workspaceGlobs, ["apps/*", "lib/*"]);
+  });
+
+  it("detects yarn workspaces.packages object form", () => {
+    write(
+      "package.json",
+      JSON.stringify({
+        name: "host",
+        workspaces: { packages: ["packages/*"], nohoist: [] },
+      }),
+    );
+    const mode = detectMode({ cwd: tmp });
+    assert.equal(mode.kind, MODE.EXISTING_MONOREPO_NO_EXPO);
+    assert.deepEqual(mode.evidence.workspaceGlobs, ["packages/*"]);
+  });
+
+  it("does not match a workspace that has Expo (that's existing-expo)", () => {
+    write(
+      "package.json",
+      JSON.stringify({ name: "host", dependencies: { expo: "~54.0.0" } }),
+    );
+    write("pnpm-workspace.yaml", "packages:\n  - 'apps/*'\n");
+    const mode = detectMode({ cwd: tmp });
+    assert.equal(mode.kind, MODE.EXISTING_EXPO);
+  });
+});
+
+describe("parsePnpmWorkspaceGlobs", () => {
+  it("reads a list of single-quoted entries", () => {
+    const yaml = "packages:\n  - 'apps/*'\n  - 'packages/*'\n";
+    assert.deepEqual(parsePnpmWorkspaceGlobs(yaml), ["apps/*", "packages/*"]);
+  });
+
+  it("reads double-quoted and unquoted entries", () => {
+    const yaml = "packages:\n  - \"apps/*\"\n  - packages/*\n";
+    assert.deepEqual(parsePnpmWorkspaceGlobs(yaml), ["apps/*", "packages/*"]);
+  });
+
+  it("returns empty when no packages key", () => {
+    assert.deepEqual(parsePnpmWorkspaceGlobs("# nothing\n"), []);
+  });
+
+  it("ignores comments", () => {
+    const yaml = "# header\npackages:\n  - 'apps/*' # comment here\n";
+    assert.deepEqual(parsePnpmWorkspaceGlobs(yaml), ["apps/*"]);
   });
 });
 

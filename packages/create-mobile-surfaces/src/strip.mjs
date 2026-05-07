@@ -173,7 +173,7 @@ function walkFiles(dir, rootDir, out = []) {
 // Walk a directory subtree applying the marker pass. Skips files without a
 // SURFACE-BEGIN marker entirely (cheap substring check before the parse).
 // Returns the list of relative paths actually rewritten.
-function stripMarkersInTree({ rootDir, surfaces, scopeDir = rootDir }) {
+export function stripMarkersInTree({ rootDir, surfaces, scopeDir = rootDir }) {
   const rewritten = [];
   for (const file of walkFiles(scopeDir, scopeDir)) {
     const before = fs.readFileSync(file, "utf8");

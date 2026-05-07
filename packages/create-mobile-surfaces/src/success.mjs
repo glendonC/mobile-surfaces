@@ -6,6 +6,7 @@ import pc from "picocolors";
 import {
   existingSuccessSections,
   existingSuccessTitle,
+  monorepo as monorepoCopy,
   successSections,
   successTitle,
 } from "./copy.mjs";
@@ -91,6 +92,59 @@ export function renderExistingSuccess({ summary, evidence, packageManager, plan 
   const next = existingSuccessSections({ projectName, packageManager });
   blocks.push(section("Try it now", next.tryItNow));
   blocks.push(section("Learn more", next.learnMore));
+
+  rail.block(blocks.join("\n"));
+  rail.close(pc.dim("Happy shipping."));
+}
+
+// Existing-monorepo-no-Expo success screen. Reports what landed in the
+// host workspace and points at the dev commands that work from inside
+// apps/mobile/.
+export function renderMonorepoSuccess({ summary, evidence, config, packageManager }) {
+  const blocks = ["", pc.green("✓") + "  " + pc.bold(monorepoCopy.successTitle)];
+
+  const did = [];
+  if (summary.appsMobileCreated) did.push(`Created apps/mobile/ in your workspace`);
+  if (summary.workspaceMerged?.changed) {
+    const target =
+      summary.workspaceMerged.kind === "pnpm-workspace"
+        ? "pnpm-workspace.yaml"
+        : "package.json";
+    did.push(
+      `Added ${summary.workspaceMerged.addedGlobs.join(", ")} to ${target}`,
+    );
+  }
+  if (summary.appJsonPatched) did.push(`Wrote apps/mobile/app.json`);
+  if (summary.identityFilesTouched > 0) {
+    did.push(`Renamed identity in ${summary.identityFilesTouched} file(s)`);
+  }
+  if (summary.installed) did.push(`Ran ${packageManager} install`);
+  if (summary.prebuilt) did.push(`Ran expo prebuild`);
+  if (did.length > 0) blocks.push(section("What landed", did));
+
+  if (summary.followups.length > 0) {
+    blocks.push(section("Follow-ups", summary.followups));
+  }
+
+  blocks.push(
+    section("Try it now", [
+      `cd apps/mobile`,
+      `npx expo run:ios          build & launch on the simulator`,
+      `tap Start in the harness, then ⌘L in the simulator to see your Live Activity on the Lock Screen`,
+    ]),
+  );
+  blocks.push(
+    section("When you're ready", [
+      `npx expo run:ios --device         run it on your iPhone`,
+    ]),
+  );
+  blocks.push(
+    section("Learn more", [
+      "https://github.com/glendonC/mobile-surfaces#readme",
+      "docs/architecture.md (in your scaffolded app)",
+      "docs/troubleshooting.md (in your scaffolded app)",
+    ]),
+  );
 
   rail.block(blocks.join("\n"));
   rail.close(pc.dim("Happy shipping."));
