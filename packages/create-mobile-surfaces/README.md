@@ -40,11 +40,17 @@ Run `npm create mobile-surfaces@latest --help` for the canonical reference.
 
 ### Exit codes
 
+CI consumers can branch on these. The categories are coarse so adding a new failure path doesn't change the contract.
+
 | Code | Meaning |
 |------|---------|
-| `0` | Success. |
-| `1` | Error — bad flag value, missing `--name` with `--yes`, target dir not empty, install failure. |
-| `2` | Cannot scaffold here — current dir is non-Expo and isn't empty. |
+| `0` | Success — also returned for `--help`, `EPIPE`, and prompts the user explicitly cancelled. |
+| `1` | User-error — bad flag value, target dir not empty, `--yes` missing a required value, or the cwd is one we can't scaffold into (non-Expo with files, or `apps/mobile/` already exists). |
+| `2` | Environment-error — preflight failed, `pnpm`/CocoaPods missing on `PATH`, install failed, prebuild failed, or the apply phase threw. The fix is in your environment. |
+| `3` | Template-error — the bundled template tarball or manifest is missing or unreadable. The published CLI is broken; please file an issue. |
+| `130` | Interrupted — Ctrl+C / `SIGINT` during a task. POSIX convention (128 + SIGINT). |
+
+Breaking change in v1.4: refuse paths (cannot-scaffold-here) used to exit `2`. They now exit `1` so the contract reads `1=user, 2=env, 3=template`. Any CI that checked for `2` to detect "wrong directory" should update.
 
 ## What it does
 

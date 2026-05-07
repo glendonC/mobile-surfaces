@@ -7,6 +7,7 @@
 import path from "node:path";
 import pc from "picocolors";
 import { cancelled, monorepo as monorepoCopy, prompts as copy } from "./copy.mjs";
+import { EXIT_CODES } from "./exit-codes.mjs";
 import { askConfirm, askSelect, askText, log, rail, section } from "./ui.mjs";
 import {
   toBundleId,
@@ -212,7 +213,7 @@ export async function runMonorepoPrompts({ evidence, manifest, overrides = {}, y
     });
     if (!proceed) {
       log.message(pc.dim(cancelled));
-      process.exit(0);
+      process.exit(EXIT_CODES.SUCCESS);
     }
   }
 

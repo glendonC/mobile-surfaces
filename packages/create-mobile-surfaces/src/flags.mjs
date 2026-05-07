@@ -175,7 +175,12 @@ Options:
   --help, -h                Show this help.
 
 Exit codes:
-  0  success
-  1  error (bad flags, target dir not empty, install failure)
-  2  cannot scaffold here (current dir is non-Expo and isn't empty)
+  0    success (including --help, EPIPE, and user-cancelled prompts)
+  1    user-error (bad flags, target dir not empty, refuse paths, --yes
+       missing required values)
+  2    environment-error (preflight failed, pnpm/CocoaPods missing,
+       install or prebuild failed)
+  3    template-error (bundled template tarball or manifest is missing
+       or unreadable)
+  130  interrupted (Ctrl+C / SIGINT)
 `;

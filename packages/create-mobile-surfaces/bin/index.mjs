@@ -2,6 +2,7 @@
 import pc from "picocolors";
 import { renderBanner } from "../src/banner.mjs";
 import { errors, welcome } from "../src/copy.mjs";
+import { EXIT_CODES } from "../src/exit-codes.mjs";
 import { HELP_TEXT, parseCliFlags, resolveYesConfig, validateOverrides } from "../src/flags.mjs";
 import * as logger from "../src/logger.mjs";
 import { runExistingExpoPrompts } from "../src/existing-expo.mjs";
@@ -32,7 +33,7 @@ import { log, rail } from "../src/ui.mjs";
 
 // Don't crash when output is piped to a reader that closes early.
 process.stdout.on("error", (err) => {
-  if (err.code === "EPIPE") process.exit(0);
+  if (err.code === "EPIPE") process.exit(EXIT_CODES.SUCCESS);
 });
 
 // Track Ctrl+C separately from other failures so the post-tasks renderer can
@@ -47,12 +48,12 @@ try {
   parsed = parseCliFlags(process.argv.slice(2));
 } catch (err) {
   process.stderr.write(`${err.message}\n\n${HELP_TEXT}`);
-  process.exit(1);
+  process.exit(EXIT_CODES.USER_ERROR);
 }
 
 if (parsed.help) {
   process.stdout.write(HELP_TEXT);
-  process.exit(0);
+  process.exit(EXIT_CODES.SUCCESS);
 }
 
 const { initialName: positionalName, overrides, yes } = parsed;
@@ -63,10 +64,20 @@ const overrideErrors = validateOverrides(overrides);
 if (overrideErrors.length > 0) {
   process.stderr.write("Invalid flag values:\n");
   for (const err of overrideErrors) process.stderr.write(`  ${err}\n`);
-  process.exit(1);
+  process.exit(EXIT_CODES.USER_ERROR);
 }
 
-const manifest = loadTemplateManifest();
+// loadTemplateManifest throws if the bundled tarball/manifest is missing or
+// corrupt — exclusively a packaging issue with the published CLI, not a
+// user or environment problem. TEMPLATE_ERROR makes that visible so CI can
+// distinguish "you misconfigured something" from "the tool itself is broken."
+let manifest;
+try {
+  manifest = loadTemplateManifest();
+} catch (err) {
+  process.stderr.write(`Template error: ${err.message}\n`);
+  process.exit(EXIT_CODES.TEMPLATE_ERROR);
+}
 
 renderBanner();
 rail.line(pc.bold(welcome));
@@ -75,7 +86,7 @@ rail.blank();
 const preflight = await runPreflight({ manifest });
 if (preflight.failures.length > 0) {
   renderFailures(preflight.failures);
-  process.exit(1);
+  process.exit(EXIT_CODES.ENV_ERROR);
 }
 rail.step(1, 5, "Toolchain");
 renderPassed(preflight.passed);
@@ -88,7 +99,10 @@ const mode = detectMode({ cwd: process.cwd(), targetName: initialName });
 
 if (mode.kind === MODE.EXISTING_NON_EXPO) {
   renderRefuse(mode);
-  process.exit(2);
+  // Refuse paths are user errors: the user pointed us at a directory we
+  // can't help with. Was historically exit 2; remapped to USER_ERROR so the
+  // 0/1/2/3/130 contract reads cleanly.
+  process.exit(EXIT_CODES.USER_ERROR);
 }
 
 if (mode.kind === MODE.EXISTING_MONOREPO_NO_EXPO) {
@@ -123,7 +137,7 @@ if (mode.kind === MODE.EXISTING_MONOREPO_NO_EXPO) {
       log.error(errors.applyFailed);
     }
     log.message(pc.dim(`Full log: ${logger.getPath()}`));
-    process.exit(1);
+    process.exit(interrupted ? EXIT_CODES.INTERRUPTED : EXIT_CODES.ENV_ERROR);
   }
 
   renderMonorepoSuccess({
@@ -132,7 +146,7 @@ if (mode.kind === MODE.EXISTING_MONOREPO_NO_EXPO) {
     config: result.config,
     packageManager,
   });
-  process.exit(0);
+  process.exit(EXIT_CODES.SUCCESS);
 }
 
 if (mode.kind === MODE.EXISTING_EXPO) {
@@ -164,7 +178,7 @@ if (mode.kind === MODE.EXISTING_EXPO) {
       log.error(errors.applyFailed);
     }
     log.message(pc.dim(`Full log: ${logger.getPath()}`));
-    process.exit(1);
+    process.exit(interrupted ? EXIT_CODES.INTERRUPTED : EXIT_CODES.ENV_ERROR);
   }
 
   renderExistingSuccess({
@@ -173,7 +187,7 @@ if (mode.kind === MODE.EXISTING_EXPO) {
     packageManager,
     plan: result.plan,
   });
-  process.exit(0);
+  process.exit(EXIT_CODES.SUCCESS);
 }
 
 // Greenfield path.
@@ -189,7 +203,7 @@ if (yes) {
   if (resolved.errors.length > 0) {
     process.stderr.write("--yes: cannot scaffold without these:\n");
     for (const err of resolved.errors) process.stderr.write(`  ${err}\n`);
-    process.exit(1);
+    process.exit(EXIT_CODES.USER_ERROR);
   }
   config = resolved.config;
 } else {
@@ -199,7 +213,7 @@ if (yes) {
 const dirState = targetDirState(config.projectName);
 if (!dirState.ok) {
   log.error(errors.dirNotEmpty(config.projectName));
-  process.exit(1);
+  process.exit(EXIT_CODES.USER_ERROR);
 }
 
 logger.open();
@@ -218,7 +232,7 @@ try {
     log.error(errors.installFailed(config.projectName));
   }
   log.message(pc.dim(`Full log: ${logger.getPath()}`));
-  process.exit(1);
+  process.exit(interrupted ? EXIT_CODES.INTERRUPTED : EXIT_CODES.ENV_ERROR);
 }
 
 renderSuccess(config);
