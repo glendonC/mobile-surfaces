@@ -79,6 +79,112 @@ export function isIdempotent(substitutions) {
   return substitutions.every(([from, to]) => from === to);
 }
 
+// File-discovery configuration for the rename pass. The original implementation
+// kept an enumerated allowlist of paths and drifted every time a new file was
+// added; we now walk the tree and accept anything whose extension or basename
+// is plausibly a text source.
+export const TEXT_EXTENSIONS = new Set([
+  ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
+  ".json", ".md", ".mdx",
+  ".swift", ".m", ".h", ".mm",
+  ".sh", ".bash",
+  ".podspec", ".entitlements", ".plist",
+  ".yaml", ".yml",
+  ".astro",
+  ".txt", ".svg",
+]);
+
+export const TEXT_BASENAMES = new Set([
+  ".env", ".env.example", ".env.local", ".env.development", ".env.production",
+  "Podfile", "Gemfile",
+  ".gitignore", ".gitattributes",
+]);
+
+export const SKIP_DIRS = new Set([
+  "node_modules", ".git", "dist", "build",
+  ".expo", ".turbo", ".next", ".astro", "coverage",
+  "Pods", ".cache",
+]);
+
+// Repo-root-relative paths to skip entirely. Treated as either an exact match
+// (file paths) or a directory prefix.
+export const SKIP_PATH_PREFIXES = [
+  // CNG regenerates this on every prebuild; rewriting it would be wiped.
+  "apps/mobile/ios",
+  // The rename tool is internal scaffolding. Rewriting its DEFAULT_IDENTITY and
+  // IDENTITY_MANIFEST_FILE constants would orphan the manifest on subsequent
+  // runs (the on-disk manifest filename would no longer match the constant).
+  "scripts/rename-starter.mjs",
+  "scripts/rename-starter.test.mjs",
+];
+
+// Generated/lock files that pnpm or another tool will regenerate post-rename.
+export const SKIP_FILES = new Set([
+  "pnpm-lock.yaml",
+  "package-lock.json",
+  "yarn.lock",
+  IDENTITY_MANIFEST_FILE,
+]);
+
+// Walk rootDir recursively and return repo-relative paths for every file that
+// passes the extension/basename allowlist and isn't in a skipped directory.
+export function walkTextFiles(rootDir) {
+  const out = [];
+  walk(rootDir, "");
+  return out;
+
+  function walk(absDir, relDir) {
+    const entries = fs.readdirSync(absDir, { withFileTypes: true });
+    for (const entry of entries) {
+      const childRel = relDir ? `${relDir}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        if (SKIP_DIRS.has(entry.name)) continue;
+        if (isUnderSkipPrefix(childRel)) continue;
+        walk(path.join(absDir, entry.name), childRel);
+      } else if (entry.isFile()) {
+        if (SKIP_FILES.has(entry.name)) continue;
+        if (isUnderSkipPrefix(childRel)) continue;
+        const ext = path.extname(entry.name);
+        if (TEXT_EXTENSIONS.has(ext) || TEXT_BASENAMES.has(entry.name)) {
+          out.push(childRel);
+        }
+      }
+    }
+  }
+}
+
+function isUnderSkipPrefix(rel) {
+  return SKIP_PATH_PREFIXES.some((p) => rel === p || rel.startsWith(`${p}/`));
+}
+
+// Apply substitutions to every text file under rootDir. Returns the number of
+// files actually rewritten. dryRun=true skips the write but still reports via
+// the log callback. Pure I/O — no git, no validators.
+export function applyTextRewrites(rootDir, substitutions, options = {}) {
+  const { dryRun = false, log = () => {} } = options;
+  let touched = 0;
+  for (const rel of walkTextFiles(rootDir)) {
+    const abs = path.join(rootDir, rel);
+    const original = fs.readFileSync(abs, "utf8");
+    let updated = original;
+    let count = 0;
+    for (const [from, to] of substitutions) {
+      if (from === to) continue;
+      const parts = updated.split(from);
+      if (parts.length > 1) {
+        count += parts.length - 1;
+        updated = parts.join(to);
+      }
+    }
+    if (updated !== original) {
+      if (!dryRun) fs.writeFileSync(abs, updated);
+      log(rel, count, dryRun);
+      touched += 1;
+    }
+  }
+  return touched;
+}
+
 function main() {
   const { values } = parseArgs({
     options: {
@@ -150,74 +256,16 @@ function main() {
     process.exit(0);
   }
 
-  const textTargets = [
-    ".env.example",
-    "CONTRIBUTING.md",
-    "README.md",
-    "SECURITY.md",
-    "package.json",
-    "apps/mobile/App.tsx",
-    "apps/mobile/app.json",
-    "apps/mobile/eas.json",
-    "apps/mobile/index.ts",
-    "apps/mobile/package.json",
-    "apps/mobile/src/notifications.ts",
-    "apps/mobile/src/screens/LiveActivityHarness.tsx",
-    "apps/mobile/src/fixtures/surfaceFixtures.ts",
-    "packages/live-activity/expo-module.config.json",
-    "packages/live-activity/index.ts",
-    "packages/live-activity/package.json",
-    "packages/live-activity/src/index.ts",
-    "packages/live-activity/ios/LiveActivityModule.podspec",
-    "packages/live-activity/ios/LiveActivityModule.swift",
-    `packages/live-activity/ios/${currentIdentity.swiftPrefix}ActivityAttributes.swift`,
-    `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}ActivityAttributes.swift`,
-    `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}ControlWidget.swift`,
-    `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}HomeWidget.swift`,
-    `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}LiveActivity.swift`,
-    `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}WidgetBundle.swift`,
-    `apps/mobile/targets/widget/_shared/${currentIdentity.swiftPrefix}ControlIntents.swift`,
-    `apps/mobile/targets/widget/_shared/${currentIdentity.swiftPrefix}SharedState.swift`,
-    "apps/mobile/targets/widget/expo-target.config.js",
-    "apps/mobile/targets/widget/generated.entitlements",
-    "apps/mobile/src/surfaceStorage/index.ts",
-    "docs/README.md",
-    "docs/architecture.md",
-    "docs/ios-environment.md",
-    "docs/roadmap.md",
-    "packages/design-tokens/package.json",
-    "packages/surface-contracts/package.json",
-    "scripts/README.md",
-    "scripts/mobile-ios-sim.sh",
-    "scripts/push-simulator-notification.sh",
-    "scripts/send-apns.mjs",
-    ...listJson("data/surface-fixtures").filter((f) => path.basename(f) !== "index.json"),
-  ];
-
-  let touched = 0;
-  for (const rel of textTargets) {
-    if (!fs.existsSync(rel)) continue;
-    const original = fs.readFileSync(rel, "utf8");
-    let updated = original;
-    let count = 0;
-    for (const [from, to] of substitutions) {
-      if (from === to) continue;
-      const parts = updated.split(from);
-      if (parts.length > 1) {
-        count += parts.length - 1;
-        updated = parts.join(to);
-      }
-    }
-    if (updated !== original) {
-      if (dryRun) {
+  const touched = applyTextRewrites(repoRoot, substitutions, {
+    dryRun,
+    log: (rel, count, dry) => {
+      if (dry) {
         console.log(`[dry-run] would rewrite ${rel} (${count} substitutions)`);
       } else {
-        fs.writeFileSync(rel, updated);
         console.log(`updated ${rel}`);
       }
-      touched += 1;
-    }
-  }
+    },
+  });
 
   // Rename Swift files whose basenames start with the current swift prefix.
   const renameTargets = [
@@ -299,14 +347,6 @@ function toKebab(s) {
 
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function listJson(dir) {
-  if (!fs.existsSync(dir)) return [];
-  return fs
-    .readdirSync(dir)
-    .filter((f) => f.endsWith(".json"))
-    .map((f) => path.join(dir, f));
 }
 
 function validateSwiftIdentifier(s, label) {
