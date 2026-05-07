@@ -182,22 +182,30 @@ function renderPlanRecap(plan) {
   rail.block(lines.join("\n"));
 }
 
-export async function runExistingExpoPrompts({ evidence, manifest }) {
+export async function runExistingExpoPrompts({ evidence, manifest, overrides = {}, yes = false }) {
   rail.step(2, 5, "Detection");
   renderFoundRecap(evidence);
 
   rail.step(3, 5, "Surfaces");
 
   // Same picker as greenfield. Live Activity + Dynamic Island always ship.
-  const homeWidget = await askConfirm({
-    message: copy.surfaces.homeWidget.message,
-    defaultValue: true,
-  });
+  const homeWidget = overrides.homeWidget !== undefined
+    ? overrides.homeWidget
+    : yes
+      ? true
+      : await askConfirm({
+          message: copy.surfaces.homeWidget.message,
+          defaultValue: true,
+        });
 
-  const controlWidget = await askConfirm({
-    message: copy.surfaces.controlWidget.message,
-    defaultValue: true,
-  });
+  const controlWidget = overrides.controlWidget !== undefined
+    ? overrides.controlWidget
+    : yes
+      ? true
+      : await askConfirm({
+          message: copy.surfaces.controlWidget.message,
+          defaultValue: true,
+        });
 
   const plan = planChanges({
     evidence,
@@ -216,36 +224,49 @@ export async function runExistingExpoPrompts({ evidence, manifest }) {
       ? evidence.config.parsed.ios.appleTeamId
       : null;
 
-  let teamId = knownTeamId;
-  if (!knownTeamId) {
-    teamId = await askText({
+  let teamId;
+  if (overrides.teamId !== undefined) {
+    teamId = overrides.teamId || null;
+  } else if (knownTeamId) {
+    teamId = knownTeamId;
+  } else if (yes) {
+    teamId = null;
+  } else {
+    const answer = await askText({
       message: copy.teamId.message,
       defaultValue: "",
       validate: validateTeamId,
     });
-    teamId = teamId || null;
+    teamId = answer || null;
   }
 
-  const installNow = await askSelect({
-    message: copy.installExisting.message,
-    defaultValue: true,
-    options: [
-      { value: true, label: copy.installExisting.yes, hint: copy.installExisting.yesHint },
-      { value: false, label: copy.installExisting.no },
-    ],
-  });
+  const installNow = overrides.installNow !== undefined
+    ? overrides.installNow
+    : yes
+      ? true
+      : await askSelect({
+          message: copy.installExisting.message,
+          defaultValue: true,
+          options: [
+            { value: true, label: copy.installExisting.yes, hint: copy.installExisting.yesHint },
+            { value: false, label: copy.installExisting.no },
+          ],
+        });
 
-  // Plan recap, then a single confirm before any change is applied.
+  // Plan recap, then a single confirm before any change is applied. --yes
+  // skips both the recap header confirmation and the "are you sure" prompt.
   renderPlanRecap(plan);
 
-  const proceed = await askConfirm({
-    message: "Apply these changes?",
-    defaultValue: true,
-  });
+  if (!yes) {
+    const proceed = await askConfirm({
+      message: "Apply these changes?",
+      defaultValue: true,
+    });
 
-  if (!proceed) {
-    log.message(pc.dim(cancelled));
-    process.exit(0);
+    if (!proceed) {
+      log.message(pc.dim(cancelled));
+      process.exit(0);
+    }
   }
 
   return { mode: "existing-expo", evidence, teamId, installNow, plan };

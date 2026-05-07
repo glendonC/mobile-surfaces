@@ -1,9 +1,8 @@
 #!/usr/bin/env node
-import { parseArgs } from "node:util";
-import path from "node:path";
 import pc from "picocolors";
 import { renderBanner } from "../src/banner.mjs";
 import { errors, welcome } from "../src/copy.mjs";
+import { HELP_TEXT, parseCliFlags, resolveYesConfig, validateOverrides } from "../src/flags.mjs";
 import * as logger from "../src/logger.mjs";
 import { runExistingExpoPrompts } from "../src/existing-expo.mjs";
 import { detectMode, MODE, renderRefuse } from "../src/mode.mjs";
@@ -37,10 +36,29 @@ process.on("SIGINT", () => {
   interrupted = true;
 });
 
-const { positionals } = parseArgs({ allowPositionals: true, options: {} });
-const initialName = positionals[0]
-  ? path.basename(positionals[0]).toLowerCase().replace(/[^a-z0-9-]/g, "-")
-  : undefined;
+let parsed;
+try {
+  parsed = parseCliFlags(process.argv.slice(2));
+} catch (err) {
+  process.stderr.write(`${err.message}\n\n${HELP_TEXT}`);
+  process.exit(1);
+}
+
+if (parsed.help) {
+  process.stdout.write(HELP_TEXT);
+  process.exit(0);
+}
+
+const { initialName: positionalName, overrides, yes } = parsed;
+// --name takes precedence over the positional arg as the project name seed.
+const initialName = overrides.projectName ?? positionalName;
+
+const overrideErrors = validateOverrides(overrides);
+if (overrideErrors.length > 0) {
+  process.stderr.write("Invalid flag values:\n");
+  for (const err of overrideErrors) process.stderr.write(`  ${err}\n`);
+  process.exit(1);
+}
 
 const manifest = loadTemplateManifest();
 
@@ -68,7 +86,12 @@ if (mode.kind === MODE.EXISTING_NON_EXPO) {
 }
 
 if (mode.kind === MODE.EXISTING_EXPO) {
-  const result = await runExistingExpoPrompts({ evidence: mode.evidence, manifest });
+  const result = await runExistingExpoPrompts({
+    evidence: mode.evidence,
+    manifest,
+    overrides,
+    yes,
+  });
   const packageManager = result.evidence.packageManager ?? "pnpm";
 
   logger.open();
@@ -104,7 +127,24 @@ if (mode.kind === MODE.EXISTING_EXPO) {
 }
 
 // Greenfield path.
-const config = await runPrompts({ initialName });
+let config;
+if (yes) {
+  // Non-interactive: every required field must be supplied (or derivable).
+  // resolveYesConfig collects errors so we can report them all at once.
+  const yesOverrides = { ...overrides };
+  if (yesOverrides.projectName === undefined && positionalName) {
+    yesOverrides.projectName = positionalName;
+  }
+  const resolved = resolveYesConfig(yesOverrides);
+  if (resolved.errors.length > 0) {
+    process.stderr.write("--yes: cannot scaffold without these:\n");
+    for (const err of resolved.errors) process.stderr.write(`  ${err}\n`);
+    process.exit(1);
+  }
+  config = resolved.config;
+} else {
+  config = await runPrompts({ initialName, overrides, yes });
+}
 
 const dirState = targetDirState(config.projectName);
 if (!dirState.ok) {
