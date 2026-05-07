@@ -71,6 +71,39 @@ export function targetDirState(projectName) {
   return { ok: false, target };
 }
 
+// Pick a sibling staging path next to where the final project will land. We
+// stage there (rather than os.tmpdir()) so the final atomic rename is a
+// same-filesystem move — no cross-device copy if /tmp is on a different
+// volume. The basename keeps the projectName so anything that scans cwd
+// can see what's going on while scaffolding is in flight.
+//
+// Caller is responsible for cleanup; on success they rename to `target`,
+// on failure they rm -rf the staging path.
+export function makeStagingPath(target) {
+  const parent = path.dirname(target);
+  const base = path.basename(target);
+  return fs.mkdtempSync(path.join(parent, `.${base}.staging-`));
+}
+
+// Atomic-promote the staging tree to the final target. Both must live on
+// the same filesystem (which makeStagingPath guarantees by placing staging
+// alongside target). On Windows fs.renameSync would fail if target exists,
+// but the prior targetDirState check already rejects that case for us.
+export function promoteStaging({ stagingPath, target }) {
+  fs.renameSync(stagingPath, target);
+}
+
+// Best-effort cleanup. We never want a rollback failure to mask the real
+// error (the network blip, the missing pnpm, etc.) so swallow ENOENT and
+// log everything else without throwing.
+export function rollbackStaging({ stagingPath, log }) {
+  try {
+    fs.rmSync(stagingPath, { recursive: true, force: true });
+  } catch (err) {
+    if (log) log(`Failed to roll back ${stagingPath}: ${err.message}`);
+  }
+}
+
 export async function copyTemplate({ target }) {
   const source = resolveTemplateSource();
   fs.mkdirSync(target, { recursive: true });

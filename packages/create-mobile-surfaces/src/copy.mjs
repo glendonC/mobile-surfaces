@@ -124,13 +124,13 @@ export const errors = {
   dirNotEmpty: (dir) =>
     `./${dir} already exists and isn't empty.\nChoose a different name, or remove it and run again.`,
   installFailed: (dir) =>
-    `pnpm install failed.\n\nYour project is at ./${dir}. The scaffold is complete; only\ndependency installation failed. Try:\n  cd ${dir} && pnpm install\n\nStill failing? See docs/troubleshooting.md.`,
+    `pnpm install failed.\n\nThe scaffold was rolled back — no files were left at ./${dir}.\nFix the underlying issue and re-run:\n  npm create mobile-surfaces@latest ${dir}\n\nSee docs/troubleshooting.md if it keeps failing.`,
   pnpmMissing: (dir) =>
-    `pnpm isn't on your PATH, but the Mobile Surfaces template ships a\npnpm-lock.yaml. Your project is at ./${dir}; the scaffold is\ncomplete. Enable pnpm and finish the install with:\n  corepack enable pnpm\n  cd ${dir} && pnpm install`,
+    `pnpm isn't on your PATH, but the Mobile Surfaces template ships a\npnpm-lock.yaml. The scaffold was rolled back — nothing landed at\n./${dir}. Enable pnpm and re-run:\n  corepack enable pnpm\n  npm create mobile-surfaces@latest ${dir}`,
   cocoapodsMissing: (dir) =>
-    `CocoaPods isn't on your PATH. expo prebuild needs it to install iOS\npods. Your project is at ./${dir}; the scaffold and dependency install\nfinished, only the iOS prepare step is pending. Install CocoaPods and\nfinish with:\n  brew install cocoapods    # or: sudo gem install cocoapods\n  cd ${dir} && npx expo prebuild --platform ios`,
+    `CocoaPods isn't on your PATH. expo prebuild needs it to install\niOS pods. The scaffold was rolled back — nothing landed at ./${dir}.\nInstall CocoaPods and re-run:\n  brew install cocoapods    # or: sudo gem install cocoapods\n  npm create mobile-surfaces@latest ${dir}`,
   installInterrupted: (dir) =>
-    `Stopped. Your project is at ./${dir}, but install didn't\nfinish. Resume with:\n  cd ${dir} && pnpm install`,
+    `Stopped. The scaffold was rolled back — nothing landed at ./${dir}.\nRe-run when you're ready:\n  npm create mobile-surfaces@latest ${dir}`,
   applyFailed:
     "Something failed while applying changes to your project.\nNo files were rolled back; review the log to see how far we got.",
   applyInterrupted:
