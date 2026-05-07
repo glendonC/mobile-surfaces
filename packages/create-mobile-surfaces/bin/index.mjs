@@ -22,7 +22,12 @@ import {
   runMonorepoTasks,
   runTasks,
 } from "../src/run-tasks.mjs";
-import { targetDirState } from "../src/scaffold.mjs";
+import {
+  makeStagingPath,
+  promoteStaging,
+  rollbackStaging,
+  targetDirState,
+} from "../src/scaffold.mjs";
 import {
   renderExistingSuccess,
   renderMonorepoSuccess,
@@ -219,9 +224,20 @@ if (!dirState.ok) {
 logger.open();
 
 rail.step(5, 5, "Build");
+// Stage the whole pipeline (template extract, rename, install, prebuild)
+// into a sibling temp dir so a partial failure never leaves a half-formed
+// project at the user's chosen path. Promotion to the final target is the
+// last step — until that rename happens, the path the user typed is still
+// untouched. On any failure we rm -rf the staging dir.
+const stagingPath = makeStagingPath(dirState.target);
 try {
-  await runTasks({ config, target: dirState.target });
+  await runTasks({ config, target: stagingPath });
+  promoteStaging({ stagingPath, target: dirState.target });
 } catch (err) {
+  rollbackStaging({
+    stagingPath,
+    log: (msg) => log.message(pc.dim(msg)),
+  });
   if (interrupted) {
     log.warn(errors.installInterrupted(config.projectName));
   } else if (err && err.tag === PNPM_MISSING_TAG) {
