@@ -11,6 +11,8 @@ import {
   isIdempotent,
   walkTextFiles,
   applyTextRewrites,
+  resetAppsMobileChangelog,
+  dropSchemaId,
   TEXT_EXTENSIONS,
   SKIP_DIRS,
 } from "./rename-starter.mjs";
@@ -250,3 +252,60 @@ test("SKIP_DIRS includes the standard generated/cache directories", () => {
     assert.ok(SKIP_DIRS.has(name), `SKIP_DIRS missing ${name}`);
   }
 });
+
+test('resetAppsMobileChangelog replaces upstream changelog with a fork stub', () => {
+  const dir = makeTempRepo();
+  try {
+    const target = path.join(dir, 'apps', 'mobile', 'CHANGELOG.md');
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, "# mobile-surfaces-app\n\n## 1.0.3\n\n- old\n");
+    const replaced = resetAppsMobileChangelog(dir, { appPackageName: 'foo-app' });
+    assert.equal(replaced, true);
+    const out = fs.readFileSync(target, 'utf8');
+    assert.match(out, /# foo-app/);
+    assert.match(out, /Unreleased/);
+    assert.ok(!out.includes('1.0.3'), 'old version history should be gone');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('resetAppsMobileChangelog returns false when the file is absent', () => {
+  const dir = makeTempRepo();
+  try {
+    const replaced = resetAppsMobileChangelog(dir, { appPackageName: 'foo-app' });
+    assert.equal(replaced, false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('dropSchemaId removes the $id key from packages/surface-contracts/schema.json', () => {
+  const dir = makeTempRepo();
+  try {
+    const target = path.join(dir, 'packages', 'surface-contracts', 'schema.json');
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, JSON.stringify({ $id: 'https://x', title: 'Foo', oneOf: [] }, null, 2) + "\n");
+    const dropped = dropSchemaId(dir);
+    assert.equal(dropped, true);
+    const parsed = JSON.parse(fs.readFileSync(target, 'utf8'));
+    assert.ok(!('$id' in parsed), 'expected $id key to be removed');
+    assert.equal(parsed.title, 'Foo', 'siblings preserved');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('dropSchemaId is a no-op when $id is not present', () => {
+  const dir = makeTempRepo();
+  try {
+    const target = path.join(dir, 'packages', 'surface-contracts', 'schema.json');
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, JSON.stringify({ title: 'Foo' }, null, 2) + "\n");
+    const dropped = dropSchemaId(dir);
+    assert.equal(dropped, false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+

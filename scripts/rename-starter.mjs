@@ -161,6 +161,42 @@ function isUnderSkipPrefix(rel) {
   return SKIP_PATH_PREFIXES.some((p) => rel === p || rel.startsWith(`${p}/`));
 }
 
+// After rename, apps/mobile/CHANGELOG.md still carries upstream's release
+// history (substituted but otherwise identical). A fork shouldn't claim
+// someone else's changelog, so reset it to a stub. Returns true when the
+// file existed and was replaced.
+export function resetAppsMobileChangelog(rootDir, { appPackageName }) {
+  const target = path.join(rootDir, "apps", "mobile", "CHANGELOG.md");
+  if (!fs.existsSync(target)) return false;
+  const stub = `# ${appPackageName}\n\n## Unreleased\n\n- Initial fork from mobile-surfaces.\n`;
+  fs.writeFileSync(target, stub);
+  return true;
+}
+
+// Strip the $id key from packages/surface-contracts/schema.json. Upstream's
+// $id points at https://unpkg.com/@mobile-surfaces/surface-contracts@1.2/...,
+// which after slug-substitution would resolve to a fork URL that isn't
+// published anywhere — silently breaking Ajv/jsonschema consumers that
+// resolve $id. We drop it here so the freshly-scaffolded checkout doesn't
+// ship a dead URL; build-schema.mjs only re-emits $id for the upstream
+// package name, so subsequent `pnpm surface:check` runs stay clean too.
+export function dropSchemaId(rootDir) {
+  const target = path.join(rootDir, "packages", "surface-contracts", "schema.json");
+  if (!fs.existsSync(target)) return false;
+  const original = fs.readFileSync(target, "utf8");
+  let parsed;
+  try {
+    parsed = JSON.parse(original);
+  } catch {
+    return false;
+  }
+  if (!("$id" in parsed)) return false;
+  delete parsed.$id;
+  const trailing = original.endsWith("\n") ? "\n" : "";
+  fs.writeFileSync(target, JSON.stringify(parsed, null, 2) + trailing);
+  return true;
+}
+
 // Apply substitutions to every text file under rootDir. Returns the number of
 // files actually rewritten. dryRun=true skips the write but still reports via
 // the log callback. Pure I/O — no git, no validators.
@@ -302,6 +338,18 @@ function main() {
   if (dryRun) {
     console.log(`[dry-run] ${touched} files would be touched. Pass without --dry-run to apply.`);
     process.exit(0);
+  }
+
+  // Reset the apps/mobile/CHANGELOG.md so the new project doesn't ship
+  // upstream's release history (the rename pass otherwise leaves it intact
+  // with substituted package names).
+  if (resetAppsMobileChangelog(repoRoot, { appPackageName: newIdentity.appPackageName })) {
+    console.log("reset apps/mobile/CHANGELOG.md to a fork stub");
+  }
+
+  // Drop the now-dead $id URL from packages/surface-contracts/schema.json.
+  if (dropSchemaId(repoRoot)) {
+    console.log("dropped $id from packages/surface-contracts/schema.json");
   }
 
   // Regenerate fixtures.ts so the deepLink scheme rewrite is reflected in
