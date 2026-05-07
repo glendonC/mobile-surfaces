@@ -76,7 +76,7 @@ importers:
         specifier: ^16.25.1
         version: 16.32.0(@types/node@25.6.0)(typescript@5.9.3)
       typescript:
-        specifier: ~5.9.2
+        specifier: ^5.0.0
         version: 5.9.3
 
   apps/site:

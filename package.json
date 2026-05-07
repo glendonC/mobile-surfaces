@@ -69,6 +69,7 @@
     "mobile:dev-client": "pnpm --dir apps/mobile exec expo start --dev-client --host lan",
     "mobile:ios": "pnpm --dir apps/mobile exec expo start --ios",
     "mobile:sim": "bash scripts/mobile-ios-sim.sh",
+    "mobile:bootstrap": "pnpm install && pnpm mobile:prebuild:ios",
     "mobile:prebuild:ios": "pnpm --dir apps/mobile exec expo prebuild --platform ios --clean",
     "mobile:run:ios": "pnpm --dir apps/mobile exec expo run:ios",
     "mobile:run:ios:device": "pnpm --dir apps/mobile exec expo run:ios --device",
@@ -92,5 +93,12 @@
     "@types/node": "^25.6.0",
     "tsup": "^8.3.5",
     "zod": "^4"
+  },
+  "pnpm": {
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "typescript": ">=5.0.0"
+      }
+    }
   }
 }

@@ -123,15 +123,28 @@ export async function renameIdentity({ target, config }) {
     { cwd: target },
   );
 
-  // Apple Team ID is optional; patch it in afterward if provided.
-  if (config.teamId) {
-    const appJsonPath = path.join(target, "apps", "mobile", "app.json");
-    const j = JSON.parse(fs.readFileSync(appJsonPath, "utf8"));
-    if (j.expo?.ios) {
-      j.expo.ios.appleTeamId = config.teamId;
-      fs.writeFileSync(appJsonPath, JSON.stringify(j, null, 2) + "\n");
-    }
+  applyAppleTeamId({ target, teamId: config.teamId });
+}
+
+// Pure-ish: read apps/mobile/app.json, set or strip appleTeamId, write back.
+// Exported so the (no-shellout) behavior is unit-testable. When teamId is
+// provided we write it; when null/empty we strip the upstream "XXXXXXXXXX"
+// placeholder so the user gets expo's missing-team-id error instead of a
+// confusing "invalid team id" failure at signing time.
+export function applyAppleTeamId({ target, teamId }) {
+  const appJsonPath = path.join(target, "apps", "mobile", "app.json");
+  if (!fs.existsSync(appJsonPath)) return false;
+  const j = JSON.parse(fs.readFileSync(appJsonPath, "utf8"));
+  if (!j.expo?.ios) return false;
+  if (teamId) {
+    j.expo.ios.appleTeamId = teamId;
+  } else if (j.expo.ios.appleTeamId === "XXXXXXXXXX") {
+    delete j.expo.ios.appleTeamId;
+  } else {
+    return false;
   }
+  fs.writeFileSync(appJsonPath, JSON.stringify(j, null, 2) + "\n");
+  return true;
 }
 
 // Per-package-manager command mapping. Each manager has its own verb for

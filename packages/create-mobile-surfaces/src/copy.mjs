@@ -78,17 +78,30 @@ export const existingSuccessSections = ({ projectName, packageManager }) => ({
   ],
 });
 
-export const successSections = (projectName) => ({
+export const successSections = (projectName, { installNow = true } = {}) => ({
   inTheBox:
     "Live Activity harness, Dynamic Island layouts, push smoke scripts,\ncontract-first fixtures, doctor checks.",
   // tryItNow stays push-free so first-run users get a working Live Activity
   // before any APNs setup. Push commands graduate to "when you're ready"
   // since they need APNs env vars.
-  tryItNow: [
-    `cd ${projectName}`,
-    "pnpm mobile:sim          build & launch on the simulator",
-    "tap Start in the harness, then ⌘L in the simulator to see your Live Activity on the Lock Screen",
-  ],
+  //
+  // When installNow=false the user picked --no-install (or answered No to
+  // the install prompt). pnpm mobile:sim assumes deps + prebuild already
+  // ran, so we prefix with mobile:bootstrap (install + prebuild) so the
+  // user has one well-ordered chain instead of debugging an opaque
+  // prebuild failure caused by missing node_modules.
+  tryItNow: installNow
+    ? [
+        `cd ${projectName}`,
+        "pnpm mobile:sim          build & launch on the simulator",
+        "tap Start in the harness, then ⌘L in the simulator to see your Live Activity on the Lock Screen",
+      ]
+    : [
+        `cd ${projectName}`,
+        "pnpm mobile:bootstrap    install deps + prepare iOS (about a minute)",
+        "pnpm mobile:sim          build & launch on the simulator",
+        "tap Start in the harness, then ⌘L in the simulator to see your Live Activity on the Lock Screen",
+      ],
   whenReady: [
     "pnpm surface:setup-apns                 wire APNs creds with a guided wizard",
     "pnpm mobile:push:sim                    send a test push to the simulator",

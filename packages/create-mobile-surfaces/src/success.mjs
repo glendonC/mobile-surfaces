@@ -24,7 +24,7 @@ function section(title, lines) {
 }
 
 export function renderSuccess(config) {
-  const s = successSections(config.projectName);
+  const s = successSections(config.projectName, { installNow: config.installNow });
 
   const blocks = [
     "",
