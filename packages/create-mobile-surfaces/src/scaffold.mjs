@@ -104,6 +104,9 @@ export async function copyTemplate({ target }) {
 export async function renameIdentity({ target, config }) {
   const swiftPrefix = toSwiftPrefix(config.projectName);
   const widgetTarget = `${swiftPrefix}Widget`;
+  // --skip-verify: rename runs before `pnpm install`, so the post-rename
+  // surface:check pass would fail importing zod from packages/surface-contracts.
+  // The user's first install + surface:check covers verification end-to-end.
   await runStreamed(
     "node",
     [
@@ -115,6 +118,7 @@ export async function renameIdentity({ target, config }) {
       `--swift-prefix=${swiftPrefix}`,
       `--slug=${config.projectName}`,
       "--force",
+      "--skip-verify",
     ],
     { cwd: target },
   );
