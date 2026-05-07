@@ -83,6 +83,7 @@
     "cli:try:existing": "node ./packages/create-mobile-surfaces/scripts/dev-try.mjs --existing",
     "cli:smoke": "pnpm --filter create-mobile-surfaces smoke",
     "cli:smoke:existing": "pnpm --filter create-mobile-surfaces smoke:existing",
+    "cli:smoke:monorepo": "pnpm --filter create-mobile-surfaces smoke:monorepo",
     "cli:test": "pnpm --filter create-mobile-surfaces test",
     "typecheck": "pnpm build && pnpm --filter mobile-surfaces-app typecheck"
   },

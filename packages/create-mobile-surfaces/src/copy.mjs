@@ -134,4 +134,13 @@ export const refuse = {
     `The package.json at ${cwd} isn't valid JSON. Fix it (or restore\nit from git) and run me again.`,
   noExpoDep: (packageName) =>
     `${packageName} is a JavaScript project, but it doesn't use Expo.\n\nMobile Surfaces requires Expo for the dev client and the iOS\nbuild pipeline. The fastest paths in:\n\n  • Add Expo to this project:  npx install-expo-modules@latest\n  • Or start fresh:            cd .. && npm create mobile-surfaces my-app\n\nThen run me again.`,
+  appsMobileExists: (packageName) =>
+    `${packageName} already has an apps/mobile/ directory, so this looks\nlike it's already been scaffolded once.\n\nIf you want to add Mobile Surfaces to an existing Expo app,\ncd into apps/mobile/ and run me again from there. If you\nwanted a fresh start, remove apps/mobile/ first.`,
+};
+
+// Copy for the existing-monorepo-no-expo flow (a TS monorepo without Expo,
+// where we'll scaffold apps/mobile/ inside their workspace).
+export const monorepo = {
+  intro: "We'll add Mobile Surfaces as apps/mobile/ in your workspace.",
+  successTitle: "Mobile Surfaces is wired up.",
 };

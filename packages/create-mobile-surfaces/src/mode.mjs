@@ -11,11 +11,43 @@ import { refuse as refuseCopy } from "./copy.mjs";
 export const MODE = Object.freeze({
   GREENFIELD: "greenfield",
   EXISTING_EXPO: "existing-expo",
+  EXISTING_MONOREPO_NO_EXPO: "existing-monorepo-no-expo",
   EXISTING_NON_EXPO: "existing-non-expo",
 });
 
 export function detectMode({ cwd, targetName }) {
-  // An explicit name is the user's "I want a new project as a sibling" gesture.
+  // Read cwd's package.json (if any) before deciding whether targetName means
+  // "new sibling project" or "name for the apps/mobile/ inside this workspace".
+  // The original rule — explicit name → greenfield, full stop — broke the
+  // monorepo flow because --yes always passes a name. Now: if cwd looks like
+  // a workspace without Expo, an explicit name routes to monorepo mode.
+  const pkgPath = path.join(cwd, "package.json");
+  let pkg = null;
+  let pkgErr = null;
+  if (fs.existsSync(pkgPath)) {
+    try {
+      pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+    } catch {
+      pkgErr = "invalid-package-json";
+    }
+  }
+
+  if (pkg) {
+    const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+    const hasExpo = "expo" in allDeps;
+    const workspace = detectWorkspace({ cwd, pkg });
+    const appsMobileExists = fs.existsSync(path.join(cwd, "apps", "mobile"));
+
+    if (workspace && !hasExpo && !appsMobileExists) {
+      return {
+        kind: MODE.EXISTING_MONOREPO_NO_EXPO,
+        evidence: gatherMonorepoEvidence({ cwd, pkg, workspace }),
+      };
+    }
+  }
+
+  // An explicit name is the user's "I want a new project as a sibling" gesture
+  // — but only when we haven't already detected a more specific mode above.
   // Take it at face value, even if cwd happens to be inside another project.
   if (targetName) {
     return {
@@ -33,21 +65,10 @@ export function detectMode({ cwd, targetName }) {
     return { kind: MODE.GREENFIELD, target: null };
   }
 
-  const pkgPath = path.join(cwd, "package.json");
-  if (!fs.existsSync(pkgPath)) {
+  if (!pkg) {
     return {
       kind: MODE.EXISTING_NON_EXPO,
-      evidence: { reason: "no-package-json", cwd },
-    };
-  }
-
-  let pkg;
-  try {
-    pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
-  } catch {
-    return {
-      kind: MODE.EXISTING_NON_EXPO,
-      evidence: { reason: "invalid-package-json", cwd },
+      evidence: { reason: pkgErr ?? "no-package-json", cwd },
     };
   }
 
@@ -59,13 +80,77 @@ export function detectMode({ cwd, targetName }) {
     };
   }
 
+  const appsMobileExists = fs.existsSync(path.join(cwd, "apps", "mobile"));
   return {
     kind: MODE.EXISTING_NON_EXPO,
     evidence: {
-      reason: "no-expo-dep",
+      reason: appsMobileExists ? "apps-mobile-exists" : "no-expo-dep",
       cwd,
       packageName: pkg.name ?? path.basename(cwd),
     },
+  };
+}
+
+// Returns { kind, path?, globs } when this looks like a workspace, or null.
+// kind is "pnpm-workspace" (a yaml file) or "package-json" (the workspaces
+// field). The pnpm form wins when both are present, since pnpm-workspace.yaml
+// is what pnpm actually reads.
+function detectWorkspace({ cwd, pkg }) {
+  const pnpmYaml = path.join(cwd, "pnpm-workspace.yaml");
+  if (fs.existsSync(pnpmYaml)) {
+    return {
+      kind: "pnpm-workspace",
+      path: pnpmYaml,
+      globs: parsePnpmWorkspaceGlobs(fs.readFileSync(pnpmYaml, "utf8")),
+    };
+  }
+  if (Array.isArray(pkg.workspaces)) {
+    return { kind: "package-json", path: null, globs: [...pkg.workspaces] };
+  }
+  if (pkg.workspaces && Array.isArray(pkg.workspaces.packages)) {
+    return {
+      kind: "package-json",
+      path: null,
+      globs: [...pkg.workspaces.packages],
+    };
+  }
+  return null;
+}
+
+// Tiny YAML reader scoped to the shape pnpm-workspace.yaml uses (a top-level
+// `packages:` key with a list of quoted strings). Avoids pulling in a YAML
+// dep for a parse this constrained.
+export function parsePnpmWorkspaceGlobs(yaml) {
+  const lines = yaml.split(/\r?\n/);
+  const globs = [];
+  let inPackages = false;
+  for (const raw of lines) {
+    const line = raw.replace(/#.*$/, "");
+    if (/^packages\s*:/.test(line)) {
+      inPackages = true;
+      continue;
+    }
+    if (inPackages) {
+      const m = line.match(/^\s+-\s*['"]?([^'"]+?)['"]?\s*$/);
+      if (m) {
+        globs.push(m[1]);
+        continue;
+      }
+      // A non-list, non-blank line at column 0 ends the packages block.
+      if (line.trim() && !/^\s/.test(line)) inPackages = false;
+    }
+  }
+  return globs;
+}
+
+function gatherMonorepoEvidence({ cwd, pkg, workspace }) {
+  return {
+    cwd,
+    packageName: pkg.name ?? path.basename(cwd),
+    packageManager: detectPackageManager(cwd),
+    workspaceKind: workspace.kind,
+    workspacePath: workspace.path,
+    workspaceGlobs: workspace.globs,
   };
 }
 
@@ -156,6 +241,9 @@ export function renderRefuse(mode) {
       break;
     case "no-expo-dep":
       body = refuseCopy.noExpoDep(evidence.packageName);
+      break;
+    case "apps-mobile-exists":
+      body = refuseCopy.appsMobileExists(evidence.packageName);
       break;
     default:
       body = refuseCopy.noPackageJson;
