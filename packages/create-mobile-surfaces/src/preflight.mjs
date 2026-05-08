@@ -165,7 +165,12 @@ export async function runPreflight({ manifest }) {
   const minimumIos = manifest?.deploymentTarget ?? "17.2";
   const minimumXcode = manifest?.minimumXcodeMajor ?? null;
 
-  const results = await Promise.all([
+  // allSettled rather than all so a check function that forgets its try/catch
+  // (or hits an unforeseen throw — e.g. a future spawn that bubbles ENOENT)
+  // doesn't abort every other check. Each check today already wraps its own
+  // exec; this is defense-in-depth so the next addition can't accidentally
+  // kill the whole preflight.
+  const settled = await Promise.allSettled([
     checkPlatform(),
     checkNode({ projectMajor }),
     checkXcode({ minimumMajor: minimumXcode }),
@@ -173,6 +178,15 @@ export async function runPreflight({ manifest }) {
     checkPnpm(),
     checkCocoapods(),
   ]);
+
+  const results = settled.map((s, i) => {
+    if (s.status === "fulfilled") return s.value;
+    return {
+      ok: false,
+      title: `Preflight check #${i + 1} threw unexpectedly`,
+      fix: `Report this with the log: ${s.reason?.message ?? String(s.reason)}`,
+    };
+  });
 
   const failures = results.filter((r) => !r.ok);
   const warnings = results.filter((r) => r.ok && r.kind === "warn");

@@ -67,6 +67,17 @@ test("flagsToOverrides: unspecified booleans are absent (let the prompt default 
   assert.ok(!("homeWidget" in overrides));
   assert.ok(!("controlWidget" in overrides));
   assert.ok(!("installNow" in overrides));
+  assert.ok(!("newArchEnabled" in overrides));
+});
+
+test("flagsToOverrides: --no-new-arch sets newArchEnabled=false; --new-arch sets true; negation wins", () => {
+  assert.equal(flagsToOverrides({ "no-new-arch": true }).newArchEnabled, false);
+  assert.equal(flagsToOverrides({ "new-arch": true }).newArchEnabled, true);
+  assert.equal(
+    flagsToOverrides({ "new-arch": true, "no-new-arch": true }).newArchEnabled,
+    false,
+    "negation wins on conflict (safer signal)",
+  );
 });
 
 test("validateOverrides: catches com.example.* placeholders", () => {

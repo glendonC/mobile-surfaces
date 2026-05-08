@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { applyAppleTeamId } from "../src/scaffold.mjs";
+import { applyAppleTeamId, applyNewArchEnabled } from "../src/scaffold.mjs";
 
 let tmp;
 
@@ -69,6 +69,31 @@ describe("applyAppleTeamId", () => {
   it("returns false when apps/mobile/app.json is missing", () => {
     assert.equal(
       applyAppleTeamId({ target: tmp, teamId: "ABCDE12345" }),
+      false,
+    );
+  });
+});
+
+describe("applyNewArchEnabled", () => {
+  it("writes expo.newArchEnabled when set to true", () => {
+    const p = writeAppJson({ expo: { name: "foo" } });
+    const ok = applyNewArchEnabled({ target: tmp, newArchEnabled: true });
+    assert.equal(ok, true);
+    const j = JSON.parse(fs.readFileSync(p, "utf8"));
+    assert.equal(j.expo.newArchEnabled, true);
+  });
+
+  it("writes expo.newArchEnabled when set to false (legacy bridge opt-out)", () => {
+    const p = writeAppJson({ expo: { name: "foo" } });
+    const ok = applyNewArchEnabled({ target: tmp, newArchEnabled: false });
+    assert.equal(ok, true);
+    const j = JSON.parse(fs.readFileSync(p, "utf8"));
+    assert.equal(j.expo.newArchEnabled, false);
+  });
+
+  it("returns false when apps/mobile/app.json is missing", () => {
+    assert.equal(
+      applyNewArchEnabled({ target: tmp, newArchEnabled: true }),
       false,
     );
   });

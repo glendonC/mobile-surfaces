@@ -32,6 +32,7 @@ export function renderSuccess(config) {
     section("What's in the box", s.inTheBox.split("\n")),
     section("Try it now", s.tryItNow),
     section("When you're ready", s.whenReady),
+    section("Customize further", s.customizeFurther),
     section("Learn more", s.learnMore),
   ];
 
@@ -136,6 +137,13 @@ export function renderMonorepoSuccess({ summary, evidence, config, packageManage
   blocks.push(
     section("When you're ready", [
       `npx expo run:ios --device         run it on your iPhone`,
+    ]),
+  );
+  blocks.push(
+    section("Customize further", [
+      "Custom fonts             https://docs.expo.dev/develop/user-interface/fonts/",
+      "Multi-env bundle ids     https://docs.expo.dev/build/eas-json/",
+      "Custom app icons         https://docs.expo.dev/develop/user-interface/app-icons/",
     ]),
   );
   blocks.push(

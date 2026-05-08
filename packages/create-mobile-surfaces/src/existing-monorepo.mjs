@@ -199,6 +199,9 @@ export async function runMonorepoPrompts({ evidence, manifest, overrides = {}, y
     teamId,
     surfaces: { homeWidget, controlWidget },
     installNow,
+    ...(overrides.newArchEnabled !== undefined
+      ? { newArchEnabled: overrides.newArchEnabled }
+      : {}),
   };
 
   const plan = planMonorepoScaffold({ evidence, manifest, config });

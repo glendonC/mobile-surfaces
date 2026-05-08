@@ -219,6 +219,14 @@ export function patchAppsMobileAppJson({
   expo.ios.bundleIdentifier = config.bundleId;
   if (config.teamId) {
     expo.ios.appleTeamId = config.teamId;
+  } else if (expo.ios.appleTeamId === "XXXXXXXXXX") {
+    // Mirror the greenfield behavior: when no team id is provided, drop the
+    // upstream placeholder so expo's own missing-team-id error surfaces
+    // instead of an opaque signing failure.
+    delete expo.ios.appleTeamId;
+  }
+  if (config.newArchEnabled !== undefined) {
+    expo.newArchEnabled = config.newArchEnabled;
   }
   if (appGroup) {
     expo.ios.entitlements = expo.ios.entitlements ?? {};
