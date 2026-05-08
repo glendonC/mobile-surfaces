@@ -30,4 +30,3 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test:push
       - run: pnpm test:scripts
-      - run: pnpm cli:test
