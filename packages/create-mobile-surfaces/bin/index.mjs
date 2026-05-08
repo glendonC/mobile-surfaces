@@ -109,17 +109,24 @@ renderBanner();
 rail.line(pc.bold(welcome));
 rail.blank();
 
-const preflight = await runPreflight({ manifest });
-if (preflight.failures.length > 0) {
-  renderFailures(preflight.failures);
-  process.exit(EXIT_CODES.ENV_ERROR);
+// Preflight runs per-branch rather than upfront. Refuse paths exit without
+// touching it (no toolchain needed to print "we don't help here"), and
+// --yes greenfield runs resolveYesConfig first so a malformed CLI invocation
+// surfaces as USER_ERROR, not ENV_ERROR. Each work path still gates on
+// preflight before any FS write or spawned tool.
+async function runPreflightOrExit() {
+  const preflight = await runPreflight({ manifest });
+  if (preflight.failures.length > 0) {
+    renderFailures(preflight.failures);
+    process.exit(EXIT_CODES.ENV_ERROR);
+  }
+  rail.step(1, 5, "Toolchain");
+  renderPassed(preflight.passed);
+  if (preflight.warnings.length > 0) {
+    renderWarnings(preflight.warnings);
+  }
+  rail.blank();
 }
-rail.step(1, 5, "Toolchain");
-renderPassed(preflight.passed);
-if (preflight.warnings.length > 0) {
-  renderWarnings(preflight.warnings);
-}
-rail.blank();
 
 const mode = detectMode({ cwd: process.cwd(), targetName: initialName });
 
@@ -132,6 +139,7 @@ if (mode.kind === MODE.EXISTING_NON_EXPO) {
 }
 
 if (mode.kind === MODE.EXISTING_MONOREPO_NO_EXPO) {
+  await runPreflightOrExit();
   const result = await runMonorepoPrompts({
     evidence: mode.evidence,
     manifest,
@@ -176,6 +184,7 @@ if (mode.kind === MODE.EXISTING_MONOREPO_NO_EXPO) {
 }
 
 if (mode.kind === MODE.EXISTING_EXPO) {
+  await runPreflightOrExit();
   const result = await runExistingExpoPrompts({
     evidence: mode.evidence,
     manifest,
@@ -221,6 +230,9 @@ let config;
 if (yes) {
   // Non-interactive: every required field must be supplied (or derivable).
   // resolveYesConfig collects errors so we can report them all at once.
+  // Runs before preflight so a malformed --yes (e.g. missing --name) exits
+  // as USER_ERROR rather than getting masked by an ENV_ERROR from a
+  // toolchain check that doesn't matter yet.
   const yesOverrides = { ...overrides };
   if (yesOverrides.projectName === undefined && positionalName) {
     yesOverrides.projectName = positionalName;
@@ -231,8 +243,10 @@ if (yes) {
     for (const err of resolved.errors) process.stderr.write(`  ${err}\n`);
     process.exit(EXIT_CODES.USER_ERROR);
   }
+  await runPreflightOrExit();
   config = resolved.config;
 } else {
+  await runPreflightOrExit();
   config = await runPrompts({ initialName, overrides, yes });
 }
 
