@@ -38,6 +38,22 @@ npm create mobile-surfaces@latest --yes \
 
 Run `npm create mobile-surfaces@latest --help` for the canonical reference.
 
+### CI / GitHub Actions
+
+A typical CI step that scaffolds and verifies a clean install. The CLI exits non-zero on any failure path, so the workflow stops early without needing custom branching:
+
+```yaml
+- name: Scaffold Mobile Surfaces
+  run: |
+    npm create mobile-surfaces@latest --yes \
+      --name my-app --bundle-id com.acme.myapp \
+      --no-install
+- name: Install + prepare iOS
+  run: cd my-app && pnpm install && pnpm mobile:prebuild:ios
+```
+
+If you want to branch on cause, use the canonical [exit codes](#exit-codes) — `1` is user-error (bad inputs), `2` is environment-error (missing tools, install failed), `3` is a packaging issue with the CLI itself.
+
 ### Exit codes
 
 CI consumers can branch on these. The categories are coarse so adding a new failure path doesn't change the contract.

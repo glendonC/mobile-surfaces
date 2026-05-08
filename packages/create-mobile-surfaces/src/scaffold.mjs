@@ -157,6 +157,23 @@ export async function renameIdentity({ target, config }) {
   );
 
   applyAppleTeamId({ target, teamId: config.teamId });
+  if (config.newArchEnabled !== undefined) {
+    applyNewArchEnabled({ target, newArchEnabled: config.newArchEnabled });
+  }
+}
+
+// Pure-ish: read apps/mobile/app.json, set expo.newArchEnabled to the user's
+// choice, write back. Only called when config.newArchEnabled is set — i.e.
+// when the user passed --new-arch or --no-new-arch. If they passed neither,
+// the template's app.json default (Expo's own default) wins.
+export function applyNewArchEnabled({ target, newArchEnabled }) {
+  const appJsonPath = path.join(target, "apps", "mobile", "app.json");
+  if (!fs.existsSync(appJsonPath)) return false;
+  const j = JSON.parse(fs.readFileSync(appJsonPath, "utf8"));
+  if (!j.expo) return false;
+  j.expo.newArchEnabled = newArchEnabled;
+  fs.writeFileSync(appJsonPath, JSON.stringify(j, null, 2) + "\n");
+  return true;
 }
 
 // Pure-ish: read apps/mobile/app.json, set or strip appleTeamId, write back.

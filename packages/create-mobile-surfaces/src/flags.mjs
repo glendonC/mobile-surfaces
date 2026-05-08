@@ -31,6 +31,8 @@ export const FLAG_OPTIONS = Object.freeze({
   "no-control-widget": { type: "boolean" },
   install: { type: "boolean" },
   "no-install": { type: "boolean" },
+  "new-arch": { type: "boolean" },
+  "no-new-arch": { type: "boolean" },
   yes: { type: "boolean", short: "y" },
   help: { type: "boolean", short: "h" },
 });
@@ -82,6 +84,13 @@ export function flagsToOverrides(values) {
   if (values["no-install"]) overrides.installNow = false;
   else if (values.install) overrides.installNow = true;
 
+  // newArchEnabled defaults to Expo's default (true on SDK 55) when neither
+  // flag is set; the override only fires when the user explicitly opts out
+  // (--no-new-arch) or back in (--new-arch). Negation wins on the rare case
+  // where both flags appear together — it's the safer signal.
+  if (values["no-new-arch"]) overrides.newArchEnabled = false;
+  else if (values["new-arch"]) overrides.newArchEnabled = true;
+
   return overrides;
 }
 
@@ -132,6 +141,12 @@ export function resolveYesConfig(overrides) {
     controlWidget: overrides.controlWidget ?? true,
   };
   config.installNow = overrides.installNow ?? true;
+  // newArchEnabled left undefined when the user passed neither flag — the
+  // template's app.json default (Expo's own default, currently true on SDK
+  // 55) wins. We only write to app.json when overrides.newArchEnabled is set.
+  if (overrides.newArchEnabled !== undefined) {
+    config.newArchEnabled = overrides.newArchEnabled;
+  }
 
   // Re-validate derived fields. With a placeholder-friendly --name like
   // `example-app`, toBundleId would emit `com.example.example-app`, which the
@@ -171,6 +186,8 @@ Options:
   --no-control-widget       Exclude the control widget.
   --install                 Run pnpm install + expo prebuild after scaffold.
   --no-install              Skip post-scaffold install.
+  --new-arch                Force Expo's New Architecture on (default).
+  --no-new-arch             Opt out of the New Architecture (legacy bridge).
   --yes, -y                 Non-interactive: accept defaults, skip the recap.
   --help, -h                Show this help.
 

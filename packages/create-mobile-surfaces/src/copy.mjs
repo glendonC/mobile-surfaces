@@ -109,6 +109,14 @@ export const successSections = (projectName, { installNow = true } = {}) => ({
     "pnpm mobile:push:device:liveactivity    push a real Live Activity update",
     "pnpm dev:doctor                         re-check your toolchain anytime",
   ],
+  // Things the template doesn't do for you. Surfaced here so users discover
+  // them at scaffold time instead of digging through Expo docs cold three
+  // weeks later when the design polish phase hits.
+  customizeFurther: [
+    "Custom fonts             https://docs.expo.dev/develop/user-interface/fonts/",
+    "Multi-env bundle ids     https://docs.expo.dev/build/eas-json/",
+    "Custom app icons         https://docs.expo.dev/develop/user-interface/app-icons/",
+  ],
   learnMore: [
     "README.md                quick start",
     "docs/architecture.md     the data shape behind everything",

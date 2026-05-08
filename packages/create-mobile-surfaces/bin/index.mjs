@@ -36,9 +36,21 @@ import {
 import { loadTemplateManifest } from "../src/template-manifest.mjs";
 import { log, rail } from "../src/ui.mjs";
 
-// Don't crash when output is piped to a reader that closes early.
+// EPIPE happens when the user pipes output through something that closes
+// early (e.g. `... | head -20`). In that case there's no real error — exit
+// 0 keeps the upstream tool well-behaved. But if a real error has already
+// been recorded and a stale write *then* hits the closed pipe, exiting 0
+// would silently mask the failure. Track recordedFailureCode and propagate
+// it from the EPIPE handler.
+let recordedFailureCode = 0;
+function recordFailure(code) {
+  // First wins so a later stdout flush can't overwrite the earlier signal.
+  if (recordedFailureCode === 0) recordedFailureCode = code;
+}
 process.stdout.on("error", (err) => {
-  if (err.code === "EPIPE") process.exit(EXIT_CODES.SUCCESS);
+  if (err.code === "EPIPE") {
+    process.exit(recordedFailureCode || EXIT_CODES.SUCCESS);
+  }
 });
 
 // Track Ctrl+C separately from other failures so the post-tasks renderer can
@@ -47,6 +59,15 @@ let interrupted = false;
 process.on("SIGINT", () => {
   interrupted = true;
 });
+
+// Wrap process.exit so every non-zero exit also feeds recordFailure, keeping
+// the EPIPE handler's contract honest without sprinkling recordFailure() at
+// every call site.
+const originalExit = process.exit.bind(process);
+process.exit = (code = 0) => {
+  if (code !== 0) recordFailure(code);
+  originalExit(code);
+};
 
 let parsed;
 try {
