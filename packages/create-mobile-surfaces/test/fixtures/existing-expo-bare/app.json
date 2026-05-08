@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "Demo Expo App",
+    "slug": "demo-expo-app",
+    "scheme": "demoexpoapp",
+    "version": "0.1.0",
+    "ios": {
+      "bundleIdentifier": "com.demo.expoapp",
+      "supportsTablet": true
+    }
+  }
+}
