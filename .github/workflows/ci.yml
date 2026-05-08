@@ -43,9 +43,13 @@ jobs:
         # own pnpm install + prebuild is exercised by the apps/* jobs.
         run: |
           set -euo pipefail
-          pnpm --filter create-mobile-surfaces build:template
           PACK_DIR=$(mktemp -d)
-          pnpm --filter create-mobile-surfaces pack --pack-destination "$PACK_DIR"
+          # cd into the package rather than using `--filter` because pnpm's
+          # filter flag implies recursive execution, and `pack` is a
+          # single-package command that rejects --recursive in pnpm 10.
+          ( cd packages/create-mobile-surfaces \
+            && pnpm build:template \
+            && pnpm pack --pack-destination "$PACK_DIR" )
           INSTALL_DIR=$(mktemp -d)
           cd "$INSTALL_DIR"
           npm init -y >/dev/null
