@@ -33,14 +33,22 @@ jobs:
       - run: pnpm cli:test
       - name: Pack-and-install smoke
         # Catches publish-time breakage that no other test surfaces:
-        #   - missing entries in `files:`
+        #   - missing entries in `files:` (tar -tzf assertions)
         #   - missing template/template.tgz (because pnpm pack does NOT run
         #     prepublishOnly — easy to break and silent until a downstream
         #     install)
-        #   - shebang/permission breakage on bin/index.mjs
-        #   - accidental dependency on workspace-only packages
-        # --no-install keeps the smoke focused on the tarball; the scaffold's
-        # own pnpm install + prebuild is exercised by the apps/* jobs.
+        #   - shebang/permission breakage on bin/index.mjs (--help invocation)
+        #   - accidental dependency on workspace-only packages (npm install
+        #     from tarball alone)
+        #   - broken flag-parsing path through the published binary (--yes
+        #     without --name expects USER_ERROR by the #36 ordering)
+        #
+        # Deliberately does NOT run the binary all the way through to a real
+        # scaffold: that would require preflight to pass, which needs Xcode
+        # 26+ and iOS 17.2 simulators on the runner. macos-latest currently
+        # ships Xcode 16.4. Full scaffold extraction is exercised by
+        # cli:test against in-process internals; this smoke covers the
+        # tarball boundary, where in-process tests can't see.
         run: |
           set -euo pipefail
           PACK_DIR=$(mktemp -d)
@@ -50,14 +58,28 @@ jobs:
           ( cd packages/create-mobile-surfaces \
             && pnpm build:template \
             && pnpm pack --pack-destination "$PACK_DIR" )
+          TARBALL=$(echo "$PACK_DIR"/create-mobile-surfaces-*.tgz)
+
+          # Phase 1: tarball contents.
+          tar -tzf "$TARBALL" | grep -qx 'package/bin/index.mjs'
+          tar -tzf "$TARBALL" | grep -qx 'package/template/template.tgz'
+          tar -tzf "$TARBALL" | grep -qx 'package/template/manifest.json'
+
+          # Phase 2: install + invoke via the published bin path.
           INSTALL_DIR=$(mktemp -d)
           cd "$INSTALL_DIR"
           npm init -y >/dev/null
-          npm install "$PACK_DIR"/create-mobile-surfaces-*.tgz
-          ./node_modules/.bin/create-mobile-surfaces \
-            --yes --name=smoke-app \
-            --bundle-id=com.acme.smokeapp \
-            --no-install
-          test -d smoke-app/apps/mobile
-          test -f smoke-app/apps/mobile/app.json
-          test -f smoke-app/package.json
+          npm install "$TARBALL"
+          BIN=./node_modules/.bin/create-mobile-surfaces
+
+          # --help exits 0 before any preflight or detection.
+          "$BIN" --help >/dev/null
+
+          # --yes without --name exits 1 (USER_ERROR) before preflight, by the
+          # ordering established in #36. Verifies resolveYesConfig fires
+          # through the published binary.
+          set +e
+          "$BIN" --yes >/dev/null 2>&1
+          EXIT=$?
+          set -e
+          [ "$EXIT" = "1" ] || { echo "expected --yes to exit 1, got $EXIT"; exit 1; }
