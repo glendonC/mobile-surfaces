@@ -31,3 +31,29 @@ jobs:
       - run: pnpm test:push
       - run: pnpm test:scripts
       - run: pnpm cli:test
+      - name: Pack-and-install smoke
+        # Catches publish-time breakage that no other test surfaces:
+        #   - missing entries in `files:`
+        #   - missing template/template.tgz (because pnpm pack does NOT run
+        #     prepublishOnly — easy to break and silent until a downstream
+        #     install)
+        #   - shebang/permission breakage on bin/index.mjs
+        #   - accidental dependency on workspace-only packages
+        # --no-install keeps the smoke focused on the tarball; the scaffold's
+        # own pnpm install + prebuild is exercised by the apps/* jobs.
+        run: |
+          set -euo pipefail
+          pnpm --filter create-mobile-surfaces build:template
+          PACK_DIR=$(mktemp -d)
+          pnpm --filter create-mobile-surfaces pack --pack-destination "$PACK_DIR"
+          INSTALL_DIR=$(mktemp -d)
+          cd "$INSTALL_DIR"
+          npm init -y >/dev/null
+          npm install "$PACK_DIR"/create-mobile-surfaces-*.tgz
+          ./node_modules/.bin/create-mobile-surfaces \
+            --yes --name=smoke-app \
+            --bundle-id=com.acme.smokeapp \
+            --no-install
+          test -d smoke-app/apps/mobile
+          test -f smoke-app/apps/mobile/app.json
+          test -f smoke-app/package.json
