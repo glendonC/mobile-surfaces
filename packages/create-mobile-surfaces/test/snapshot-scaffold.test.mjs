@@ -56,19 +56,38 @@ function normalizeForHash(rel, raw) {
   }
 }
 
+// The greenfield scaffold currently includes packages/create-mobile-surfaces/
+// in the user's tree. That's tangential to this snapshot's intent, and its
+// own test/ dir creates a bootstrap loop: adding a test file here changes
+// the snapshot the test asserts against. Exclude this dir so the snapshot
+// stays stable across changes to the CLI's own test infra.
+const SCAFFOLD_PATH_EXCLUDES = [
+  "packages/create-mobile-surfaces/test/",
+];
+
+function isExcluded(rel) {
+  if (rel.endsWith(".DS_Store")) return true;
+  for (const prefix of SCAFFOLD_PATH_EXCLUDES) {
+    if (rel === prefix.replace(/\/$/, "")) return true;
+    if (rel.startsWith(prefix)) return true;
+  }
+  return false;
+}
+
 function walkTree(rootDir) {
   const entries = [];
   const stack = [rootDir];
   while (stack.length > 0) {
     const dir = stack.pop();
     for (const item of fs.readdirSync(dir)) {
-      if (item === ".DS_Store") continue;
       const full = path.join(dir, item);
+      const rel = path.relative(rootDir, full);
+      if (isExcluded(rel)) continue;
       const stat = fs.lstatSync(full);
       if (stat.isDirectory()) {
         stack.push(full);
       } else if (stat.isFile()) {
-        entries.push(path.relative(rootDir, full));
+        entries.push(rel);
       }
     }
   }
