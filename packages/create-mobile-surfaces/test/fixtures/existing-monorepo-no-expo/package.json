@@ -1,0 +1,11 @@
+{
+  "name": "demo-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "echo 'placeholder build'"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}
