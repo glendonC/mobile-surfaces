@@ -29,3 +29,4 @@ jobs:
       - run: pnpm surface:check
       - run: pnpm typecheck
       - run: pnpm test:push
+      - run: pnpm test:scripts
