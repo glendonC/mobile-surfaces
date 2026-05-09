@@ -1,5 +1,14 @@
 # mobile-surfaces-app
 
+## 1.0.4
+
+### Patch Changes
+
+- Updated dependencies [86f811a]
+  - @mobile-surfaces/surface-contracts@2.0.0
+  - @mobile-surfaces/design-tokens@2.0.0
+  - @mobile-surfaces/live-activity@2.0.0
+
 ## 1.0.3
 
 ### Patch Changes
