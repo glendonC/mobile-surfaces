@@ -41,7 +41,7 @@
 
   ## Runtime packages (`@mobile-surfaces/{surface-contracts,design-tokens,live-activity,push}`)
 
-  No API changes since 1.3.0. Versions align with the linked release train; consumers can update lockfiles without code changes.
+  Version bump driven by the `create-mobile-surfaces` 2.0.0 major. The runtime packages have no API changes since 1.3.0 and ship at 2.0.0 only because the linked release train moves all packages together. Consumers can update lockfiles without code changes.
 
 ### Patch Changes
 
