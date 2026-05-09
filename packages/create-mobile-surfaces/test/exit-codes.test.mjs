@@ -80,4 +80,36 @@ describe("CLI exit codes (subprocess)", () => {
     const result = runCli([], { cwd: tmp });
     assert.equal(result.status, EXIT_CODES.USER_ERROR);
   });
+
+  // The remaining EXISTING_NON_EXPO refuse reasons (mode.mjs:71 and 87). The
+  // 2.0 break moved every refuse to USER_ERROR; without these tests, a future
+  // change that flips one reason back to ENV_ERROR would pass CI.
+  it("invalid package.json (parse error) -> 1 (USER_ERROR)", () => {
+    fs.writeFileSync(path.join(tmp, "package.json"), "{ not valid json");
+    const result = runCli([], { cwd: tmp });
+    assert.equal(result.status, EXIT_CODES.USER_ERROR);
+  });
+
+  it("package.json with no expo dep -> 1 (USER_ERROR)", () => {
+    fs.writeFileSync(
+      path.join(tmp, "package.json"),
+      JSON.stringify({ name: "rn-app", dependencies: { "react-native": "0.81.0" } }),
+    );
+    const result = runCli([], { cwd: tmp });
+    assert.equal(result.status, EXIT_CODES.USER_ERROR);
+  });
+
+  it("workspace with apps/mobile/ already present -> 1 (USER_ERROR)", () => {
+    fs.writeFileSync(
+      path.join(tmp, "package.json"),
+      JSON.stringify({ name: "host" }),
+    );
+    fs.writeFileSync(
+      path.join(tmp, "pnpm-workspace.yaml"),
+      "packages:\n  - 'apps/*'\n",
+    );
+    fs.mkdirSync(path.join(tmp, "apps", "mobile"), { recursive: true });
+    const result = runCli([], { cwd: tmp });
+    assert.equal(result.status, EXIT_CODES.USER_ERROR);
+  });
 });

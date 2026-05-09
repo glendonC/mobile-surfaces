@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { detectMode, MODE, parsePnpmWorkspaceGlobs } from "../src/mode.mjs";
+import { detectMode, MODE, parsePnpmWorkspaceGlobs, renderRefuse } from "../src/mode.mjs";
 
 let tmp;
 let savedUserAgent;
@@ -133,6 +133,71 @@ describe("detectMode — existing monorepo, no Expo", () => {
     write("pnpm-workspace.yaml", "packages:\n  - 'apps/*'\n");
     const mode = detectMode({ cwd: tmp });
     assert.equal(mode.kind, MODE.EXISTING_EXPO);
+  });
+});
+
+describe("renderRefuse", () => {
+  // Capture stdout so we can assert on what the user actually sees without
+  // letting the test polluting the test runner's output.
+  function captureStdout(fn) {
+    const original = process.stdout.write.bind(process.stdout);
+    let captured = "";
+    process.stdout.write = (chunk) => {
+      captured += chunk;
+      return true;
+    };
+    try {
+      fn();
+    } finally {
+      process.stdout.write = original;
+    }
+    return captured;
+  }
+
+  it("renders the no-package-json copy", () => {
+    const output = captureStdout(() =>
+      renderRefuse({ evidence: { reason: "no-package-json", cwd: "/foo" } }),
+    );
+    assert.match(output, /Can't add Mobile Surfaces here/);
+    assert.match(output, /package\.json/);
+  });
+
+  it("renders the invalid-package-json copy with the cwd", () => {
+    const output = captureStdout(() =>
+      renderRefuse({
+        evidence: { reason: "invalid-package-json", cwd: "/some/path" },
+      }),
+    );
+    assert.match(output, /\/some\/path/);
+  });
+
+  it("renders the no-expo-dep copy with the package name", () => {
+    const output = captureStdout(() =>
+      renderRefuse({
+        evidence: { reason: "no-expo-dep", packageName: "my-app" },
+      }),
+    );
+    assert.match(output, /my-app/);
+  });
+
+  it("renders the apps-mobile-exists copy with the package name", () => {
+    const output = captureStdout(() =>
+      renderRefuse({
+        evidence: { reason: "apps-mobile-exists", packageName: "host-monorepo" },
+      }),
+    );
+    assert.match(output, /host-monorepo/);
+  });
+
+  it("falls back to the default copy for an unknown reason", () => {
+    // A new refuse reason added to mode.mjs without updating the switch
+    // statement would land here. The fallback is the generic "no-package-json"
+    // copy, which is at least never wrong shape-wise. This test pins the
+    // behavior so a future refactor can't silently change it.
+    const output = captureStdout(() =>
+      renderRefuse({ evidence: { reason: "newly-invented-reason" } }),
+    );
+    assert.match(output, /Can't add Mobile Surfaces here/);
   });
 });
 

@@ -46,7 +46,10 @@ export async function prepareSourceTree() {
   };
 }
 
-function runStreamed(cmd, args, opts) {
+// Exported for tests that pin the rejection shape (err.exitCode, err.command).
+// Production callers reach this through copyTemplate, runInstall,
+// renameIdentity, prebuildIos, etc.
+export function runStreamed(cmd, args, opts) {
   return new Promise((resolve, reject) => {
     logger.header(`${cmd} ${args.join(" ")}${opts?.cwd ? `  (cwd ${opts.cwd})` : ""}`);
     const child = spawn(cmd, args, { ...opts, stdio: ["ignore", "pipe", "pipe"] });
