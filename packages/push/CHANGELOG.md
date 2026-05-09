@@ -19,7 +19,7 @@
   - Customize-further section in the post-scaffold success message and a CI invocation example in the README. (#17, #18)
   - `pnpm mobile:bootstrap` script that installs + first-prebuilds in one step. (#15)
   - Recursive identity rename across the whole tree (was previously an enumerated allowlist that drifted as files were added). (#5)
-  - Source-first package main/types pointers — typecheck no longer fails on the first run because workspace packages no longer claim unbuilt `dist/` artifacts. (#6)
+  - Source-first package `main` and `types` pointers, so typecheck no longer fails on the first run because workspace packages no longer claim unbuilt `dist/` artifacts. (#6)
 
   ## Bug fixes (`create-mobile-surfaces`)
 
