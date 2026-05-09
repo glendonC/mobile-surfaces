@@ -56,13 +56,19 @@ function normalizeForHash(rel, raw) {
   }
 }
 
-// The greenfield scaffold currently includes packages/create-mobile-surfaces/
-// in the user's tree. That's tangential to this snapshot's intent, and its
-// own test/ dir creates a bootstrap loop: adding a test file here changes
-// the snapshot the test asserts against. Exclude this dir so the snapshot
-// stays stable across changes to the CLI's own test infra.
+// Paths excluded from the snapshot. All of these are repo infrastructure
+// that's tangential to the snapshot's intent (catching drift in user-facing
+// scaffold output) AND would otherwise create false positives whenever
+// release/test infra files come and go:
+//   - packages/create-mobile-surfaces/test/: bootstrap loop — adding a test
+//     file here changes the snapshot the test asserts against
+//   - .changeset/: changeset files are added per-PR and consumed by
+//     `pnpm changeset version` on release. Without this exclusion, every
+//     release PR breaks CI on its own changeset file, and the bot's
+//     "Version packages" PR breaks again when it deletes the file
 const SCAFFOLD_PATH_EXCLUDES = [
   "packages/create-mobile-surfaces/test/",
+  ".changeset/",
 ];
 
 function isExcluded(rel) {
