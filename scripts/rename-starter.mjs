@@ -174,7 +174,7 @@ export function resetAppsMobileChangelog(rootDir, { appPackageName }) {
 }
 
 // Strip the $id key from packages/surface-contracts/schema.json. Upstream's
-// $id points at https://unpkg.com/@mobile-surfaces/surface-contracts@1.2/...,
+// $id points at https://unpkg.com/@mobile-surfaces/surface-contracts@2.0/...,
 // which after slug-substitution would resolve to a fork URL that isn't
 // published anywhere — silently breaking Ajv/jsonschema consumers that
 // resolve $id. We drop it here so the freshly-scaffolded checkout doesn't
