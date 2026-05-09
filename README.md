@@ -85,6 +85,24 @@ The CLI checks your toolchain (macOS, Xcode, Node, an iOS simulator), prompts fo
 
 That is it. No Xcode UI to navigate, no Swift you have to write up front, and no APNs (Apple's Push Notification service, the system that delivers pushes to iPhones) setup before you can see something work.
 
+## Scripted usage
+
+If you are wiring this into CI, an AI agent, or any non-interactive automation, pass `--yes` plus the required fields to skip every prompt:
+
+```bash
+npm create mobile-surfaces@latest --yes \
+  --name my-app --bundle-id com.acme.myapp \
+  --no-install
+```
+
+The CLI also detects three starting situations beyond an empty directory:
+
+- **An existing Expo app.** Switches to add-to-existing mode, recaps every change, then patches `app.json`, copies the widget target, and adds Info.plist keys.
+- **A TypeScript monorepo without Expo.** Scaffolds `apps/mobile/` inside the workspace and adds the workspace globs needed for it.
+- **Anything else with files in it.** Refuses with an exit code of `1`, so CI stops early.
+
+The exit-code contract is `0` success, `1` user error (bad inputs), `2` environment error (missing tools, install failed), `3` template error (the published CLI is broken), `130` interrupted (Ctrl+C). See [packages/create-mobile-surfaces/README.md](./packages/create-mobile-surfaces/README.md) for the full flag reference and a CI workflow example.
+
 ## How it works
 
 You write one function:
