@@ -40,20 +40,37 @@ function comboName(s) {
   return `hw-${s.homeWidget}-cw-${s.controlWidget}`;
 }
 
-// rename-starter.mjs writes a `ranAt: <ISO timestamp>` into
-// .mobile-surfaces-identity.json on every run. Replace it with a fixed
-// placeholder so the rest of the manifest's contents still get diff coverage.
+// Two sources of expected-but-noisy drift in the materialized scaffold:
+//   1. rename-starter.mjs writes a `ranAt: <ISO timestamp>` into
+//      .mobile-surfaces-identity.json on every run.
+//   2. Linked package versions (apps/mobile/package.json and friends) bump
+//      on every release, which would otherwise force a manual snapshot
+//      update on every linked-bump PR even when the scaffold output is
+//      semantically unchanged.
+// Normalize both before hashing so the rest of the file still gets diff
+// coverage.
 const IDENTITY_MANIFEST = ".mobile-surfaces-identity.json";
 
 function normalizeForHash(rel, raw) {
-  if (rel !== IDENTITY_MANIFEST) return raw;
-  try {
-    const parsed = JSON.parse(raw.toString("utf8"));
-    if (typeof parsed.ranAt === "string") parsed.ranAt = "<NORMALIZED>";
-    return Buffer.from(`${JSON.stringify(parsed, null, 2)}\n`);
-  } catch {
-    return raw;
+  if (rel === IDENTITY_MANIFEST) {
+    try {
+      const parsed = JSON.parse(raw.toString("utf8"));
+      if (typeof parsed.ranAt === "string") parsed.ranAt = "<NORMALIZED>";
+      return Buffer.from(`${JSON.stringify(parsed, null, 2)}\n`);
+    } catch {
+      return raw;
+    }
   }
+  if (rel === "package.json" || rel.endsWith("/package.json")) {
+    try {
+      const parsed = JSON.parse(raw.toString("utf8"));
+      if (typeof parsed.version === "string") parsed.version = "<NORMALIZED>";
+      return Buffer.from(`${JSON.stringify(parsed, null, 2)}\n`);
+    } catch {
+      return raw;
+    }
+  }
+  return raw;
 }
 
 // Paths excluded from the snapshot. All of these are repo infrastructure
