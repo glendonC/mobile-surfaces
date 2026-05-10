@@ -12,13 +12,13 @@ importers:
         specifier: 2.31.0
         version: 2.31.0(@types/node@25.6.0)
       '@types/node':
-        specifier: ^25.6.0
+        specifier: 25.6.0
         version: 25.6.0
       tsup:
-        specifier: ^8.3.5
+        specifier: 8.5.1
         version: 8.5.1(jiti@2.6.1)(postcss@8.5.13)(typescript@5.9.3)(yaml@2.8.3)
       zod:
-        specifier: ^4
+        specifier: 4.3.6
         version: 4.3.6
 
   apps/mobile:
@@ -104,19 +104,19 @@ importers:
   packages/create-mobile-surfaces:
     dependencies:
       '@inquirer/ansi':
-        specifier: ^2.0.5
+        specifier: 2.0.5
         version: 2.0.5
       '@inquirer/core':
-        specifier: ^11.1.9
+        specifier: 11.1.9
         version: 11.1.9(@types/node@25.6.0)
       '@inquirer/prompts':
-        specifier: ^8.4.2
+        specifier: 8.4.2
         version: 8.4.2(@types/node@25.6.0)
       ora:
-        specifier: ^9.4.0
+        specifier: 9.4.0
         version: 9.4.0
       picocolors:
-        specifier: ^1.1.1
+        specifier: 1.1.1
         version: 1.1.1
 
   packages/design-tokens: {}
@@ -145,7 +145,7 @@ importers:
   packages/surface-contracts:
     dependencies:
       zod:
-        specifier: ^4
+        specifier: 4.3.6
         version: 4.3.6
 
 packages:

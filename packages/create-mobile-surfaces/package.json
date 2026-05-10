@@ -46,10 +46,10 @@
     "prepublishOnly": "node ./scripts/build-template.mjs"
   },
   "dependencies": {
-    "@inquirer/ansi": "^2.0.5",
-    "@inquirer/core": "^11.1.9",
-    "@inquirer/prompts": "^8.4.2",
-    "ora": "^9.4.0",
-    "picocolors": "^1.1.1"
+    "@inquirer/ansi": "2.0.5",
+    "@inquirer/core": "11.1.9",
+    "@inquirer/prompts": "8.4.2",
+    "ora": "9.4.0",
+    "picocolors": "1.1.1"
   }
 }

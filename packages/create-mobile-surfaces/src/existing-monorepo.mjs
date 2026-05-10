@@ -73,15 +73,18 @@ function renderFoundRecap(evidence) {
 function renderPlanRecap(plan) {
   const lines = [pc.bold("What I'll add"), ""];
 
+  // Echo the surface selections so the user sees their choices reflected
+  // before "Apply these changes?". Live activity + dynamic island always
+  // ship; only home + control widgets are toggleable.
+  lines.push("  " + pc.bold("Surfaces"));
+  lines.push(`    live activity + dynamic island  ${pc.dim("(always)")}`);
+  lines.push(`    home widget                     ${plan.surfaces.homeWidget ? pc.bold("yes") : pc.dim("no")}`);
+  lines.push(`    control widget                  ${plan.surfaces.controlWidget ? pc.bold("yes") : pc.dim("no")}`);
+  lines.push("");
+
   lines.push("  " + pc.bold("New files"));
   lines.push(`    apps/mobile/  (Expo app + widget target)`);
-  if (plan.surfaces.homeWidget) {
-    lines.push(`    apps/mobile/targets/widget/  (live activity + home + control widgets)`);
-  } else if (plan.surfaces.controlWidget) {
-    lines.push(`    apps/mobile/targets/widget/  (live activity + control widget)`);
-  } else {
-    lines.push(`    apps/mobile/targets/widget/  (live activity only)`);
-  }
+  lines.push(`    apps/mobile/targets/widget/`);
   lines.push("");
 
   if (plan.workspaceGlobsToAdd.length > 0) {
