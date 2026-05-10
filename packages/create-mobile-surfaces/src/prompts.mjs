@@ -1,10 +1,17 @@
 // The greenfield prompt flow. Returns a config object the rest of the CLI
 // uses to materialize the project. UI primitives come from ./ui.mjs which
 // wraps @inquirer/prompts and ora — no clack, no redraw bookkeeping.
+//
+// The `ui` parameter is a DI seam for unit tests: production callers omit
+// it and pick up the live ui module; tests inject a fake object whose
+// askText/askConfirm/askSelect return scripted answers and whose log/rail/
+// section are no-ops. Adding the seam landed coverage for the validator-
+// retry, recap-retry, and cancellation paths that mocking @inquirer/prompts
+// directly does not reach.
 
 import pc from "picocolors";
 import { prompts as copy } from "./copy.mjs";
-import { askConfirm, askSelect, askText, log, rail, section } from "./ui.mjs";
+import * as defaultUi from "./ui.mjs";
 import {
   toBundleId,
   toScheme,
@@ -14,12 +21,12 @@ import {
   validateTeamId,
 } from "./validators.mjs";
 
-export async function runPrompts({ initialName, overrides = {}, yes = false }) {
-  rail.step(2, 5, "Project basics");
+export async function runPrompts({ initialName, overrides = {}, yes = false, ui = defaultUi }) {
+  ui.rail.step(2, 5, "Project basics");
 
   const projectName = overrides.projectName !== undefined
     ? overrides.projectName
-    : await askText({
+    : await ui.askText({
         message: copy.projectName.message,
         defaultValue: initialName ?? "lockscreen-demo",
         validate: validateProjectSlug,
@@ -29,7 +36,7 @@ export async function runPrompts({ initialName, overrides = {}, yes = false }) {
     ? overrides.scheme
     : yes
       ? toScheme(projectName)
-      : await askText({
+      : await ui.askText({
           message: copy.scheme.message,
           defaultValue: toScheme(projectName),
           validate: validateScheme,
@@ -39,7 +46,7 @@ export async function runPrompts({ initialName, overrides = {}, yes = false }) {
     ? overrides.bundleId
     : yes
       ? toBundleId(projectName)
-      : await askText({
+      : await ui.askText({
           message: copy.bundleId.message,
           defaultValue: toBundleId(projectName),
           validate: validateBundleId,
@@ -49,13 +56,13 @@ export async function runPrompts({ initialName, overrides = {}, yes = false }) {
     ? overrides.teamId
     : yes
       ? ""
-      : await askText({
+      : await ui.askText({
           message: copy.teamId.message,
           defaultValue: "",
           validate: validateTeamId,
         });
 
-  rail.step(3, 5, "Surfaces");
+  ui.rail.step(3, 5, "Surfaces");
 
   // Live Activity + Dynamic Island always ship — they're the load-bearing
   // surface this template was built around. Home and control widgets are
@@ -65,7 +72,7 @@ export async function runPrompts({ initialName, overrides = {}, yes = false }) {
     ? overrides.homeWidget
     : yes
       ? true
-      : await askConfirm({
+      : await ui.askConfirm({
           message: copy.surfaces.homeWidget.message,
           defaultValue: true,
         });
@@ -74,7 +81,7 @@ export async function runPrompts({ initialName, overrides = {}, yes = false }) {
     ? overrides.controlWidget
     : yes
       ? true
-      : await askConfirm({
+      : await ui.askConfirm({
           message: copy.surfaces.controlWidget.message,
           defaultValue: true,
         });
@@ -83,7 +90,7 @@ export async function runPrompts({ initialName, overrides = {}, yes = false }) {
     ? overrides.installNow
     : yes
       ? true
-      : await askSelect({
+      : await ui.askSelect({
           message: copy.install.message,
           defaultValue: true,
           options: [
@@ -95,7 +102,7 @@ export async function runPrompts({ initialName, overrides = {}, yes = false }) {
   // --yes skips the recap + confirmation; the user already knows what they
   // typed. Interactive runs always recap and confirm.
   if (!yes) {
-    rail.step(4, 5, "Confirm");
+    ui.rail.step(4, 5, "Confirm");
 
     // Recap — single stdout.write block. Cannot be redrawn over.
     const recapBody = [
@@ -107,16 +114,16 @@ export async function runPrompts({ initialName, overrides = {}, yes = false }) {
       `control       ${controlWidget ? pc.bold("yes") : pc.dim("no")}`,
       `install       ${installNow ? pc.bold("yes") : pc.dim("no")}`,
     ].join("\n");
-    section("Recap", recapBody);
+    ui.section("Recap", recapBody);
 
-    const proceed = await askConfirm({
+    const proceed = await ui.askConfirm({
       message: copy.confirm.message,
       defaultValue: true,
     });
 
     if (!proceed) {
-      log.info("Starting over.");
-      return runPrompts({ initialName: projectName, overrides, yes });
+      ui.log.info("Starting over.");
+      return runPrompts({ initialName: projectName, overrides, yes, ui });
     }
   }
 

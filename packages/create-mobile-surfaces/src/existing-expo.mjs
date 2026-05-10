@@ -12,7 +12,7 @@ import path from "node:path";
 import pc from "picocolors";
 import { cancelled, prompts as copy } from "./copy.mjs";
 import { EXIT_CODES } from "./exit-codes.mjs";
-import { askConfirm, askSelect, askText, log, rail } from "./ui.mjs";
+import * as defaultUi from "./ui.mjs";
 import { validateTeamId } from "./validators.mjs";
 
 // Default selections preserve pre-3A behavior: every surface ships unless
@@ -111,7 +111,7 @@ function configLabel(config) {
 
 // Rail-prefixed recap. Rendered as a single rail.block so even if the terminal
 // is narrow, the column-zero rail prefix is preserved on every row.
-function renderFoundRecap(evidence) {
+function renderFoundRecap(evidence, ui) {
   const config = evidence.config;
   // Order: lead with the things we're about to mutate (config, bundle id),
   // then identifying context (project, package manager). Demote Expo version,
@@ -130,10 +130,10 @@ function renderFoundRecap(evidence) {
     lines.push(`  Plugins       ${pc.dim(evidence.pluginsPresent.join(", "))}`);
   }
   lines.push("");
-  rail.block(lines.join("\n"));
+  ui.rail.block(lines.join("\n"));
 }
 
-function renderPlanRecap(plan) {
+function renderPlanRecap(plan, ui) {
   const lines = [pc.bold("What I'll add"), ""];
 
   // Echo the surface selections so the user sees their choices reflected
@@ -192,21 +192,21 @@ function renderPlanRecap(plan) {
     lines.push("");
   }
 
-  rail.block(lines.join("\n"));
+  ui.rail.block(lines.join("\n"));
 }
 
-export async function runExistingExpoPrompts({ evidence, manifest, overrides = {}, yes = false }) {
-  rail.step(2, 5, "Detection");
-  renderFoundRecap(evidence);
+export async function runExistingExpoPrompts({ evidence, manifest, overrides = {}, yes = false, ui = defaultUi }) {
+  ui.rail.step(2, 5, "Detection");
+  renderFoundRecap(evidence, ui);
 
-  rail.step(3, 5, "Surfaces");
+  ui.rail.step(3, 5, "Surfaces");
 
   // Same picker as greenfield. Live Activity + Dynamic Island always ship.
   const homeWidget = overrides.homeWidget !== undefined
     ? overrides.homeWidget
     : yes
       ? true
-      : await askConfirm({
+      : await ui.askConfirm({
           message: copy.surfaces.homeWidget.message,
           defaultValue: true,
         });
@@ -215,7 +215,7 @@ export async function runExistingExpoPrompts({ evidence, manifest, overrides = {
     ? overrides.controlWidget
     : yes
       ? true
-      : await askConfirm({
+      : await ui.askConfirm({
           message: copy.surfaces.controlWidget.message,
           defaultValue: true,
         });
@@ -226,7 +226,7 @@ export async function runExistingExpoPrompts({ evidence, manifest, overrides = {
     surfaces: { homeWidget, controlWidget },
   });
 
-  rail.step(4, 5, "Plan");
+  ui.rail.step(4, 5, "Plan");
 
   // Apple Team ID — ask only if we don't already have a real (non-placeholder)
   // value in app.json. JS/TS configs can't be read safely so we always ask.
@@ -245,7 +245,7 @@ export async function runExistingExpoPrompts({ evidence, manifest, overrides = {
   } else if (yes) {
     teamId = null;
   } else {
-    const answer = await askText({
+    const answer = await ui.askText({
       message: copy.teamId.message,
       defaultValue: "",
       validate: validateTeamId,
@@ -257,7 +257,7 @@ export async function runExistingExpoPrompts({ evidence, manifest, overrides = {
     ? overrides.installNow
     : yes
       ? true
-      : await askSelect({
+      : await ui.askSelect({
           message: copy.installExisting.message,
           defaultValue: true,
           options: [
@@ -268,16 +268,16 @@ export async function runExistingExpoPrompts({ evidence, manifest, overrides = {
 
   // Plan recap, then a single confirm before any change is applied. --yes
   // skips both the recap header confirmation and the "are you sure" prompt.
-  renderPlanRecap(plan);
+  renderPlanRecap(plan, ui);
 
   if (!yes) {
-    const proceed = await askConfirm({
+    const proceed = await ui.askConfirm({
       message: "Apply these changes?",
       defaultValue: true,
     });
 
     if (!proceed) {
-      log.message(pc.dim(cancelled));
+      ui.log.message(pc.dim(cancelled));
       process.exit(EXIT_CODES.SUCCESS);
     }
   }
