@@ -8,7 +8,7 @@ import path from "node:path";
 import pc from "picocolors";
 import { cancelled, monorepo as monorepoCopy, prompts as copy } from "./copy.mjs";
 import { EXIT_CODES } from "./exit-codes.mjs";
-import { askConfirm, askSelect, askText, log, rail, section } from "./ui.mjs";
+import * as defaultUi from "./ui.mjs";
 import {
   toBundleId,
   toScheme,
@@ -53,7 +53,7 @@ export function planMonorepoScaffold({ evidence, manifest, config }) {
   };
 }
 
-function renderFoundRecap(evidence) {
+function renderFoundRecap(evidence, ui) {
   const lines = [
     pc.bold("What we found"),
     "",
@@ -67,10 +67,10 @@ function renderFoundRecap(evidence) {
     `  Package mgr   ${pc.bold(evidence.packageManager ?? "unknown")}`,
     "",
   ];
-  rail.block(lines.join("\n"));
+  ui.rail.block(lines.join("\n"));
 }
 
-function renderPlanRecap(plan) {
+function renderPlanRecap(plan, ui) {
   const lines = [pc.bold("What I'll add"), ""];
 
   // Echo the surface selections so the user sees their choices reflected
@@ -111,21 +111,21 @@ function renderPlanRecap(plan) {
   lines.push("    your root package.json, tsconfig.json, lint, or prettier configs");
   lines.push("");
 
-  rail.block(lines.join("\n"));
+  ui.rail.block(lines.join("\n"));
 }
 
-export async function runMonorepoPrompts({ evidence, manifest, overrides = {}, yes = false }) {
-  rail.step(2, 5, "Detection");
-  rail.line(monorepoCopy.intro);
-  rail.blank();
-  renderFoundRecap(evidence);
+export async function runMonorepoPrompts({ evidence, manifest, overrides = {}, yes = false, ui = defaultUi }) {
+  ui.rail.step(2, 5, "Detection");
+  ui.rail.line(monorepoCopy.intro);
+  ui.rail.blank();
+  renderFoundRecap(evidence, ui);
 
   // Identity prompts. Same shape as greenfield since this mode also writes
   // a new Expo app from scratch — the user has no existing identity for us
   // to recap.
   const projectName = overrides.projectName !== undefined
     ? overrides.projectName
-    : await askText({
+    : await ui.askText({
         message: copy.projectName.message,
         defaultValue: "lockscreen-demo",
         validate: validateProjectSlug,
@@ -135,7 +135,7 @@ export async function runMonorepoPrompts({ evidence, manifest, overrides = {}, y
     ? overrides.scheme
     : yes
       ? toScheme(projectName)
-      : await askText({
+      : await ui.askText({
           message: copy.scheme.message,
           defaultValue: toScheme(projectName),
           validate: validateScheme,
@@ -145,7 +145,7 @@ export async function runMonorepoPrompts({ evidence, manifest, overrides = {}, y
     ? overrides.bundleId
     : yes
       ? toBundleId(projectName)
-      : await askText({
+      : await ui.askText({
           message: copy.bundleId.message,
           defaultValue: toBundleId(projectName),
           validate: validateBundleId,
@@ -155,20 +155,20 @@ export async function runMonorepoPrompts({ evidence, manifest, overrides = {}, y
     ? overrides.teamId
     : yes
       ? ""
-      : await askText({
+      : await ui.askText({
           message: copy.teamId.message,
           defaultValue: "",
           validate: validateTeamId,
         });
   const teamId = teamIdRaw && teamIdRaw.length > 0 ? teamIdRaw : null;
 
-  rail.step(3, 5, "Surfaces");
+  ui.rail.step(3, 5, "Surfaces");
 
   const homeWidget = overrides.homeWidget !== undefined
     ? overrides.homeWidget
     : yes
       ? true
-      : await askConfirm({
+      : await ui.askConfirm({
           message: copy.surfaces.homeWidget.message,
           defaultValue: true,
         });
@@ -177,7 +177,7 @@ export async function runMonorepoPrompts({ evidence, manifest, overrides = {}, y
     ? overrides.controlWidget
     : yes
       ? true
-      : await askConfirm({
+      : await ui.askConfirm({
           message: copy.surfaces.controlWidget.message,
           defaultValue: true,
         });
@@ -186,7 +186,7 @@ export async function runMonorepoPrompts({ evidence, manifest, overrides = {}, y
     ? overrides.installNow
     : yes
       ? true
-      : await askSelect({
+      : await ui.askSelect({
           message: copy.installExisting.message,
           defaultValue: true,
           options: [
@@ -209,16 +209,16 @@ export async function runMonorepoPrompts({ evidence, manifest, overrides = {}, y
 
   const plan = planMonorepoScaffold({ evidence, manifest, config });
 
-  rail.step(4, 5, "Plan");
-  renderPlanRecap(plan);
+  ui.rail.step(4, 5, "Plan");
+  renderPlanRecap(plan, ui);
 
   if (!yes) {
-    const proceed = await askConfirm({
+    const proceed = await ui.askConfirm({
       message: "Apply these changes?",
       defaultValue: true,
     });
     if (!proceed) {
-      log.message(pc.dim(cancelled));
+      ui.log.message(pc.dim(cancelled));
       process.exit(EXIT_CODES.SUCCESS);
     }
   }

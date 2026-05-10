@@ -126,8 +126,10 @@ export const rail = {
 
 // Inquirer throws an ExitPromptError when the user hits Ctrl+C. We funnel
 // that through a single catch so each prompt site doesn't repeat the
-// "say cancelled, exit 0" pattern.
-async function guard(fn) {
+// "say cancelled, exit 0" pattern. Exported so the cancellation contract
+// can be unit-tested directly without going through the prompt-orchestrator
+// layer.
+export async function guard(fn) {
   try {
     return await fn();
   } catch (err) {
@@ -144,7 +146,8 @@ async function guard(fn) {
 
 // Validators in our codebase return a string (the error) or undefined
 // (valid). Inquirer expects `true` on valid and a string on error.
-function adaptValidate(validate) {
+// Exported for direct unit testing.
+export function adaptValidate(validate) {
   if (!validate) return undefined;
   return (value) => {
     const err = validate(value);
