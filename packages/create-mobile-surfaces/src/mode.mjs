@@ -2,11 +2,22 @@
 // existing Expo project, or looking at something we can't help with? Returns
 // the kind plus enough evidence for the next phase to recap and prompt
 // without re-reading the same files.
+//
+// Two collaborators are factored out: workspace.mjs (pnpm-workspace.yaml +
+// package.json `workspaces` parsing) and package-manager.mjs (user-agent +
+// lockfile walk). Both are usable on their own without going through the
+// wider mode-detection flow.
 
 import fs from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
 import { refuse as refuseCopy } from "./copy.mjs";
+import { detectPackageManager } from "./package-manager.mjs";
+import { detectWorkspace, parsePnpmWorkspaceGlobs } from "./workspace.mjs";
+
+// Re-exported for tests and any callers that want the YAML parser directly.
+// New code should import from ./workspace.mjs.
+export { parsePnpmWorkspaceGlobs };
 
 export const MODE = Object.freeze({
   GREENFIELD: "greenfield",
@@ -91,58 +102,6 @@ export function detectMode({ cwd, targetName }) {
   };
 }
 
-// Returns { kind, path?, globs } when this looks like a workspace, or null.
-// kind is "pnpm-workspace" (a yaml file) or "package-json" (the workspaces
-// field). The pnpm form wins when both are present, since pnpm-workspace.yaml
-// is what pnpm actually reads.
-function detectWorkspace({ cwd, pkg }) {
-  const pnpmYaml = path.join(cwd, "pnpm-workspace.yaml");
-  if (fs.existsSync(pnpmYaml)) {
-    return {
-      kind: "pnpm-workspace",
-      path: pnpmYaml,
-      globs: parsePnpmWorkspaceGlobs(fs.readFileSync(pnpmYaml, "utf8")),
-    };
-  }
-  if (Array.isArray(pkg.workspaces)) {
-    return { kind: "package-json", path: null, globs: [...pkg.workspaces] };
-  }
-  if (pkg.workspaces && Array.isArray(pkg.workspaces.packages)) {
-    return {
-      kind: "package-json",
-      path: null,
-      globs: [...pkg.workspaces.packages],
-    };
-  }
-  return null;
-}
-
-// Tiny YAML reader scoped to the shape pnpm-workspace.yaml uses (a top-level
-// `packages:` key with a list of quoted strings). Avoids pulling in a YAML
-// dep for a parse this constrained.
-export function parsePnpmWorkspaceGlobs(yaml) {
-  const lines = yaml.split(/\r?\n/);
-  const globs = [];
-  let inPackages = false;
-  for (const raw of lines) {
-    const line = raw.replace(/#.*$/, "");
-    if (/^packages\s*:/.test(line)) {
-      inPackages = true;
-      continue;
-    }
-    if (inPackages) {
-      const m = line.match(/^\s+-\s*['"]?([^'"]+?)['"]?\s*$/);
-      if (m) {
-        globs.push(m[1]);
-        continue;
-      }
-      // A non-list, non-blank line at column 0 ends the packages block.
-      if (line.trim() && !/^\s/.test(line)) inPackages = false;
-    }
-  }
-  return globs;
-}
-
 function gatherMonorepoEvidence({ cwd, pkg, workspace }) {
   return {
     cwd,
@@ -201,30 +160,6 @@ function readJsonConfig(filePath) {
   } catch {
     return { kind: "json", path: filePath, parsed: null, error: "invalid-json" };
   }
-}
-
-function detectPackageManager(cwd) {
-  // 1. The user-agent set by `<pm> create ...` is the strongest signal
-  //    because it reflects what the user actually typed.
-  const ua = process.env.npm_config_user_agent ?? "";
-  if (ua.startsWith("pnpm/")) return "pnpm";
-  if (ua.startsWith("bun/")) return "bun";
-  if (ua.startsWith("yarn/")) return "yarn";
-  if (ua.startsWith("npm/")) return "npm";
-
-  // 2. Walk up looking for a lockfile, so monorepo subdirs find the
-  //    workspace's package manager.
-  let dir = cwd;
-  for (let i = 0; i < 6; i++) {
-    if (fs.existsSync(path.join(dir, "pnpm-lock.yaml"))) return "pnpm";
-    if (fs.existsSync(path.join(dir, "bun.lockb"))) return "bun";
-    if (fs.existsSync(path.join(dir, "yarn.lock"))) return "yarn";
-    if (fs.existsSync(path.join(dir, "package-lock.json"))) return "npm";
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return null;
 }
 
 // Render path. Each refuse reason gets a tailored screen — the value here

@@ -156,10 +156,49 @@ export async function renameIdentity({ target, config }) {
     { cwd: target },
   );
 
-  applyAppleTeamId({ target, teamId: config.teamId });
-  if (config.newArchEnabled !== undefined) {
-    applyNewArchEnabled({ target, newArchEnabled: config.newArchEnabled });
+  // Apply both app.json patches in a single read-modify-write. The rename
+  // script already wrote app.json in this run, and applyAppleTeamId /
+  // applyNewArchEnabled each do their own r-m-w cycle; calling them
+  // sequentially adds two more reads of a file we just touched. Their
+  // exported forms remain for unit tests; production goes through this
+  // batched path.
+  applyAppJsonPatches({
+    target,
+    teamId: config.teamId,
+    newArchEnabled: config.newArchEnabled,
+  });
+}
+
+// Internal: one read-modify-write applying both teamId and newArchEnabled
+// patches. Mirrors applyAppleTeamId + applyNewArchEnabled semantics: skips
+// when the file or expected keys are missing; strips the upstream
+// "XXXXXXXXXX" placeholder when teamId is null/empty. Returns true when any
+// change was written.
+function applyAppJsonPatches({ target, teamId, newArchEnabled }) {
+  const appJsonPath = path.join(target, "apps", "mobile", "app.json");
+  if (!fs.existsSync(appJsonPath)) return false;
+  const j = JSON.parse(fs.readFileSync(appJsonPath, "utf8"));
+  if (!j.expo) return false;
+  let changed = false;
+
+  if (j.expo.ios) {
+    if (teamId) {
+      j.expo.ios.appleTeamId = teamId;
+      changed = true;
+    } else if (j.expo.ios.appleTeamId === "XXXXXXXXXX") {
+      delete j.expo.ios.appleTeamId;
+      changed = true;
+    }
   }
+
+  if (newArchEnabled !== undefined) {
+    j.expo.newArchEnabled = newArchEnabled;
+    changed = true;
+  }
+
+  if (!changed) return false;
+  fs.writeFileSync(appJsonPath, JSON.stringify(j, null, 2) + "\n");
+  return true;
 }
 
 // Pure-ish: read apps/mobile/app.json, set expo.newArchEnabled to the user's

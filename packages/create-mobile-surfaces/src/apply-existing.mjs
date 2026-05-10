@@ -191,12 +191,13 @@ export function applyWidgetRename({ destDir, swiftPrefix }) {
   }
 
   const widgetTarget = `${swiftPrefix}Widget`;
-  const filesTouched = [];
-  const filesRenamed = [];
+  const TEXTY_EXTS = new Set([".swift", ".js", ".ts", ".json", ".plist", ".strings", ".md"]);
 
-  // Walk every file under destDir. The widget target dir is a flat shape
-  // plus an Assets.xcassets subtree we don't need to rewrite — but we walk
-  // recursively anyway in case the bundled tree grows nested files later.
+  // Two-phase: walk + collect, then apply. Coordinating writes and renames
+  // through a single set of {path, newContent, newName} records makes the
+  // ordering explicit (write rewritten content first, then rename) and keeps
+  // the apply step easy to reason about — no in-walk side effects.
+  const ops = [];
   function walk(dir) {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name);
@@ -206,33 +207,43 @@ export function applyWidgetRename({ destDir, swiftPrefix }) {
       }
       if (!entry.isFile()) continue;
 
+      let newContent;
       // Only rewrite text-y files. Asset bundles (.car, images) won't
       // contain literal "MobileSurfaces" strings, but reading them as utf8
       // is wasteful and risks false-positive substitutions.
-      const ext = path.extname(entry.name).toLowerCase();
-      const textyExts = new Set([".swift", ".js", ".ts", ".json", ".plist", ".strings", ".md"]);
-      if (textyExts.has(ext)) {
+      if (TEXTY_EXTS.has(path.extname(entry.name).toLowerCase())) {
         const original = fs.readFileSync(full, "utf8");
         const rewritten = rewriteContent({ source: original, swiftPrefix, widgetTarget });
-        if (rewritten !== original) {
-          fs.writeFileSync(full, rewritten);
-          filesTouched.push(full);
-        }
+        if (rewritten !== original) newContent = rewritten;
       }
 
-      // Rename MobileSurfaces<Suffix>.swift → <swiftPrefix><Suffix>.swift.
-      // Only rewrite the prefix at the start of the basename so we don't
-      // clobber unrelated uses of the literal string elsewhere.
+      // MobileSurfaces<Suffix>.swift → <swiftPrefix><Suffix>.swift. Only the
+      // prefix at the start of the basename is rewritten so unrelated uses
+      // of the literal "MobileSurfaces" string elsewhere are left alone.
       const renamed = renameWidgetFilename(entry.name, swiftPrefix);
-      if (renamed && renamed !== entry.name) {
-        const newFull = path.join(dir, renamed);
-        fs.renameSync(full, newFull);
-        filesRenamed.push({ from: full, to: newFull });
+      const newName = renamed && renamed !== entry.name ? renamed : undefined;
+
+      if (newContent !== undefined || newName !== undefined) {
+        ops.push({ dir, name: entry.name, newContent, newName });
       }
     }
   }
-
   walk(destDir);
+
+  const filesTouched = [];
+  const filesRenamed = [];
+  for (const op of ops) {
+    const full = path.join(op.dir, op.name);
+    if (op.newContent !== undefined) {
+      fs.writeFileSync(full, op.newContent);
+      filesTouched.push(full);
+    }
+    if (op.newName !== undefined) {
+      const newFull = path.join(op.dir, op.newName);
+      fs.renameSync(full, newFull);
+      filesRenamed.push({ from: full, to: newFull });
+    }
+  }
 
   return {
     renamed: true,
