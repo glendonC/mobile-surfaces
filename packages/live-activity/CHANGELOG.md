@@ -1,5 +1,41 @@
 # @mobile-surfaces/live-activity
 
+## 2.0.1
+
+### Patch Changes
+
+- b270fa1: Pin all dependencies to exact versions across packages and root devDependencies. Replaces caret/tilde ranges on zod, @inquirer/ansi, @inquirer/core, @inquirer/prompts, ora, picocolors, @types/node, and tsup so consumers no longer pick up transitive majors at install time.
+
+  CLI improvements: the existing-expo and existing-monorepo plan recaps now echo the user's surface selections (live activity, home widget, control widget) before "Apply these changes?" so toggled-off surfaces are visible at confirmation. The existing-expo "What we found" recap leads with Config and Bundle id, demoting Expo version, ios/ folder, and plugins below the actionable fields. The bundle identifier validator now hints at reverse-DNS format ("Should be reverse-DNS (e.g. com.company.appname) with at least two segments"), and the Apple Team ID prompt points to developer.apple.com/account.
+
+- 9bf2d87: @mobile-surfaces/push: production-readiness pass.
+
+  - Add UnregisteredError typed class for APNs 410 responses and bind it to MS020. Backends can now distinguish a rotated or terminated token from genuinely unknown reasons without string-matching the reason field.
+  - Close a narrow GOAWAY race in Http2Client. If APNs sent GOAWAY between session establishment and request dispatch, the SDK could issue a request on a session that had already been dropped from the cache. The request layer now validates the session is still current and re-dials once before dispatch, so a flapping connection surfaces as a transport error to the retry layer rather than racing.
+  - Sanitize APNs key file errors. resolveKeyPem in @mobile-surfaces/push and the loadApnsKey helper in scripts/send-apns.mjs no longer surface the resolved absolute key path on read failure; ENOENT, EACCES, and EISDIR map to a path-free message. A 64 KB size guard rejects misconfigured paths early.
+  - Document JWT cache concurrency. JwtCache is safe for concurrent in-flight requests on a single Node event loop but does not synchronize across worker_threads or cluster workers; the docstring now states the contract explicitly.
+  - New transport tests: GOAWAY mid-flight reconnects on a fresh session; parallel sends multiplex over a single session; idle timeout closes the session and the next send reconnects; Http2Client surfaces per-request timeouts as ETIMEDOUT-coded errors.
+
+- 72dee5f: create-mobile-surfaces: internal refactors with no behavior change.
+
+  - Split mode.mjs into focused modules. Workspace detection (pnpm-workspace.yaml + package.json `workspaces` parsing) moves to workspace.mjs, and package-manager detection (npm_config_user_agent + lockfile walk) moves to package-manager.mjs. mode.mjs now imports from both and re-exports parsePnpmWorkspaceGlobs for the existing test, but new code can target workspace.mjs directly without paying the cost of full mode detection.
+  - Consolidate the greenfield app.json triple-read in scaffold.renameIdentity. The rename-starter script writes app.json, then applyAppleTeamId and applyNewArchEnabled each did their own read-modify-write on the file we just touched; renameIdentity now uses an internal applyAppJsonPatches helper that batches both patches into a single read-modify-write. The exported applyAppleTeamId / applyNewArchEnabled functions stay for unit tests.
+  - Consolidate the apply-existing widget-rename walk. applyWidgetRename now collects {dir, name, newContent, newName} tuples in one walk and applies writes + renames in a coordinated sweep. Same external behavior; intent is clearer and the apply step is easier to reason about than per-file side effects mid-traversal.
+
+- 0166297: create-mobile-surfaces: testable prompt flow.
+
+  Adds a small DI seam to the three prompt orchestrators (runPrompts, runExistingExpoPrompts, runMonorepoPrompts) so unit tests can drive them without going through @inquirer/prompts. Each function now accepts a `ui` parameter that defaults to the live ./ui.mjs module; bin/index.mjs and other production callers are unchanged. The orchestrators internally call `ui.askText` / `ui.askConfirm` / `ui.askSelect` / `ui.log.*` / `ui.rail.*` / `ui.section` instead of imported bindings, and pass `ui` into recursive calls (the runPrompts retry path) and into the renderFoundRecap / renderPlanRecap helpers.
+
+  ui.mjs exports `guard` and `adaptValidate` so the cancellation contract (ExitPromptError + ERR_USE_AFTER_CLOSE → process.exit(0); other errors rethrown) and the validator-shape adapter can be unit-tested directly.
+
+  New prompts.test.mjs adds 9 tests: three for adaptValidate, three for guard's exit/rethrow behavior, and three for the runPrompts orchestration (validator independence, --yes skips every prompt, rejected recap confirm restarts the flow).
+
+- Updated dependencies [b270fa1]
+- Updated dependencies [9bf2d87]
+- Updated dependencies [72dee5f]
+- Updated dependencies [0166297]
+  - @mobile-surfaces/surface-contracts@2.0.1
+
 ## 2.0.0
 
 ### Major Changes
