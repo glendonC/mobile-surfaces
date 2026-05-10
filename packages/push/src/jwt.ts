@@ -61,23 +61,68 @@ export function mintJwt(config: JwtConfig, nowMs: number = Date.now()): string {
   return `${signingInput}.${base64Url(sig)}`;
 }
 
+// Apple .p8 keys are around 250 bytes. 64 KB is generous and prevents a
+// misconfigured key path (e.g. pointing at a giant log) from being read into
+// memory before we notice.
+const KEY_FILE_MAX_BYTES = 64 * 1024;
+
 /**
  * Resolve a key path or raw PEM buffer into a string PEM. If the input is a
  * Buffer with PEM markers, return it as-is; otherwise treat as a filesystem
  * path.
+ *
+ * On read failure, error messages refer to "the configured APNs key" rather
+ * than the resolved absolute path. The path is host-specific (often inside a
+ * user home directory) and would otherwise leak into shared logs.
  */
 export function resolveKeyPem(keyPathOrBuffer: string | Buffer): string {
   if (Buffer.isBuffer(keyPathOrBuffer)) {
     return keyPathOrBuffer.toString("utf8");
   }
-  return fs.readFileSync(keyPathOrBuffer, "utf8");
+  let fd: number | undefined;
+  try {
+    fd = fs.openSync(keyPathOrBuffer, "r");
+    const stat = fs.fstatSync(fd);
+    if (stat.size > KEY_FILE_MAX_BYTES) {
+      throw new Error(
+        `Configured APNs key is ${stat.size} bytes (max ${KEY_FILE_MAX_BYTES}). Confirm the key path points at a .p8 file.`,
+      );
+    }
+    return fs.readFileSync(fd, "utf8");
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException | undefined)?.code;
+    if (code === "ENOENT" || code === "EACCES" || code === "EISDIR") {
+      throw new Error(
+        `Could not read configured APNs key (${code}). Confirm the key path points at a readable .p8 file.`,
+      );
+    }
+    throw err;
+  } finally {
+    if (fd !== undefined) {
+      try {
+        fs.closeSync(fd);
+      } catch {
+        // already closed; ignore
+      }
+    }
+  }
 }
 
 /**
  * Lazy JWT cache. Mints on first `get()`, re-mints when the cached token is
- * older than `refreshIntervalMs`. Not thread-safe (Node is single-threaded
- * per worker, so concurrent in-flight requests share the same cached token,
- * which is correct).
+ * older than `refreshIntervalMs`.
+ *
+ * Concurrency model: safe for any number of concurrent in-flight requests on
+ * a single Node event loop, which is the only environment Apple's HTTP/2
+ * APNs client targets. Two `get()` calls scheduled in the same tick share the
+ * cached entry without re-minting.
+ *
+ * NOT safe across worker_threads or cluster workers. Each worker keeps its
+ * own #entry, so multiple workers may mint independently — that's wasted
+ * compute (ES256 signing) but functionally correct, since each JWT is
+ * independently valid against APNs. If you require a single mint across
+ * workers, sign once in the main thread and pass the token in via your own
+ * synchronization (BroadcastChannel, shared cache, etc.).
  */
 export class JwtCache {
   readonly #config: JwtConfig;

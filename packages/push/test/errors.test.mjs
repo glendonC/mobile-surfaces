@@ -7,6 +7,7 @@ const {
   InvalidProviderTokenError,
   ExpiredProviderTokenError,
   TopicDisallowedError,
+  UnregisteredError,
   PayloadTooLargeError,
   BadPriorityError,
   BadExpirationDateError,
@@ -33,6 +34,7 @@ const REASON_TABLE = [
   ["InvalidProviderToken", InvalidProviderTokenError],
   ["ExpiredProviderToken", ExpiredProviderTokenError],
   ["TopicDisallowed", TopicDisallowedError],
+  ["Unregistered", UnregisteredError],
   ["PayloadTooLarge", PayloadTooLargeError],
   ["BadPriority", BadPriorityError],
   ["BadExpirationDate", BadExpirationDateError],
@@ -81,6 +83,7 @@ test("typed errors expose trapId from the generated bindings", () => {
     [BadDeviceTokenError, "MS014"],
     [TooManyRequestsError, "MS015"],
     [TopicDisallowedError, "MS018"],
+    [UnregisteredError, "MS020"],
     [MissingApnsConfigError, "MS028"],
   ];
   for (const [Klass, trapId] of expected) {

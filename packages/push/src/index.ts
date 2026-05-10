@@ -31,6 +31,7 @@ export {
   InvalidProviderTokenError,
   ExpiredProviderTokenError,
   TopicDisallowedError,
+  UnregisteredError,
   PayloadTooLargeError,
   BadPriorityError,
   BadExpirationDateError,

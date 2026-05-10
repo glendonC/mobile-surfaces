@@ -86,7 +86,16 @@ export class Http2Client {
     if (this.#closed) {
       throw new Error("Http2Client is closed");
     }
-    const session = await this.#ensureSession();
+    // Race window: GOAWAY can fire between ensureSession resolving and
+    // executeRequest dispatching, in which case dropSession() has already
+    // cleared #session but the local reference still points at a closing
+    // session. Re-dial once if the session is no longer healthy or was
+    // replaced. Bounded to one retry so a flapping connection still surfaces
+    // as a transport error to client.ts retry, rather than looping here.
+    let session = await this.#ensureSession();
+    if (this.#session !== session || session.closed || session.destroyed) {
+      session = await this.#ensureSession();
+    }
     this.#inFlight += 1;
     this.#cancelIdleTimer();
     try {

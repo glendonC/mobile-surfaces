@@ -483,6 +483,82 @@ test("hooks.onError surfaces APNs trapId for bound error classes", async (t) => 
   assert.equal(received.trapId, "MS018");
 });
 
+// --- transport lifecycle --------------------------------------------------
+
+test("transport drop mid-flight is retried on a fresh session", { timeout: 5000 }, async (t) => {
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    if (calls === 1) {
+      // Server forcibly drops the h2 session mid-stream — equivalent to
+      // GOAWAY immediately followed by a socket close. The SDK's transport
+      // layer should treat this as a retryable transport error and dial a
+      // fresh session for the retry.
+      return { destroy: true };
+    }
+    return { status: 200 };
+  });
+  const client = makeClient({
+    sendOrigin: mock.origin,
+    retryPolicy: { maxRetries: 1, baseDelayMs: 1, maxDelayMs: 5, jitter: false },
+  });
+  teardown(t, client, mock);
+
+  const res = await client.alert("a".repeat(64), SNAPSHOT);
+  assert.equal(res.status, 200);
+  assert.equal(mock.requests.length, 2);
+  // Two sessions accepted by the server: the dropped one and the retry's
+  // fresh dial. Pins that the SDK does not try to reuse the dead session.
+  assert.equal(mock.sessionCount, 2);
+});
+
+test("parallel sends on a warm session multiplex over a single HTTP/2 session", { timeout: 5000 }, async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  // Warm the session first so the parallel batch dispatches against an
+  // already-connected session rather than racing 5 cold dials. HTTP/2
+  // multiplexing is what we want to pin: many concurrent streams sharing
+  // one session, not the accidental in-flight dial dedup.
+  await client.alert("0".repeat(64), SNAPSHOT);
+  assert.equal(mock.sessionCount, 1);
+
+  const tokens = ["a", "b", "c", "d", "e"].map((c) => c.repeat(64));
+  const responses = await Promise.all(
+    tokens.map((token) => client.alert(token, SNAPSHOT)),
+  );
+  for (const res of responses) assert.equal(res.status, 200);
+  assert.equal(mock.requests.length, tokens.length + 1);
+  // All five parallel streams shared the warm session.
+  assert.equal(mock.sessionCount, 1);
+});
+
+test("idle timeout closes the session and the next send reconnects", { timeout: 5000 }, async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = createPushClient({
+    keyId: "ABC1234567",
+    teamId: "TEAM123456",
+    keyPath: KEY.file,
+    bundleId: "com.example.test",
+    environment: "development",
+    // Aggressive idle window so the test runs in well under a second.
+    idleTimeoutMs: 50,
+    [TEST_TRANSPORT_OVERRIDE]: { sendOrigin: mock.origin },
+  });
+  teardown(t, client, mock);
+
+  await client.alert("a".repeat(64), SNAPSHOT);
+  assert.equal(mock.sessionCount, 1);
+
+  // Wait past the idle window. The SDK's idle timer should close the
+  // session; the next send should dial a new one.
+  await new Promise((res) => setTimeout(res, 200));
+
+  await client.alert("b".repeat(64), SNAPSHOT);
+  assert.equal(mock.sessionCount, 2);
+});
+
 // --- cleanup --------------------------------------------------------------
 test("teardown: remove temp p8 directory", () => {
   KEY.cleanup();

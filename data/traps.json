@@ -252,7 +252,8 @@
       "symptom": "Backend send to a stored token returns 410 Unregistered or 400 BadDeviceToken on a previously-working device. The user did nothing wrong; the OS rotated the token.",
       "fix": "Treat the latest event as authoritative. Re-store on every emission keyed by user/device id, and update the active record rather than appending.",
       "docs": ["docs/push.md#token-taxonomy"],
-      "since": "1.0.0"
+      "since": "1.0.0",
+      "errorClasses": ["UnregisteredError"]
     },
     {
       "id": "MS021",

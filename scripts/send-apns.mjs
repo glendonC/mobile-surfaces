@@ -183,6 +183,38 @@ function formatSkew(ms) {
 
 const REQUIRED_ENV = ["APNS_KEY_PATH", "APNS_KEY_ID", "APNS_TEAM_ID", "APNS_BUNDLE_ID"];
 
+// Apple .p8 keys are around 250 bytes. 64 KB is generous and prevents a
+// misconfigured APNS_KEY_PATH (e.g. pointing at a giant log) from blowing up
+// memory before we notice.
+const KEY_FILE_MAX_BYTES = 64 * 1024;
+
+// Read the APNs auth key without surfacing the resolved filesystem path in
+// error messages. The path is host-specific and can leak a user's home
+// directory layout into shared logs; APNS_KEY_PATH is the actionable name.
+function loadApnsKey() {
+  try {
+    const fd = fs.openSync(path.resolve(process.env.APNS_KEY_PATH), "r");
+    try {
+      const stat = fs.fstatSync(fd);
+      if (stat.size > KEY_FILE_MAX_BYTES) {
+        throw new Error(
+          `APNs auth key at APNS_KEY_PATH is ${stat.size} bytes (max ${KEY_FILE_MAX_BYTES}). Confirm APNS_KEY_PATH points at a .p8 file.`,
+        );
+      }
+      return fs.readFileSync(fd, "utf8");
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch (err) {
+    if (err && (err.code === "ENOENT" || err.code === "EACCES" || err.code === "EISDIR")) {
+      throw new Error(
+        `Could not read APNs auth key (${err.code}). Confirm APNS_KEY_PATH points at a readable .p8 file.`,
+      );
+    }
+    throw err;
+  }
+}
+
 // CLI option spec is shared between parse-time validation (importable, used by
 // tests) and the run-time send/manage path.
 const PARSE_OPTIONS = {
@@ -666,7 +698,7 @@ function http2Request({ origin, headers, body }) {
 
 async function runDeviceSend(config) {
   ensureEnv();
-  const keyPem = fs.readFileSync(path.resolve(process.env.APNS_KEY_PATH), "utf8");
+  const keyPem = loadApnsKey();
   const jwt = makeJwt(keyPem, process.env.APNS_KEY_ID, process.env.APNS_TEAM_ID);
   const payload =
     config.type === "liveactivity"
@@ -690,7 +722,7 @@ async function runDeviceSend(config) {
 
 async function runBroadcastSend(config) {
   ensureEnv();
-  const keyPem = fs.readFileSync(path.resolve(process.env.APNS_KEY_PATH), "utf8");
+  const keyPem = loadApnsKey();
   const jwt = makeJwt(keyPem, process.env.APNS_KEY_ID, process.env.APNS_TEAM_ID);
   const payload = JSON.stringify(buildBroadcastPayload(config));
   const headers = buildBroadcastHeaders(config, jwt, process.env.APNS_BUNDLE_ID);
@@ -712,7 +744,7 @@ async function runBroadcastSend(config) {
 
 async function runChannelManagement(config) {
   ensureEnv();
-  const keyPem = fs.readFileSync(path.resolve(process.env.APNS_KEY_PATH), "utf8");
+  const keyPem = loadApnsKey();
   const jwt = makeJwt(keyPem, process.env.APNS_KEY_ID, process.env.APNS_TEAM_ID);
   const bundleId = process.env.APNS_BUNDLE_ID;
   const { host, port } = manageHost(config.env);

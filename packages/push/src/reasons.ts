@@ -25,6 +25,10 @@ export const APNS_REASON_GUIDE: Record<string, ApnsReasonGuideEntry> = {
     cause: "Auth key is not enabled for this bundle id, or bundleId does not match the iOS app bundle identifier.",
     fix: "For Live Activity pushes, the topic is automatically suffixed with .push-type.liveactivity. Do not include that suffix in bundleId itself.",
   },
+  Unregistered: {
+    cause: "The token's Live Activity ended, the user uninstalled the app, or the OS rotated the token.",
+    fix: "Discard the token and stop selecting it for sends. Per MS020, treat the latest pushTokenUpdates / pushToStartTokenUpdates emission as authoritative.",
+  },
   Forbidden: {
     cause: "Auth key was revoked.",
     fix: "Generate a new APNs auth key in the Apple Developer portal and update keyPath / keyId.",
@@ -117,4 +121,10 @@ export const RETRYABLE_TRANSPORT_CODES: ReadonlySet<string> = new Set([
   "ENETUNREACH",
   "EHOSTUNREACH",
   "NGHTTP2_REFUSED_STREAM",
+  // Node's http2 module reports a session that closed unexpectedly
+  // (e.g. peer destroyed the connection or sent GOAWAY+close while a
+  // stream was in flight) with this code on the failing stream. Treating
+  // it as retryable mirrors the connection-error fallthrough we get for
+  // ECONNRESET; the next attempt establishes a fresh session.
+  "ERR_HTTP2_SESSION_ERROR",
 ]);

@@ -93,6 +93,18 @@ export class TopicDisallowedError extends ApnsError {
   }
 }
 
+/**
+ * 410 Unregistered. The token's activity has ended, the user uninstalled the
+ * app, or the OS rotated the token (MS020). Backends should discard the token
+ * and stop selecting it for sends.
+ */
+export class UnregisteredError extends ApnsError {
+  constructor(init: Omit<ApnsErrorInit, "reason">) {
+    super({ ...init, reason: "Unregistered" });
+    this.name = "UnregisteredError";
+  }
+}
+
 export class PayloadTooLargeError extends ApnsError {
   constructor(init: Omit<ApnsErrorInit, "reason">) {
     super({ ...init, reason: "PayloadTooLarge" });
@@ -275,6 +287,8 @@ export function reasonToError(reason: string, init: ReasonToErrorInit): ApnsErro
       return new ExpiredProviderTokenError(init);
     case "TopicDisallowed":
       return new TopicDisallowedError(init);
+    case "Unregistered":
+      return new UnregisteredError(init);
     case "PayloadTooLarge":
       return new PayloadTooLargeError(init);
     case "BadPriority":
