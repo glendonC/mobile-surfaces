@@ -31,7 +31,7 @@ export const prompts = {
     message: "Bundle identifier (reverse-DNS, lowercase — replace com.example.*)",
   },
   teamId: {
-    message: "Apple Team ID (skip if simulator-only)",
+    message: "Apple Team ID (skip if simulator-only; find at developer.apple.com/account)",
   },
   surfaces: {
     homeWidget: {

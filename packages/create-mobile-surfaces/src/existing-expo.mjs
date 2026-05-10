@@ -113,15 +113,18 @@ function configLabel(config) {
 // is narrow, the column-zero rail prefix is preserved on every row.
 function renderFoundRecap(evidence) {
   const config = evidence.config;
+  // Order: lead with the things we're about to mutate (config, bundle id),
+  // then identifying context (project, package manager). Demote Expo version,
+  // ios/ folder, and plugins to the bottom — they're context, not actionable.
   const lines = [
     pc.bold("What we found"),
     "",
-    `  Project       ${pc.bold(evidence.packageName)}`,
-    `  Expo          ${pc.bold(evidence.expoVersion ?? "unknown")}`,
-    `  Bundle id     ${pc.bold(config?.bundleId ?? "(not set)")}`,
-    `  Package mgr   ${pc.bold(evidence.packageManager ?? "unknown")}`,
     `  Config        ${pc.bold(configLabel(config))}`,
-    `  ios/ folder   ${evidence.hasIosDir ? pc.bold("present") : pc.dim("not present")}`,
+    `  Bundle id     ${pc.bold(config?.bundleId ?? "(not set)")}`,
+    `  Project       ${pc.bold(evidence.packageName)}`,
+    `  Package mgr   ${pc.bold(evidence.packageManager ?? "unknown")}`,
+    `  Expo          ${pc.dim(evidence.expoVersion ?? "unknown")}`,
+    `  ios/ folder   ${evidence.hasIosDir ? pc.dim("present") : pc.dim("not present")}`,
   ];
   if (evidence.pluginsPresent.length > 0) {
     lines.push(`  Plugins       ${pc.dim(evidence.pluginsPresent.join(", "))}`);
@@ -132,6 +135,15 @@ function renderFoundRecap(evidence) {
 
 function renderPlanRecap(plan) {
   const lines = [pc.bold("What I'll add"), ""];
+
+  // Echo the surface selections so the user sees their choices reflected
+  // before "Apply these changes?". Live activity + dynamic island always
+  // ship; only home + control widgets are toggleable.
+  lines.push("  " + pc.bold("Surfaces"));
+  lines.push(`    live activity + dynamic island  ${pc.dim("(always)")}`);
+  lines.push(`    home widget                     ${plan.surfaces.homeWidget ? pc.bold("yes") : pc.dim("no")}`);
+  lines.push(`    control widget                  ${plan.surfaces.controlWidget ? pc.bold("yes") : pc.dim("no")}`);
+  lines.push("");
 
   if (plan.packagesToAdd.length > 0) {
     lines.push("  " + pc.bold("Packages"));
