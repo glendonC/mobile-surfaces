@@ -9,6 +9,13 @@ export function startMockApns(handler) {
   return new Promise((resolve, reject) => {
     const server = http2.createServer();
     const requests = [];
+    // Track each accepted h2 session so tests can verify reconnect behavior
+    // (one new session after a GOAWAY) versus connection reuse (one session
+    // for many parallel streams).
+    const sessions = [];
+    server.on("session", (session) => {
+      sessions.push(session);
+    });
     server.on("stream", (stream, headers) => {
       const reqInfo = {
         path: String(headers[":path"]),
@@ -56,10 +63,38 @@ export function startMockApns(handler) {
         origin,
         server,
         requests,
+        get sessionCount() {
+          return sessions.length;
+        },
+        // Forcefully destroy the most recent h2 session so the SDK has to
+        // dial a fresh one on the next request. Mirrors APNs sending GOAWAY
+        // then closing the socket: the SDK's `goaway` and `close` listeners
+        // both drop the cached session.
+        destroySession() {
+          const last = sessions[sessions.length - 1];
+          if (!last || last.destroyed) return;
+          try {
+            last.destroy();
+          } catch {
+            // session may already be closing; ignore.
+          }
+        },
         close: () =>
           new Promise((res) => {
+            // Forcibly destroy any sessions still attached to the server so
+            // server.close() can resolve quickly even if a test left a
+            // session in a half-closed state. Without this, idle/destroy
+            // tests can hang teardown waiting on graceful close.
+            for (const session of sessions) {
+              if (!session.destroyed) {
+                try {
+                  session.destroy();
+                } catch {
+                  // ignore
+                }
+              }
+            }
             server.close(() => res());
-            // Force-close any lingering sessions so the process exits.
             server.unref?.();
           }),
       });

@@ -369,7 +369,10 @@ export const traps: readonly TrapEntry[] = [
     "docs": [
       "docs/push.md#token-taxonomy"
     ],
-    "since": "1.0.0"
+    "since": "1.0.0",
+    "errorClasses": [
+      "UnregisteredError"
+    ]
   },
   {
     "id": "MS021",

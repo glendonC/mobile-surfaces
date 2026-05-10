@@ -11,6 +11,7 @@ export const TRAP_ID_BY_ERROR_CLASS = {
   PayloadTooLargeError: "MS011",
   TooManyRequestsError: "MS015",
   TopicDisallowedError: "MS018",
+  UnregisteredError: "MS020",
 } as const satisfies Record<string, `MS${string}`>;
 
 export type TrapBoundErrorClassName = keyof typeof TRAP_ID_BY_ERROR_CLASS;
