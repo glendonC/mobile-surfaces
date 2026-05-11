@@ -190,6 +190,45 @@ export class MissingPushTypeError extends ApnsError {
 }
 
 /**
+ * 403 Forbidden. The auth key was revoked. Terminal — no retry helps; the
+ * operator must mint a fresh key in the Apple Developer portal and update
+ * `keyPath` / `keyId`. Distinguished from `InvalidProviderTokenError` (which
+ * is a transient JWT mismatch) because the operational response is different.
+ */
+export class ForbiddenError extends ApnsError {
+  constructor(init: Omit<ApnsErrorInit, "reason">) {
+    super({ ...init, reason: "Forbidden" });
+    this.name = "ForbiddenError";
+  }
+}
+
+/**
+ * 500 Internal Server Error from APNs. Transient; included in
+ * `DEFAULT_RETRYABLE_REASONS` so the default retry policy retries it.
+ * Surfaced as a typed class (rather than `UnknownApnsError`) so observability
+ * hooks can discriminate it from other 5xx fallthroughs.
+ */
+export class InternalServerError extends ApnsError {
+  constructor(init: Omit<ApnsErrorInit, "reason">) {
+    super({ ...init, reason: "InternalServerError" });
+    this.name = "InternalServerError";
+  }
+}
+
+/**
+ * 503 Service Unavailable from APNs. Transient; included in
+ * `DEFAULT_RETRYABLE_REASONS` so the default retry policy retries it.
+ * Surfaced as a typed class (rather than `UnknownApnsError`) so observability
+ * hooks can discriminate it from other 5xx fallthroughs.
+ */
+export class ServiceUnavailableError extends ApnsError {
+  constructor(init: Omit<ApnsErrorInit, "reason">) {
+    super({ ...init, reason: "ServiceUnavailable" });
+    this.name = "ServiceUnavailableError";
+  }
+}
+
+/**
  * 429 Too Many Requests. `retryAfterSeconds` is parsed from the `Retry-After`
  * response header when present; the retry policy honors it instead of the
  * computed exponential backoff.
@@ -313,6 +352,12 @@ export function reasonToError(reason: string, init: ReasonToErrorInit): ApnsErro
       return new FeatureNotEnabledError(init);
     case "MissingPushType":
       return new MissingPushTypeError(init);
+    case "Forbidden":
+      return new ForbiddenError(init);
+    case "InternalServerError":
+      return new InternalServerError(init);
+    case "ServiceUnavailable":
+      return new ServiceUnavailableError(init);
     case "TooManyRequests":
       return new TooManyRequestsError(init);
     default:

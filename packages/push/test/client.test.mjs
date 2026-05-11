@@ -512,6 +512,33 @@ test("transport drop mid-flight is retried on a fresh session", { timeout: 5000 
   assert.equal(mock.sessionCount, 2);
 });
 
+test("RST_STREAM on a single request is retried without dropping the session", { timeout: 5000 }, async (t) => {
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    if (calls === 1) {
+      // Per-stream reset (REFUSED_STREAM, in RETRYABLE_TRANSPORT_CODES).
+      // The session itself stays alive — APNs / a proxy resetting one
+      // stream is distinct from a GOAWAY/close that tears down the
+      // whole connection. The SDK should retry on the same session.
+      return { rstStream: true };
+    }
+    return { status: 200 };
+  });
+  const client = makeClient({
+    sendOrigin: mock.origin,
+    retryPolicy: { maxRetries: 1, baseDelayMs: 1, maxDelayMs: 5, jitter: false },
+  });
+  teardown(t, client, mock);
+
+  const res = await client.alert("a".repeat(64), SNAPSHOT);
+  assert.equal(res.status, 200);
+  assert.equal(mock.requests.length, 2);
+  // One session: RST_STREAM only closed the failed stream; the retry
+  // dispatched on the same warm connection.
+  assert.equal(mock.sessionCount, 1);
+});
+
 test("parallel sends on a warm session multiplex over a single HTTP/2 session", { timeout: 5000 }, async (t) => {
   const mock = await startMockApns(() => ({ status: 200 }));
   const client = makeClient({ sendOrigin: mock.origin });

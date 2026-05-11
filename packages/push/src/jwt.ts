@@ -151,6 +151,11 @@ export class JwtCache {
       this.#entry === undefined ||
       nowMs - this.#entry.iatMs > this.#refreshIntervalMs
     ) {
+      // Invariant: this branch must stay synchronous. If a future change
+      // makes mintJwt async (or adds an `await` between the freshness check
+      // and the assignment to #entry), two concurrent get() calls hitting an
+      // expired token can both pass the check and both re-mint. Keep mintJwt
+      // CPU-bound and free of I/O.
       const token = mintJwt(this.#config, nowMs);
       this.#entry = { token, iatMs: nowMs };
     }

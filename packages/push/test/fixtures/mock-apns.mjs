@@ -108,9 +108,24 @@ function writeResponse(stream, resp) {
     stream.end();
     return;
   }
-  const { status = 200, headers = {}, body, destroy } = resp;
+  const { status = 200, headers = {}, body, destroy, rstStream } = resp;
   if (destroy) {
     stream.session?.destroy(new Error("forced close"));
+    return;
+  }
+  // Per-stream reset, leaving the session alive. Mirrors APNs / a proxy
+  // sending RST_STREAM on a single in-flight request. Defaults to
+  // REFUSED_STREAM (NGHTTP2_REFUSED_STREAM, in the SDK's retryable transport
+  // codes); pass `{ rstStream: <code> }` to use a different code.
+  if (rstStream) {
+    const code = typeof rstStream === "number"
+      ? rstStream
+      : 0x07; // NGHTTP2_REFUSED_STREAM
+    try {
+      stream.close(code);
+    } catch {
+      // stream may already be closing; ignore.
+    }
     return;
   }
   const responseHeaders = { ":status": status, ...headers };
