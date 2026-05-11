@@ -17,20 +17,44 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export function resolveTemplateRoot() {
-  // Published: a manifest.json lives next to the bundled tarball.
-  const bundled = path.resolve(__dirname, "..", "template", "manifest.json");
-  if (fs.existsSync(bundled)) {
-    return { kind: "bundled", manifestPath: bundled };
+// One probe, cached for the life of the process. resolveTemplateRoot() and
+// scaffold.mjs's resolveTemplateSource() both ask the same question — is
+// this a published tarball or a live monorepo — so cache the answer in a
+// shape that carries every path either caller needs.
+let _cliMode;
+function resolveCliMode() {
+  if (_cliMode) return _cliMode;
+  const templateDir = path.resolve(__dirname, "..", "template");
+  const manifestPath = path.join(templateDir, "manifest.json");
+  const tarballPath = path.join(templateDir, "template.tgz");
+  if (fs.existsSync(manifestPath)) {
+    _cliMode = { kind: "bundled", manifestPath, tarballPath };
+    return _cliMode;
   }
-  // Dev: walk up to the monorepo root and read live files.
   const repoRoot = path.resolve(__dirname, "..", "..", "..");
   if (fs.existsSync(path.join(repoRoot, "pnpm-workspace.yaml"))) {
-    return { kind: "live", repoRoot };
+    _cliMode = { kind: "live", repoRoot };
+    return _cliMode;
   }
   throw new Error(
-    `Couldn't locate the template. Looked for ${bundled} (published) or a monorepo at ${repoRoot} (dev).`,
+    `Couldn't locate the template. Looked for ${manifestPath} (published) or a monorepo at ${repoRoot} (dev).`,
   );
+}
+
+export function resolveTemplateRoot() {
+  const mode = resolveCliMode();
+  return mode.kind === "bundled"
+    ? { kind: "bundled", manifestPath: mode.manifestPath }
+    : { kind: "live", repoRoot: mode.repoRoot };
+}
+
+// Used by scaffold.mjs; exposes the tarball path when published, or the
+// monorepo root when live. Shares the same cached probe as resolveTemplateRoot.
+export function resolveTemplateTarball() {
+  const mode = resolveCliMode();
+  return mode.kind === "bundled"
+    ? { kind: "tarball", path: mode.tarballPath }
+    : { kind: "git", path: mode.repoRoot };
 }
 
 export function loadTemplateManifest() {

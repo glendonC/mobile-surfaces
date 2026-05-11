@@ -133,16 +133,16 @@ function gatherExpoEvidence({ cwd, pkg, allDeps }) {
     pluginsPresent: [],
   };
 
-  const appJson = path.join(cwd, "app.json");
-  const appJs = path.join(cwd, "app.config.js");
-  const appTs = path.join(cwd, "app.config.ts");
-
-  if (fs.existsSync(appJson)) {
-    evidence.config = readJsonConfig(appJson);
-  } else if (fs.existsSync(appTs)) {
-    evidence.config = { kind: "ts", path: appTs };
-  } else if (fs.existsSync(appJs)) {
-    evidence.config = { kind: "js", path: appJs };
+  // One readdir instead of three existsSync probes. Picks the first config in
+  // priority order (json > ts > js) — matching how Expo itself resolves
+  // app.config.* — without three separate stat syscalls.
+  const cwdEntries = new Set(safeReaddir(cwd));
+  if (cwdEntries.has("app.json")) {
+    evidence.config = readJsonConfig(path.join(cwd, "app.json"));
+  } else if (cwdEntries.has("app.config.ts")) {
+    evidence.config = { kind: "ts", path: path.join(cwd, "app.config.ts") };
+  } else if (cwdEntries.has("app.config.js")) {
+    evidence.config = { kind: "js", path: path.join(cwd, "app.config.js") };
   }
 
   if (evidence.config?.parsed) {
@@ -152,6 +152,14 @@ function gatherExpoEvidence({ cwd, pkg, allDeps }) {
   }
 
   return evidence;
+}
+
+function safeReaddir(dir) {
+  try {
+    return fs.readdirSync(dir);
+  } catch {
+    return [];
+  }
 }
 
 function readJsonConfig(filePath) {
@@ -190,7 +198,10 @@ export function renderRefuse(mode) {
       body = refuseCopy.appsMobileExists(evidence.packageName);
       break;
     default:
-      body = refuseCopy.noPackageJson;
+      throw new Error(
+        `renderRefuse received an unknown evidence.reason: ${JSON.stringify(evidence.reason)}. ` +
+          `This is a bug in detectMode — every refuse branch should populate one of the documented reason values.`,
+      );
   }
 
   process.stdout.write("\n" + pc.yellow("▲  ") + pc.bold("Can't add Mobile Surfaces here.") + "\n\n");

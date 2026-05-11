@@ -58,6 +58,11 @@ export class Http2Client {
   readonly #connect: Http2ConnectFactory;
   readonly #sessionOptions: http2.ClientSessionOptions | http2.SecureClientSessionOptions | undefined;
   #session: ClientHttp2Session | undefined;
+  // In-flight dial promise. Concurrent #ensureSession() callers await the
+  // same Promise so a cold-start burst (or N parallel retries after a
+  // GOAWAY) produces ONE TLS handshake instead of N. Cleared in resolve and
+  // reject paths so a failed dial doesn't poison subsequent attempts.
+  #sessionPromise: Promise<ClientHttp2Session> | undefined;
   #inFlight = 0;
   #idleTimer: NodeJS.Timeout | undefined;
   #closed = false;
@@ -110,7 +115,21 @@ export class Http2Client {
     if (this.#session && !this.#session.closed && !this.#session.destroyed) {
       return this.#session;
     }
-    return await new Promise<ClientHttp2Session>((resolve, reject) => {
+    if (this.#sessionPromise) {
+      return this.#sessionPromise;
+    }
+    this.#sessionPromise = this.#dial().finally(() => {
+      // Clear the slot regardless of outcome. Success: subsequent requests
+      // pick up the cached #session and never re-enter this path. Failure:
+      // the next caller gets a fresh dial attempt instead of inheriting the
+      // poisoned promise.
+      this.#sessionPromise = undefined;
+    });
+    return this.#sessionPromise;
+  }
+
+  #dial(): Promise<ClientHttp2Session> {
+    return new Promise<ClientHttp2Session>((resolve, reject) => {
       const session = this.#connect(this.#origin, this.#sessionOptions);
       const generation = ++this.#sessionGeneration;
       const onError = (err: Error) => {

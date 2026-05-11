@@ -77,6 +77,11 @@ export const existingSuccessSections = ({ projectName, packageManager }) => ({
     `${packageManager} run mobile:dev-client     start the dev server`,
     `npx expo run:ios                  build & launch on the simulator`,
   ],
+  whenReady: [
+    `npx expo run:ios --device                  run it on your iPhone`,
+    `pnpm surface:setup-apns                    wire APNs creds with a guided wizard`,
+    `pnpm mobile:push:device:liveactivity       push a real Live Activity update`,
+  ],
   learnMore: [
     "docs/architecture.md     the data shape behind everything",
     "docs/troubleshooting.md  when something breaks",
@@ -158,7 +163,7 @@ export const refuse = {
   noPackageJson:
     "This directory has files in it but no package.json, so I can't\ntell what kind of project this is.\n\nIf you want to create a new project, cd to an empty directory\nand run me again. If this is an existing iOS-only Xcode project,\nMobile Surfaces only works inside Expo apps — that's a different\nproduct.",
   invalidPackageJson: (cwd) =>
-    `The package.json at ${cwd} isn't valid JSON. Fix it (or restore\nit from git) and run me again.`,
+    `The package.json at ${cwd}/package.json has a JSON syntax error.\nThe usual causes are a trailing comma, an unquoted key, or an\nunescaped quote in a string value. Open it in an editor with\nJSON linting and the offending line should be flagged. Fix the\nsyntax (or restore the file from git) and run me again.`,
   noExpoDep: (packageName) =>
     `${packageName} is a JavaScript project, but it doesn't use Expo.\n\nMobile Surfaces requires Expo for the dev client and the iOS\nbuild pipeline. The fastest paths in:\n\n  • Add Expo to this project:  npx install-expo-modules@latest\n  • Or start fresh:            cd .. && npm create mobile-surfaces my-app\n\nThen run me again.`,
   appsMobileExists: (packageName) =>
@@ -168,6 +173,6 @@ export const refuse = {
 // Copy for the existing-monorepo-no-expo flow (a TS monorepo without Expo,
 // where we'll scaffold apps/mobile/ inside their workspace).
 export const monorepo = {
-  intro: "We'll add Mobile Surfaces as apps/mobile/ in your workspace.",
+  intro: "Adds Mobile Surfaces as apps/mobile/ in your workspace.",
   successTitle: "Mobile Surfaces is wired up.",
 };

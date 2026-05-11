@@ -13,7 +13,7 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 
 ## Index
 
-29 rules total: 24 error, 4 warning, 1 info.
+30 rules total: 25 error, 4 warning, 1 info.
 
 | ID | Severity | Detection | Title |
 | --- | --- | --- | --- |
@@ -41,6 +41,7 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 | [MS027](#ms027-foreign-expo-project-must-target-ios-17-2-or-higher) | error | config | Foreign Expo project must target iOS 17.2 or higher |
 | [MS028](#ms028-apns-auth-key-environment-variables-must-be-set-before-sending) | error | runtime | APNs auth key environment variables must be set before sending |
 | [MS029](#ms029-generated-apps-mobile-ios-is-gitignored) | error | config | Generated apps/mobile/ios/ is gitignored |
+| [MS030](#ms030-apns-provider-token-must-be-valid-and-current) | error | runtime | APNs provider token must be valid and current |
 | [MS010](#ms010-toolchain-preflight-node-24-pnpm-xcode-26) | warning | config | Toolchain preflight (Node 24, pnpm, Xcode 26+) |
 | [MS015](#ms015-push-priority-5-vs-10-budget-rules) | warning | runtime | Push priority 5 vs 10 budget rules |
 | [MS021](#ms021-discard-per-activity-tokens-when-the-activity-ends) | warning | runtime | Discard per-activity tokens when the activity ends |
@@ -56,9 +57,9 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 - `control`: MS013, MS026
 - `ios-version`: MS012, MS027
 - `live-activity`: MS001, MS002, MS003, MS004, MS011, MS015, MS016, MS019, MS021, MS022
-- `push`: MS006, MS011, MS014, MS015, MS018, MS024, MS028
+- `push`: MS006, MS011, MS014, MS015, MS018, MS024, MS028, MS030
 - `swift`: MS002, MS003, MS004, MS022
-- `tokens`: MS014, MS016, MS019, MS020, MS021, MS023, MS028
+- `tokens`: MS014, MS016, MS019, MS020, MS021, MS023, MS028, MS030
 - `toolchain`: MS005, MS010, MS026
 - `widget`: MS013, MS026
 
@@ -344,6 +345,18 @@ CNG-managed directories must not be checked into version control; commits will f
 **Fix.** Add apps/mobile/ios/ to .gitignore. If files are already tracked, untrack with git rm -r --cached apps/mobile/ios then commit the .gitignore update.
 
 **See:** `docs/ios-environment.md`
+
+### MS030: APNs provider token must be valid and current
+
+**severity:** error  •  **detection:** runtime (only at send/receive)  •  **tags:** push, tokens
+
+APNs returns 403 with reason Forbidden, InvalidProviderToken, or ExpiredProviderToken when the auth-key JWT cannot be verified; each reason has a distinct operator response.
+
+**Symptom.** All sends fail with 403. ForbiddenError means the auth key was revoked in the Apple Developer portal. InvalidProviderTokenError means the JWT is malformed or signed with the wrong key id / team id. ExpiredProviderTokenError means the JWT is older than 60 minutes (typically clock skew, since the SDK refreshes at 50 minutes).
+
+**Fix.** ForbiddenError: mint a new auth key in the Apple Developer portal and update APNS_KEY_ID / APNS_KEY_PATH. InvalidProviderTokenError: verify APNS_KEY_ID matches the key file and APNS_TEAM_ID matches the developer account. ExpiredProviderTokenError: check system clock alignment against NTP; if the SDK is long-lived, confirm createPushClient is not being held past process restarts without re-minting.
+
+**See:** `docs/push.md#error-responses`
 
 ### MS010: Toolchain preflight (Node 24, pnpm, Xcode 26+)
 

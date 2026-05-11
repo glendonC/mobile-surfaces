@@ -119,34 +119,34 @@ function renderFoundRecap(evidence, ui) {
   const lines = [
     pc.bold("What we found"),
     "",
-    `  Config        ${pc.bold(configLabel(config))}`,
-    `  Bundle id     ${pc.bold(config?.bundleId ?? "(not set)")}`,
-    `  Project       ${pc.bold(evidence.packageName)}`,
-    `  Package mgr   ${pc.bold(evidence.packageManager ?? "unknown")}`,
-    `  Expo          ${pc.dim(evidence.expoVersion ?? "unknown")}`,
+    `  config        ${pc.bold(configLabel(config))}`,
+    `  bundle id     ${pc.bold(config?.bundleId ?? "(not set)")}`,
+    `  project       ${pc.bold(evidence.packageName)}`,
+    `  package mgr   ${pc.bold(evidence.packageManager ?? "unknown")}`,
+    `  expo          ${pc.dim(evidence.expoVersion ?? "unknown")}`,
     `  ios/ folder   ${evidence.hasIosDir ? pc.dim("present") : pc.dim("not present")}`,
   ];
   if (evidence.pluginsPresent.length > 0) {
-    lines.push(`  Plugins       ${pc.dim(evidence.pluginsPresent.join(", "))}`);
+    lines.push(`  plugins       ${pc.dim(evidence.pluginsPresent.join(", "))}`);
   }
   lines.push("");
   ui.rail.block(lines.join("\n"));
 }
 
 function renderPlanRecap(plan, ui) {
-  const lines = [pc.bold("What I'll add"), ""];
+  const lines = [pc.bold("Changes to apply"), ""];
 
   // Echo the surface selections so the user sees their choices reflected
   // before "Apply these changes?". Live activity + dynamic island always
   // ship; only home + control widgets are toggleable.
-  lines.push("  " + pc.bold("Surfaces"));
+  lines.push("  " + pc.bold("surfaces"));
   lines.push(`    live activity + dynamic island  ${pc.dim("(always)")}`);
   lines.push(`    home widget                     ${plan.surfaces.homeWidget ? pc.bold("yes") : pc.dim("no")}`);
   lines.push(`    control widget                  ${plan.surfaces.controlWidget ? pc.bold("yes") : pc.dim("no")}`);
   lines.push("");
 
   if (plan.packagesToAdd.length > 0) {
-    lines.push("  " + pc.bold("Packages"));
+    lines.push("  " + pc.bold("packages"));
     for (const p of plan.packagesToAdd) {
       lines.push("    " + p.name);
     }
@@ -170,8 +170,8 @@ function renderPlanRecap(plan, ui) {
   }
   if (appLines.length > 0) {
     const heading = plan.appConfigManual
-      ? `In your app config ${pc.dim(`(apply by hand to ${configLabel({ kind: plan.appConfigKind })})`)}`
-      : "In your app config";
+      ? `app config ${pc.dim(`(apply by hand to ${configLabel({ kind: plan.appConfigKind })})`)}`
+      : "app config";
     lines.push("  " + pc.bold(heading));
     for (const l of appLines) lines.push("    " + l);
     lines.push("");
@@ -179,7 +179,7 @@ function renderPlanRecap(plan, ui) {
 
   if (plan.widgetFilesToCopy.length > 0) {
     const widgetParent = path.posix.dirname(plan.widgetTargetDir);
-    lines.push("  " + pc.bold("New files"));
+    lines.push("  " + pc.bold("new files"));
     for (const f of plan.widgetFilesToCopy) {
       lines.push("    " + path.posix.relative(widgetParent, f));
     }
@@ -187,7 +187,7 @@ function renderPlanRecap(plan, ui) {
   }
 
   if (plan.willPrebuild) {
-    lines.push("  " + pc.bold("Then"));
+    lines.push("  " + pc.bold("then"));
     lines.push("    expo prebuild --platform ios");
     lines.push("");
   }

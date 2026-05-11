@@ -586,6 +586,71 @@ test("idle timeout closes the session and the next send reconnects", { timeout: 
   assert.equal(mock.sessionCount, 2);
 });
 
+test("two parallel sends share a single retry-session after stream-level resets", { timeout: 5000 }, async (t) => {
+  // Pins the concurrent-recovery path with rstStream as the trigger. Using
+  // a per-stream reset (rather than full session destruction) avoids the
+  // late-GOAWAY-on-new-session artifact that the in-process h2c mock can
+  // surface when one session is torn down while another is being dialed,
+  // while still exercising the property the audit asked for: two parallel
+  // failures should produce one shared recovery, not two independent dials.
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    // Warmup succeeds (call 1). The parallel batch (calls 2 and 3) both get
+    // REFUSED_STREAM. Retries on the same warm session (calls 4 and 5)
+    // succeed; rstStream leaves the session alive, so no reconnect happens.
+    if (calls >= 2 && calls <= 3) {
+      return { rstStream: true };
+    }
+    return { status: 200 };
+  });
+  const client = makeClient({
+    sendOrigin: mock.origin,
+    retryPolicy: { maxRetries: 1, baseDelayMs: 1, maxDelayMs: 5, jitter: false },
+  });
+  teardown(t, client, mock);
+
+  // Warm the session so the parallel batch shares a single warm dial.
+  await client.alert("0".repeat(64), SNAPSHOT);
+  assert.equal(mock.sessionCount, 1);
+
+  const [r1, r2] = await Promise.all([
+    client.alert("a".repeat(64), SNAPSHOT),
+    client.alert("b".repeat(64), SNAPSHOT),
+  ]);
+  assert.equal(r1.status, 200);
+  assert.equal(r2.status, 200);
+
+  // Five total server-side requests: 1 warmup + 2 stream-resets + 2 retries.
+  assert.equal(mock.requests.length, 5);
+  // One session: rstStream is a per-stream reset, so the warm session
+  // stays alive and both retries multiplex back onto it. A regression that
+  // dropped the session on stream-level resets would show as 2+.
+  assert.equal(mock.sessionCount, 1);
+});
+
+test("cold-start parallel sends share a single dial (no double-dial race)", { timeout: 5000 }, async (t) => {
+  // Pins the in-flight dial dedup: even when N requests are kicked off
+  // before any session exists, #ensureSession must return the same connect
+  // promise to all concurrent callers — otherwise the SDK would race-dial N
+  // sessions and burn an extra TLS handshake per concurrent request at
+  // startup. sessionCount === 1 after the batch is what holds.
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  // No warmup. Five parallel sends from cold state.
+  const tokens = ["a", "b", "c", "d", "e"].map((c) => c.repeat(64));
+  const responses = await Promise.all(
+    tokens.map((token) => client.alert(token, SNAPSHOT)),
+  );
+
+  for (const res of responses) assert.equal(res.status, 200);
+  assert.equal(mock.requests.length, tokens.length);
+  // One session: the SDK deduplicated the concurrent dial requests.
+  assert.equal(mock.sessionCount, 1);
+});
+
 // --- cleanup --------------------------------------------------------------
 test("teardown: remove temp p8 directory", () => {
   KEY.cleanup();

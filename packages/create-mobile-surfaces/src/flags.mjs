@@ -179,7 +179,8 @@ Options:
   --name <slug>             Project name. Required with --yes.
   --scheme <scheme>         URL scheme. Defaults to slugified project name.
   --bundle-id <id>          iOS bundle id. Defaults to com.example.<slug>.
-  --team-id <id>            Apple Team ID. Optional; can be set later.
+  --team-id <id>            Apple Team ID (10 chars). Optional; omit to skip
+                            and set later in app.json's ios.appleTeamId.
   --home-widget             Include the home-screen widget surface (default).
   --no-home-widget          Exclude the home-screen widget.
   --control-widget          Include the iOS 18 control widget (default).

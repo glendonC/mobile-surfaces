@@ -12,4 +12,4 @@ create-mobile-surfaces: tighten the apply phase for both existing-Expo and exist
 
 create-mobile-surfaces: collapse the standalone `applyAppleTeamId` and `applyNewArchEnabled` helpers into a single exported `applyAppJsonPatches`. Production already used the batched form; the standalone helpers existed only to keep unit tests focused. Tests now drive `applyAppJsonPatches` directly and a new combined-pass test pins that both writes land in one read-modify-write.
 
-create-mobile-surfaces: small ergonomics polish on the CLI source — a decision-tree comment in `detectMode` so the precedence order is scannable without tracing, and a clearer `--no-new-arch` help string ("use the legacy React Native bridge instead" rather than the bare "legacy bridge" jargon).
+create-mobile-surfaces: add a decision-tree comment in `detectMode` so the precedence order is scannable without tracing, and reword `--no-new-arch` help to "use the legacy React Native bridge instead" rather than the bare "legacy bridge" jargon.

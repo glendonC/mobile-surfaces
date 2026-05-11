@@ -57,38 +57,38 @@ function renderFoundRecap(evidence, ui) {
   const lines = [
     pc.bold("What we found"),
     "",
-    `  Workspace     ${pc.bold(evidence.packageName)}`,
-    `  Workspace via ${pc.bold(
+    `  workspace     ${pc.bold(evidence.packageName)}`,
+    `  workspace via ${pc.bold(
       evidence.workspaceKind === "pnpm-workspace"
         ? "pnpm-workspace.yaml"
         : "package.json workspaces",
     )}`,
-    `  Globs         ${pc.dim(evidence.workspaceGlobs.join(", ") || "(none)")}`,
-    `  Package mgr   ${pc.bold(evidence.packageManager ?? "unknown")}`,
+    `  globs         ${pc.dim(evidence.workspaceGlobs.join(", ") || "(none)")}`,
+    `  package mgr   ${pc.bold(evidence.packageManager ?? "unknown")}`,
     "",
   ];
   ui.rail.block(lines.join("\n"));
 }
 
 function renderPlanRecap(plan, ui) {
-  const lines = [pc.bold("What I'll add"), ""];
+  const lines = [pc.bold("Changes to apply"), ""];
 
   // Echo the surface selections so the user sees their choices reflected
   // before "Apply these changes?". Live activity + dynamic island always
   // ship; only home + control widgets are toggleable.
-  lines.push("  " + pc.bold("Surfaces"));
+  lines.push("  " + pc.bold("surfaces"));
   lines.push(`    live activity + dynamic island  ${pc.dim("(always)")}`);
   lines.push(`    home widget                     ${plan.surfaces.homeWidget ? pc.bold("yes") : pc.dim("no")}`);
   lines.push(`    control widget                  ${plan.surfaces.controlWidget ? pc.bold("yes") : pc.dim("no")}`);
   lines.push("");
 
-  lines.push("  " + pc.bold("New files"));
+  lines.push("  " + pc.bold("new files"));
   lines.push(`    apps/mobile/  (Expo app + widget target)`);
   lines.push(`    apps/mobile/targets/widget/`);
   lines.push("");
 
   if (plan.workspaceGlobsToAdd.length > 0) {
-    lines.push("  " + pc.bold("Workspace updates"));
+    lines.push("  " + pc.bold("workspace updates"));
     const target =
       plan.workspaceKind === "pnpm-workspace"
         ? "pnpm-workspace.yaml"
@@ -100,14 +100,14 @@ function renderPlanRecap(plan, ui) {
   }
 
   if (plan.packagesToInstall.length > 0) {
-    lines.push("  " + pc.bold("Dependencies (in apps/mobile/package.json)"));
+    lines.push("  " + pc.bold("dependencies (in apps/mobile/package.json)"));
     for (const name of plan.packagesToInstall) {
       lines.push(`    ${name}`);
     }
     lines.push("");
   }
 
-  lines.push("  " + pc.bold("We won't touch"));
+  lines.push("  " + pc.bold("won't touch"));
   lines.push("    your root package.json, tsconfig.json, lint, or prettier configs");
   lines.push("");
 

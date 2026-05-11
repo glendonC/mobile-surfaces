@@ -356,9 +356,24 @@ export async function applyMonorepo({
     followups,
   };
 
-  // 1) Stage the template, copy apps/mobile/ into the host. We deliberately
-  //    skip packages/* and root files: the user already has a workspace and
-  //    we don't want to clobber their lint/tsconfig/pnpm-workspace surface.
+  await stageAndCopyAppsMobile({ summary });
+  stripSurfacesAndMarkers({ config, summary });
+  rewriteIdentityInTree({ config, summary });
+  patchAppJsonStep({ config, summary });
+  rewriteWorkspaceDeps({ manifest, summary });
+  mergeHostWorkspace({ evidence, summary });
+
+  followups.push(
+    "We didn't touch your root package.json, tsconfig.json, eslint, or prettier configs. Adjust those if you want apps/mobile/ to share them.",
+  );
+
+  return summary;
+}
+
+// Step 1: stage the template, copy apps/mobile/ into the host. Deliberately
+// skips packages/* and root files — the user already has a workspace and we
+// don't want to clobber their lint/tsconfig/pnpm-workspace surface.
+async function stageAndCopyAppsMobile({ summary }) {
   const source = await prepareSourceTree();
   try {
     const sourceAppsMobile = path.join(source.rootDir, "apps", "mobile");
@@ -372,13 +387,14 @@ export async function applyMonorepo({
   } finally {
     source.cleanup();
   }
+}
 
-  // 2) Strip surface markers + delete deselected widget files. Runs before
-  //    the identity rename so the deletion paths still match the bundled
-  //    "MobileSurfaces*" basenames. Two passes: widget-dir for file deletes
-  //    (those paths only make sense relative to the widget dir), then a
-  //    wider marker pass so harness sources in apps/mobile/src/ also get
-  //    their SURFACE-BEGIN/END comments stripped.
+// Step 2: strip surface markers + delete deselected widget files. Runs before
+// the identity rename so deletion paths still match the bundled "MobileSurfaces*"
+// basenames. Two passes: widget-dir for file deletes (those paths only make
+// sense relative to the widget dir), then a wider marker pass so harness
+// sources in apps/mobile/src/ also get their SURFACE-BEGIN/END comments stripped.
+function stripSurfacesAndMarkers({ config, summary }) {
   const surfaces = config.surfaces ?? { homeWidget: true, controlWidget: true };
   applyStripWidgetDir({
     widgetDir: path.join(summary.appsMobileRoot, "targets", "widget"),
@@ -386,9 +402,11 @@ export async function applyMonorepo({
   });
   stripMarkersInTree({ rootDir: summary.appsMobileRoot, surfaces });
   summary.surfacesStripped = true;
+}
 
-  // 3) Rewrite identity in the freshly-copied apps/mobile/ subtree. Two
-  //    passes: text content (substitutions) and Swift filename renames.
+// Step 3: rewrite identity in the freshly-copied apps/mobile/ subtree. Two
+// passes: text content (substitutions) and Swift filename renames.
+function rewriteIdentityInTree({ config, summary }) {
   const newIdentity = {
     name: config.projectName,
     scheme: config.scheme,
@@ -409,11 +427,13 @@ export async function applyMonorepo({
     next: newIdentity,
   });
   summary.identityFilesRenamed = renamed.length;
+}
 
-  // 4) Patch app.json — explicit values for scheme/bundleId/teamId/appGroup.
-  //    Identity rewrite already updated literal occurrences, but app.json's
-  //    derived appGroup ("group.<bundleId>") needs to match the new bundleId
-  //    exactly, and the team id is a brand-new field the rewrite never sees.
+// Step 4: patch app.json with explicit scheme/bundleId/teamId/appGroup.
+// Identity rewrite already updated literal occurrences, but app.json's
+// derived appGroup ("group.<bundleId>") needs to match the new bundleId
+// exactly, and the team id is a brand-new field the rewrite never sees.
+function patchAppJsonStep({ config, summary }) {
   const appGroup = `group.${config.bundleId}`;
   patchAppsMobileAppJson({
     appsMobileRoot: summary.appsMobileRoot,
@@ -421,17 +441,21 @@ export async function applyMonorepo({
     appGroup,
   });
   summary.appJsonPatched = true;
+}
 
-  // 5) Rewrite apps/mobile/package.json workspace:* @mobile-surfaces/* deps
-  //    to npm versions from the manifest.
+// Step 5: rewrite apps/mobile/package.json workspace:* @mobile-surfaces/* deps
+// to npm versions from the manifest.
+function rewriteWorkspaceDeps({ manifest, summary }) {
   const depResult = rewriteAppsMobileWorkspaceDeps({
     appsMobileRoot: summary.appsMobileRoot,
     manifest,
   });
   summary.workspaceDepsRewrote = depResult.rewrote;
+}
 
-  // 6) Merge "apps/*" into the host's workspace declaration so apps/mobile/
-  //    is picked up by the host's package manager.
+// Step 6: merge "apps/*" into the host's workspace declaration so apps/mobile/
+// is picked up by the host's package manager.
+function mergeHostWorkspace({ evidence, summary }) {
   const workspace = {
     kind: evidence.workspaceKind,
     path: evidence.workspacePath,
@@ -439,13 +463,6 @@ export async function applyMonorepo({
     packageJsonPath: path.join(evidence.cwd, "package.json"),
   };
   summary.workspaceMerged = mergeWorkspaceGlobs({ workspace });
-
-  // Followups for things we deliberately left to the user.
-  followups.push(
-    "We didn't touch your root package.json, tsconfig.json, eslint, or prettier configs. Adjust those if you want apps/mobile/ to share them.",
-  );
-
-  return summary;
 }
 
 // Run install + prebuild. Split from applyMonorepo so the task runner can

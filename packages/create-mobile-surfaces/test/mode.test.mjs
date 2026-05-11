@@ -189,15 +189,15 @@ describe("renderRefuse", () => {
     assert.match(output, /host-monorepo/);
   });
 
-  it("falls back to the default copy for an unknown reason", () => {
-    // A new refuse reason added to mode.mjs without updating the switch
-    // statement would land here. The fallback is the generic "no-package-json"
-    // copy, which is at least never wrong shape-wise. This test pins the
-    // behavior so a future refactor can't silently change it.
-    const output = captureStdout(() =>
-      renderRefuse({ evidence: { reason: "newly-invented-reason" } }),
+  it("throws on an unknown evidence.reason instead of silently rendering noPackageJson", () => {
+    // A new refuse reason added to mode.mjs without updating the renderRefuse
+    // switch must surface as a loud bug rather than a misleading "no
+    // package.json" screen. This test pins that throw so a future refactor
+    // can't reintroduce the silent fallback.
+    assert.throws(
+      () => renderRefuse({ evidence: { reason: "newly-invented-reason" } }),
+      /unknown evidence\.reason/,
     );
-    assert.match(output, /Can't add Mobile Surfaces here/);
   });
 });
 

@@ -14,8 +14,7 @@ import {
   askSelect,
   askText,
   guard,
-  resetPrompts,
-  setPrompts,
+  withStubbedPrompts,
 } from "../src/ui.mjs";
 import { EXIT_CODES } from "../src/exit-codes.mjs";
 
@@ -166,137 +165,135 @@ test("guard: rethrows unrelated errors instead of exiting", async () => {
 
 test("askText: ExitPromptError thrown by input() bubbles into guard and exits 0", async () => {
   await withCapturedExit(async (getExited) => {
-    setPrompts({
-      input: async () => {
-        const err = new Error("user canceled");
-        err.name = "ExitPromptError";
-        throw err;
+    await withStubbedPrompts(
+      {
+        input: async () => {
+          const err = new Error("user canceled");
+          err.name = "ExitPromptError";
+          throw err;
+        },
       },
-    });
-    try {
-      await assert.rejects(
-        () => askText({ message: "x", defaultValue: "" }),
-        /__exit__/,
-      );
-      assert.equal(getExited(), EXIT_CODES.SUCCESS);
-    } finally {
-      resetPrompts();
-    }
+      async () => {
+        await assert.rejects(
+          () => askText({ message: "x", defaultValue: "" }),
+          /__exit__/,
+        );
+        assert.equal(getExited(), EXIT_CODES.SUCCESS);
+      },
+    );
   });
 });
 
 test("askConfirm: ExitPromptError thrown by confirm() bubbles into guard and exits 0", async () => {
   await withCapturedExit(async (getExited) => {
-    setPrompts({
-      confirm: async () => {
-        const err = new Error("user canceled");
-        err.name = "ExitPromptError";
-        throw err;
+    await withStubbedPrompts(
+      {
+        confirm: async () => {
+          const err = new Error("user canceled");
+          err.name = "ExitPromptError";
+          throw err;
+        },
       },
-    });
-    try {
-      await assert.rejects(
-        () => askConfirm({ message: "ok?" }),
-        /__exit__/,
-      );
-      assert.equal(getExited(), EXIT_CODES.SUCCESS);
-    } finally {
-      resetPrompts();
-    }
+      async () => {
+        await assert.rejects(() => askConfirm({ message: "ok?" }), /__exit__/);
+        assert.equal(getExited(), EXIT_CODES.SUCCESS);
+      },
+    );
   });
 });
 
 test("askSelect: ExitPromptError thrown by select() bubbles into guard and exits 0", async () => {
   await withCapturedExit(async (getExited) => {
-    setPrompts({
-      select: async () => {
-        const err = new Error("user canceled");
-        err.name = "ExitPromptError";
-        throw err;
+    await withStubbedPrompts(
+      {
+        select: async () => {
+          const err = new Error("user canceled");
+          err.name = "ExitPromptError";
+          throw err;
+        },
       },
-    });
-    try {
-      await assert.rejects(
-        () =>
-          askSelect({
-            message: "pick",
-            options: [
-              { value: 1, label: "one" },
-              { value: 2, label: "two" },
-            ],
-          }),
-        /__exit__/,
-      );
-      assert.equal(getExited(), EXIT_CODES.SUCCESS);
-    } finally {
-      resetPrompts();
-    }
+      async () => {
+        await assert.rejects(
+          () =>
+            askSelect({
+              message: "pick",
+              options: [
+                { value: 1, label: "one" },
+                { value: 2, label: "two" },
+              ],
+            }),
+          /__exit__/,
+        );
+        assert.equal(getExited(), EXIT_CODES.SUCCESS);
+      },
+    );
   });
 });
 
 test("askText: ERR_USE_AFTER_CLOSE thrown by input() bubbles into guard and exits 0", async () => {
   await withCapturedExit(async (getExited) => {
-    setPrompts({
-      input: async () => {
-        const err = new Error("stream closed mid-prompt");
-        err.code = "ERR_USE_AFTER_CLOSE";
-        throw err;
+    await withStubbedPrompts(
+      {
+        input: async () => {
+          const err = new Error("stream closed mid-prompt");
+          err.code = "ERR_USE_AFTER_CLOSE";
+          throw err;
+        },
       },
-    });
-    try {
-      await assert.rejects(
-        () => askText({ message: "x", defaultValue: "" }),
-        /__exit__/,
-      );
-      assert.equal(getExited(), EXIT_CODES.SUCCESS);
-    } finally {
-      resetPrompts();
-    }
+      async () => {
+        await assert.rejects(
+          () => askText({ message: "x", defaultValue: "" }),
+          /__exit__/,
+        );
+        assert.equal(getExited(), EXIT_CODES.SUCCESS);
+      },
+    );
   });
 });
 
 test("askText: passes the adapted validator into input(); validator string surfaces as inquirer-shape error", async () => {
   let capturedArgs;
-  setPrompts({
-    input: async (args) => {
-      capturedArgs = args;
-      return "answer";
+  await withStubbedPrompts(
+    {
+      input: async (args) => {
+        capturedArgs = args;
+        return "answer";
+      },
     },
-  });
-  try {
-    const result = await askText({
-      message: "name",
-      defaultValue: "",
-      validate: (value) => (value === "ok" ? undefined : "needs to be lowercase"),
-    });
-    assert.equal(result, "answer");
-    assert.equal(capturedArgs.message, "name");
-    assert.equal(capturedArgs.default, "");
-    // The adapted validator returns true on accept and the error string on
-    // reject, which is what @inquirer/prompts.input expects.
-    assert.equal(typeof capturedArgs.validate, "function");
-    assert.equal(capturedArgs.validate("ok"), true);
-    assert.equal(capturedArgs.validate("WHATEVER"), "needs to be lowercase");
-  } finally {
-    resetPrompts();
-  }
+    async () => {
+      const result = await askText({
+        message: "name",
+        defaultValue: "",
+        validate: (value) =>
+          value === "ok" ? undefined : "needs to be lowercase",
+      });
+      assert.equal(result, "answer");
+      assert.equal(capturedArgs.message, "name");
+      assert.equal(capturedArgs.default, "");
+      // The adapted validator returns true on accept and the error string on
+      // reject, which is what @inquirer/prompts.input expects.
+      assert.equal(typeof capturedArgs.validate, "function");
+      assert.equal(capturedArgs.validate("ok"), true);
+      assert.equal(capturedArgs.validate("WHATEVER"), "needs to be lowercase");
+    },
+  );
 });
 
 test("askText: omits validate when none is supplied so input() runs unvalidated", async () => {
   let capturedArgs;
-  setPrompts({
-    input: async (args) => {
-      capturedArgs = args;
-      return "answer";
+  await withStubbedPrompts(
+    {
+      input: async (args) => {
+        capturedArgs = args;
+        return "answer";
+      },
     },
-  });
-  try {
-    const result = await askText({ message: "name", defaultValue: "" });
-    assert.equal(result, "answer");
-    assert.equal(capturedArgs.validate, undefined);
-  } finally {
-    resetPrompts();
-  }
+    async () => {
+      const result = await askText({ message: "name", defaultValue: "" });
+      assert.equal(result, "answer");
+      assert.equal(capturedArgs.validate, undefined);
+    },
+  );
 });
 
 // --- prompts.mjs: runPrompts ---------------------------------------------
@@ -373,4 +370,56 @@ test("runPrompts: rejected recap confirm restarts the flow; second confirm retur
   assert.equal(result.projectName, "second");
   assert.equal(result.bundleId, "com.second.app");
   assert.equal(ui.calls.length, 16);
+});
+
+// --- live inquirer retry loop --------------------------------------------
+
+// The DI-seam tests above stub the inquirer primitives, so they pin the
+// wiring shape (adaptValidate returns a string on reject) but don't exercise
+// the actual retry loop inside @inquirer/prompts.input. The test below uses
+// @inquirer/testing's virtual-stream renderer to drive the real input prompt
+// end-to-end: type a rejected value, observe the prompt re-ask, type an
+// accepted value, observe the answer resolve. If a future inquirer release
+// changes its validator contract (return string -> retry), this test fails
+// where the stubs would still pass.
+import { input as inquirerInput } from "@inquirer/prompts";
+import { render } from "@inquirer/testing";
+
+test("live inquirer retry loop: rejected value re-asks; accepted value resolves", async () => {
+  // Same validator + adapter the CLI uses, exercised through the real prompt.
+  const validate = (value) =>
+    value === "ok" ? undefined : "needs to be exactly 'ok'";
+  const inquirerValidator = adaptValidate(validate);
+
+  const { answer, events, getScreen } = await render(inquirerInput, {
+    message: "type ok",
+    validate: inquirerValidator,
+  });
+
+  // First pass: a rejected value. inquirer should NOT resolve `answer`; it
+  // should re-render with the validator's error string visible.
+  events.type("bad");
+  events.keypress("enter");
+
+  // Give inquirer's event loop time to run the validator and re-render.
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.match(
+    getScreen(),
+    /needs to be exactly 'ok'/,
+    "inquirer should render the validator's rejection message",
+  );
+
+  // Second pass: clear the rejected value, type the accepted one. inquirer
+  // resolves `answer` once the validator returns true (which adaptValidate
+  // produces when the underlying validate returns undefined).
+  for (let i = 0; i < "bad".length; i += 1) {
+    events.keypress("backspace");
+  }
+  events.type("ok");
+  events.keypress("enter");
+
+  const result = await answer;
+  assert.equal(result, "ok");
 });

@@ -23,6 +23,7 @@ const {
   TooManyRequestsError,
   UnknownApnsError,
   MissingApnsConfigError,
+  ForbiddenError,
   trapIdForErrorClass,
   TRAP_ID_BY_ERROR_CLASS,
 } = await import("../dist/index.js");
@@ -48,6 +49,7 @@ const REASON_TABLE = [
   ["FeatureNotEnabled", FeatureNotEnabledError],
   ["MissingPushType", MissingPushTypeError],
   ["TooManyRequests", TooManyRequestsError],
+  ["Forbidden", ForbiddenError],
 ];
 
 test("reasonToError maps each documented reason to its typed subclass", () => {
@@ -85,6 +87,9 @@ test("typed errors expose trapId from the generated bindings", () => {
     [TopicDisallowedError, "MS018"],
     [UnregisteredError, "MS020"],
     [MissingApnsConfigError, "MS028"],
+    [ExpiredProviderTokenError, "MS030"],
+    [ForbiddenError, "MS030"],
+    [InvalidProviderTokenError, "MS030"],
   ];
   for (const [Klass, trapId] of expected) {
     const err =

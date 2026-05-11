@@ -34,6 +34,16 @@ Do not hand-edit `packages/surface-contracts/src/fixtures.ts`; it is generated.
 
 `fixtures.ts` is generated and committed on purpose. Keeping it in source means a fresh clone has working TypeScript before any install or build step runs, no `postinstall` hook is needed, and CI catches drift via `pnpm surface:check` (`generate-surface-fixtures.mjs --check`) rather than regenerating silently. The tradeoff is that fixture-touching PRs include both the JSON change in `data/surface-fixtures/` and the regenerated `fixtures.ts` diff — review them as a pair.
 
+## Dependency Pinning
+
+Different layers of this repo follow different pinning rules. The rules are not arbitrary; each one is the one that keeps that layer's tooling honest.
+
+- **Published packages** (`packages/*` other than `apps/`) pin every dependency to an exact version. Consumers install transitively and have no lockfile of ours to fall back on, so a floating range there would silently shift downstream builds.
+- **`apps/mobile`** follows Expo's template convention: tilde ranges (`~55.0.18`) on `expo` and `expo-*`, exact on `react`, `react-dom`, `react-native`, `@bacons/apple-targets`. Expo curates compatible patch ranges via `bundledNativeModules.json`; rewriting these to exact pins makes `expo install --check` and `expo-doctor` noisy without changing what the lockfile actually installs.
+- **`apps/site`** (private marketing site) uses caret/tilde ranges per the upstream Astro/Tailwind conventions. CI runs `pnpm install --frozen-lockfile`, so the lockfile is the source of truth either way.
+
+`@bacons/apple-targets` is the one Expo-adjacent dep that must stay exact-pinned (MS026): it materializes the widget Xcode target at prebuild time, and a floating range there would shift the generated `ios/` output across contributors. `scripts/check-external-pins.mjs` enforces this in CI; bump it through a changeset like any other published dep.
+
 ## Native Workflow
 
 `apps/mobile/ios/` is generated and ignored. Update these committed sources instead:

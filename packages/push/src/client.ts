@@ -238,12 +238,20 @@ function isTransportError(err: unknown): boolean {
   if (RETRYABLE_TRANSPORT_CODES.has(code)) return true;
   // Node wraps RST_STREAM as ERR_HTTP2_STREAM_ERROR and exposes the
   // protocol-level code (e.g. NGHTTP2_REFUSED_STREAM) in the message rather
-  // than on err.code. Disambiguate so a transient REFUSED_STREAM retries but
-  // a PROTOCOL_ERROR or INTERNAL_ERROR surfaces. Keep the substring check
-  // narrow on purpose: only the codes already in the retryable set count.
+  // than on err.code. Disambiguate so transient stream-level errors retry
+  // but PROTOCOL_ERROR (caller's malformed frame) surfaces.
+  // - REFUSED_STREAM: peer rejected before processing; safe to retry.
+  // - INTERNAL_ERROR: also raised by Node on in-flight streams when the
+  //   peer destroys the session under multiple concurrent streams (the
+  //   single-stream case surfaces as ERR_HTTP2_SESSION_ERROR instead, which
+  //   is already in RETRYABLE_TRANSPORT_CODES). Treating it as retryable
+  //   keeps parallel-recovery symmetric with the single-stream path.
   if (code === "ERR_HTTP2_STREAM_ERROR") {
     const message = (err as { message?: string }).message ?? "";
-    return message.includes("NGHTTP2_REFUSED_STREAM");
+    return (
+      message.includes("NGHTTP2_REFUSED_STREAM") ||
+      message.includes("NGHTTP2_INTERNAL_ERROR")
+    );
   }
   return false;
 }

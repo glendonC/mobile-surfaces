@@ -9,24 +9,15 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as logger from "./logger.mjs";
+import { resolveTemplateTarball } from "./template-manifest.mjs";
 import { toSwiftPrefix } from "./validators.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Where does the template live? In a published package, it's a tarball at
-// ../template/template.tgz. In this monorepo, fall back to the repo root
-// three levels up from this file.
-export function resolveTemplateSource() {
-  const tarball = path.resolve(__dirname, "..", "template", "template.tgz");
-  if (fs.existsSync(tarball)) return { kind: "tarball", path: tarball };
-  const repoRoot = path.resolve(__dirname, "..", "..", "..");
-  if (fs.existsSync(path.join(repoRoot, "pnpm-workspace.yaml"))) {
-    return { kind: "git", path: repoRoot };
-  }
-  throw new Error(
-    `Couldn't find a template. Expected ${tarball} or a monorepo at ${repoRoot}.`,
-  );
-}
+// Re-exported so existing callers and tests that import from scaffold keep
+// working. The probe and its cache live in template-manifest.mjs alongside
+// resolveTemplateRoot(); both functions share the same one-shot filesystem check.
+export const resolveTemplateSource = resolveTemplateTarball;
 
 // Materialize the template into a directory we can read individual files from.
 // Greenfield's copyTemplate writes the whole tree into the target; the

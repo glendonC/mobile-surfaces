@@ -7,6 +7,9 @@
 
 export const TRAP_ID_BY_ERROR_CLASS = {
   BadDeviceTokenError: "MS014",
+  ExpiredProviderTokenError: "MS030",
+  ForbiddenError: "MS030",
+  InvalidProviderTokenError: "MS030",
   MissingApnsConfigError: "MS028",
   PayloadTooLargeError: "MS011",
   TooManyRequestsError: "MS015",

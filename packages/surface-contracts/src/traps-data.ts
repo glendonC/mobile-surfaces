@@ -531,6 +531,28 @@ export const traps: readonly TrapEntry[] = [
       "docs/ios-environment.md"
     ],
     "since": "1.0.0"
+  },
+  {
+    "id": "MS030",
+    "title": "APNs provider token must be valid and current",
+    "severity": "error",
+    "detection": "runtime",
+    "tags": [
+      "push",
+      "tokens"
+    ],
+    "summary": "APNs returns 403 with reason Forbidden, InvalidProviderToken, or ExpiredProviderToken when the auth-key JWT cannot be verified; each reason has a distinct operator response.",
+    "symptom": "All sends fail with 403. ForbiddenError means the auth key was revoked in the Apple Developer portal. InvalidProviderTokenError means the JWT is malformed or signed with the wrong key id / team id. ExpiredProviderTokenError means the JWT is older than 60 minutes (typically clock skew, since the SDK refreshes at 50 minutes).",
+    "fix": "ForbiddenError: mint a new auth key in the Apple Developer portal and update APNS_KEY_ID / APNS_KEY_PATH. InvalidProviderTokenError: verify APNS_KEY_ID matches the key file and APNS_TEAM_ID matches the developer account. ExpiredProviderTokenError: check system clock alignment against NTP; if the SDK is long-lived, confirm createPushClient is not being held past process restarts without re-minting.",
+    "docs": [
+      "docs/push.md#error-responses"
+    ],
+    "since": "2.1.0",
+    "errorClasses": [
+      "ExpiredProviderTokenError",
+      "ForbiddenError",
+      "InvalidProviderTokenError"
+    ]
   }
 ] as const satisfies readonly TrapEntry[];
 

@@ -323,7 +323,16 @@ export async function applyToExisting({ evidence, plan, packageManager, manifest
     followups,
   };
 
-  // 1) Install packages we have real versions for.
+  await applyPackageInstall({ plan, target, packageManager, summary });
+  applyAppConfigPatch({ plan, evidence, teamId, summary });
+  await applyWidgetCopyStripRename({ plan, evidence, manifest, appRoot, target, summary });
+
+  return summary;
+}
+
+// Step 1: install packages we have real npm versions for; queue followups for
+// workspace-only entries that the host can't resolve yet.
+async function applyPackageInstall({ plan, target, packageManager, summary }) {
   const installable = installablePackages(plan);
   const skipped = plan.packagesToAdd.filter((p) => p.workspace);
   summary.packagesSkipped = skipped.map((p) => p.name);
@@ -332,45 +341,44 @@ export async function applyToExisting({ evidence, plan, packageManager, manifest
     summary.packagesInstalled = installable;
   }
   if (skipped.length > 0) {
-    followups.push(
+    summary.followups.push(
       `These packages aren't on npm yet so they were skipped: ${skipped
         .map((p) => p.name)
         .join(", ")}. They ship in the next release of mobile-surfaces.`,
     );
   }
+}
 
-  // 2) Patch app config — write JSON in place, or stage a paste-ready
-  //    snippet for app.config.{js,ts}.
+// Step 2: write app config in place when JSON; stage a paste-ready snippet for
+// app.config.{js,ts}. Surfaces a follow-up when the user's existing team id
+// conflicts with the one they typed at the prompt.
+function applyAppConfigPatch({ plan, evidence, teamId, summary }) {
   if (plan.appConfigManual) {
     summary.manualSnippet = renderManualSnippet(plan, { teamId });
-  } else if (evidence.config?.kind === "json" && evidence.config.path) {
-    // Only write the team id when we don't risk overwriting an existing
-    // real value. The buildPatchedAppJson helper enforces the same rule
-    // internally; here we additionally surface a follow-up so the user
-    // notices the divergence instead of silently keeping the old value.
-    const existingTeamId = evidence.config.parsed?.ios?.appleTeamId ?? null;
-    const isPlaceholder = existingTeamId === "XXXXXXXXXX";
-    if (
-      teamId &&
-      existingTeamId &&
-      !isPlaceholder &&
-      existingTeamId !== teamId
-    ) {
-      followups.push(
-        `Your app.json already has expo.ios.appleTeamId set to ${existingTeamId}. Left it alone — update it manually if you meant to switch to ${teamId}.`,
-      );
-    }
-    patchAppJson({ appJsonPath: evidence.config.path, plan, teamId });
-    summary.appJsonPatched = true;
+    return;
   }
+  if (!(evidence.config?.kind === "json" && evidence.config.path)) return;
 
-  // 3) Copy the widget target dir from the template into the user's app,
-  //    strip it to match the surface picker (deletes deselected widget
-  //    Swift files; trims marker regions in the bundle), then rename the
-  //    bundled MobileSurfaces* identity to the user's app identity so they
-  //    don't end up with `MobileSurfacesWidget` wired into their (e.g.)
-  //    "Acme" project. Strip runs before rename so deletion paths stay on
-  //    the original "MobileSurfaces*" names.
+  // Only write the team id when we don't risk overwriting an existing real
+  // value. buildPatchedAppJson enforces the same rule internally; here we
+  // additionally surface a follow-up so the user notices the divergence
+  // instead of silently keeping the old value.
+  const existingTeamId = evidence.config.parsed?.ios?.appleTeamId ?? null;
+  const isPlaceholder = existingTeamId === "XXXXXXXXXX";
+  if (teamId && existingTeamId && !isPlaceholder && existingTeamId !== teamId) {
+    summary.followups.push(
+      `Your app.json already has expo.ios.appleTeamId set to ${existingTeamId}. Left it alone — update it manually if you meant to switch to ${teamId}.`,
+    );
+  }
+  patchAppJson({ appJsonPath: evidence.config.path, plan, teamId });
+  summary.appJsonPatched = true;
+}
+
+// Step 3: copy the widget target dir from the template into the user's app,
+// strip it to match the surface picker, then rename the bundled MobileSurfaces*
+// identity to the user's. Strip runs before rename so deletion paths stay on
+// the original "MobileSurfaces*" names.
+async function applyWidgetCopyStripRename({ plan, evidence, manifest, appRoot, target, summary }) {
   const source = await prepareSourceTree();
   try {
     const result = copyWidgetTarget({
@@ -379,38 +387,33 @@ export async function applyToExisting({ evidence, plan, packageManager, manifest
       destAppRoot: appRoot,
     });
     summary.widgetDestDir = result.destDir;
-    if (result.copied) {
-      summary.widgetCopied = true;
-
-      const surfaces = plan.surfaces ?? DEFAULT_SURFACES;
-      applyStripWidgetDir({ widgetDir: result.destDir, surfaces });
-
-      const swiftPrefix = deriveSwiftPrefixFromEvidence(evidence);
-      if (swiftPrefix) {
-        const renameResult = applyWidgetRename({
-          destDir: result.destDir,
-          swiftPrefix,
-        });
-        if (renameResult.renamed) {
-          summary.widgetRenamed = {
-            from: "MobileSurfaces",
-            to: swiftPrefix,
-          };
-        }
-      } else {
-        followups.push(
-          `Couldn't derive a Swift prefix from your project name. The widget target was copied with the bundled "MobileSurfaces" identifiers — rename them by hand to match your app.`,
-        );
-      }
-    } else {
+    if (!result.copied) {
       summary.widgetConflict = result.decision;
-      followups.push(
+      summary.followups.push(
         `${path.relative(target, result.destDir) || result.destDir} already exists with files. Skipped to avoid clobbering. Move it aside and rerun if you want the bundled widget.`,
       );
+      return;
+    }
+    summary.widgetCopied = true;
+
+    const surfaces = plan.surfaces ?? DEFAULT_SURFACES;
+    applyStripWidgetDir({ widgetDir: result.destDir, surfaces });
+
+    const swiftPrefix = deriveSwiftPrefixFromEvidence(evidence);
+    if (!swiftPrefix) {
+      summary.followups.push(
+        `Couldn't derive a Swift prefix from your project name. The widget target was copied with the bundled "MobileSurfaces" identifiers — rename them by hand to match your app.`,
+      );
+      return;
+    }
+    const renameResult = applyWidgetRename({
+      destDir: result.destDir,
+      swiftPrefix,
+    });
+    if (renameResult.renamed) {
+      summary.widgetRenamed = { from: "MobileSurfaces", to: swiftPrefix };
     }
   } finally {
     source.cleanup();
   }
-
-  return summary;
 }

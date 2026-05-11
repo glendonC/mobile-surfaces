@@ -52,6 +52,22 @@ export function resetPrompts() {
   activePrompts = { ...LIVE_PROMPTS };
 }
 
+/**
+ * Run `fn` with the given prompt primitives stubbed in, restoring the live
+ * primitives in a finally so leaks across tests are structurally impossible.
+ * Supports sync and async `fn`. Prefer this in tests over hand-rolled
+ * setPrompts/try/finally/resetPrompts blocks — the explicit finally is the
+ * one piece of test plumbing that's easy to forget and load-bearing.
+ */
+export async function withStubbedPrompts(overrides, fn) {
+  setPrompts(overrides);
+  try {
+    return await fn();
+  } finally {
+    resetPrompts();
+  }
+}
+
 // Rail glyphs — gray so the content carries weight, the chrome doesn't.
 const RAIL_BAR = pc.gray("│");
 const RAIL_PREFIX = pc.gray("│  ");

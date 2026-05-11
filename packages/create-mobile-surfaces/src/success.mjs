@@ -92,6 +92,7 @@ export function renderExistingSuccess({ summary, evidence, packageManager, plan 
 
   const next = existingSuccessSections({ projectName, packageManager });
   blocks.push(section("Try it now", next.tryItNow));
+  blocks.push(section("When you're ready", next.whenReady));
   blocks.push(section("Learn more", next.learnMore));
 
   rail.block(blocks.join("\n"));
