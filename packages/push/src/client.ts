@@ -235,7 +235,17 @@ function isTransportError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
   const code = (err as { code?: string }).code;
   if (typeof code !== "string") return false;
-  return RETRYABLE_TRANSPORT_CODES.has(code);
+  if (RETRYABLE_TRANSPORT_CODES.has(code)) return true;
+  // Node wraps RST_STREAM as ERR_HTTP2_STREAM_ERROR and exposes the
+  // protocol-level code (e.g. NGHTTP2_REFUSED_STREAM) in the message rather
+  // than on err.code. Disambiguate so a transient REFUSED_STREAM retries but
+  // a PROTOCOL_ERROR or INTERNAL_ERROR surfaces. Keep the substring check
+  // narrow on purpose: only the codes already in the retryable set count.
+  if (code === "ERR_HTTP2_STREAM_ERROR") {
+    const message = (err as { message?: string }).message ?? "";
+    return message.includes("NGHTTP2_REFUSED_STREAM");
+  }
+  return false;
 }
 
 // Per MS028: createPushClient validates presence of every required option and
