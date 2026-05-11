@@ -704,6 +704,50 @@ test("repeated GOAWAY cycles dial a fresh session on every recovery", { timeout:
   assert.equal(mock.sessionCount, 3);
 });
 
+test("sustained GOAWAY cycles drive repeated re-dials and the SDK keeps recovering", { timeout: 10_000 }, async (t) => {
+  // Extends the two-cycle GOAWAY pin above to a sustained-outage shape.
+  // Every Nth sequential call destroys the session; the SDK has to dial a
+  // fresh session for the next attempt. Running five drop cycles back to
+  // back pins the rotation rhythm beyond what the original two-cycle test
+  // proves, so a regression in the generation counter or session-swap
+  // bookkeeping that only shows after several rotations would fail here.
+  //
+  // Parallel sends are intentionally deferred to the dedicated cold-start
+  // dedup test below: combining a destroy-every-other-call pattern with
+  // mid-flight parallel batches makes both sides of the assertion flaky
+  // because a doomed session may carry multiple in-flight streams, and the
+  // retry layer (maxRetries: 1) cannot recover if the fresh session is
+  // also destroyed before the retry lands. This test stays sequential so
+  // the rotation count is deterministic.
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    // Destroy odd calls (1, 3, 5, 7, 9, 11). Each one is recovered by the
+    // even-numbered retry that follows.
+    if (calls % 2 === 1) return { destroy: true };
+    return { status: 200 };
+  });
+  const client = makeClient({
+    sendOrigin: mock.origin,
+    retryPolicy: { maxRetries: 1, baseDelayMs: 1, maxDelayMs: 5, jitter: false },
+  });
+  teardown(t, client, mock);
+
+  // Six sequential sends. Each one destroys its first attempt and succeeds
+  // on the second, for 12 server-side requests and 6 fresh dials on top of
+  // the original session.
+  for (const c of ["a", "b", "c", "d", "e", "f"]) {
+    const res = await client.alert(c.repeat(64), SNAPSHOT);
+    assert.equal(res.status, 200);
+  }
+
+  assert.equal(mock.requests.length, 12);
+  // One initial session plus one new session per destroyed first-attempt.
+  // The pattern is dropped/retry-success per send, so 6 sends produce 6
+  // destroyed sessions; the SDK dials a fresh one each time.
+  assert.equal(mock.sessionCount, 7);
+});
+
 test("ETIMEDOUT on a hanging stream is retried through the transport-retry layer", { timeout: 5000 }, async (t) => {
   // Pins that an in-flight stream that hangs long enough to fire the request
   // timeout surfaces as ETIMEDOUT (per RETRYABLE_TRANSPORT_CODES) and goes

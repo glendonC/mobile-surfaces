@@ -118,6 +118,48 @@ describe("processFileContent — nested markers", () => {
   });
 });
 
+describe("processFileContent — id-set normalization and nesting", () => {
+  it("matches BEGIN and END regardless of id order in a multi-id list", () => {
+    // BEGIN cites "home-widget control-widget"; END cites the reverse. The
+    // parser normalizes both via slice().sort().join(" ") so the order the
+    // author wrote them in doesn't matter. Pin so a future change that
+    // treats the id list as positional would fail loudly here.
+    const src = [
+      "// SURFACE-BEGIN: home-widget control-widget",
+      "shared = 1;",
+      "// SURFACE-END: control-widget home-widget",
+    ].join("\n");
+    // Both surfaces on: marker lines drop, content stays.
+    assert.equal(processFileContent(src, ALL_ON), "shared = 1;");
+    // Both surfaces off: full region drops.
+    assert.equal(processFileContent(src, ALL_OFF), "");
+  });
+
+  it("handles a true nested region (inner kept when outer strips, inner strips when outer keeps)", () => {
+    // Outer is home-widget-only, inner is control-widget-only. With HOME_OFF
+    // the outer strips the whole region (including the inner). With
+    // CONTROL_OFF the outer stays, but the inner strips its body.
+    const src = [
+      "// SURFACE-BEGIN: home-widget",
+      "outer = 1;",
+      "// SURFACE-BEGIN: control-widget",
+      "inner = 2;",
+      "// SURFACE-END: control-widget",
+      "tail = 3;",
+      "// SURFACE-END: home-widget",
+    ].join("\n");
+    assert.equal(processFileContent(src, HOME_OFF), "");
+    assert.equal(
+      processFileContent(src, CONTROL_OFF),
+      ["outer = 1;", "tail = 3;"].join("\n"),
+    );
+    assert.equal(
+      processFileContent(src, ALL_ON),
+      ["outer = 1;", "inner = 2;", "tail = 3;"].join("\n"),
+    );
+  });
+});
+
 describe("processFileContent — error cases", () => {
   it("throws on an unknown surface id rather than silently dropping code", () => {
     assert.throws(
