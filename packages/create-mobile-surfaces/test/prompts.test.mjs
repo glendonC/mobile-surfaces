@@ -8,8 +8,31 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { runPrompts } from "../src/prompts.mjs";
-import { adaptValidate, guard } from "../src/ui.mjs";
+import {
+  adaptValidate,
+  askConfirm,
+  askSelect,
+  askText,
+  guard,
+  resetPrompts,
+  setPrompts,
+} from "../src/ui.mjs";
 import { EXIT_CODES } from "../src/exit-codes.mjs";
+
+// Helper for the askText/askSelect/askConfirm tests: swap process.exit for
+// a thrower so the test can assert the exit code without actually exiting,
+// then restore. The thrown sentinel unwinds the async stack out of guard().
+function withCapturedExit(fn) {
+  const original = process.exit;
+  let exited;
+  process.exit = (code) => {
+    exited = code;
+    throw new Error("__exit__");
+  };
+  return fn(() => exited).finally(() => {
+    process.exit = original;
+  });
+}
 
 // Build a fake ui. `script` is an array of { kind: "text"|"confirm"|"select",
 // answer } entries consumed in order each time the matching prompt runs. For
@@ -129,6 +152,150 @@ test("guard: rethrows unrelated errors instead of exiting", async () => {
     assert.equal(exited, undefined);
   } finally {
     process.exit = original;
+  }
+});
+
+// --- ui.mjs: askText / askSelect / askConfirm via setPrompts() ------------
+//
+// These tests pin the wiring between guard(), adaptValidate(), and the
+// @inquirer primitives that askText/askSelect/askConfirm wrap. The
+// orchestrator-level tests above use a fake ui that bypasses these
+// wrappers; the cases below exercise the wrappers themselves by injecting
+// stubs through setPrompts() and confirming the cancellation + validator
+// paths behave as documented.
+
+test("askText: ExitPromptError thrown by input() bubbles into guard and exits 0", async () => {
+  await withCapturedExit(async (getExited) => {
+    setPrompts({
+      input: async () => {
+        const err = new Error("user canceled");
+        err.name = "ExitPromptError";
+        throw err;
+      },
+    });
+    try {
+      await assert.rejects(
+        () => askText({ message: "x", defaultValue: "" }),
+        /__exit__/,
+      );
+      assert.equal(getExited(), EXIT_CODES.SUCCESS);
+    } finally {
+      resetPrompts();
+    }
+  });
+});
+
+test("askConfirm: ExitPromptError thrown by confirm() bubbles into guard and exits 0", async () => {
+  await withCapturedExit(async (getExited) => {
+    setPrompts({
+      confirm: async () => {
+        const err = new Error("user canceled");
+        err.name = "ExitPromptError";
+        throw err;
+      },
+    });
+    try {
+      await assert.rejects(
+        () => askConfirm({ message: "ok?" }),
+        /__exit__/,
+      );
+      assert.equal(getExited(), EXIT_CODES.SUCCESS);
+    } finally {
+      resetPrompts();
+    }
+  });
+});
+
+test("askSelect: ExitPromptError thrown by select() bubbles into guard and exits 0", async () => {
+  await withCapturedExit(async (getExited) => {
+    setPrompts({
+      select: async () => {
+        const err = new Error("user canceled");
+        err.name = "ExitPromptError";
+        throw err;
+      },
+    });
+    try {
+      await assert.rejects(
+        () =>
+          askSelect({
+            message: "pick",
+            options: [
+              { value: 1, label: "one" },
+              { value: 2, label: "two" },
+            ],
+          }),
+        /__exit__/,
+      );
+      assert.equal(getExited(), EXIT_CODES.SUCCESS);
+    } finally {
+      resetPrompts();
+    }
+  });
+});
+
+test("askText: ERR_USE_AFTER_CLOSE thrown by input() bubbles into guard and exits 0", async () => {
+  await withCapturedExit(async (getExited) => {
+    setPrompts({
+      input: async () => {
+        const err = new Error("stream closed mid-prompt");
+        err.code = "ERR_USE_AFTER_CLOSE";
+        throw err;
+      },
+    });
+    try {
+      await assert.rejects(
+        () => askText({ message: "x", defaultValue: "" }),
+        /__exit__/,
+      );
+      assert.equal(getExited(), EXIT_CODES.SUCCESS);
+    } finally {
+      resetPrompts();
+    }
+  });
+});
+
+test("askText: passes the adapted validator into input(); validator string surfaces as inquirer-shape error", async () => {
+  let capturedArgs;
+  setPrompts({
+    input: async (args) => {
+      capturedArgs = args;
+      return "answer";
+    },
+  });
+  try {
+    const result = await askText({
+      message: "name",
+      defaultValue: "",
+      validate: (value) => (value === "ok" ? undefined : "needs to be lowercase"),
+    });
+    assert.equal(result, "answer");
+    assert.equal(capturedArgs.message, "name");
+    assert.equal(capturedArgs.default, "");
+    // The adapted validator returns true on accept and the error string on
+    // reject, which is what @inquirer/prompts.input expects.
+    assert.equal(typeof capturedArgs.validate, "function");
+    assert.equal(capturedArgs.validate("ok"), true);
+    assert.equal(capturedArgs.validate("WHATEVER"), "needs to be lowercase");
+  } finally {
+    resetPrompts();
+  }
+});
+
+test("askText: omits validate when none is supplied so input() runs unvalidated", async () => {
+  let capturedArgs;
+  setPrompts({
+    input: async (args) => {
+      capturedArgs = args;
+      return "answer";
+    },
+  });
+  try {
+    const result = await askText({ message: "name", defaultValue: "" });
+    assert.equal(result, "answer");
+    assert.equal(capturedArgs.validate, undefined);
+  } finally {
+    resetPrompts();
   }
 });
 
