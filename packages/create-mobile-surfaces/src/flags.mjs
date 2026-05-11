@@ -187,7 +187,8 @@ Options:
   --install                 Run pnpm install + expo prebuild after scaffold.
   --no-install              Skip post-scaffold install.
   --new-arch                Force Expo's New Architecture on (default).
-  --no-new-arch             Opt out of the New Architecture (legacy bridge).
+  --no-new-arch             Opt out of the New Architecture; use the legacy
+                            React Native bridge instead.
   --yes, -y                 Non-interactive: accept defaults, skip the recap.
   --help, -h                Show this help.
 

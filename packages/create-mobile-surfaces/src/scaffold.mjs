@@ -160,11 +160,9 @@ export async function renameIdentity({ target, config }) {
   );
 
   // Apply both app.json patches in a single read-modify-write. The rename
-  // script already wrote app.json in this run, and applyAppleTeamId /
-  // applyNewArchEnabled each do their own r-m-w cycle; calling them
-  // sequentially adds two more reads of a file we just touched. Their
-  // exported forms remain for unit tests; production goes through this
-  // batched path.
+  // script already wrote app.json in this run; bundling the teamId and
+  // newArchEnabled writes into one r-m-w cycle avoids two extra reads of a
+  // file we just touched.
   applyAppJsonPatches({
     target,
     teamId: config.teamId,
@@ -172,12 +170,22 @@ export async function renameIdentity({ target, config }) {
   });
 }
 
-// Internal: one read-modify-write applying both teamId and newArchEnabled
-// patches. Mirrors applyAppleTeamId + applyNewArchEnabled semantics: skips
-// when the file or expected keys are missing; strips the upstream
-// "XXXXXXXXXX" placeholder when teamId is null/empty. Returns true when any
-// change was written.
-function applyAppJsonPatches({ target, teamId, newArchEnabled }) {
+/**
+ * Read apps/mobile/app.json, apply both the teamId and newArchEnabled
+ * patches in a single read-modify-write, and write back. Returns true when
+ * any change was written, false when the file is missing, has no expo
+ * block, or the inputs produced no change.
+ *
+ * Behavior details:
+ * - teamId provided -> writes expo.ios.appleTeamId (only when expo.ios
+ *   exists; without it the write target is missing).
+ * - teamId nullish AND expo.ios.appleTeamId is the literal upstream
+ *   "XXXXXXXXXX" placeholder -> strips it. A real existing team id is
+ *   preserved (defensive against a re-run that does not pass --team-id).
+ * - newArchEnabled is a boolean (undefined means the user passed neither
+ *   --new-arch nor --no-new-arch; leave the template default in place).
+ */
+export function applyAppJsonPatches({ target, teamId, newArchEnabled }) {
   const appJsonPath = path.join(target, "apps", "mobile", "app.json");
   if (!fs.existsSync(appJsonPath)) return false;
   const j = JSON.parse(fs.readFileSync(appJsonPath, "utf8"));
@@ -200,41 +208,6 @@ function applyAppJsonPatches({ target, teamId, newArchEnabled }) {
   }
 
   if (!changed) return false;
-  fs.writeFileSync(appJsonPath, JSON.stringify(j, null, 2) + "\n");
-  return true;
-}
-
-// Pure-ish: read apps/mobile/app.json, set expo.newArchEnabled to the user's
-// choice, write back. Only called when config.newArchEnabled is set — i.e.
-// when the user passed --new-arch or --no-new-arch. If they passed neither,
-// the template's app.json default (Expo's own default) wins.
-export function applyNewArchEnabled({ target, newArchEnabled }) {
-  const appJsonPath = path.join(target, "apps", "mobile", "app.json");
-  if (!fs.existsSync(appJsonPath)) return false;
-  const j = JSON.parse(fs.readFileSync(appJsonPath, "utf8"));
-  if (!j.expo) return false;
-  j.expo.newArchEnabled = newArchEnabled;
-  fs.writeFileSync(appJsonPath, JSON.stringify(j, null, 2) + "\n");
-  return true;
-}
-
-// Pure-ish: read apps/mobile/app.json, set or strip appleTeamId, write back.
-// Exported so the (no-shellout) behavior is unit-testable. When teamId is
-// provided we write it; when null/empty we strip the upstream "XXXXXXXXXX"
-// placeholder so the user gets expo's missing-team-id error instead of a
-// confusing "invalid team id" failure at signing time.
-export function applyAppleTeamId({ target, teamId }) {
-  const appJsonPath = path.join(target, "apps", "mobile", "app.json");
-  if (!fs.existsSync(appJsonPath)) return false;
-  const j = JSON.parse(fs.readFileSync(appJsonPath, "utf8"));
-  if (!j.expo?.ios) return false;
-  if (teamId) {
-    j.expo.ios.appleTeamId = teamId;
-  } else if (j.expo.ios.appleTeamId === "XXXXXXXXXX") {
-    delete j.expo.ios.appleTeamId;
-  } else {
-    return false;
-  }
   fs.writeFileSync(appJsonPath, JSON.stringify(j, null, 2) + "\n");
   return true;
 }
