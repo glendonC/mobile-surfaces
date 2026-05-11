@@ -39,10 +39,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm surface:check
       - run: pnpm typecheck
-      - run: pnpm test:scripts
       - run: pnpm test:push
+      - run: pnpm test:scripts
       - run: pnpm cli:test
       - run: pnpm cli:smoke:existing
+      - name: Pack-and-install smoke
+        run: bash scripts/smoke-pack-and-install.sh
       - uses: changesets/action@v1
         with:
           title: Version packages
