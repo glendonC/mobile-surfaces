@@ -58,6 +58,12 @@ export const prompts = {
     yes: "Looks good, scaffold it",
     no: "Start over",
   },
+  // The confirm shown after the plan recap on the existing-expo and
+  // existing-monorepo flows. Distinct from `confirm` because the user is
+  // patching a project they already own, not creating one.
+  confirmExisting: {
+    message: "Apply these changes?",
+  },
 };
 
 export const cancelled = "Cancelled. No files written.";
@@ -140,9 +146,9 @@ export const errors = {
   installInterrupted: (dir) =>
     `Stopped. The scaffold was rolled back — nothing landed at ./${dir}.\nRe-run when you're ready:\n  npm create mobile-surfaces@latest ${dir}`,
   applyFailed:
-    "Something failed while applying changes to your project.\nNo files were rolled back; review the log to see how far we got.",
+    "A step failed while applying changes to your project.\nNo files were rolled back, so some edits may have landed.\nReview your git status and the log below to see what changed,\nthen either fix the underlying issue and re-run, or restore\nthe affected files from git.",
   applyInterrupted:
-    "Stopped midway through applying changes. Some changes may\nhave landed; review your git status and the log.",
+    "Stopped midway through applying changes. Some edits may\nhave landed; review your git status and the log below to\ndecide whether to keep them or restore from git.",
 };
 
 // Refuse-path copy. Each non-Expo reason gets a tailored message because the
