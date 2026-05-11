@@ -516,6 +516,44 @@ describe("applyStripGreenfield — integration against real source files", () =>
   });
 });
 
+describe("applyStripGreenfield - regenerateFixtures failure", () => {
+  // When the bundled generate-surface-fixtures.mjs exits non-zero, strip
+  // raises a tagged error rather than silently leaving the TS fixtures out
+  // of sync with the JSON sources. This test pins the throw path.
+  it("throws when scripts/generate-surface-fixtures.mjs exits non-zero", () => {
+    // Minimal tree that triggers the regenerate branch: an index.json that
+    // points at the widget fixture, plus the widget fixture file itself, so
+    // pruning the index for homeWidget: false will fire regenerateFixtures.
+    fs.mkdirSync(path.join(tmp, "data", "surface-fixtures"), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmp, "data", "surface-fixtures", "index.json"),
+      JSON.stringify(["./widget-dashboard.json"]),
+    );
+    fs.writeFileSync(
+      path.join(tmp, "data", "surface-fixtures", "widget-dashboard.json"),
+      "{}",
+    );
+    fs.mkdirSync(path.join(tmp, "scripts"), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmp, "scripts", "generate-surface-fixtures.mjs"),
+      "process.exit(7);\n",
+    );
+
+    assert.throws(
+      () => applyStripGreenfield({ rootDir: tmp, surfaces: HOME_OFF }),
+      /generate-surface-fixtures\.mjs exited with 7/,
+    );
+  });
+
+  it("returns fixturesRegenerated: false when no fixture changes occurred", () => {
+    // No index.json, no surface fixture deletions: the regenerate branch is
+    // skipped entirely. This pins the negative case so a refactor that
+    // accidentally always-runs regenerate would fail here.
+    const summary = applyStripGreenfield({ rootDir: tmp, surfaces: ALL_ON });
+    assert.equal(summary.fixturesRegenerated, false);
+  });
+});
+
 describe("formatSurfaceSummary", () => {
   it("always includes live activity and lists selected widgets", () => {
     assert.equal(formatSurfaceSummary(ALL_ON), "live activity, home widget, control widget");

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import {
   applyWidgetRename,
   buildPatchedAppJson,
+  copyWidgetTarget,
   deriveSwiftPrefixFromEvidence,
   formatPackageSpec,
   installablePackages,
@@ -441,5 +442,65 @@ describe("widgetCopyDecision", () => {
     const decision = widgetCopyDecision({ destDir: dest });
     assert.equal(decision.kind, "conflict");
     assert.deepEqual(decision.entries, ["Existing.swift"]);
+  });
+});
+
+describe("copyWidgetTarget - failure modes", () => {
+  // The orchestrator (applyToExisting) folds copyWidgetTarget's return value
+  // into summary.widgetCopied / summary.widgetConflict, which drives the
+  // success screen and follow-up notes. If conflict ever silently turned
+  // into a copy (or missing-source ever silently no-oped), users would get
+  // a corrupted apply with no failure copy.
+  function seedSourceTree(rootDir) {
+    const widgetDir = path.join(rootDir, "apps", "mobile", "targets", "widget");
+    fs.mkdirSync(widgetDir, { recursive: true });
+    fs.writeFileSync(path.join(widgetDir, "Bundle.swift"), "// stub");
+  }
+
+  const manifest = { widgetTargetDir: "apps/mobile/targets/widget" };
+
+  it("refuses to overwrite a widget dir that already has files", () => {
+    const sourceRoot = path.join(tmp, "source");
+    const destAppRoot = path.join(tmp, "user-app");
+    seedSourceTree(sourceRoot);
+    const destDir = path.join(destAppRoot, "targets", "widget");
+    fs.mkdirSync(destDir, { recursive: true });
+    fs.writeFileSync(path.join(destDir, "TheirWidget.swift"), "// theirs");
+
+    const result = copyWidgetTarget({ sourceRoot, manifest, destAppRoot });
+    assert.equal(result.copied, false);
+    assert.equal(result.decision.kind, "conflict");
+    // The user's file must still be there: a conflict is "leave it alone".
+    assert.equal(
+      fs.readFileSync(path.join(destDir, "TheirWidget.swift"), "utf8"),
+      "// theirs",
+    );
+    // Ours must NOT have been written.
+    assert.equal(fs.existsSync(path.join(destDir, "Bundle.swift")), false);
+  });
+
+  it("throws when the source widget dir is missing", () => {
+    const sourceRoot = path.join(tmp, "source");
+    fs.mkdirSync(sourceRoot, { recursive: true });
+    const destAppRoot = path.join(tmp, "user-app");
+    fs.mkdirSync(destAppRoot, { recursive: true });
+
+    assert.throws(
+      () => copyWidgetTarget({ sourceRoot, manifest, destAppRoot }),
+      /Widget source missing/,
+    );
+  });
+
+  it("copies the widget tree when the dest is fresh", () => {
+    const sourceRoot = path.join(tmp, "source");
+    const destAppRoot = path.join(tmp, "user-app");
+    seedSourceTree(sourceRoot);
+
+    const result = copyWidgetTarget({ sourceRoot, manifest, destAppRoot });
+    assert.equal(result.copied, true);
+    assert.equal(
+      fs.existsSync(path.join(destAppRoot, "targets", "widget", "Bundle.swift")),
+      true,
+    );
   });
 });

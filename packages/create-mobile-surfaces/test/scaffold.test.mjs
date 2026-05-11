@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { applyAppleTeamId, applyNewArchEnabled } from "../src/scaffold.mjs";
+import { applyAppleTeamId, applyNewArchEnabled, runStreamed } from "../src/scaffold.mjs";
 
 let tmp;
 
@@ -71,6 +71,28 @@ describe("applyAppleTeamId", () => {
       applyAppleTeamId({ target: tmp, teamId: "ABCDE12345" }),
       false,
     );
+  });
+});
+
+describe("runStreamed - error shape", () => {
+  // bin/index.mjs branches on err.exitCode and err.command to render the
+  // right user-facing failure copy (install vs prebuild vs template extract).
+  // Pin both fields so a refactor can't silently drop one.
+  it("rejects with exitCode and command set when the child exits non-zero", async () => {
+    let caught;
+    try {
+      await runStreamed("node", ["-e", "process.exit(7)"]);
+    } catch (err) {
+      caught = err;
+    }
+    assert.ok(caught, "expected runStreamed to reject");
+    assert.equal(caught.exitCode, 7);
+    assert.equal(caught.command, "node -e process.exit(7)");
+    assert.match(caught.message, /node exited with code 7/);
+  });
+
+  it("resolves silently on exit code 0", async () => {
+    await runStreamed("node", ["-e", "process.exit(0)"]);
   });
 });
 
