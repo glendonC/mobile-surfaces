@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   assertSnapshot,
+  IncompleteProjectionError,
   liveSurfaceSnapshot,
   liveSurfaceSnapshotV0,
   migrateV0ToV1,
@@ -255,6 +256,193 @@ test("safeParseAnyVersion fails with v1 error when neither version parses", () =
 
 test("strict assertSnapshot does NOT auto-migrate v0 payloads", () => {
   assert.throws(() => assertSnapshot(v0Sample));
+});
+
+// ---------------------------------------------------------------------------
+// Deep-link regex edge cases
+// ---------------------------------------------------------------------------
+
+const deepLinkPositiveCases = [
+  "mobilesurfaces://foo",
+  "https://example.com/path",
+  "custom-scheme://x",
+  "h+t.p://opaque",
+];
+
+for (const link of deepLinkPositiveCases) {
+  test(`deepLink accepts ${JSON.stringify(link)}`, () => {
+    const result = safeParseSnapshot({ ...queued, deepLink: link });
+    assert.equal(result.success, true);
+  });
+}
+
+const deepLinkNegativeCases = [
+  "not-a-uri",
+  "://missing-scheme",
+  "1starts-with-digit://x",
+  "",
+  "MOBILESURFACES://upper-scheme",
+  " https://leading-space",
+];
+
+for (const link of deepLinkNegativeCases) {
+  test(`deepLink rejects ${JSON.stringify(link)}`, () => {
+    const result = safeParseSnapshot({ ...queued, deepLink: link });
+    assert.equal(result.success, false);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// morePartsCount boundaries (schema declares z.int().min(0))
+// ---------------------------------------------------------------------------
+
+test("morePartsCount accepts 0", () => {
+  const result = safeParseSnapshot({ ...queued, morePartsCount: 0 });
+  assert.equal(result.success, true);
+});
+
+test("morePartsCount accepts 1", () => {
+  const result = safeParseSnapshot({ ...queued, morePartsCount: 1 });
+  assert.equal(result.success, true);
+});
+
+test("morePartsCount accepts large integers", () => {
+  const result = safeParseSnapshot({ ...queued, morePartsCount: 1_000_000 });
+  assert.equal(result.success, true);
+});
+
+test("morePartsCount rejects negative integers", () => {
+  const result = safeParseSnapshot({ ...queued, morePartsCount: -1 });
+  assert.equal(result.success, false);
+});
+
+test("morePartsCount rejects non-integer numbers", () => {
+  const result = safeParseSnapshot({ ...queued, morePartsCount: 1.5 });
+  assert.equal(result.success, false);
+});
+
+test("morePartsCount rejects NaN", () => {
+  const result = safeParseSnapshot({ ...queued, morePartsCount: Number.NaN });
+  assert.equal(result.success, false);
+});
+
+test("morePartsCount rejects string-encoded integers", () => {
+  const result = safeParseSnapshot({ ...queued, morePartsCount: "3" });
+  assert.equal(result.success, false);
+});
+
+// ---------------------------------------------------------------------------
+// Projection validation (Part 1 contracts)
+// ---------------------------------------------------------------------------
+
+test("toControlValueProvider falls back to primaryText when actionLabel is absent", () => {
+  const control = assertSnapshot({
+    ...queued,
+    id: "fixture-control-no-action-label",
+    surfaceId: "surface-control",
+    actionLabel: undefined,
+    kind: "control",
+    control: { kind: "toggle", state: true, intent: "toggleSurface" },
+  });
+  const projected = toControlValueProvider(control);
+  assert.equal(projected.label, queued.primaryText);
+});
+
+test("toControlValueProvider falls back to primaryText when actionLabel is empty string", () => {
+  const control = assertSnapshot({
+    ...queued,
+    id: "fixture-control-empty-action-label",
+    surfaceId: "surface-control",
+    actionLabel: "",
+    kind: "control",
+    control: { kind: "button", intent: "openSurface" },
+  });
+  const projected = toControlValueProvider(control);
+  // Empty-string actionLabel must NOT be passed through. The fix-site coerces
+  // empty-string to "absent" so primaryText (which is .min(1) in the schema)
+  // wins. This pins the silent-empty-label bug closed.
+  assert.equal(projected.label, queued.primaryText);
+  assert.notEqual(projected.label, "");
+});
+
+test("IncompleteProjectionError class is exported and named correctly", () => {
+  const err = new IncompleteProjectionError("toX", "fieldY", "detail");
+  assert.equal(err.name, "IncompleteProjectionError");
+  assert.equal(err.projection, "toX");
+  assert.equal(err.field, "fieldY");
+  assert.match(err.message, /toX/);
+  assert.match(err.message, /fieldY/);
+  assert.ok(err instanceof Error);
+});
+
+test("toControlValueProvider preserves null when control.state and control.intent are absent", () => {
+  const control = assertSnapshot({
+    ...queued,
+    id: "fixture-control-bare",
+    surfaceId: "surface-control",
+    kind: "control",
+    control: { kind: "deepLink" },
+  });
+  const projected = toControlValueProvider(control);
+  assert.equal(projected.value, null);
+  assert.equal(projected.intent, null);
+});
+
+// ---------------------------------------------------------------------------
+// Optional-field pass-through pins (decided NOT to throw)
+// ---------------------------------------------------------------------------
+
+test("toWidgetTimelineEntry passes through undefined family and reloadPolicy", () => {
+  const widget = assertSnapshot({
+    ...queued,
+    id: "fixture-widget-bare",
+    surfaceId: "surface-widget",
+    kind: "widget",
+    widget: {},
+  });
+  const projected = toWidgetTimelineEntry(widget);
+  assert.equal(projected.family, undefined);
+  assert.equal(projected.reloadPolicy, undefined);
+  assert.equal(projected.headline, queued.primaryText);
+});
+
+test("toNotificationContentPayload omits category and threadId when absent", () => {
+  const note = assertSnapshot({
+    ...queued,
+    id: "fixture-notification-bare",
+    surfaceId: "surface-notification",
+    kind: "notification",
+    notification: {},
+  });
+  const projected = toNotificationContentPayload(note);
+  assert.equal("category" in projected.aps, false);
+  assert.equal("thread-id" in projected.aps, false);
+  assert.equal(projected.aps.alert.title, queued.primaryText);
+  assert.equal(projected.aps.alert.body, queued.secondaryText);
+});
+
+test("toNotificationContentPayload drops empty-string category and threadId", () => {
+  const note = assertSnapshot({
+    ...queued,
+    id: "fixture-notification-empty-meta",
+    surfaceId: "surface-notification",
+    kind: "notification",
+    notification: { category: "", threadId: "" },
+  });
+  const projected = toNotificationContentPayload(note);
+  assert.equal("category" in projected.aps, false);
+  assert.equal("thread-id" in projected.aps, false);
+});
+
+test("toLiveActivityContentState accepts empty secondaryText (schema permits empty string)", () => {
+  const live = assertSnapshot({
+    ...queued,
+    id: "fixture-live-empty-secondary",
+    secondaryText: "",
+  });
+  const projected = toLiveActivityContentState(live);
+  assert.equal(projected.subhead, "");
+  assert.equal(projected.headline, queued.primaryText);
 });
 
 test("liveSurfaceSnapshot exposes a Standard Schema (~standard) interface", () => {

@@ -100,6 +100,23 @@ export interface LiveSurfaceNotificationContentPayload {
   };
 }
 
+/**
+ * Thrown when a projection helper receives a snapshot that parses against the
+ * schema but is missing a field the target wire format requires. The schema
+ * accepts the input (so producers see no Zod error), but the projection would
+ * otherwise emit a silently-broken downstream payload.
+ */
+export class IncompleteProjectionError extends Error {
+  readonly projection: string;
+  readonly field: string;
+  constructor(projection: string, field: string, detail: string) {
+    super(`${projection}: ${detail} (missing: ${field})`);
+    this.name = "IncompleteProjectionError";
+    this.projection = projection;
+    this.field = field;
+  }
+}
+
 export function toLiveActivityContentState(
   snapshot: LiveSurfaceSnapshot,
 ): LiveSurfaceActivityContentState {
@@ -167,6 +184,20 @@ export function toControlValueProvider(
     "control",
   );
   const control = controlSnap.control;
+  // `actionLabel` is optional and `z.string().optional()` accepts the empty
+  // string, but `??` only triggers on null/undefined. An empty actionLabel
+  // would silently produce an empty button label downstream, so coerce
+  // empty-string to "absent" before falling back to primaryText.
+  const labelCandidate = controlSnap.actionLabel?.length
+    ? controlSnap.actionLabel
+    : controlSnap.primaryText;
+  if (!labelCandidate) {
+    throw new IncompleteProjectionError(
+      "toControlValueProvider",
+      "actionLabel or primaryText",
+      "control snapshots must supply a non-empty actionLabel or primaryText to drive the control widget label.",
+    );
+  }
   return {
     kind: "control",
     snapshotId: controlSnap.id,
@@ -174,7 +205,7 @@ export function toControlValueProvider(
     controlKind: control.kind,
     value: control.state ?? null,
     intent: control.intent ?? null,
-    label: controlSnap.actionLabel ?? controlSnap.primaryText,
+    label: labelCandidate,
     deepLink: controlSnap.deepLink,
   };
 }

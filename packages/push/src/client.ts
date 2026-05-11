@@ -19,6 +19,7 @@ import {
   ClientClosedError,
   InvalidSnapshotError,
   MissingApnsConfigError,
+  PayloadTooLargeError,
   TooManyRequestsError,
   reasonToError,
 } from "./errors.ts";
@@ -28,6 +29,29 @@ import { JwtCache, resolveKeyPem } from "./jwt.ts";
 import { DEFAULT_RETRY_POLICY, computeBackoffMs, sleep } from "./retry.ts";
 import type { RetryPolicy } from "./retry.ts";
 import { RETRYABLE_TRANSPORT_CODES, TERMINAL_REASONS } from "./reasons.ts";
+
+// APNs payload ceilings per MS011. Per-activity and alert sends are bounded at
+// 4 KB; iOS 18 broadcast pushes get an extra 1 KB. The SDK enforces these
+// client-side so callers see PayloadTooLargeError before the round-trip.
+const MAX_PAYLOAD_BYTES_DEFAULT = 4096;
+const MAX_PAYLOAD_BYTES_BROADCAST = 5120;
+
+type PayloadKind = "alert" | "update" | "start" | "end" | "broadcast";
+
+function assertPayloadWithinLimit(
+  payload: string,
+  kind: PayloadKind,
+): void {
+  const limit =
+    kind === "broadcast" ? MAX_PAYLOAD_BYTES_BROADCAST : MAX_PAYLOAD_BYTES_DEFAULT;
+  const size = Buffer.byteLength(payload, "utf8");
+  if (size > limit) {
+    throw new PayloadTooLargeError({
+      status: 413,
+      message: `Client-side pre-flight: payload size ${size} bytes exceeds limit ${limit} for ${kind}; rejected before APNs round-trip. See MS011.`,
+    });
+  }
+}
 
 export interface CreatePushClientOptions {
   /** 10-character APNs Auth Key ID from the Apple Developer portal. */
@@ -513,6 +537,7 @@ export class PushClient {
     const payload = JSON.stringify(
       this.#buildActivityPayload(live, "update", undefined, options),
     );
+    assertPayloadWithinLimit(payload, "broadcast");
     const apnsId = options.apnsId ?? genApnsId();
     const priority = String(options.priority ?? 5);
     const headers: Record<string, string> = {
@@ -657,6 +682,7 @@ export class PushClient {
     apnsTopic: string;
     options: SendOptions;
   }): Promise<SendResponse> {
+    assertPayloadWithinLimit(args.payload, args.operation as PayloadKind);
     const apnsId = args.options.apnsId ?? genApnsId();
     const priority = String(args.options.priority ?? args.defaultPriority);
     const expiration = String(args.options.expirationSeconds ?? nowSec() + 3600);

@@ -40,7 +40,7 @@ console.log(`[smoke] log at ${logger.getPath()}`);
 const config = {
   projectName,
   scheme: "smoke",
-  bundleId: `com.example.${projectName.replace(/-/g, "")}`,
+  bundleId: `com.acme.${projectName.replace(/-/g, "")}`,
   teamId: null,
   installNow: values.install,
 };

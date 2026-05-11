@@ -12,6 +12,7 @@ const {
   InvalidSnapshotError,
   ClientClosedError,
   MissingApnsConfigError,
+  PayloadTooLargeError,
 } = await import("../dist/index.js");
 
 import { generateEs256Pem, writeTempP8 } from "./fixtures/setup-cert.mjs";
@@ -801,6 +802,124 @@ test("cold-start parallel sends share a single dial (no double-dial race)", { ti
   assert.equal(mock.requests.length, tokens.length);
   // One session: the SDK deduplicated the concurrent dial requests.
   assert.equal(mock.sessionCount, 1);
+});
+
+// --- client-side payload size pre-flight (MS011) -------------------------
+
+test("update() rejects oversized per-activity payload before any network call", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  // 5000 bytes of secondaryText alone clears the 4096 ceiling once the
+  // ActivityKit envelope (aps, content-state, timestamp, etc.) is layered on.
+  const oversized = { ...SNAPSHOT, secondaryText: "x".repeat(5000) };
+
+  await assert.rejects(
+    () => client.update("a".repeat(64), oversized),
+    (err) => {
+      assert.ok(err instanceof PayloadTooLargeError);
+      assert.equal(err.status, 413);
+      assert.equal(err.trapId, "MS011");
+      assert.match(err.message, /pre-flight/);
+      assert.match(err.message, /4096/);
+      return true;
+    },
+  );
+  // The wire never saw the send: the pre-flight short-circuited before dial.
+  assert.equal(mock.requests.length, 0);
+});
+
+test("alert() rejects oversized payload before any network call", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const oversized = { ...SNAPSHOT, secondaryText: "y".repeat(5000) };
+
+  await assert.rejects(
+    () => client.alert("a".repeat(64), oversized),
+    (err) => {
+      assert.ok(err instanceof PayloadTooLargeError);
+      assert.equal(err.trapId, "MS011");
+      assert.match(err.message, /alert/);
+      return true;
+    },
+  );
+  assert.equal(mock.requests.length, 0);
+});
+
+test("broadcast() rejects oversized payload before any network call", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  // Broadcast ceiling is 5120; pad past it so this test pins the broadcast
+  // branch rather than incidentally tripping the 4096 default.
+  const oversized = { ...SNAPSHOT, secondaryText: "z".repeat(6000) };
+
+  await assert.rejects(
+    () => client.broadcast("ChannelId123", oversized),
+    (err) => {
+      assert.ok(err instanceof PayloadTooLargeError);
+      assert.equal(err.trapId, "MS011");
+      assert.match(err.message, /5120/);
+      assert.match(err.message, /broadcast/);
+      return true;
+    },
+  );
+  assert.equal(mock.requests.length, 0);
+});
+
+test("broadcast() accepts a payload that fits the 5120-byte broadcast ceiling but would fail the 4096 default", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  // 4500 bytes of secondaryText sits between the two ceilings: the assembled
+  // payload exceeds 4096 (so update() would reject it) but stays under 5120.
+  // This pins that broadcast uses the higher ceiling rather than the default.
+  const oversized = { ...SNAPSHOT, secondaryText: "w".repeat(4500) };
+
+  const res = await client.broadcast("ChannelId123", oversized);
+  assert.equal(res.status, 200);
+  assert.equal(mock.requests.length, 1);
+});
+
+test("update() accepts a payload just under the 4096-byte ceiling", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  // 3000 bytes of secondaryText leaves headroom for the envelope; total
+  // serialized payload stays well under 4096.
+  const fits = { ...SNAPSHOT, secondaryText: "u".repeat(3000) };
+
+  const res = await client.update("a".repeat(64), fits);
+  assert.equal(res.status, 200);
+  assert.equal(mock.requests.length, 1);
+});
+
+test("PayloadTooLargeError thrown by pre-flight carries trapId MS011", async (t) => {
+  // Pins the runtime trap-binding loop: PayloadTooLargeError is bound to
+  // MS011 in trap-bindings.ts and the lazy getter on ApnsError must resolve
+  // it on the instance the SDK throws. Auditors have claimed this binding is
+  // unverified at runtime; this test holds the line.
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const oversized = { ...SNAPSHOT, secondaryText: "q".repeat(5000) };
+
+  await assert.rejects(
+    () => client.update("a".repeat(64), oversized),
+    (err) => {
+      assert.equal(err.name, "PayloadTooLargeError");
+      assert.equal(err.trapId, "MS011");
+      assert.equal(err.reason, "PayloadTooLarge");
+      return true;
+    },
+  );
 });
 
 // --- cleanup --------------------------------------------------------------
