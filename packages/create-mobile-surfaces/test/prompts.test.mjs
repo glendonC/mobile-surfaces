@@ -8,6 +8,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { runPrompts } from "../src/prompts.mjs";
+import { runExistingExpoPrompts } from "../src/existing-expo.mjs";
+import { runMonorepoPrompts } from "../src/existing-monorepo.mjs";
 import {
   adaptValidate,
   askConfirm,
@@ -433,6 +435,56 @@ test("live inquirer retry loop: rejected value re-asks; accepted value resolves"
   assert.deepEqual(seen, ["bad", "ok"]);
 });
 
+// Fixtures for the existing-expo and monorepo orchestrator tests. Both
+// flows expect an evidence object from mode detection and a template
+// manifest with the same shape buildManifestFromLive produces. Keep these
+// minimal: only the keys the orchestrators actually read.
+const EXPO_EVIDENCE = Object.freeze({
+  cwd: "/fake/cwd",
+  packageName: "host-app",
+  expoVersion: "~54.0.0",
+  config: {
+    kind: "json",
+    path: "/fake/cwd/app.json",
+    parsed: {
+      name: "Host App",
+      ios: { bundleIdentifier: "com.acme.host", deploymentTarget: "17.2" },
+      plugins: [],
+    },
+    appName: "Host App",
+    bundleId: "com.acme.host",
+    deploymentTarget: "17.2",
+  },
+  packageManager: "pnpm",
+  hasIosDir: false,
+  pluginsPresent: [],
+});
+
+const MONOREPO_EVIDENCE = Object.freeze({
+  cwd: "/fake/monorepo",
+  packageName: "host-monorepo",
+  packageManager: "pnpm",
+  workspaceKind: "pnpm-workspace",
+  workspacePath: "/fake/monorepo/pnpm-workspace.yaml",
+  workspaceGlobs: ["apps/*", "packages/*"],
+});
+
+const FAKE_MANIFEST = Object.freeze({
+  cliRequiredNode: ">=24",
+  deploymentTarget: "17.2",
+  minimumXcodeMajor: 26,
+  addPackages: [{ name: "@mobile-surfaces/live-activity", version: "2.0.0" }],
+  addPlugins: [{ name: "expo-build-properties", config: {} }],
+  addInfoPlist: {},
+  addEntitlements: {},
+  widgetTargetDir: "apps/mobile/targets/widget",
+  widgetFiles: [
+    "apps/mobile/targets/widget/MobileSurfacesHomeWidget.swift",
+    "apps/mobile/targets/widget/MobileSurfacesControlWidget.swift",
+    "apps/mobile/targets/widget/MobileSurfacesLiveActivity.swift",
+  ],
+});
+
 test("runPrompts: recap rejected twice restarts twice, then resolves on the third pass", async () => {
   // Extends the single-rejection coverage above. Pinning multi-pass restart
   // protects against a regression where the recursion only triggers once
@@ -470,4 +522,172 @@ test("runPrompts: recap rejected twice restarts twice, then resolves on the thir
   assert.equal(result.projectName, "three");
   assert.equal(result.bundleId, "com.three.app");
   assert.equal(ui.calls.length, 24);
+});
+
+// --- orchestrator-level cancellation through the live ui --------------------
+
+// The fake-ui tests above pin the orchestrator's wiring, but cancellation
+// only fires through the live askText/askConfirm/askSelect wrappers (guard()
+// catches ExitPromptError and calls process.exit). The tests below run the
+// orchestrator against the live ui module with a single inquirer primitive
+// stubbed via setPrompts, so guard() runs for real and we can assert on the
+// exit code.
+
+test("runPrompts: ExitPromptError thrown mid-flow exits SUCCESS through guard", async () => {
+  await withCapturedExit(async (getExited) => {
+    let inputCalls = 0;
+    await withStubbedPrompts(
+      {
+        input: async () => {
+          inputCalls += 1;
+          if (inputCalls === 1) return "myproj";
+          const err = new Error("user canceled");
+          err.name = "ExitPromptError";
+          throw err;
+        },
+      },
+      async () => {
+        await assert.rejects(
+          () => runPrompts({ overrides: {}, yes: false }),
+          /__exit__/,
+        );
+        assert.equal(getExited(), EXIT_CODES.SUCCESS);
+      },
+    );
+  });
+});
+
+// --- runExistingExpoPrompts ------------------------------------------------
+
+test("runExistingExpoPrompts: happy path returns mode + teamId + plan", async () => {
+  const ui = makeFakeUi([
+    { kind: "confirm", answer: true },  // homeWidget
+    { kind: "confirm", answer: true },  // controlWidget
+    { kind: "text", answer: "ABCDE12345" }, // teamId (app.json has no real one in this fixture)
+    { kind: "select", answer: true },   // installNow
+    { kind: "confirm", answer: true },  // recap confirm
+  ]);
+  const result = await runExistingExpoPrompts({
+    evidence: EXPO_EVIDENCE,
+    manifest: FAKE_MANIFEST,
+    overrides: {},
+    yes: false,
+    ui,
+  });
+  assert.equal(result.mode, "existing-expo");
+  assert.equal(result.teamId, "ABCDE12345");
+  assert.equal(result.installNow, true);
+  assert.equal(result.plan.surfaces.homeWidget, true);
+  assert.equal(result.plan.surfaces.controlWidget, true);
+});
+
+test("runExistingExpoPrompts: declining the recap exits SUCCESS without restarting", async () => {
+  // Asymmetry with greenfield: existing-expo treats recap-decline as
+  // cancellation, not a restart, because the user already has a project and
+  // the prompt sequence does not produce a fresh identity worth re-collecting.
+  // If a future change makes this path restart instead, the exit assertion
+  // below fails and surfaces the divergence.
+  await withCapturedExit(async (getExited) => {
+    const ui = makeFakeUi([
+      { kind: "confirm", answer: true },
+      { kind: "confirm", answer: true },
+      { kind: "text", answer: "" },
+      { kind: "select", answer: true },
+      { kind: "confirm", answer: false }, // recap declined
+    ]);
+    await assert.rejects(
+      () =>
+        runExistingExpoPrompts({
+          evidence: EXPO_EVIDENCE,
+          manifest: FAKE_MANIFEST,
+          overrides: {},
+          yes: false,
+          ui,
+        }),
+      /__exit__/,
+    );
+    assert.equal(getExited(), EXIT_CODES.SUCCESS);
+  });
+});
+
+test("runExistingExpoPrompts: ExitPromptError mid-flow exits SUCCESS through guard", async () => {
+  await withCapturedExit(async (getExited) => {
+    await withStubbedPrompts(
+      {
+        confirm: async () => {
+          const err = new Error("user canceled");
+          err.name = "ExitPromptError";
+          throw err;
+        },
+      },
+      async () => {
+        await assert.rejects(
+          () =>
+            runExistingExpoPrompts({
+              evidence: EXPO_EVIDENCE,
+              manifest: FAKE_MANIFEST,
+              overrides: {},
+              yes: false,
+            }),
+          /__exit__/,
+        );
+        assert.equal(getExited(), EXIT_CODES.SUCCESS);
+      },
+    );
+  });
+});
+
+// --- runMonorepoPrompts ----------------------------------------------------
+
+test("runMonorepoPrompts: happy path returns mode + config + plan", async () => {
+  const ui = makeFakeUi([
+    { kind: "text", answer: "lockscreen-demo" }, // projectName
+    { kind: "text", answer: "lockscreendemo" },  // scheme
+    { kind: "text", answer: "com.acme.lockscreendemo" }, // bundleId
+    { kind: "text", answer: "" },                // teamId
+    { kind: "confirm", answer: true },           // homeWidget
+    { kind: "confirm", answer: true },           // controlWidget
+    { kind: "select", answer: true },            // installNow
+    { kind: "confirm", answer: true },           // recap confirm
+  ]);
+  const result = await runMonorepoPrompts({
+    evidence: MONOREPO_EVIDENCE,
+    manifest: FAKE_MANIFEST,
+    overrides: {},
+    yes: false,
+    ui,
+  });
+  assert.equal(result.mode, "existing-monorepo-no-expo");
+  assert.equal(result.config.projectName, "lockscreen-demo");
+  assert.equal(result.config.teamId, null);
+  assert.equal(result.plan.appsMobileDest.endsWith("apps/mobile"), true);
+  // Workspace already declares apps/*, so the plan should not propose to add it.
+  assert.deepEqual(result.plan.workspaceGlobsToAdd, []);
+});
+
+test("runMonorepoPrompts: declining the recap exits SUCCESS without restarting", async () => {
+  await withCapturedExit(async (getExited) => {
+    const ui = makeFakeUi([
+      { kind: "text", answer: "lockscreen-demo" },
+      { kind: "text", answer: "lockscreendemo" },
+      { kind: "text", answer: "com.acme.lockscreendemo" },
+      { kind: "text", answer: "" },
+      { kind: "confirm", answer: true },
+      { kind: "confirm", answer: true },
+      { kind: "select", answer: true },
+      { kind: "confirm", answer: false }, // recap declined
+    ]);
+    await assert.rejects(
+      () =>
+        runMonorepoPrompts({
+          evidence: MONOREPO_EVIDENCE,
+          manifest: FAKE_MANIFEST,
+          overrides: {},
+          yes: false,
+          ui,
+        }),
+      /__exit__/,
+    );
+    assert.equal(getExited(), EXIT_CODES.SUCCESS);
+  });
 });
