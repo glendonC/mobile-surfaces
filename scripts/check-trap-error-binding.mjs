@@ -101,8 +101,32 @@ const exportedClasses = new Set(
   Array.from(errorsSource.matchAll(/^export class (\w+)/gm), (m) => m[1]),
 );
 
-// Forward direction: every cited class must be a real export.
+// Subset of exported classes that derive from ApnsError. Those are the
+// wire-level error classes: they correspond to an APNs `reason` string and
+// must be reachable through `reasonToError`'s switch. Classes that extend
+// plain `Error` (MissingApnsConfigError, InvalidSnapshotError, etc.) are
+// thrown by the SDK itself, not in response to an APNs reason, so they are
+// excluded from the reasonToError-wiring check below.
+const apnsErrorSubclasses = new Set(
+  Array.from(
+    errorsSource.matchAll(/^export class (\w+) extends ApnsError/gm),
+    (m) => m[1],
+  ),
+);
+
+// Classes returned by the `reasonToError` switch. Cases look like
+// `return new FooError(init)` (with or without spread); the regex captures
+// every constructor invocation in the file, which for errors.ts is a clean
+// proxy for the switch arms.
+const reasonDispatchClasses = new Set(
+  Array.from(errorsSource.matchAll(/return new (\w+)\(/gm), (m) => m[1]),
+);
+
+// Forward direction: every cited class must be a real export, and any
+// ApnsError subclass we cite must be reachable through reasonToError so a
+// real APNs response can actually dispatch into it.
 const missingClassIssues = [];
+const unwiredDispatchIssues = [];
 const citedToTrap = new Map();
 const duplicateBindingIssues = [];
 for (const entry of traps.entries) {
@@ -112,6 +136,14 @@ for (const entry of traps.entries) {
       missingClassIssues.push({
         path: `${entry.id}.errorClasses`,
         message: `${className} is not exported from packages/push/src/errors.ts`,
+      });
+    } else if (
+      apnsErrorSubclasses.has(className) &&
+      !reasonDispatchClasses.has(className)
+    ) {
+      unwiredDispatchIssues.push({
+        path: `${entry.id}.errorClasses`,
+        message: `${className} extends ApnsError but has no case in reasonToError; runtime cannot dispatch to it from an APNs response.`,
       });
     }
     const existing = citedToTrap.get(className);
@@ -155,6 +187,17 @@ const checks = [
         : `${duplicateBindingIssues.length} error class${duplicateBindingIssues.length === 1 ? "" : "es"} are cited by multiple traps.`,
     ...(duplicateBindingIssues.length > 0
       ? { detail: { issues: duplicateBindingIssues } }
+      : {}),
+  },
+  {
+    id: "reason-dispatch-wired",
+    status: unwiredDispatchIssues.length === 0 ? "ok" : "fail",
+    summary:
+      unwiredDispatchIssues.length === 0
+        ? "Every cited ApnsError subclass is reachable through reasonToError."
+        : `${unwiredDispatchIssues.length} cited ApnsError subclass${unwiredDispatchIssues.length === 1 ? "" : "es"} are not wired into reasonToError.`,
+    ...(unwiredDispatchIssues.length > 0
+      ? { detail: { issues: unwiredDispatchIssues } }
       : {}),
   },
   {

@@ -63,13 +63,75 @@ test("JwtCache mints once and reuses until refresh window passes", () => {
   const b = cache.get();
   assert.equal(a, b, "second get within window must reuse cached token");
 
-  // Advance just under refresh window — still cached.
+  // Advance just under refresh window: still cached.
   now += 49 * 60_000;
   const c = cache.get();
   assert.equal(c, a);
 
-  // Advance past 50min boundary — new token minted.
+  // Advance past 50min boundary: new token minted.
   now += 2 * 60_000;
   const d = cache.get();
   assert.notEqual(d, a, "after 50min window the cache must re-mint");
+});
+
+// Regression pins for the synchronous-mint invariant documented in jwt.ts.
+// The cache MUST mint exactly once across a burst of get() calls landing at
+// the same now(), and exactly twice when those calls straddle the refresh
+// boundary. If a future change accidentally introduces an await inside the
+// mint branch, two concurrent sends near the boundary could both pass the
+// freshness check and both mint, wasting an ES256 signature on every burst.
+// Counting crypto.createSign invocations is the closest we can get to that
+// "did we mint extra?" question without reaching into private fields.
+test("JwtCache mints exactly once when many gets land at the same now()", () => {
+  const cache = new JwtCache(
+    { keyPem: KEY_PEM, keyId: "ABC1234567", teamId: "TEAM123456" },
+    { now: () => 1_700_000_000_000, refreshIntervalMs: 50 * 60_000 },
+  );
+
+  const originalCreateSign = crypto.createSign;
+  let signCount = 0;
+  crypto.createSign = (...args) => {
+    signCount += 1;
+    return originalCreateSign.apply(crypto, args);
+  };
+  try {
+    for (let i = 0; i < 8; i += 1) cache.get();
+  } finally {
+    crypto.createSign = originalCreateSign;
+  }
+  assert.equal(signCount, 1, "expected exactly one mint across 8 gets");
+});
+
+test("JwtCache mints exactly twice when gets straddle the 50min boundary", () => {
+  let now = 1_700_000_000_000;
+  const cache = new JwtCache(
+    { keyPem: KEY_PEM, keyId: "ABC1234567", teamId: "TEAM123456" },
+    { now: () => now, refreshIntervalMs: 50 * 60_000 },
+  );
+
+  const originalCreateSign = crypto.createSign;
+  let signCount = 0;
+  crypto.createSign = (...args) => {
+    signCount += 1;
+    return originalCreateSign.apply(crypto, args);
+  };
+  try {
+    cache.get();
+    cache.get();
+    // 1ms past the boundary: the next get() must re-mint.
+    now += 50 * 60_000 + 1;
+    cache.get();
+    cache.get();
+  } finally {
+    crypto.createSign = originalCreateSign;
+  }
+  assert.equal(signCount, 2, "expected one mint per side of the boundary");
+});
+
+test("JwtCache.get returns a sync string (concurrency invariant)", () => {
+  const cache = new JwtCache(
+    { keyPem: KEY_PEM, keyId: "ABC1234567", teamId: "TEAM123456" },
+  );
+  const result = cache.get();
+  assert.equal(typeof result, "string");
 });
