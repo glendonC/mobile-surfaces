@@ -3,7 +3,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { detectMode, MODE, parsePnpmWorkspaceGlobs, renderRefuse } from "../src/mode.mjs";
+import { detectMode, MODE, parsePnpmWorkspaceGlobs } from "../src/mode.mjs";
+import { renderRefuse } from "../src/refuse.mjs";
 
 let tmp;
 let savedUserAgent;

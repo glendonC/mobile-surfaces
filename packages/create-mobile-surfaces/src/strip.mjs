@@ -18,6 +18,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { makeTextFileFilter, walkFiles } from "./fs-walk.mjs";
 
 // Surface ids (kebab) → selection keys (camel). The picker returns
 // { homeWidget: bool, controlWidget: bool } and markers cite the kebab id.
@@ -148,34 +149,19 @@ export function processFileContent(content, surfaces) {
   return lines.filter((_, i) => !drop.has(i)).join("\n");
 }
 
-function shouldVisit(absPath, rootDir) {
-  const rel = path.relative(rootDir, absPath);
-  for (const seg of rel.split(path.sep)) {
-    if (SKIP_DIRS.has(seg)) return false;
-  }
-  return true;
-}
-
-function walkFiles(dir, rootDir, out = []) {
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (!shouldVisit(full, rootDir)) continue;
-    if (entry.isDirectory()) {
-      walkFiles(full, rootDir, out);
-    } else if (entry.isFile()) {
-      const ext = path.extname(entry.name).toLowerCase();
-      if (TEXT_EXTS.has(ext)) out.push(full);
-    }
-  }
-  return out;
-}
+const IS_TEXT_FILE = makeTextFileFilter({ textExts: TEXT_EXTS });
 
 // Walk a directory subtree applying the marker pass. Skips files without a
 // SURFACE-BEGIN marker entirely (cheap substring check before the parse).
 // Returns the list of relative paths actually rewritten.
 export function stripMarkersInTree({ rootDir, surfaces, scopeDir = rootDir }) {
   const rewritten = [];
-  for (const file of walkFiles(scopeDir, scopeDir)) {
+  const files = walkFiles({
+    rootDir: scopeDir,
+    skipDirs: SKIP_DIRS,
+    filter: IS_TEXT_FILE,
+  });
+  for (const file of files) {
     const before = fs.readFileSync(file, "utf8");
     if (
       !before.includes("SURFACE-BEGIN:") &&

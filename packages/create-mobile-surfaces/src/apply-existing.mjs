@@ -11,6 +11,7 @@ import * as logger from "./logger.mjs";
 import { prepareSourceTree, runAddPackages } from "./scaffold.mjs";
 import { applyStripWidgetDir } from "./strip.mjs";
 import { toSwiftPrefix } from "./validators.mjs";
+import { walkFiles } from "./fs-walk.mjs";
 
 const DEFAULT_SURFACES = Object.freeze({
   homeWidget: true,
@@ -51,10 +52,13 @@ export function buildPatchedAppJson({ existing, plan, teamId = null }) {
     }
   }
 
+  const infoPlistKeys = Object.keys(plan.infoPlistToAdd);
+  const entitlementsToAdd = plan.entitlementsToAdd ?? {};
+  const entitlementsKeys = Object.keys(entitlementsToAdd);
   const needsIos =
     plan.deploymentTargetTo ||
-    Object.keys(plan.infoPlistToAdd).length > 0 ||
-    Object.keys(plan.entitlementsToAdd ?? {}).length > 0 ||
+    infoPlistKeys.length > 0 ||
+    entitlementsKeys.length > 0 ||
     Boolean(teamId);
   if (needsIos) expo.ios = expo.ios ?? {};
 
@@ -62,14 +66,14 @@ export function buildPatchedAppJson({ existing, plan, teamId = null }) {
     expo.ios.deploymentTarget = plan.deploymentTargetTo;
   }
 
-  if (Object.keys(plan.infoPlistToAdd).length > 0) {
+  if (infoPlistKeys.length > 0) {
     expo.ios.infoPlist = expo.ios.infoPlist ?? {};
     Object.assign(expo.ios.infoPlist, plan.infoPlistToAdd);
   }
 
-  if (Object.keys(plan.entitlementsToAdd ?? {}).length > 0) {
+  if (entitlementsKeys.length > 0) {
     expo.ios.entitlements = expo.ios.entitlements ?? {};
-    Object.assign(expo.ios.entitlements, plan.entitlementsToAdd);
+    Object.assign(expo.ios.entitlements, entitlementsToAdd);
   }
 
   if (teamId) {
@@ -103,10 +107,13 @@ export function renderManualSnippet(plan, { teamId = null } = {}) {
       p.config !== undefined ? [p.name, p.config] : p.name,
     );
   }
+  const infoPlistKeys = Object.keys(plan.infoPlistToAdd);
+  const entitlementsToAdd = plan.entitlementsToAdd ?? {};
+  const entitlementsKeys = Object.keys(entitlementsToAdd);
   const needsIos =
     plan.deploymentTargetTo ||
-    Object.keys(plan.infoPlistToAdd).length > 0 ||
-    Object.keys(plan.entitlementsToAdd ?? {}).length > 0 ||
+    infoPlistKeys.length > 0 ||
+    entitlementsKeys.length > 0 ||
     Boolean(teamId);
   if (needsIos) snippet.ios = {};
   if (plan.deploymentTargetTo) {
@@ -115,11 +122,11 @@ export function renderManualSnippet(plan, { teamId = null } = {}) {
   if (teamId) {
     snippet.ios.appleTeamId = teamId;
   }
-  if (Object.keys(plan.infoPlistToAdd).length > 0) {
+  if (infoPlistKeys.length > 0) {
     snippet.ios.infoPlist = { ...plan.infoPlistToAdd };
   }
-  if (Object.keys(plan.entitlementsToAdd ?? {}).length > 0) {
-    snippet.ios.entitlements = { ...plan.entitlementsToAdd };
+  if (entitlementsKeys.length > 0) {
+    snippet.ios.entitlements = { ...entitlementsToAdd };
   }
   return JSON.stringify(snippet, null, 2);
 }
@@ -198,37 +205,30 @@ export function applyWidgetRename({ destDir, swiftPrefix }) {
   // ordering explicit (write rewritten content first, then rename) and keeps
   // the apply step easy to reason about — no in-walk side effects.
   const ops = [];
-  function walk(dir) {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        walk(full);
-        continue;
-      }
-      if (!entry.isFile()) continue;
+  for (const full of walkFiles({ rootDir: destDir })) {
+    const dir = path.dirname(full);
+    const name = path.basename(full);
 
-      let newContent;
-      // Only rewrite text-y files. Asset bundles (.car, images) won't
-      // contain literal "MobileSurfaces" strings, but reading them as utf8
-      // is wasteful and risks false-positive substitutions.
-      if (TEXTY_EXTS.has(path.extname(entry.name).toLowerCase())) {
-        const original = fs.readFileSync(full, "utf8");
-        const rewritten = rewriteContent({ source: original, swiftPrefix, widgetTarget });
-        if (rewritten !== original) newContent = rewritten;
-      }
+    let newContent;
+    // Only rewrite text-y files. Asset bundles (.car, images) won't
+    // contain literal "MobileSurfaces" strings, but reading them as utf8
+    // is wasteful and risks false-positive substitutions.
+    if (TEXTY_EXTS.has(path.extname(name).toLowerCase())) {
+      const original = fs.readFileSync(full, "utf8");
+      const rewritten = rewriteContent({ source: original, swiftPrefix, widgetTarget });
+      if (rewritten !== original) newContent = rewritten;
+    }
 
-      // MobileSurfaces<Suffix>.swift → <swiftPrefix><Suffix>.swift. Only the
-      // prefix at the start of the basename is rewritten so unrelated uses
-      // of the literal "MobileSurfaces" string elsewhere are left alone.
-      const renamed = renameWidgetFilename(entry.name, swiftPrefix);
-      const newName = renamed && renamed !== entry.name ? renamed : undefined;
+    // MobileSurfaces<Suffix>.swift → <swiftPrefix><Suffix>.swift. Only the
+    // prefix at the start of the basename is rewritten so unrelated uses
+    // of the literal "MobileSurfaces" string elsewhere are left alone.
+    const renamed = renameWidgetFilename(name, swiftPrefix);
+    const newName = renamed && renamed !== name ? renamed : undefined;
 
-      if (newContent !== undefined || newName !== undefined) {
-        ops.push({ dir, name: entry.name, newContent, newName });
-      }
+    if (newContent !== undefined || newName !== undefined) {
+      ops.push({ dir, name, newContent, newName });
     }
   }
-  walk(destDir);
 
   const filesTouched = [];
   const filesRenamed = [];

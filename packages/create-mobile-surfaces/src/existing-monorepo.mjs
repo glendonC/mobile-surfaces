@@ -63,10 +63,16 @@ function renderFoundRecap(evidence, ui) {
         ? "pnpm-workspace.yaml"
         : "package.json workspaces",
     )}`,
-    `  globs         ${pc.dim(evidence.workspaceGlobs.join(", ") || "(none)")}`,
-    `  package mgr   ${pc.bold(evidence.packageManager ?? "unknown")}`,
-    "",
   ];
+  // Only show globs when the host has declared some. Printing "(none)" here
+  // read as "we found no globs" — which is correct but unhelpful, since the
+  // apply step will add apps/* on its own. Hiding the line keeps the recap
+  // about positively-found evidence only.
+  if (evidence.workspaceGlobs.length > 0) {
+    lines.push(`  globs         ${pc.dim(evidence.workspaceGlobs.join(", "))}`);
+  }
+  lines.push(`  package mgr   ${pc.bold(evidence.packageManager ?? "unknown")}`);
+  lines.push("");
   ui.rail.block(lines.join("\n"));
 }
 

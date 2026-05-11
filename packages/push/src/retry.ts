@@ -28,8 +28,9 @@ export const DEFAULT_RETRY_POLICY: RetryPolicy = {
 /**
  * Compute the next backoff window for `attempt` (0-indexed; first retry is
  * attempt 0). Returns `retryAfterMs` if provided (caller already converted
- * Retry-After seconds to ms). Otherwise: min(base * 2^attempt, max) + optional
- * jitter ∈ [0, base).
+ * Retry-After seconds to ms). Otherwise: min(base * 2^attempt + jitter, max),
+ * where jitter ∈ [0, base) when enabled. `maxDelayMs` is a hard ceiling on the
+ * returned value; jitter cannot push the result past the cap.
  */
 export function computeBackoffMs(
   attempt: number,
@@ -40,9 +41,9 @@ export function computeBackoffMs(
   if (retryAfterMs !== undefined && Number.isFinite(retryAfterMs) && retryAfterMs >= 0) {
     return retryAfterMs;
   }
-  const exp = Math.min(policy.baseDelayMs * 2 ** attempt, policy.maxDelayMs);
+  const exp = policy.baseDelayMs * 2 ** attempt;
   const jitter = policy.jitter ? Math.floor(random() * policy.baseDelayMs) : 0;
-  return exp + jitter;
+  return Math.min(exp + jitter, policy.maxDelayMs);
 }
 
 /**

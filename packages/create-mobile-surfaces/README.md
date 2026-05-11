@@ -33,6 +33,7 @@ npm create mobile-surfaces@latest --yes \
 | `--home-widget` / `--no-home-widget` | Include the home-screen widget surface (default: yes). |
 | `--control-widget` / `--no-control-widget` | Include the iOS 18 control widget (default: yes). |
 | `--install` / `--no-install` | Run `pnpm install` + `expo prebuild` after scaffold (default: yes). |
+| `--new-arch` / `--no-new-arch` | Force Expo's New Architecture on or off. Omit to keep the template default. |
 | `--yes`, `-y` | Non-interactive: accept defaults, skip the recap. |
 | `--help`, `-h` | Show help. |
 

@@ -211,6 +211,16 @@ function loadApnsKey() {
         `Could not read APNs auth key (${err.code}). Confirm APNS_KEY_PATH points at a readable .p8 file.`,
       );
     }
+    // Node fs errors carry the resolved absolute path on err.path and embed
+    // it in err.message; rethrowing as-is would surface the user's home
+    // directory layout (or a CI secret mount point) into operator logs. The
+    // `err.path` check is the fs-error tell — non-fs errors (e.g. the size
+    // guard above) re-throw untouched.
+    if (err && typeof err === "object" && typeof err.path === "string") {
+      throw new Error(
+        `Could not read APNs auth key${err.code ? ` (${err.code})` : ""}. Confirm APNS_KEY_PATH points at a readable .p8 file.`,
+      );
+    }
     throw err;
   }
 }

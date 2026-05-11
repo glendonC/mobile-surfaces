@@ -27,7 +27,7 @@ import { Http2Client } from "./http.ts";
 import { JwtCache, resolveKeyPem } from "./jwt.ts";
 import { DEFAULT_RETRY_POLICY, computeBackoffMs, sleep } from "./retry.ts";
 import type { RetryPolicy } from "./retry.ts";
-import { RETRYABLE_TRANSPORT_CODES } from "./reasons.ts";
+import { RETRYABLE_TRANSPORT_CODES, TERMINAL_REASONS } from "./reasons.ts";
 
 export interface CreatePushClientOptions {
   /** 10-character APNs Auth Key ID from the Apple Developer portal. */
@@ -182,6 +182,12 @@ interface TestTransportOverride {
   sendOrigin?: string;
   /** Override channel-management origin. */
   manageOrigin?: string;
+  /**
+   * Per-request stream timeout in ms, forwarded to Http2Client.request().
+   * Test-only knob so transport-retry coverage can hit ETIMEDOUT without
+   * waiting for the 30s production default. Production code never sets this.
+   */
+  requestTimeoutMs?: number;
 }
 
 function sendOriginFor(env: "development" | "production"): string {
@@ -338,6 +344,7 @@ export class PushClient {
   readonly #send: Http2Client;
   readonly #manage: Http2Client;
   readonly #hooks: PushHooks;
+  readonly #requestTimeoutMs: number | undefined;
   #closed = false;
 
   constructor(options: CreatePushClientOptions) {
@@ -362,6 +369,7 @@ export class PushClient {
     const override = (options as unknown as Record<symbol, unknown>)[
       TEST_TRANSPORT_OVERRIDE
     ] as TestTransportOverride | undefined;
+    this.#requestTimeoutMs = override?.requestTimeoutMs;
 
     this.#send = new Http2Client({
       origin: override?.sendOrigin ?? sendOriginFor(options.environment),
@@ -680,7 +688,11 @@ export class PushClient {
       this.#assertOpen();
       const startedAt = Date.now();
       try {
-        const res = await this.#manage.request({ headers, body });
+        const res = await this.#manage.request({
+          headers,
+          body,
+          timeoutMs: this.#requestTimeoutMs,
+        });
         const durationMs = Date.now() - startedAt;
         const apnsId = pickHeader(res.headers, "apns-id");
         if (res.status >= 200 && res.status < 300) {
@@ -752,7 +764,11 @@ export class PushClient {
       this.#assertOpen();
       const startedAt = Date.now();
       try {
-        const res = await transport.request({ headers, body });
+        const res = await transport.request({
+          headers,
+          body,
+          timeoutMs: this.#requestTimeoutMs,
+        });
         const durationMs = Date.now() - startedAt;
         if (res.status >= 200 && res.status < 300) {
           this.#fireResponseHook({
@@ -829,6 +845,10 @@ export class PushClient {
   }
 
   #shouldRetry(err: ApnsError, _attempt: number): boolean {
+    // Terminal reasons are denied first so a caller-customized
+    // retryableReasons set cannot accidentally re-enable retries for
+    // permanently-broken tokens (BadDeviceToken, Unregistered, etc.).
+    if (TERMINAL_REASONS.has(err.reason)) return false;
     if (err instanceof TooManyRequestsError) return true;
     return this.#retryPolicy.retryableReasons.has(err.reason);
   }

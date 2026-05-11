@@ -181,6 +181,49 @@ test("BadDeviceToken response surfaces as BadDeviceTokenError with apns-id", asy
       return true;
     },
   );
+  // Terminal codes must never be retried, regardless of retryableReasons. If a
+  // future change widened the retry set to include BadDeviceToken, the request
+  // count here would jump past 1 and catch the regression.
+  assert.equal(mock.requests.length, 1);
+});
+
+test("terminal reasons are denied even when retryableReasons explicitly includes them", async (t) => {
+  // Pins the TERMINAL_REASONS deny-list contract: a caller-customized retry
+  // policy that names a terminal reason cannot bypass the SDK's terminal
+  // guard. The four codes below stay terminal under any retry-policy override.
+  const terminalCodes = [
+    { reason: "BadDeviceToken", status: 400 },
+    { reason: "Unregistered", status: 410 },
+    { reason: "PayloadTooLarge", status: 413 },
+    { reason: "TopicDisallowed", status: 400 },
+  ];
+  for (const { reason, status } of terminalCodes) {
+    const mock = await startMockApns(() => ({ status, body: { reason } }));
+    const client = makeClient({
+      sendOrigin: mock.origin,
+      retryPolicy: {
+        maxRetries: 3,
+        baseDelayMs: 1,
+        maxDelayMs: 2,
+        jitter: false,
+        // Widen the retry set to include every terminal code. The SDK's
+        // built-in TERMINAL_REASONS deny-list must still take precedence.
+        retryableReasons: new Set([
+          ...terminalCodes.map((c) => c.reason),
+          "TooManyRequests",
+          "InternalServerError",
+          "ServiceUnavailable",
+        ]),
+      },
+    });
+    teardown(t, client, mock);
+
+    await assert.rejects(
+      () => client.alert("c".repeat(64), SNAPSHOT),
+      (err) => err.reason === reason,
+    );
+    assert.equal(mock.requests.length, 1, `${reason} retried ${mock.requests.length} times`);
+  }
 });
 
 test("TooManyRequests parses Retry-After and exposes retryAfterSeconds", async (t) => {
@@ -627,6 +670,71 @@ test("two parallel sends share a single retry-session after stream-level resets"
   // stays alive and both retries multiplex back onto it. A regression that
   // dropped the session on stream-level resets would show as 2+.
   assert.equal(mock.sessionCount, 1);
+});
+
+test("repeated GOAWAY cycles dial a fresh session on every recovery", { timeout: 5000 }, async (t) => {
+  // Pins the multi-cycle reconnect path: APNs is allowed to rotate the
+  // connection multiple times across a single client's lifetime, and every
+  // cycle must surface as a fresh dial. A regression that cached the dead
+  // session across drops would show as fewer than the expected sessionCount.
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    // Calls 1 and 3 destroy the session mid-stream (GOAWAY + close).
+    // Calls 2 and 4 succeed on the freshly-dialed retry session.
+    if (calls === 1 || calls === 3) return { destroy: true };
+    return { status: 200 };
+  });
+  const client = makeClient({
+    sendOrigin: mock.origin,
+    retryPolicy: { maxRetries: 1, baseDelayMs: 1, maxDelayMs: 5, jitter: false },
+  });
+  teardown(t, client, mock);
+
+  const r1 = await client.alert("a".repeat(64), SNAPSHOT);
+  assert.equal(r1.status, 200);
+  const r2 = await client.alert("b".repeat(64), SNAPSHOT);
+  assert.equal(r2.status, 200);
+
+  // 4 server-side requests: 2 dropped + 2 successful retries.
+  assert.equal(mock.requests.length, 4);
+  // 3 sessions: original (dropped), retry-1 (lived through second send's
+  // first attempt then dropped), retry-2 (final live session). A regression
+  // that kept the first dead session cached would show sessionCount=2.
+  assert.equal(mock.sessionCount, 3);
+});
+
+test("ETIMEDOUT on a hanging stream is retried through the transport-retry layer", { timeout: 5000 }, async (t) => {
+  // Pins that an in-flight stream that hangs long enough to fire the request
+  // timeout surfaces as ETIMEDOUT (per RETRYABLE_TRANSPORT_CODES) and goes
+  // through PushClient's retry path rather than failing on the first attempt.
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    // First call: hold the stream open forever so the SDK's per-request
+    // timeout fires from its side. Second call: respond normally so the
+    // retry resolves and we can observe the retry happened.
+    if (calls === 1) return new Promise(() => {});
+    return { status: 200 };
+  });
+  const client = createPushClient({
+    keyId: "ABC1234567",
+    teamId: "TEAM123456",
+    keyPath: KEY.file,
+    bundleId: "com.example.test",
+    environment: "development",
+    idleTimeoutMs: 1_000,
+    retryPolicy: { maxRetries: 1, baseDelayMs: 1, maxDelayMs: 5, jitter: false },
+    [TEST_TRANSPORT_OVERRIDE]: {
+      sendOrigin: mock.origin,
+      requestTimeoutMs: 50,
+    },
+  });
+  teardown(t, client, mock);
+
+  const res = await client.alert("a".repeat(64), SNAPSHOT);
+  assert.equal(res.status, 200);
+  assert.equal(mock.requests.length, 2);
 });
 
 test("cold-start parallel sends share a single dial (no double-dial race)", { timeout: 5000 }, async (t) => {

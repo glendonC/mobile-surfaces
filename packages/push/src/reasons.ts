@@ -110,6 +110,28 @@ export const DEFAULT_RETRYABLE_REASONS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Reasons that will never recover on retry and must never be retried, even if
+ * a caller-supplied `retryableReasons` set happens to include one of them by
+ * mistake. The PushClient denies these before consulting `retryableReasons`,
+ * so retry-policy widening cannot accidentally burn budget on tokens that
+ * iOS has permanently rejected.
+ *
+ * Membership is intentionally narrow: only reasons that are guaranteed to
+ * stay broken on the next attempt (bad-device-token, payload-too-large,
+ * topic-disallowed, unregistered token). Provider-token reasons such as
+ * ExpiredProviderToken are NOT terminal because the SDK refreshes the JWT
+ * on the next attempt; auth-key revocation (Forbidden) is also excluded so
+ * the default policy can surface it via the existing reason-not-in-retryable
+ * fallthrough rather than appearing to be a configurable knob.
+ */
+export const TERMINAL_REASONS: ReadonlySet<string> = new Set([
+  "BadDeviceToken",
+  "PayloadTooLarge",
+  "TopicDisallowed",
+  "Unregistered",
+]);
+
+/**
  * Connection-level errors that are always retryable, regardless of reason
  * (since these arrive before APNs can return a JSON body).
  */

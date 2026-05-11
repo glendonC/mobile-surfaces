@@ -86,7 +86,7 @@ describe("buildIdentitySubstitutions", () => {
 });
 
 describe("applyIdentityRewrites", () => {
-  it("rewrites text files under rootDir, leaving non-text files untouched", () => {
+  it("rewrites text files under rootDir, leaving non-text files untouched", async () => {
     write("src/foo.swift", "import MobileSurfaces\nlet x = MobileSurfacesWidget\n");
     write("README.md", "# mobile-surfaces\nscheme: mobilesurfaces");
     write("assets/icon.png", "binary-data-pretend");
@@ -102,7 +102,7 @@ describe("applyIdentityRewrites", () => {
       appPackageName: "foo-app-app",
     };
     const subs = buildIdentitySubstitutions(newId);
-    const touched = applyIdentityRewrites({ rootDir: tmp, substitutions: subs });
+    const touched = await applyIdentityRewrites({ rootDir: tmp, substitutions: subs });
     assert.ok(touched >= 2);
 
     const swift = fs.readFileSync(path.join(tmp, "src/foo.swift"), "utf8");
@@ -118,7 +118,7 @@ describe("applyIdentityRewrites", () => {
     assert.equal(png, "binary-data-pretend", "binary files should not be rewritten");
   });
 
-  it("skips ios/, node_modules, .git", () => {
+  it("skips ios/, node_modules, .git", async () => {
     write("ios/Foo.swift", "MobileSurfaces");
     write("node_modules/foo/index.js", "MobileSurfaces");
     write(".git/HEAD", "MobileSurfaces");
@@ -126,7 +126,7 @@ describe("applyIdentityRewrites", () => {
 
     const newId = { ...DEFAULT_IDENTITY, name: "X", swiftPrefix: "X" };
     const subs = buildIdentitySubstitutions(newId);
-    applyIdentityRewrites({ rootDir: tmp, substitutions: subs });
+    await applyIdentityRewrites({ rootDir: tmp, substitutions: subs });
 
     assert.ok(
       fs.readFileSync(path.join(tmp, "ios/Foo.swift"), "utf8").includes("MobileSurfaces"),

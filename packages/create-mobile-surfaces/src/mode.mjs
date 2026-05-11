@@ -10,14 +10,17 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import pc from "picocolors";
-import { refuse as refuseCopy } from "./copy.mjs";
 import { detectPackageManager } from "./package-manager.mjs";
 import { detectWorkspace, parsePnpmWorkspaceGlobs } from "./workspace.mjs";
 
 // Re-exported for tests and any callers that want the YAML parser directly.
 // New code should import from ./workspace.mjs.
 export { parsePnpmWorkspaceGlobs };
+
+// Re-exported so existing callers that grouped detection + presentation
+// imports from mode.mjs keep working. New code should import directly from
+// ./refuse.mjs.
+export { renderRefuse } from "./refuse.mjs";
 
 export const MODE = Object.freeze({
   GREENFIELD: "greenfield",
@@ -179,34 +182,3 @@ function readJsonConfig(filePath) {
   }
 }
 
-// Render path. Each refuse reason gets a tailored screen — the value here
-// is naming the user's actual situation and the smallest concrete next step.
-export function renderRefuse(mode) {
-  const { evidence } = mode;
-  let body;
-  switch (evidence.reason) {
-    case "no-package-json":
-      body = refuseCopy.noPackageJson;
-      break;
-    case "invalid-package-json":
-      body = refuseCopy.invalidPackageJson(evidence.cwd);
-      break;
-    case "no-expo-dep":
-      body = refuseCopy.noExpoDep(evidence.packageName);
-      break;
-    case "apps-mobile-exists":
-      body = refuseCopy.appsMobileExists(evidence.packageName);
-      break;
-    default:
-      throw new Error(
-        `renderRefuse received an unknown evidence.reason: ${JSON.stringify(evidence.reason)}. ` +
-          `This is a bug in detectMode — every refuse branch should populate one of the documented reason values.`,
-      );
-  }
-
-  process.stdout.write("\n" + pc.yellow("▲  ") + pc.bold("Can't add Mobile Surfaces here.") + "\n\n");
-  for (const line of body.split("\n")) {
-    process.stdout.write(line ? "   " + line + "\n" : "\n");
-  }
-  process.stdout.write("\n");
-}

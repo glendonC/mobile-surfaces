@@ -7,7 +7,8 @@ import { HELP_TEXT, parseCliFlags, resolveYesConfig, validateOverrides } from ".
 import * as logger from "../src/logger.mjs";
 import { runExistingExpoPrompts } from "../src/existing-expo.mjs";
 import { runMonorepoPrompts } from "../src/existing-monorepo.mjs";
-import { detectMode, MODE, renderRefuse } from "../src/mode.mjs";
+import { detectMode, MODE } from "../src/mode.mjs";
+import { renderRefuse } from "../src/refuse.mjs";
 import {
   renderFailures,
   renderPassed,

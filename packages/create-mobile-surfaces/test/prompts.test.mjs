@@ -387,8 +387,13 @@ import { render } from "@inquirer/testing";
 
 test("live inquirer retry loop: rejected value re-asks; accepted value resolves", async () => {
   // Same validator + adapter the CLI uses, exercised through the real prompt.
-  const validate = (value) =>
-    value === "ok" ? undefined : "needs to be exactly 'ok'";
+  // Counted so the test pins the retry contract (validator called once per
+  // submission attempt) in addition to the screen-render evidence below.
+  const seen = [];
+  const validate = (value) => {
+    seen.push(value);
+    return value === "ok" ? undefined : "needs to be exactly 'ok'";
+  };
   const inquirerValidator = adaptValidate(validate);
 
   const { answer, events, getScreen } = await render(inquirerInput, {
@@ -422,4 +427,47 @@ test("live inquirer retry loop: rejected value re-asks; accepted value resolves"
 
   const result = await answer;
   assert.equal(result, "ok");
+  // Exactly two submissions: the rejected "bad" and the accepted "ok". A
+  // regression where the adapter returned `true` for everything (or the
+  // retry loop dropped the validator entirely) would show as one call.
+  assert.deepEqual(seen, ["bad", "ok"]);
+});
+
+test("runPrompts: recap rejected twice restarts twice, then resolves on the third pass", async () => {
+  // Extends the single-rejection coverage above. Pinning multi-pass restart
+  // protects against a regression where the recursion only triggers once
+  // (e.g. accidentally consuming the rejection state on the first restart).
+  const ui = makeFakeUi([
+    // Pass 1 — declined.
+    { kind: "text", answer: "one" },
+    { kind: "text", answer: "one" },
+    { kind: "text", answer: "com.one.app" },
+    { kind: "text", answer: "" },
+    { kind: "confirm", answer: true },
+    { kind: "confirm", answer: true },
+    { kind: "select", answer: true },
+    { kind: "confirm", answer: false },
+    // Pass 2 — declined again.
+    { kind: "text", answer: "two" },
+    { kind: "text", answer: "two" },
+    { kind: "text", answer: "com.two.app" },
+    { kind: "text", answer: "" },
+    { kind: "confirm", answer: true },
+    { kind: "confirm", answer: true },
+    { kind: "select", answer: true },
+    { kind: "confirm", answer: false },
+    // Pass 3 — accepted.
+    { kind: "text", answer: "three" },
+    { kind: "text", answer: "three" },
+    { kind: "text", answer: "com.three.app" },
+    { kind: "text", answer: "" },
+    { kind: "confirm", answer: true },
+    { kind: "confirm", answer: true },
+    { kind: "select", answer: true },
+    { kind: "confirm", answer: true },
+  ]);
+  const result = await runPrompts({ overrides: {}, yes: false, ui });
+  assert.equal(result.projectName, "three");
+  assert.equal(result.bundleId, "com.three.app");
+  assert.equal(ui.calls.length, 24);
 });
