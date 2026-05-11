@@ -361,9 +361,9 @@ async function applyPackageInstall({ plan, target, packageManager, summary }) {
   }
   if (skipped.length > 0) {
     summary.followups.push(
-      `These packages aren't on npm yet so they were skipped: ${skipped
+      `Skipped local-only refs (workspace:* or file:): ${skipped
         .map((p) => p.name)
-        .join(", ")}. They ship in the next release of mobile-surfaces.`,
+        .join(", ")}. Install them manually or replace the ref with a concrete version.`,
     );
   }
 }

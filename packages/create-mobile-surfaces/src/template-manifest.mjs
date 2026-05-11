@@ -95,16 +95,23 @@ function computeLiveManifest(repoRoot) {
   const allAppDeps = { ...appPkg.dependencies, ...appPkg.devDependencies };
 
   // Resolve packages we'd add — for each declared addition, find the version
-  // in apps/mobile/package.json. Workspace packages (workspace:* protocol)
-  // and file: deps can't be installed from npm yet, so they get a marker so
-  // the install step can skip them and surface a follow-up.
+  // in apps/mobile/package.json. @mobile-surfaces/* packages are declared as
+  // workspace:* in the live repo but ship to npm under a linked release group;
+  // resolve those workspace refs to the concrete published version recorded
+  // in packages/<short-name>/package.json so foreign installs get a real
+  // npm-resolvable spec. Non-@mobile-surfaces local refs (file:, foreign
+  // workspace:*) stay marked workspace so the install step skips them.
   const addPackages = (ms.addPackages ?? []).map((name) => {
     const declared = allAppDeps[name];
     if (declared) {
       const isLocal = declared.startsWith("workspace:") || declared.startsWith("file:");
-      if (isLocal) return { name, version: declared, workspace: true };
-      return { name, version: declared };
+      if (!isLocal) return { name, version: declared };
+      const resolved = resolvePublishedMobileSurfacesVersion(repoRoot, name);
+      if (resolved) return { name, version: resolved };
+      return { name, version: declared, workspace: true };
     }
+    const resolved = resolvePublishedMobileSurfacesVersion(repoRoot, name);
+    if (resolved) return { name, version: resolved };
     if (name.startsWith("@mobile-surfaces/")) {
       return { name, version: "workspace", workspace: true };
     }
@@ -165,6 +172,22 @@ function computeLiveManifest(repoRoot) {
     widgetTargetDir: widgetDirRel,
     widgetFiles,
   };
+}
+
+// Look up the version of a @mobile-surfaces/* package from its own
+// package.json under packages/. Returns null for names outside the scope
+// or when the package directory is missing. The linked changeset group
+// keeps these versions in lockstep, so reading one is enough to pin a
+// foreign install to a coherent set.
+function resolvePublishedMobileSurfacesVersion(repoRoot, name) {
+  if (!name.startsWith("@mobile-surfaces/")) return null;
+  const shortName = name.slice("@mobile-surfaces/".length);
+  const pkgPath = path.join(repoRoot, "packages", shortName, "package.json");
+  if (!fs.existsSync(pkgPath)) return null;
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+  return typeof pkg.version === "string" && pkg.version.length > 0
+    ? pkg.version
+    : null;
 }
 
 // Read this CLI's own version from its package.json (no hardcoding).

@@ -33,5 +33,6 @@ jobs:
       - run: pnpm cli:test
       - run: pnpm cli:smoke
       - run: pnpm cli:smoke:existing
+      - run: pnpm cli:smoke:monorepo
       - name: Pack-and-install smoke
         run: bash scripts/smoke-pack-and-install.sh
