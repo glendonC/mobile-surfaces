@@ -22,10 +22,21 @@ export function detectPackageManager(cwd) {
   if (ua.startsWith("yarn/")) return "yarn";
   if (ua.startsWith("npm/")) return "npm";
 
+  // One readdir per level + Set membership instead of N existsSync stat
+  // syscalls per level. For a deep nested project this drops the cost of
+  // the upward walk from O(levels * lockfiles) stats to O(levels) reads.
   let dir = cwd;
   for (let i = 0; i < 6; i++) {
-    for (const [lockfile, name] of LOCKFILES) {
-      if (fs.existsSync(path.join(dir, lockfile))) return name;
+    let entries;
+    try {
+      entries = new Set(fs.readdirSync(dir));
+    } catch {
+      entries = null;
+    }
+    if (entries) {
+      for (const [lockfile, name] of LOCKFILES) {
+        if (entries.has(lockfile)) return name;
+      }
     }
     const parent = path.dirname(dir);
     if (parent === dir) break;

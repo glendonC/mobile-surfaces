@@ -372,10 +372,10 @@ describe("applyWidgetRename — filesystem pass", () => {
     fs.writeFileSync(path.join(dir, "Info.plist"), "<plist></plist>\n");
   }
 
-  it("renames MobileSurfacesWidget.swift family to <prefix>... .swift", () => {
+  it("renames MobileSurfacesWidget.swift family to <prefix>... .swift", async () => {
     const dir = path.join(tmp, "targets", "widget");
     seedFakeWidget(dir);
-    const result = applyWidgetRename({ destDir: dir, swiftPrefix: "Acme" });
+    const result = await applyWidgetRename({ destDir: dir, swiftPrefix: "Acme" });
     assert.equal(result.renamed, true);
     const files = fs.readdirSync(dir).sort();
     assert.deepEqual(files, [
@@ -387,37 +387,37 @@ describe("applyWidgetRename — filesystem pass", () => {
     ]);
   });
 
-  it("rewrites struct MobileSurfacesActivityAttributes to struct <prefix>ActivityAttributes", () => {
+  it("rewrites struct MobileSurfacesActivityAttributes to struct <prefix>ActivityAttributes", async () => {
     const dir = path.join(tmp, "targets", "widget");
     seedFakeWidget(dir);
-    applyWidgetRename({ destDir: dir, swiftPrefix: "Acme" });
+    await applyWidgetRename({ destDir: dir, swiftPrefix: "Acme" });
     const swift = fs.readFileSync(path.join(dir, "AcmeActivityAttributes.swift"), "utf8");
     assert.match(swift, /struct AcmeActivityAttributes: ActivityAttributes/);
     assert.equal(/MobileSurfaces/.test(swift), false);
   });
 
-  it("rewrites name: \"MobileSurfacesWidget\" in expo-target.config.js to <prefix>Widget", () => {
+  it("rewrites name: \"MobileSurfacesWidget\" in expo-target.config.js to <prefix>Widget", async () => {
     const dir = path.join(tmp, "targets", "widget");
     seedFakeWidget(dir);
-    applyWidgetRename({ destDir: dir, swiftPrefix: "Acme" });
+    await applyWidgetRename({ destDir: dir, swiftPrefix: "Acme" });
     const cfg = fs.readFileSync(path.join(dir, "expo-target.config.js"), "utf8");
     assert.match(cfg, /name: "AcmeWidget"/);
   });
 
-  it("returns reason=no-swift-prefix when prefix is empty", () => {
+  it("returns reason=no-swift-prefix when prefix is empty", async () => {
     const dir = path.join(tmp, "targets", "widget");
     seedFakeWidget(dir);
-    const result = applyWidgetRename({ destDir: dir, swiftPrefix: "" });
+    const result = await applyWidgetRename({ destDir: dir, swiftPrefix: "" });
     assert.equal(result.renamed, false);
     assert.equal(result.reason, "no-swift-prefix");
     // Files untouched.
     assert.ok(fs.existsSync(path.join(dir, "MobileSurfacesActivityAttributes.swift")));
   });
 
-  it("returns reason=already-matches when the user's prefix is already MobileSurfaces", () => {
+  it("returns reason=already-matches when the user's prefix is already MobileSurfaces", async () => {
     const dir = path.join(tmp, "targets", "widget");
     seedFakeWidget(dir);
-    const result = applyWidgetRename({ destDir: dir, swiftPrefix: "MobileSurfaces" });
+    const result = await applyWidgetRename({ destDir: dir, swiftPrefix: "MobileSurfaces" });
     assert.equal(result.renamed, false);
     assert.equal(result.reason, "already-matches");
   });

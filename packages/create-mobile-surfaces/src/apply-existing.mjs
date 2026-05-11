@@ -6,6 +6,7 @@
 // are unit-tested without filesystem I/O.
 
 import fs from "node:fs";
+import fsp from "node:fs/promises";
 import path from "node:path";
 import * as logger from "./logger.mjs";
 import { prepareSourceTree, runAddPackages } from "./scaffold.mjs";
@@ -17,6 +18,12 @@ const DEFAULT_SURFACES = Object.freeze({
   homeWidget: true,
   controlWidget: true,
 });
+
+// Concurrency cap for the per-file read+rewrite pass in applyWidgetRename.
+// Matches apply-monorepo's identity-rewrite cap so a widget target with many
+// files doesn't serialize blocking I/O on the event loop, but stays low
+// enough to avoid flooring the FD table on constrained CI runners.
+const REWRITE_CONCURRENCY = 8;
 
 // Format a manifest package entry as the spec string a package manager's
 // `add` subcommand expects. Workspace/file deps can't yet resolve from npm,
@@ -185,7 +192,11 @@ export function deriveSwiftPrefixFromEvidence(evidence) {
 // Pure-ish: takes a destDir on disk and a swiftPrefix string; returns a
 // summary describing what changed. No spawning, no manifest reads, no
 // network — easy to unit-test by writing a small fake widget tree.
-export function applyWidgetRename({ destDir, swiftPrefix }) {
+//
+// Async with bounded concurrency so a widget target with many text files
+// doesn't serialize blocking reads on the event loop. The walk itself stays
+// synchronous (fast on readdirSync); only the per-file read fans out.
+export async function applyWidgetRename({ destDir, swiftPrefix }) {
   if (!swiftPrefix) {
     return { renamed: false, reason: "no-swift-prefix" };
   }
@@ -200,34 +211,42 @@ export function applyWidgetRename({ destDir, swiftPrefix }) {
   const widgetTarget = `${swiftPrefix}Widget`;
   const TEXTY_EXTS = new Set([".swift", ".js", ".ts", ".json", ".plist", ".strings", ".md"]);
 
-  // Two-phase: walk + collect, then apply. Coordinating writes and renames
-  // through a single set of {path, newContent, newName} records makes the
-  // ordering explicit (write rewritten content first, then rename) and keeps
-  // the apply step easy to reason about — no in-walk side effects.
-  const ops = [];
+  // Walk first (sync, cheap), classify each entry, then fan out the
+  // per-file reads in bounded batches. Writes/renames apply after all reads
+  // resolve — keeps ordering explicit (write rewritten content first, then
+  // rename) so paths collected during the walk remain valid.
+  const candidates = [];
   for (const full of walkFiles({ rootDir: destDir })) {
     const dir = path.dirname(full);
     const name = path.basename(full);
-
-    let newContent;
-    // Only rewrite text-y files. Asset bundles (.car, images) won't
-    // contain literal "MobileSurfaces" strings, but reading them as utf8
-    // is wasteful and risks false-positive substitutions.
-    if (TEXTY_EXTS.has(path.extname(name).toLowerCase())) {
-      const original = fs.readFileSync(full, "utf8");
-      const rewritten = rewriteContent({ source: original, swiftPrefix, widgetTarget });
-      if (rewritten !== original) newContent = rewritten;
-    }
-
+    const isText = TEXTY_EXTS.has(path.extname(name).toLowerCase());
     // MobileSurfaces<Suffix>.swift → <swiftPrefix><Suffix>.swift. Only the
     // prefix at the start of the basename is rewritten so unrelated uses
     // of the literal "MobileSurfaces" string elsewhere are left alone.
     const renamed = renameWidgetFilename(name, swiftPrefix);
     const newName = renamed && renamed !== name ? renamed : undefined;
+    candidates.push({ full, dir, name, isText, newName });
+  }
 
-    if (newContent !== undefined || newName !== undefined) {
-      ops.push({ dir, name, newContent, newName });
-    }
+  const ops = [];
+  for (let i = 0; i < candidates.length; i += REWRITE_CONCURRENCY) {
+    const batch = candidates.slice(i, i + REWRITE_CONCURRENCY);
+    const results = await Promise.all(
+      batch.map(async (c) => {
+        let newContent;
+        // Only rewrite text-y files. Asset bundles (.car, images) won't
+        // contain literal "MobileSurfaces" strings, but reading them as
+        // utf8 is wasteful and risks false-positive substitutions.
+        if (c.isText) {
+          const original = await fsp.readFile(c.full, "utf8");
+          const rewritten = rewriteContent({ source: original, swiftPrefix, widgetTarget });
+          if (rewritten !== original) newContent = rewritten;
+        }
+        if (newContent === undefined && c.newName === undefined) return null;
+        return { dir: c.dir, name: c.name, newContent, newName: c.newName };
+      }),
+    );
+    for (const r of results) if (r) ops.push(r);
   }
 
   const filesTouched = [];
@@ -406,7 +425,7 @@ async function applyWidgetCopyStripRename({ plan, evidence, manifest, appRoot, t
       );
       return;
     }
-    const renameResult = applyWidgetRename({
+    const renameResult = await applyWidgetRename({
       destDir: result.destDir,
       swiftPrefix,
     });

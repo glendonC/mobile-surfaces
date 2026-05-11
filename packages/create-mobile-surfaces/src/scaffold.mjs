@@ -52,6 +52,12 @@ export function runStreamed(cmd, args, opts) {
       const err = new Error(`${cmd} exited with code ${code}`);
       err.exitCode = code;
       err.command = `${cmd} ${args.join(" ")}`;
+      // logger.write opened the log stream on the first stdout/stderr chunk,
+      // so getPath() is populated by the time we reject. Attaching it to the
+      // error gives downstream handlers (and anyone debugging from a stack
+      // trace) a concrete file to look at without parsing surrounding output.
+      const logPath = logger.getPath();
+      if (logPath) err.logPath = logPath;
       reject(err);
     });
   });

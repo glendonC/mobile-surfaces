@@ -65,9 +65,23 @@ export function loadTemplateManifest() {
   return buildManifestFromLive(source.repoRoot);
 }
 
+// Cache the live manifest by repoRoot so retries (e.g. failed scaffold then
+// rerun in the same process, dev-smoke scripts that read the manifest twice)
+// don't re-parse the 3–4 source files. Keyed by repoRoot so a test that
+// switches roots in-process still gets a fresh read.
+const _liveManifestCache = new Map();
+
 // Used by the publish-time builder so the bundled manifest snapshot has the
 // exact same shape as a live read.
 export function buildManifestFromLive(repoRoot) {
+  const cached = _liveManifestCache.get(repoRoot);
+  if (cached) return cached;
+  const manifest = computeLiveManifest(repoRoot);
+  _liveManifestCache.set(repoRoot, manifest);
+  return manifest;
+}
+
+function computeLiveManifest(repoRoot) {
   const rootPkgPath = path.join(repoRoot, "package.json");
   const rootPkg = JSON.parse(fs.readFileSync(rootPkgPath, "utf8"));
   const ms = rootPkg.mobileSurfaces ?? {};

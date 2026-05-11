@@ -11,16 +11,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { detectPackageManager } from "./package-manager.mjs";
-import { detectWorkspace, parsePnpmWorkspaceGlobs } from "./workspace.mjs";
-
-// Re-exported for tests and any callers that want the YAML parser directly.
-// New code should import from ./workspace.mjs.
-export { parsePnpmWorkspaceGlobs };
-
-// Re-exported so existing callers that grouped detection + presentation
-// imports from mode.mjs keep working. New code should import directly from
-// ./refuse.mjs.
-export { renderRefuse } from "./refuse.mjs";
+import { detectWorkspace } from "./workspace.mjs";
 
 export const MODE = Object.freeze({
   GREENFIELD: "greenfield",
