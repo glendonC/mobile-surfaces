@@ -28,7 +28,8 @@ const surfaceContractsPkg = JSON.parse(
   readFileSync(resolve("packages/surface-contracts/package.json"), "utf8"),
 );
 if (surfaceContractsPkg.name === "@mobile-surfaces/surface-contracts") {
-  schema.$id = "https://unpkg.com/@mobile-surfaces/surface-contracts@1.2/schema.json";
+  const [major, minor] = surfaceContractsPkg.version.split(".");
+  schema.$id = `https://unpkg.com/@mobile-surfaces/surface-contracts@${major}.${minor}/schema.json`;
 }
 schema.title = "LiveSurfaceSnapshot";
 

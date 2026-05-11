@@ -192,7 +192,7 @@ The flow:
 - **A v0 → v1 migration codec ships in the package.** `liveSurfaceSnapshotV0`, `migrateV0ToV1(parsed)`, and `safeParseAnyVersion(value)` let consumers promote stored payloads without manual editing. See [`schema-migration.md`](./schema-migration.md) for the full story.
 - **Bump `schemaVersion` only on a breaking change.** Renaming a field, removing a field, changing a type, tightening a constraint (e.g. an enum drops a value, a string gains a regex it did not have before), or anything that would make a previously valid payload fail to parse.
 - **Additive optional fields are non-breaking.** Adding a new `actionLabel`-style optional field does not require a bump. Existing payloads still parse; new clients can read the new field when present.
-- **The `unpkg.com/@mobile-surfaces/surface-contracts@1.2/schema.json` URL pins to major.minor.** This lets a future minor that adds a discriminated-union variant publish a new URL without yanking what consumers already reference. `scripts/build-schema.mjs` is the source of this `$id`.
+- **The `unpkg.com/@mobile-surfaces/surface-contracts@2.0/schema.json` URL pins to major.minor.** This lets a future minor that adds a discriminated-union variant publish a new URL without yanking what consumers already reference. `scripts/build-schema.mjs` derives this `$id` from the surface-contracts `package.json` version, so it tracks the release train automatically.
 
 ### Standard Schema Interop
 
