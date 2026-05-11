@@ -23,6 +23,35 @@ import { input, select as inqSelect } from "@inquirer/prompts";
 import ora from "ora";
 import pc from "picocolors";
 
+// @inquirer primitives wired in here so the rest of the file can call them
+// through one indirection. Live mode (the default) uses the real inquirer
+// implementations; tests call setPrompts() to inject stubs for
+// ExitPromptError / ERR_USE_AFTER_CLOSE / validator paths without driving
+// an actual TTY. Reset to live with resetPrompts(). The `confirm` slot is
+// stitched in below once horizontalConfirm is declared.
+const LIVE_PROMPTS = {
+  input,
+  select: inqSelect,
+  confirm: null,
+};
+
+let activePrompts = { ...LIVE_PROMPTS };
+
+/**
+ * Override one or more of the @inquirer primitives ({ input, select,
+ * confirm }) for tests. Only the keys you pass are replaced; everything
+ * else falls back to the live implementation. Call resetPrompts() after
+ * the test to restore the originals.
+ */
+export function setPrompts(overrides) {
+  activePrompts = { ...activePrompts, ...overrides };
+}
+
+/** Restore the live @inquirer primitives. */
+export function resetPrompts() {
+  activePrompts = { ...LIVE_PROMPTS };
+}
+
 // Rail glyphs — gray so the content carries weight, the chrome doesn't.
 const RAIL_BAR = pc.gray("│");
 const RAIL_PREFIX = pc.gray("│  ");
@@ -161,7 +190,7 @@ export function adaptValidate(validate) {
 // `default` is set, which serves as a free hint for "press enter to accept".
 export async function askText({ message, defaultValue, validate }) {
   return guard(() =>
-    input({
+    activePrompts.input({
       message,
       default: defaultValue,
       validate: adaptValidate(validate),
@@ -171,7 +200,7 @@ export async function askText({ message, defaultValue, validate }) {
 
 export async function askSelect({ message, options, defaultValue }) {
   return guard(() =>
-    inqSelect({
+    activePrompts.select({
       message,
       default: defaultValue,
       choices: options.map((o) => ({
@@ -239,8 +268,15 @@ const horizontalConfirm = createPrompt((config, done) => {
   return [`${prefix} ${message}  ${yes}  ${no}${cursorHide}`, help];
 });
 
+// Stitch the live confirm binding now that horizontalConfirm is in scope.
+// activePrompts inherits from this on every resetPrompts() call.
+LIVE_PROMPTS.confirm = horizontalConfirm;
+activePrompts.confirm = horizontalConfirm;
+
 export async function askConfirm({ message, defaultValue = true }) {
-  return guard(() => horizontalConfirm({ message, default: defaultValue }));
+  return guard(() =>
+    activePrompts.confirm({ message, default: defaultValue }),
+  );
 }
 
 // Async task with a spinner + elapsed-time stamp. ora's `prefixText` puts
