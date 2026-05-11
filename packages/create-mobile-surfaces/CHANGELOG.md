@@ -1,5 +1,11 @@
 # create-mobile-surfaces
 
+## 2.0.2
+
+### Patch Changes
+
+- 8dbe2ad: @mobile-surfaces/surface-contracts: bump JSON Schema $id from @1.2 to @2.0 so backends pinning the documented unpkg URL resolve to the actual released contract. scripts/build-schema.mjs now derives major.minor from packages/surface-contracts/package.json so the URL tracks the release train automatically; doc references in docs/architecture.md, docs/backend-integration.md, docs/roadmap.md, docs/schema-migration.md, and packages/surface-contracts/README.md are swept to match. Historical CHANGELOG entries are left at @1.2 for accuracy. Cross-references trap MS006.
+
 ## 2.0.1
 
 ### Patch Changes
