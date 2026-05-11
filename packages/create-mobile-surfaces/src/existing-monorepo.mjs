@@ -214,7 +214,7 @@ export async function runMonorepoPrompts({ evidence, manifest, overrides = {}, y
 
   if (!yes) {
     const proceed = await ui.askConfirm({
-      message: "Apply these changes?",
+      message: copy.confirmExisting.message,
       defaultValue: true,
     });
     if (!proceed) {

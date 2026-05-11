@@ -272,7 +272,7 @@ export async function runExistingExpoPrompts({ evidence, manifest, overrides = {
 
   if (!yes) {
     const proceed = await ui.askConfirm({
-      message: "Apply these changes?",
+      message: copy.confirmExisting.message,
       defaultValue: true,
     });
 

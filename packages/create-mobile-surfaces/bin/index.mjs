@@ -209,6 +209,10 @@ if (mode.kind === MODE.EXISTING_EXPO) {
   } catch (err) {
     if (interrupted) {
       log.warn(errors.applyInterrupted);
+    } else if (err && err.tag === PNPM_MISSING_TAG) {
+      log.error(err.message);
+    } else if (err && err.tag === COCOAPODS_MISSING_TAG) {
+      log.error(err.message);
     } else {
       log.error(errors.applyFailed);
     }
