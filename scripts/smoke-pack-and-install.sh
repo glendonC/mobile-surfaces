@@ -36,10 +36,17 @@ TARBALL="$(echo "$PACK_DIR"/create-mobile-surfaces-*.tgz)"
 # Phase 1: tarball contents. Each entry in package.json `files:` should be
 # represented; a typo dropping any of bin/, src/, or template/ ships a
 # broken package.
-tar -tzf "$TARBALL" | grep -qx 'package/bin/index.mjs'
-tar -tzf "$TARBALL" | grep -qx 'package/template/template.tgz'
-tar -tzf "$TARBALL" | grep -qx 'package/template/manifest.json'
-tar -tzf "$TARBALL" | grep -q '^package/src/'
+#
+# Materialize once and grep against the buffer. Piping tar straight into
+# `grep -q` looks fine locally but under `set -euo pipefail` it races: grep
+# closes the pipe on first match, tar gets SIGPIPE mid-write, and the
+# pipeline exits non-zero. Hit on the first publish run on CI; the local
+# tarball was small enough that tar finished before grep closed.
+TARBALL_ENTRIES="$(tar -tzf "$TARBALL")"
+grep -qx 'package/bin/index.mjs' <<<"$TARBALL_ENTRIES"
+grep -qx 'package/template/template.tgz' <<<"$TARBALL_ENTRIES"
+grep -qx 'package/template/manifest.json' <<<"$TARBALL_ENTRIES"
+grep -q '^package/src/' <<<"$TARBALL_ENTRIES"
 
 # Phase 2: install + invoke via the published bin path.
 INSTALL_DIR="$(mktemp -d)"
