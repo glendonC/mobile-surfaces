@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { applyAppleTeamId, applyNewArchEnabled, runStreamed } from "../src/scaffold.mjs";
+import { applyAppJsonPatches, runStreamed } from "../src/scaffold.mjs";
 
 let tmp;
 
@@ -22,10 +22,10 @@ function writeAppJson(contents) {
   return p;
 }
 
-describe("applyAppleTeamId", () => {
+describe("applyAppJsonPatches - teamId", () => {
   it("writes the team id when one is provided", () => {
     const p = writeAppJson({ expo: { ios: { bundleIdentifier: "com.acme.foo" } } });
-    const ok = applyAppleTeamId({ target: tmp, teamId: "ABCDE12345" });
+    const ok = applyAppJsonPatches({ target: tmp, teamId: "ABCDE12345" });
     assert.equal(ok, true);
     const j = JSON.parse(fs.readFileSync(p, "utf8"));
     assert.equal(j.expo.ios.appleTeamId, "ABCDE12345");
@@ -40,7 +40,7 @@ describe("applyAppleTeamId", () => {
         },
       },
     });
-    const ok = applyAppleTeamId({ target: tmp, teamId: null });
+    const ok = applyAppJsonPatches({ target: tmp, teamId: null });
     assert.equal(ok, true);
     const j = JSON.parse(fs.readFileSync(p, "utf8"));
     assert.ok(!("appleTeamId" in j.expo.ios), "placeholder should be stripped");
@@ -58,7 +58,7 @@ describe("applyAppleTeamId", () => {
     writeAppJson({
       expo: { ios: { appleTeamId: "REALTEAM01" } },
     });
-    const ok = applyAppleTeamId({ target: tmp, teamId: null });
+    const ok = applyAppJsonPatches({ target: tmp, teamId: null });
     assert.equal(ok, false, "no-op when not placeholder and no new value");
     const j = JSON.parse(
       fs.readFileSync(path.join(tmp, "apps/mobile/app.json"), "utf8"),
@@ -68,7 +68,7 @@ describe("applyAppleTeamId", () => {
 
   it("returns false when apps/mobile/app.json is missing", () => {
     assert.equal(
-      applyAppleTeamId({ target: tmp, teamId: "ABCDE12345" }),
+      applyAppJsonPatches({ target: tmp, teamId: "ABCDE12345" }),
       false,
     );
   });
@@ -96,10 +96,10 @@ describe("runStreamed - error shape", () => {
   });
 });
 
-describe("applyNewArchEnabled", () => {
+describe("applyAppJsonPatches - newArchEnabled", () => {
   it("writes expo.newArchEnabled when set to true", () => {
     const p = writeAppJson({ expo: { name: "foo" } });
-    const ok = applyNewArchEnabled({ target: tmp, newArchEnabled: true });
+    const ok = applyAppJsonPatches({ target: tmp, newArchEnabled: true });
     assert.equal(ok, true);
     const j = JSON.parse(fs.readFileSync(p, "utf8"));
     assert.equal(j.expo.newArchEnabled, true);
@@ -107,7 +107,7 @@ describe("applyNewArchEnabled", () => {
 
   it("writes expo.newArchEnabled when set to false (legacy bridge opt-out)", () => {
     const p = writeAppJson({ expo: { name: "foo" } });
-    const ok = applyNewArchEnabled({ target: tmp, newArchEnabled: false });
+    const ok = applyAppJsonPatches({ target: tmp, newArchEnabled: false });
     assert.equal(ok, true);
     const j = JSON.parse(fs.readFileSync(p, "utf8"));
     assert.equal(j.expo.newArchEnabled, false);
@@ -115,8 +115,26 @@ describe("applyNewArchEnabled", () => {
 
   it("returns false when apps/mobile/app.json is missing", () => {
     assert.equal(
-      applyNewArchEnabled({ target: tmp, newArchEnabled: true }),
+      applyAppJsonPatches({ target: tmp, newArchEnabled: true }),
       false,
     );
+  });
+});
+
+describe("applyAppJsonPatches - combined", () => {
+  // The production caller (renameIdentity in scaffold.mjs) passes both
+  // teamId and newArchEnabled in one call. Pin that they coalesce into
+  // a single read-modify-write rather than two.
+  it("writes both teamId and newArchEnabled in a single pass", () => {
+    const p = writeAppJson({ expo: { ios: { bundleIdentifier: "com.acme.foo" } } });
+    const ok = applyAppJsonPatches({
+      target: tmp,
+      teamId: "ABCDE12345",
+      newArchEnabled: false,
+    });
+    assert.equal(ok, true);
+    const j = JSON.parse(fs.readFileSync(p, "utf8"));
+    assert.equal(j.expo.ios.appleTeamId, "ABCDE12345");
+    assert.equal(j.expo.newArchEnabled, false);
   });
 });

@@ -254,17 +254,18 @@ export function applyWidgetRename({ destDir, swiftPrefix }) {
   };
 }
 
-// Pure file-content rewrite. Order matters: the more specific
-// `MobileSurfacesWidget` token must be rewritten before the broader
-// `MobileSurfaces` substring substitution would touch its prefix and
-// produce something like `${swiftPrefix}Widget` ≠ `${widgetTarget}` when
-// the two diverge.
+// Pure file-content rewrite. Single regex pass over the source: alternation
+// is left-to-right so `MobileSurfacesWidget` is matched before the broader
+// `MobileSurfaces` at each position, which is what makes the order-dependent
+// substitution work — the widget token must rewrite to `widgetTarget`, not
+// `${swiftPrefix}Widget` (those diverge when the user picks a custom widget
+// name). Replaces two sequential split/join passes with one allocation-free
+// scan.
 export function rewriteContent({ source, swiftPrefix, widgetTarget }) {
   if (!source) return source;
-  let out = source;
-  out = out.split("MobileSurfacesWidget").join(widgetTarget);
-  out = out.split("MobileSurfaces").join(swiftPrefix);
-  return out;
+  return source.replace(/MobileSurfacesWidget|MobileSurfaces/g, (match) =>
+    match === "MobileSurfacesWidget" ? widgetTarget : swiftPrefix,
+  );
 }
 
 // Pure filename rewrite for the widget target dir.

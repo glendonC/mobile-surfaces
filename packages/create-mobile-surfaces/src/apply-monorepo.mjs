@@ -115,15 +115,35 @@ export function applyIdentityRewrites({ rootDir, substitutions }) {
   return touched;
 }
 
+// Apply every substitution in one pass over the input where possible. The
+// literal entries collapse into a single alternation regex so the engine
+// walks the string once and picks the longest-prefix match at each position
+// (alternation is left-to-right, so the input order — most-specific first —
+// is preserved). Regex entries stay one-pass-each because they encode their
+// own context (negative lookbehinds, character classes, etc.) that does not
+// compose cleanly with literal alternation.
+//
+// Replaces the previous per-substitution split/join loop, which scanned and
+// re-allocated the full string once per literal. For a typical apps/mobile
+// rewrite with 6 literals + 1 regex, that was 7 passes; this is 2.
 export function applySubstitutionsToString(input, substitutions) {
+  if (substitutions.length === 0) return input;
+  const literals = substitutions.filter(
+    (sub) => sub.kind === "literal" && sub.from !== sub.to,
+  );
   let out = input;
+  if (literals.length > 0) {
+    const lookup = new Map(literals.map((sub) => [sub.from, sub.to]));
+    const pattern = new RegExp(
+      literals.map((sub) => escapeRegex(sub.from)).join("|"),
+      "g",
+    );
+    out = out.replace(pattern, (match) => lookup.get(match) ?? match);
+  }
   for (const sub of substitutions) {
     if (sub.kind === "regex") {
       out = out.replace(sub.from, sub.to);
-      continue;
     }
-    if (sub.from === sub.to) continue;
-    if (out.includes(sub.from)) out = out.split(sub.from).join(sub.to);
   }
   return out;
 }

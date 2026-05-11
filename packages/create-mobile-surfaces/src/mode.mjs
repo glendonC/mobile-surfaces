@@ -32,6 +32,15 @@ export function detectMode({ cwd, targetName }) {
   // The original rule — explicit name → greenfield, full stop — broke the
   // monorepo flow because --yes always passes a name. Now: if cwd looks like
   // a workspace without Expo, an explicit name routes to monorepo mode.
+  //
+  // Decision tree, in precedence order:
+  //   1. Workspace + no Expo + no apps/mobile/  -> EXISTING_MONOREPO_NO_EXPO
+  //   2. Otherwise, an explicit targetName       -> GREENFIELD (sibling project)
+  //   3. Empty cwd                               -> GREENFIELD (in place)
+  //   4. No package.json (or invalid JSON)       -> EXISTING_NON_EXPO (refuse)
+  //   5. Expo dep present                        -> EXISTING_EXPO
+  //   6. apps/mobile/ exists                     -> EXISTING_NON_EXPO (refuse)
+  //   7. Fallback                                -> EXISTING_NON_EXPO (refuse)
   const pkgPath = path.join(cwd, "package.json");
   let pkg = null;
   let pkgErr = null;

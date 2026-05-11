@@ -146,32 +146,43 @@ export type LiveSurfaceSnapshotStandby = z.infer<
 // in this repo always set `kind` explicitly; this is a safety net for any
 // externally-stored snapshot.
 //
+// Wrapped in z.lazy() so the preprocess + discriminated-union construction
+// (building the kind -> variant Map across 6 variants) is deferred to the
+// first parse/safeParse call instead of running at module import. Backends
+// that import this package but only validate occasionally, and short-lived
+// serverless invocations that rarely hit the codepath, no longer pay the
+// construction cost on cold start. The variants themselves stay eagerly
+// built (they are independently exported) and .parse / .safeParse still
+// pass through transparently.
+//
 // Standard Schema (https://standardschema.dev) interop is provided automatically
 // by Zod 4 via the `~standard` property — `liveSurfaceSnapshot["~standard"]`
 // returns `{ vendor: "zod", version: 1, validate, jsonSchema }`. Consumers can
 // pass this contract to any Standard-Schema-aware library (Valibot, ArkType,
 // `@standard-schema/spec` runners) without depending on Zod at runtime. The
 // fixture-validation tests pin this; do not remove the assertion.
-export const liveSurfaceSnapshot = z.preprocess(
-  (value) => {
-    if (
-      value !== null &&
-      typeof value === "object" &&
-      !Array.isArray(value) &&
-      !("kind" in (value as Record<string, unknown>))
-    ) {
-      return { ...(value as Record<string, unknown>), kind: "liveActivity" };
-    }
-    return value;
-  },
-  z.discriminatedUnion("kind", [
-    liveSurfaceSnapshotLiveActivity,
-    liveSurfaceSnapshotWidget,
-    liveSurfaceSnapshotControl,
-    liveSurfaceSnapshotNotification,
-    liveSurfaceSnapshotLockAccessory,
-    liveSurfaceSnapshotStandby,
-  ]),
+export const liveSurfaceSnapshot = z.lazy(() =>
+  z.preprocess(
+    (value) => {
+      if (
+        value !== null &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        !("kind" in (value as Record<string, unknown>))
+      ) {
+        return { ...(value as Record<string, unknown>), kind: "liveActivity" };
+      }
+      return value;
+    },
+    z.discriminatedUnion("kind", [
+      liveSurfaceSnapshotLiveActivity,
+      liveSurfaceSnapshotWidget,
+      liveSurfaceSnapshotControl,
+      liveSurfaceSnapshotNotification,
+      liveSurfaceSnapshotLockAccessory,
+      liveSurfaceSnapshotStandby,
+    ]),
+  ),
 );
 export type LiveSurfaceSnapshot = z.infer<typeof liveSurfaceSnapshot>;
 
