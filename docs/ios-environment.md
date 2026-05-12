@@ -38,7 +38,7 @@ pnpm mobile:prebuild:ios              # regenerate apps/mobile/ios
 pnpm mobile:run:ios                   # build/install to simulator
 pnpm mobile:run:ios:device            # build/install to a connected iPhone
 pnpm mobile:push:sim                  # simctl push smoke payload
-pnpm mobile:push:device:alert         # APNs alert push, requires APNS_* env vars
+pnpm mobile:push:device:alert         # APNs alert push, requires APNS_* env vars and --snapshot-file
 pnpm mobile:push:device:liveactivity  # ActivityKit push update/end, requires an activity token
 ```
 

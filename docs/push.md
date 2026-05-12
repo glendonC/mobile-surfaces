@@ -80,14 +80,11 @@ const client = createPushClient({
   keyPath: process.env.APNS_KEY_PATH!,    // path to .p8 OR Buffer of raw PEM
   bundleId: process.env.APNS_BUNDLE_ID!,  // bundle id without .push-type.liveactivity suffix
   environment: "development",             // "development" | "production"
-  retryPolicy: {                          // optional override; see "Retry policy" below
-    maxRetries: 3,
-    baseDelayMs: 100,
-    maxDelayMs: 5000,
-    jitter: true,
-    retryableReasons: new Set(["TooManyRequests", "InternalServerError", "ServiceUnavailable"]),
-  },
   idleTimeoutMs: 60_000,                  // close HTTP/2 session after this many ms idle
+  // retry behavior is fixed internal: priority-10 sends get a stricter
+  // back-off profile automatically. See "Retry policy" below for the
+  // operational escape hatch (_unsafeRetryOverride and
+  // MOBILE_SURFACES_PUSH_DISABLE_RETRY) — you almost never want it.
 });
 ```
 
@@ -106,7 +103,21 @@ await client.alert(deviceToken, surfaceFixtureSnapshots.attention, {
 });
 ```
 
-Returns `{ apnsId, status, timestamp }`.
+Returns a `PushResult`:
+
+```ts
+{
+  apnsId: string;
+  status: number;          // 2xx on success
+  timestamp: Date;
+  attempts: number;        // 1 on first-try success
+  latencyMs: number;       // cumulative across attempts including backoff
+  retried: ReadonlyArray<{ attempt, reason, backoffMs, trapId? }>;
+  trapHits: ReadonlyArray<string>;  // unique trap ids surfaced during retries
+}
+```
+
+`SendResponse` is kept as a deprecated alias for one minor. The retry tracker lets an AI consumer or test reconstruct what happened without subscribing to hooks.
 
 ### `update(activityToken, snapshot, options?)`
 
@@ -218,23 +229,58 @@ The default policy retries up to **3 times** with exponential backoff (**100 ms*
 - `ServiceUnavailable`
 - transport-level errors: `ECONNRESET`, `ECONNREFUSED`, `ETIMEDOUT`, `EPIPE`, `ENETUNREACH`, `EHOSTUNREACH`, `NGHTTP2_REFUSED_STREAM`
 
-Override at construction time:
+**Priority-aware adjustment.** When `apns-priority: 10` hits a transient or throttled error and APNs hasn't supplied `Retry-After`, the SDK applies a stricter profile automatically: 2x base, 2x cap, `maxRetries` clamped to 2. Priority-5 sends use the base policy. This is fixed internal behavior (MS015) — there's no knob to tune it because the right values are not something a calling agent should have to reason about.
+
+The retry tracker on `PushResult.retried` records every failed attempt with its reason, backoff, and trap id, so observability stays structured.
+
+#### Operational escape hatch
+
+You almost never want this. The defaults handle priority-aware throttling, honor `Retry-After`, and refuse to retry terminal reasons (`BadDeviceToken`, `Unregistered`, `PayloadTooLarge`, `TopicDisallowed`).
+
+If you genuinely need to disable or tune retries — typically for tests that need deterministic timing, or SRE incident response — there are two escape hatches in order of precedence:
 
 ```ts
-import { createPushClient, DEFAULT_RETRY_POLICY } from "@mobile-surfaces/push";
+// 1. Runtime kill-switch (wins over everything). Sets maxRetries=0.
+MOBILE_SURFACES_PUSH_DISABLE_RETRY=1 node your-app.js
+
+// 2. Programmatic override at construction time. Named `_unsafe` because AI
+//    consumers should avoid it; SRE humans find it via type completion.
+import { createPushClient } from "@mobile-surfaces/push";
 
 const client = createPushClient({
   // ...
-  retryPolicy: {
-    ...DEFAULT_RETRY_POLICY,
-    maxRetries: 5,
-    baseDelayMs: 250,
-    retryableReasons: new Set(["TooManyRequests"]), // narrow the set
+  _unsafeRetryOverride: {
+    maxRetries: 0,
+    baseDelayMs: 1,
+    jitter: false,
   },
 });
 ```
 
-`computeBackoffMs` lives in `packages/push/src/retry.ts` if you want to reuse the same backoff math elsewhere; the default formula is `min(base * 2^attempt, max) + random(0, base)` with jitter.
+The legacy `retryPolicy` option still works for one minor version but emits a one-time deprecation warning; migrate to `_unsafeRetryOverride`. The `DEFAULT_RETRY_POLICY` constant and the `RetryPolicy` type are still exported for callers who want to compose against the defaults.
+
+### Introspection: `client.describeSend()`
+
+Side-effect-free plan of what a send would do. Returns the request envelope (push type, topic, priority, payload bytes vs MS011 ceiling, effective retry policy, trap hits) without dispatching an HTTP request and without minting a JWT.
+
+```ts
+const plan = client.describeSend("update", surfaceFixtureSnapshots.activeProgress);
+// {
+//   operation: "update",
+//   pushType: "liveactivity",
+//   topic: "com.example.mobilesurfaces.push-type.liveactivity",
+//   priority: 5,
+//   payloadBytes: 412,
+//   budgetLimit: 4096,
+//   withinBudget: true,
+//   trapHits: [],
+//   effectiveRetryPolicy: { maxRetries: 3, baseDelayMs: 100, ... },
+// }
+```
+
+Oversize payloads surface via `withinBudget: false` and `trapHits: ["MS011"]` rather than throwing `PayloadTooLargeError`. Invalid snapshots still throw `InvalidSnapshotError` — same contract as the live send. Useful for AI consumers verifying a snapshot before commit and for tests asserting the envelope shape without an APNs key.
+
+`computeBackoffMs` lives in `packages/push/src/retry.ts` if you want to reuse the backoff math elsewhere; the formula is `min(base * 2^attempt, max) + random(0, base)` with jitter, on the effective (priority-adjusted) policy.
 
 ## Channel push (iOS 18+)
 
@@ -329,14 +375,14 @@ The full mapping mirrors `packages/push/src/reasons.ts` and `scripts/send-apns.m
 
 ## Smoke script reference
 
-`scripts/send-apns.mjs` is the canonical wire-shape reference. It supports six modes; pick by the lead flag.
+`scripts/send-apns.mjs` is a thin wrapper over `@mobile-surfaces/push` for one-off sends from the local machine. It supports six modes; pick by the lead flag. Every send requires `--snapshot-file` — for credential-only validation, use `pnpm surface:setup-apns` (it probes APNs sandbox with a fake token and reports auth issues without needing a real device token).
 
 | Mode | Lead flag | Required additions | Output target |
 | --- | --- | --- | --- |
-| Alert | `--type=alert` | `--device-token=<hex>` | `POST /3/device/<token>` |
-| Live Activity update/end | `--type=liveactivity --activity-token=<hex>` | `--event=update|end` | `POST /3/device/<token>` |
-| Live Activity remote start | `--type=liveactivity --push-to-start-token=<hex>` | `--event=start --attributes-file=…` | `POST /3/device/<token>` |
-| Broadcast | `--type=liveactivity --channel-id=<base64>` | `--event=update` | `POST /4/broadcasts/apps/<bundle-id>` |
+| Alert | `--type=alert` | `--device-token=<hex> --snapshot-file=…` | `POST /3/device/<token>` |
+| Live Activity update/end | `--type=liveactivity --activity-token=<hex>` | `--event=update|end --snapshot-file=…` | `POST /3/device/<token>` |
+| Live Activity remote start | `--type=liveactivity --push-to-start-token=<hex>` | `--event=start --snapshot-file=… --attributes-file=…` | `POST /3/device/<token>` |
+| Broadcast | `--type=liveactivity --channel-id=<base64>` | `--event=update --snapshot-file=…` | `POST /4/broadcasts/apps/<bundle-id>` |
 | Channel: create | `--channel-action=create` | (`--storage-policy=no-storage|most-recent-message`) | `POST /1/apps/<bundle>/channels` on management host |
 | Channel: list | `--channel-action=list` | - | `GET /1/apps/<bundle>/all-channels` on management host |
 | Channel: delete | `--channel-action=delete` | `--channel-id=<base64>` | `DELETE /1/apps/<bundle>/channels` on management host |
@@ -344,13 +390,16 @@ The full mapping mirrors `packages/push/src/reasons.ts` and `scripts/send-apns.m
 ### Common flags
 
 - `--env=development|production`: picks the host pair (default `development`).
-- `--snapshot-file=./data/surface-fixtures/active-progress.json`: load a `LiveSurfaceSnapshot` from disk; the script projects it through `toAlertPayload` or `toLiveActivityContentState` as appropriate.
-- `--state-file=./scripts/sample-state.json`: bypass the projection and ship a raw ActivityKit `content-state` JSON. Useful for testing renderer behavior without going through the contract.
+- `--snapshot-file=./data/surface-fixtures/active-progress.json`: load a `LiveSurfaceSnapshot` from disk; the script projects it through `toAlertPayload` or `toLiveActivityContentState` as appropriate. Required for every send.
 - `--attributes-file=…`: required for `--event=start`. JSON file with `surfaceId` and `modeLabel`. The surface fixtures match this shape.
 - `--attributes-type=MobileSurfacesActivityAttributes`: override the type name after `pnpm surface:rename`.
 - `--stale-date=<unix-seconds>`: ActivityKit `stale-date` aps field.
 - `--dismissal-date=<unix-seconds>`: ActivityKit `dismissal-date`. Defaults to now on `--event=end`.
 - `--priority=5|10`: `apns-priority`. Defaults: 5 for `liveactivity`, 10 for `alert`.
+- `--print` (or `--describe`): side-effect-free plan mode. Calls `client.describeSend()` and prints the envelope (topic, push type, priority, payload bytes vs MS011 ceiling, effective retry policy, trap hits) without dispatching. Exits 0 even if the snapshot would oversize — surfaces as `withinBudget: false`.
+- `--json`: deterministic machine-readable stdout. Send results emit `{ ok, apnsId, status, attempts, latencyMs, retried, trapHits, ... }`; errors emit `{ ok: false, error: { message, reason?, trapId?, docsUrl?, fix? } }`. Human-readable output goes to stderr.
+
+Exit codes: `0` success, `1` operational failure (APNs rejected, network), `2` usage/validation error (bad flags, missing env). Reason details live in stderr or the `--json` body, not in the exit code.
 
 ### Worked example: end-to-end remote start
 
@@ -381,7 +430,7 @@ node scripts/send-apns.mjs \
   --env=development
 ```
 
-The script prints the HTTP status, request topic, push-type, payload, and any APNs response body. On non-2xx responses it appends the matching `APNS_REASON_GUIDE` entry, so you do not need to switch tabs to debug a 400 / 403 / 410. It also warns on >5 minute clock skew detected from the `Date` response header.
+The script prints the HTTP status, request topic, push-type, payload byte count, request attempts, and any retry events. On non-2xx responses it appends the matching `APNS_REASON_GUIDE` entry plus the error's `docsUrl`, so you do not need to switch tabs to debug a 400 / 403 / 410. Pass `--print` to see the same envelope without dispatching the request, or `--json` for machine-readable output.
 
 ## Anti-goals
 
