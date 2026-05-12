@@ -196,28 +196,30 @@ export type LiveSurfaceSnapshotStandby = z.infer<
 // pass this contract to any Standard-Schema-aware library (Valibot, ArkType,
 // `@standard-schema/spec` runners) without depending on Zod at runtime. The
 // fixture-validation tests pin this; do not remove the assertion.
-export const liveSurfaceSnapshot = z.lazy(() =>
-  z.preprocess(
-    (value) => {
-      if (
-        value !== null &&
-        typeof value === "object" &&
-        !Array.isArray(value) &&
-        !("kind" in (value as Record<string, unknown>))
-      ) {
-        return { ...(value as Record<string, unknown>), kind: "liveActivity" };
-      }
-      return value;
-    },
-    z.discriminatedUnion("kind", [
-      liveSurfaceSnapshotLiveActivity,
-      liveSurfaceSnapshotWidget,
-      liveSurfaceSnapshotControl,
-      liveSurfaceSnapshotNotification,
-      liveSurfaceSnapshotLockAccessory,
-      liveSurfaceSnapshotStandby,
-    ]),
-  ),
+// Backcompat shim: payloads minted before the kind discriminator existed
+// (early v1 drafts) parse as liveActivity by default. Slated for removal in
+// the v2 contract bump; until then the preprocess keeps published JSON
+// schemas honest without breaking older fixture files.
+export const liveSurfaceSnapshot = z.preprocess(
+  (value) => {
+    if (
+      value !== null &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      !("kind" in (value as Record<string, unknown>))
+    ) {
+      return { ...(value as Record<string, unknown>), kind: "liveActivity" };
+    }
+    return value;
+  },
+  z.discriminatedUnion("kind", [
+    liveSurfaceSnapshotLiveActivity,
+    liveSurfaceSnapshotWidget,
+    liveSurfaceSnapshotControl,
+    liveSurfaceSnapshotNotification,
+    liveSurfaceSnapshotLockAccessory,
+    liveSurfaceSnapshotStandby,
+  ]),
 );
 export type LiveSurfaceSnapshot = z.infer<typeof liveSurfaceSnapshot>;
 
@@ -253,30 +255,97 @@ export const liveSurfaceAlertPayload = z
   .strict();
 export type LiveSurfaceAlertPayload = z.infer<typeof liveSurfaceAlertPayload>;
 
+// Output Zod schemas for each projection. Round-trip tests parse the
+// projection helper's return value through these so a schema change or
+// projection refactor that diverges fails CI before it ships.
+export const liveSurfaceWidgetTimelineEntrySchema = z
+  .object({
+    kind: z.literal("widget"),
+    snapshotId: z.string(),
+    surfaceId: z.string(),
+    state: liveSurfaceState,
+    family: z.enum(["systemSmall", "systemMedium", "systemLarge"]).optional(),
+    reloadPolicy: z.enum(["manual", "afterDate"]).optional(),
+    headline: z.string(),
+    subhead: z.string(),
+    progress: z.number().min(0).max(1),
+    deepLink: z.string(),
+  })
+  .strict();
+
+export const liveSurfaceControlValueProviderSchema = z
+  .object({
+    kind: z.literal("control"),
+    snapshotId: z.string(),
+    surfaceId: z.string(),
+    controlKind: z.enum(["toggle", "button", "deepLink"]),
+    value: z.union([z.boolean(), z.null()]),
+    intent: z.union([z.string(), z.null()]),
+    label: z.string().min(1),
+    deepLink: z.string(),
+  })
+  .strict();
+
+export const liveSurfaceLockAccessoryEntrySchema = z
+  .object({
+    kind: z.literal("lockAccessory"),
+    snapshotId: z.string(),
+    surfaceId: z.string(),
+    state: liveSurfaceState,
+    family: liveSurfaceLockAccessoryFamily,
+    headline: z.string(),
+    shortText: z.string(),
+    gaugeValue: z.number().min(0).max(1),
+    deepLink: z.string(),
+  })
+  .strict();
+
+export const liveSurfaceStandbyEntrySchema = z
+  .object({
+    kind: z.literal("standby"),
+    snapshotId: z.string(),
+    surfaceId: z.string(),
+    state: liveSurfaceState,
+    presentation: liveSurfaceStandbyPresentation,
+    tint: z.union([z.enum(["default", "monochrome"]), z.null()]),
+    headline: z.string(),
+    subhead: z.string(),
+    progress: z.number().min(0).max(1),
+    deepLink: z.string(),
+  })
+  .strict();
+
+export const liveSurfaceNotificationContentPayloadSchema = z
+  .object({
+    aps: z
+      .object({
+        alert: z.object({
+          title: z.string(),
+          body: z.string(),
+        }),
+        sound: z.literal("default").optional(),
+        category: z.string().optional(),
+        "thread-id": z.string().optional(),
+      })
+      .strict(),
+    liveSurface: z
+      .object({
+        kind: z.literal("surface_notification"),
+        snapshotId: z.string(),
+        surfaceId: z.string(),
+        state: liveSurfaceState,
+        deepLink: z.string(),
+      })
+      .strict(),
+  })
+  .strict();
+
 // Derived arrays preserve the older string-list export surface for consumers
-// who only need the union members. Tuple-narrow so downstream `as const`
-// patterns keep working.
-export const liveSurfaceStates = liveSurfaceState.options as unknown as readonly [
-  "queued",
-  "active",
-  "paused",
-  "attention",
-  "bad_timing",
-  "completed",
-];
-export const liveSurfaceStages = liveSurfaceStage.options as unknown as readonly [
-  "prompted",
-  "inProgress",
-  "completing",
-];
-export const liveSurfaceKinds = liveSurfaceKind.options as unknown as readonly [
-  "liveActivity",
-  "widget",
-  "control",
-  "lockAccessory",
-  "standby",
-  "notification",
-];
+// who only need the union members. Inferred from Zod's `.options` so adding
+// or removing a state/stage/kind in one place updates the exported tuple too.
+export const liveSurfaceStates = liveSurfaceState.options;
+export const liveSurfaceStages = liveSurfaceStage.options;
+export const liveSurfaceKinds = liveSurfaceKind.options;
 
 /**
  * Strict v1 parser. Throws on any payload that does not match the v1

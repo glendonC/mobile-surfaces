@@ -19,6 +19,11 @@ export {
   liveSurfaceStandbySlice,
   liveSurfaceActivityContentState,
   liveSurfaceAlertPayload,
+  liveSurfaceWidgetTimelineEntrySchema,
+  liveSurfaceControlValueProviderSchema,
+  liveSurfaceLockAccessoryEntrySchema,
+  liveSurfaceStandbyEntrySchema,
+  liveSurfaceNotificationContentPayloadSchema,
   liveSurfaceStates,
   liveSurfaceStages,
   liveSurfaceKinds,
@@ -228,6 +233,11 @@ export function toControlValueProvider(
   const labelCandidate = controlSnap.actionLabel?.length
     ? controlSnap.actionLabel
     : controlSnap.primaryText;
+  // Defense-in-depth: schema currently constrains primaryText to .min(1) so
+  // this branch is unreachable for safeParse'd snapshots. Kept because the
+  // class is part of the v2.1 public API (CHANGELOG documents the error as a
+  // caller contract) and to re-activate cleanly if .min(1) is ever relaxed
+  // or if a caller bypasses parse().
   if (!labelCandidate) {
     throw new IncompleteProjectionError(
       "toControlValueProvider",

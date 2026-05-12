@@ -4,8 +4,13 @@ import {
   assertSnapshot,
   IncompleteProjectionError,
   liveSurfaceAlertPayload,
+  liveSurfaceControlValueProviderSchema,
+  liveSurfaceLockAccessoryEntrySchema,
+  liveSurfaceNotificationContentPayloadSchema,
   liveSurfaceSnapshot,
   liveSurfaceSnapshotV0,
+  liveSurfaceStandbyEntrySchema,
+  liveSurfaceWidgetTimelineEntrySchema,
   migrateV0ToV1,
   safeParseAnyVersion,
   safeParseSnapshot,
@@ -50,6 +55,87 @@ test("toAlertPayload output parses as liveSurfaceAlertPayload", () => {
   const payload = toAlertPayload(queued);
   const parsed = liveSurfaceAlertPayload.parse(payload);
   assert.deepEqual(parsed, payload);
+});
+
+// Round-trip tests for every projection. Each projection helper builds its
+// return shape by hand; without these, a schema rename or projection refactor
+// could drift silently. Mirrors the toAlertPayload pattern (which already
+// round-trips through liveSurfaceAlertPayload above) across the other five.
+test("toWidgetTimelineEntry output parses as liveSurfaceWidgetTimelineEntrySchema", () => {
+  const widget = surfaceFixtureSnapshots.widgetDashboard;
+  assert.equal(widget.kind, "widget");
+  const entry = toWidgetTimelineEntry(widget);
+  const parsed = liveSurfaceWidgetTimelineEntrySchema.parse(entry);
+  assert.deepEqual(parsed, entry);
+});
+
+test("toControlValueProvider output parses as liveSurfaceControlValueProviderSchema", () => {
+  const control = surfaceFixtureSnapshots.controlToggle;
+  assert.equal(control.kind, "control");
+  const entry = toControlValueProvider(control);
+  const parsed = liveSurfaceControlValueProviderSchema.parse(entry);
+  assert.deepEqual(parsed, entry);
+});
+
+test("toLockAccessoryEntry output parses as liveSurfaceLockAccessoryEntrySchema", () => {
+  const accessory = surfaceFixtureSnapshots.lockAccessoryCircular;
+  assert.equal(accessory.kind, "lockAccessory");
+  const entry = toLockAccessoryEntry(accessory);
+  const parsed = liveSurfaceLockAccessoryEntrySchema.parse(entry);
+  assert.deepEqual(parsed, entry);
+});
+
+test("toStandbyEntry output parses as liveSurfaceStandbyEntrySchema", () => {
+  const standby = surfaceFixtureSnapshots.standbyCard;
+  assert.equal(standby.kind, "standby");
+  const entry = toStandbyEntry(standby);
+  const parsed = liveSurfaceStandbyEntrySchema.parse(entry);
+  assert.deepEqual(parsed, entry);
+});
+
+test("toNotificationContentPayload output parses as liveSurfaceNotificationContentPayloadSchema", () => {
+  // Notification fixture isn't published yet; synthesize one inline so the
+  // round-trip stays asserted. The shape mirrors a snapshot the harness would
+  // emit if a notification surface were exercised.
+  const note = assertSnapshot({
+    schemaVersion: "1",
+    kind: "notification",
+    id: "fixture-notification",
+    surfaceId: "surface-notification",
+    state: "active",
+    modeLabel: "alert",
+    contextLabel: "test",
+    statusLine: "notification round-trip",
+    primaryText: "Round-trip headline",
+    secondaryText: "Round-trip body",
+    actionLabel: "Open",
+    estimatedSeconds: 60,
+    morePartsCount: 0,
+    progress: 0,
+    stage: "prompted",
+    deepLink: "mobilesurfaces://surface/test",
+    notification: { category: "test-category", threadId: "thread-1" },
+  });
+  const payload = toNotificationContentPayload(note);
+  const parsed = liveSurfaceNotificationContentPayloadSchema.parse(payload);
+  assert.deepEqual(parsed, payload);
+});
+
+// MS011: per-activity Live Activity pushes are bounded at 4 KB and iOS 18
+// broadcast pushes at 5 KB. Asserting every committed liveActivity fixture
+// projects under 4 KB pins the budget so a future fixture (or a contract
+// change that adds fields) cannot silently bust the ceiling.
+test("every liveActivity fixture projects under the MS011 4 KB ceiling", () => {
+  const PER_ACTIVITY_BUDGET = 4096;
+  for (const [name, snapshot] of Object.entries(surfaceFixtureSnapshots)) {
+    if (snapshot.kind !== "liveActivity") continue;
+    const contentState = toLiveActivityContentState(snapshot);
+    const bytes = Buffer.byteLength(JSON.stringify(contentState), "utf8");
+    assert.ok(
+      bytes <= PER_ACTIVITY_BUDGET,
+      `fixture "${name}" produces ${bytes} bytes; MS011 ceiling is ${PER_ACTIVITY_BUDGET}`,
+    );
+  }
 });
 
 test("widget projection accepts widget snapshots and rejects mismatches", () => {
