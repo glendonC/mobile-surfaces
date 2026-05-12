@@ -240,6 +240,7 @@ Start with the [docs hub](./docs/README.md) if you are not sure where to go next
 
 - [Backend integration](./docs/backend-integration.md). Domain event to snapshot to APNs.
 - [Push](./docs/push.md). Wire-layer reference, SDK, smoke script, token taxonomy, error reasons, channel push.
+- [Observability](./docs/observability.md). Which catalog-bound errors are worth alerting on, hook signatures, recommended log shape.
 - [Multi-surface](./docs/multi-surface.md). Every `kind` value, what ships today, when to emit each.
 - [Schema migration](./docs/schema-migration.md). v0 to v1 codec, Standard Schema interop, evolution policy.
 - [Architecture](./docs/architecture.md). The contract, the surfaces, the adapter boundary.
