@@ -440,6 +440,47 @@ test("morePartsCount rejects string-encoded integers", () => {
 });
 
 // ---------------------------------------------------------------------------
+// updatedAt (optional v1, required in v2)
+// ---------------------------------------------------------------------------
+
+test("updatedAt is optional in v1 — snapshots without it still parse", () => {
+  const { updatedAt: _omit, ...withoutUpdatedAt } = queued;
+  const result = safeParseSnapshot(withoutUpdatedAt);
+  assert.equal(result.success, true);
+});
+
+test("updatedAt accepts an RFC 3339 / ISO 8601 datetime string", () => {
+  const snapshot = assertSnapshot({
+    ...queued,
+    updatedAt: "2026-05-12T18:32:11.482Z",
+  });
+  assert.equal(snapshot.updatedAt, "2026-05-12T18:32:11.482Z");
+});
+
+test("updatedAt accepts an RFC 3339 datetime with a non-UTC offset", () => {
+  const snapshot = assertSnapshot({
+    ...queued,
+    updatedAt: "2026-05-12T11:32:11.482-07:00",
+  });
+  assert.equal(snapshot.updatedAt, "2026-05-12T11:32:11.482-07:00");
+});
+
+test("updatedAt rejects a plain date string (no time component)", () => {
+  const result = safeParseSnapshot({ ...queued, updatedAt: "2026-05-12" });
+  assert.equal(result.success, false);
+});
+
+test("updatedAt rejects a unix-epoch number masquerading as a string", () => {
+  const result = safeParseSnapshot({ ...queued, updatedAt: "1747076400" });
+  assert.equal(result.success, false);
+});
+
+test("updatedAt rejects a non-string value", () => {
+  const result = safeParseSnapshot({ ...queued, updatedAt: 1747076400 });
+  assert.equal(result.success, false);
+});
+
+// ---------------------------------------------------------------------------
 // Projection validation (Part 1 contracts)
 // ---------------------------------------------------------------------------
 

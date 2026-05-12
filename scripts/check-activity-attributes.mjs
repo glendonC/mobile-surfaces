@@ -5,7 +5,10 @@
 //      matching Codable shape across modules at runtime, so any drift is a
 //      silent bug.
 //   2. The Swift `ContentState` struct must match the Zod
-//      `liveSurfaceActivityContentState` source of truth (MS003 / MS022).
+//      `liveSurfaceActivityContentState` source of truth (MS003 — covers
+//      both the field set and the JSON-key wire shape that ActivityKit
+//      decodes; MS022 was merged into MS003 in 2.2 since both fired for the
+//      same class of edit and named the same enforcer).
 //   3. The Swift `Stage` enum cases must match the Zod `liveSurfaceStage`
 //      options (MS004).
 //

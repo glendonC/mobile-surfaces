@@ -49,7 +49,7 @@ export const traps: readonly TrapEntry[] = [
   },
   {
     "id": "MS003",
-    "title": "Swift ContentState fields match Zod liveSurfaceActivityContentState",
+    "title": "Swift ContentState fields and JSON keys match Zod liveSurfaceActivityContentState",
     "severity": "error",
     "detection": "static",
     "tags": [
@@ -57,9 +57,9 @@ export const traps: readonly TrapEntry[] = [
       "swift",
       "contract"
     ],
-    "summary": "Field names and types in MobileSurfacesActivityAttributes.ContentState must match liveSurfaceActivityContentState in packages/surface-contracts/src/schema.ts.",
-    "symptom": "Push lands but the Lock Screen view stays on its old state because the Codable decoder silently fails on a renamed key.",
-    "fix": "Update the Zod source first, regenerate the JSON Schema (pnpm surface:check), and mirror the field change into both Swift attribute files.",
+    "summary": "MobileSurfacesActivityAttributes.ContentState must declare the same fields, types, and JSON keys as liveSurfaceActivityContentState in packages/surface-contracts/src/schema.ts. Both Swift attribute files participate; the JSON-key shape is what ActivityKit decodes from the push payload.",
+    "symptom": "Push lands at APNs (200) but the Lock Screen view stays on its old state. The Codable decoder silently fails on a renamed key or a type mismatch and ActivityKit drops the update without surfacing an error.",
+    "fix": "Update the Zod source first, regenerate the JSON Schema (pnpm surface:check), then mirror the field change into both Swift attribute files. Project payloads through toLiveActivityContentState rather than hand-rolling JSON so the JS layer cannot diverge from the contract.",
     "enforcement": {
       "script": "scripts/check-activity-attributes.mjs"
     },
@@ -210,16 +210,19 @@ export const traps: readonly TrapEntry[] = [
     "id": "MS013",
     "title": "App Group entitlement must match host app and widget extension",
     "severity": "error",
-    "detection": "config",
+    "detection": "static",
     "tags": [
       "app-group",
       "widget",
       "control",
       "config"
     ],
-    "summary": "apps/mobile/app.json and apps/mobile/targets/widget/expo-target.config.js must declare the same com.apple.security.application-groups identifier.",
+    "summary": "apps/mobile/app.json, apps/mobile/targets/widget/generated.entitlements, MobileSurfacesSharedState.swift, and the host-side TS constants in apps/mobile/src must all declare the same com.apple.security.application-groups identifier.",
     "symptom": "Widget renders placeholder forever; control widget never reads the toggle state. No error: the entitlement mismatch makes both sides read separate App Group containers.",
-    "fix": "Set the same group identifier on both sides (default 'group.com.example.mobilesurfaces'; rename via pnpm surface:rename) and rerun prebuild.",
+    "fix": "Set the same group identifier on every side (default 'group.com.example.mobilesurfaces'; rename via pnpm surface:rename) and rerun prebuild. check-app-group-identity verifies parity across all five declaration sites.",
+    "enforcement": {
+      "script": "scripts/check-app-group-identity.mjs"
+    },
     "docs": [
       "docs/ios-environment.md"
     ],
@@ -372,24 +375,6 @@ export const traps: readonly TrapEntry[] = [
     "docs": [
       "docs/push.md#token-taxonomy"
     ],
-    "since": "1.0.0"
-  },
-  {
-    "id": "MS022",
-    "title": "ActivityKit content-state JSON keys must match Swift ContentState",
-    "severity": "error",
-    "detection": "static",
-    "tags": [
-      "live-activity",
-      "swift",
-      "contract"
-    ],
-    "summary": "The Zod ActivityKit projection and MobileSurfacesActivityAttributes.ContentState must use the same JSON keys and value types; custom state files must mirror that shared shape.",
-    "symptom": "APNs returns 200, but the Lock Screen stays on the prior content state. The Codable decoder silently fails on a key mismatch and ActivityKit drops the update.",
-    "fix": "Project through toLiveActivityContentState rather than hand-rolling JSON. If you add or rename a content-state field, update the Zod source and both Swift attribute files in lockstep.",
-    "enforcement": {
-      "script": "scripts/check-activity-attributes.mjs"
-    },
     "since": "1.0.0"
   },
   {

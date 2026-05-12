@@ -96,6 +96,23 @@ const liveSurfaceSnapshotBaseShape = {
   schemaVersion: z.literal("1").default("1"),
   id: z.string().min(1),
   surfaceId: z.string().min(1),
+  // Wall-clock instant the snapshot was authored, as an RFC 3339 datetime
+  // string. Consumers use it to drop out-of-order pushes: ActivityKit and
+  // APNs offer no in-band ordering guarantee, and the network may reorder
+  // a stage-transition update behind a content-state tick. Comparing
+  // updatedAt against the snapshot already applied is the only correct
+  // discard test on the client.
+  //
+  // UTC (Z-suffixed) is recommended for trivial lexicographic comparison —
+  // "2026-05-12T18:32:11.482Z" — but offsets are also accepted so producers
+  // emitting OffsetDateTime / time.Time / Instant don't have to normalize
+  // before serialization. When mixing producers, normalize to UTC before
+  // comparing.
+  //
+  // Optional in v1 for backwards compatibility with payloads authored
+  // before this field was added; v2 will make it required. New code on the
+  // producer side should populate it on every snapshot.
+  updatedAt: z.string().datetime({ offset: true }).optional(),
   state: liveSurfaceState,
   modeLabel: z.string().min(1),
   contextLabel: z.string(),

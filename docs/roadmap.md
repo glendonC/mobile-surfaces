@@ -32,7 +32,7 @@ See [`compatibility.md`](./compatibility.md) for the canonical pinned row.
 - Harness wires "Refresh widget" and "Toggle control state" actions; fixtures for `kind: "widget"` and `kind: "control"` ship under `data/surface-fixtures/`.
 - `_shared` AppIntent files give intents both app and extension target membership via `@bacons/apple-targets`.
 
-Lock-screen accessory, notification content extension, and StandBy variants are intentionally not included in this slice; they are listed under In flight / Frontier below.
+The notification content extension is intentionally not included in this slice; it is listed under Deferred below. Lock-screen accessory and StandBy variants landed alongside the home and control widgets — see the per-`kind` status sections in [`docs/multi-surface.md`](./multi-surface.md).
 
 ### Phase 4: Modern APNs
 
@@ -81,9 +81,11 @@ This roadmap rewrite is part of Phase 7. Shipped docs now cover the multi-surfac
 
 Revisit when Expo SDK 56 ships. Until then, the duplication and the byte-identity guard stay in place.
 
-### Lock-screen accessory, notification content extension, StandBy
+### Notification content extension
 
-The contract already accommodates `kind: "lockAccessory"`, `kind: "standby"`, and `kind: "notification"` (with projection helper `toNotificationContentPayload`), but the SwiftUI surfaces and harness wiring do not exist yet. Fixtures and renderers are out of scope until the Phase 3 home/control work has soak time on real devices.
+The contract accommodates `kind: "notification"` and the `toNotificationContentPayload` projection helper is shipped, but the starter does not register a `UNNotificationContentExtension` target yet. Backends can already emit notification snapshots; they will render as standard alert payloads until the content extension lands.
+
+Lock-screen accessory and StandBy were originally deferred alongside this work but have since shipped: `kind: "lockAccessory"` projects via `toLockAccessoryEntry` and renders through `MobileSurfacesLockAccessoryWidget`; `kind: "standby"` projects via `toStandbyEntry` and renders through `MobileSurfacesStandbyWidget`. See the per-`kind` status sections in [`docs/multi-surface.md`](./multi-surface.md).
 
 ## Frontier: iOS 26 (Phase 8)
 
@@ -92,7 +94,6 @@ Explicitly out of scope unless a real use case surfaces. Listed here so the opti
 - ScheduledActivity scheduling API.
 - AlarmKit countdown integration.
 - Liquid Glass / `levelOfDetail` rendering hints.
-- StandBy variant rendering hint.
 
 ## Out of scope
 

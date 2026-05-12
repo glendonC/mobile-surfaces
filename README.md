@@ -139,8 +139,10 @@ flowchart LR
   Snapshot --> Island["Dynamic Island"]
   Snapshot --> Widget["Home widget"]
   Snapshot --> Control["Control widget"]
+  Snapshot --> Accessory["Lock Screen accessory"]
+  Snapshot --> Standby["StandBy widget"]
   Snapshot --> APNs["APNs push payload"]
-  Snapshot --> Future["Notification/StandBy projections"]
+  Snapshot --> Future["Notification content extension (contract shipped, native extension pending)"]
 ```
 
 Change the snapshot once, every surface updates together. They cannot drift, because they are all reading from the same shape. The shape is defined in TypeScript with a runtime validator: `kind` picks which branch is valid, and Zod checks that the matching fields are present. Your editor and your CI both catch mistakes before they ship.

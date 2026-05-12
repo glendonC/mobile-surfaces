@@ -32,7 +32,17 @@ export type LiveActivityEvents = {
   onPushToken: (payload: { activityId: string; token: string }) => void;
   onActivityStateChange: (payload: {
     activityId: string;
-    state: "active" | "ended" | "dismissed" | "stale" | "pending";
+    state:
+      | "active"
+      | "ended"
+      | "dismissed"
+      | "stale"
+      | "pending"
+      // Reserved for ActivityKit ActivityState cases Apple adds after the
+      // current SDK version. The native module surfaces these as "unknown"
+      // rather than collapsing them into "active", so consumers can detect
+      // and log the new state instead of acting on a misleading default.
+      | "unknown";
   }) => void;
   /**
    * Fired when ActivityKit hands us a fresh push-to-start token (iOS 17.2+).

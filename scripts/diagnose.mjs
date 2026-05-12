@@ -55,6 +55,7 @@ const TOOLS = [
   { script: "scripts/generate-surface-fixtures.mjs", extra: ["--check"] },
   { script: "scripts/check-activity-attributes.mjs", extra: [] },
   { script: "scripts/check-validator-sync.mjs", extra: [] },
+  { script: "scripts/check-app-group-identity.mjs", extra: [] },
   { script: "scripts/check-adapter-boundary.mjs", extra: [] },
   { script: "scripts/validate-trap-catalog.mjs", extra: [] },
   { script: "scripts/check-trap-error-binding.mjs", extra: [] },
@@ -70,6 +71,7 @@ for (const { script, extra } of TOOLS) {
     "node",
     [
       "--experimental-strip-types",
+      "--no-warnings=ExperimentalWarning",
       resolve(REPO_ROOT, script),
       ...extra,
       "--json",

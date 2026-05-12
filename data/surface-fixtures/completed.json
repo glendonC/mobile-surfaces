@@ -4,6 +4,7 @@
   "kind": "liveActivity",
   "id": "fixture-completed",
   "surfaceId": "surface-completed",
+  "updatedAt": "2026-05-12T18:34:42.917Z",
   "state": "completed",
   "modeLabel": "completed",
   "contextLabel": "finished",

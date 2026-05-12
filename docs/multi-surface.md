@@ -26,12 +26,14 @@ flowchart LR
   Snapshot --> W["kind: widget<br/>→ toWidgetTimelineEntry"]
   Snapshot --> C["kind: control<br/>→ toControlValueProvider"]
   Snapshot --> N["kind: notification<br/>→ toNotificationContentPayload"]
-  Snapshot --> LK["kind: lockAccessory<br/>(forward-compat)"]
-  Snapshot --> SB["kind: standby<br/>(forward-compat)"]
+  Snapshot --> LK["kind: lockAccessory<br/>→ toLockAccessoryEntry"]
+  Snapshot --> SB["kind: standby<br/>→ toStandbyEntry"]
   LA --> LockScreen["Lock Screen + Dynamic Island"]
   W --> HomeWidget["Home-screen widget"]
   C --> ControlWidget["iOS 18 control widget"]
   N --> Notification["Notification content"]
+  LK --> LockAccessory["Lock Screen accessory widget"]
+  SB --> Standby["StandBy mode widget"]
 ```
 
 Projection helpers are kind-gated: `toLiveActivityContentState` rejects a `widget`-kind snapshot at runtime, `toWidgetTimelineEntry` rejects a `liveActivity`-kind snapshot, etc. (see `assertSnapshotKind` in `packages/surface-contracts/src/index.ts`). The discriminated union also makes invalid kind/slice combinations unparseable up front; a `kind: "control"` snapshot without a `control` slice fails at `liveSurfaceSnapshot.safeParse`.
@@ -251,9 +253,9 @@ Until the notification content extension lands, you can ship a `kind: "liveActiv
 
 A lock-screen accessory widget (the inline / circular / rectangular Lock Screen complications introduced in iOS 16). Renders next to the clock.
 
-**Status: forward-compat scaffolding only.** The contract parses cleanly (`liveSurfaceSnapshotLockAccessory` is a real branch of the discriminated union), but there is no projection helper, no fixture, and no native renderer in the widget target. Phase 4 of the 2026-04 refactor adds the SwiftUI surface and harness wiring; until then, snapshots with `kind: "lockAccessory"` will validate but have no rendering path. See [`docs/roadmap.md`](./roadmap.md) for the deferred work.
+**Status: shipped, lighter slice than `widget`/`control`.** The contract parses cleanly via `liveSurfaceSnapshotLockAccessory`, `toLockAccessoryEntry` projects to the consumer shape (`family`, `shortText` with empty-string fallback to `primaryText`, `gaugeValue` defaulting to overall `progress`), the `lock-accessory-circular.json` fixture exercises it, and `MobileSurfacesLockAccessoryWidget` renders it on device. The slice carries less than `widget`/`control` because the Lock Screen accessory families are themselves constrained — there is intentionally no rich glyph or detail-rows surface here.
 
-### When (eventually) to emit
+### When to emit
 
 - Persistent at-a-glance state that should sit next to the clock without animation.
 - Lock-screen complications where a Live Activity is overkill (no countdown, no progress animation).
@@ -280,16 +282,16 @@ const parsed = liveSurfaceSnapshotLockAccessory.parse({
   stage: "inProgress",
   deepLink: "mobilesurfaces://surface/surface-status",
 });
-// Validates today; render path arrives with the Phase 4 follow-up.
+// Renders on device through MobileSurfacesLockAccessoryWidget.
 ```
 
 ## `kind: "standby"`
 
 The iOS 17+ StandBy mode (large idle clock view when the phone is charging on its side). Renders existing widget content with a different rendering hint.
 
-**Status: forward-compat scaffolding only.** Same as `lockAccessory`: the contract parses cleanly via `liveSurfaceSnapshotStandby`, but there is no projection helper, no fixture, and no native renderer. Listed under [`docs/roadmap.md`](./roadmap.md) "Frontier: iOS 26 (Phase 8)" as a `levelOfDetail` rendering hint; it lands when a real use case surfaces.
+**Status: shipped, intentionally minimal slice.** `liveSurfaceSnapshotStandby` parses and validates, `toStandbyEntry` projects to the consumer shape (`presentation`, `tint`, `headline`, `subhead`, `progress`), the `standby-card.json` fixture demonstrates it, and `MobileSurfacesStandbyWidget` renders it on device with day/night-aware backgrounds and a monochrome tint mode. The slice carries only `presentation` and `tint` because StandBy is a rendering-hint surface, not a data surface — everything else flows from the shared base.
 
-### When (eventually) to emit
+### When to emit
 
 - A widget that should render distinctly when the device is in StandBy (high-contrast, glanceable, dim-friendly).
 
@@ -315,7 +317,7 @@ const parsed = liveSurfaceSnapshotStandby.parse({
   stage: "inProgress",
   deepLink: "mobilesurfaces://surface/surface-clock",
 });
-// Validates today; render path arrives with the Phase 8 frontier work.
+// Renders on device through MobileSurfacesStandbyWidget.
 ```
 
 ## Cross-cutting concerns
@@ -345,7 +347,7 @@ The `deepLink` field is propagated into every projection: it lands in `LiveSurfa
 | Persistent status visible at a glance, infrequent updates | `widget` |
 | Single-tap interaction reachable from Control Center / Lock Screen | `control` |
 | Standalone notification with category / thread routing | `notification` |
-| Lock Screen complication next to the clock | `lockAccessory` (forward-compat, no native renderer yet) |
-| StandBy-specific rendering hint | `standby` (forward-compat, no native renderer yet) |
+| Lock Screen complication next to the clock | `lockAccessory` |
+| StandBy-specific rendering hint | `standby` |
 
 A single domain event can fan out to multiple kinds; emit one snapshot per surface the user has opted in to. The base fields stay equivalent across kinds; only the projection slice and the projection helper change.
