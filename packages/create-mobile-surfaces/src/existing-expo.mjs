@@ -21,6 +21,8 @@ import { validateTeamId } from "./validators.mjs";
 const DEFAULT_SURFACES = Object.freeze({
   homeWidget: true,
   controlWidget: true,
+  lockAccessoryWidget: true,
+  standbyWidget: true,
 });
 
 // Map a surface id to the widget-target swift file that materializes it.
@@ -28,6 +30,8 @@ const DEFAULT_SURFACES = Object.freeze({
 const WIDGET_FILE_BY_SURFACE = Object.freeze({
   homeWidget: "MobileSurfacesHomeWidget.swift",
   controlWidget: "MobileSurfacesControlWidget.swift",
+  lockAccessoryWidget: "MobileSurfacesLockAccessoryWidget.swift",
+  standbyWidget: "MobileSurfacesStandbyWidget.swift",
 });
 
 export function planChanges({ evidence, manifest, surfaces = DEFAULT_SURFACES }) {

@@ -416,7 +416,12 @@ async function stageAndCopyAppsMobile({ summary }) {
 // sense relative to the widget dir), then a wider marker pass so harness
 // sources in apps/mobile/src/ also get their SURFACE-BEGIN/END comments stripped.
 function stripSurfacesAndMarkers({ config, summary }) {
-  const surfaces = config.surfaces ?? { homeWidget: true, controlWidget: true };
+  const surfaces = config.surfaces ?? {
+    homeWidget: true,
+    controlWidget: true,
+    lockAccessoryWidget: true,
+    standbyWidget: true,
+  };
   applyStripWidgetDir({
     widgetDir: path.join(summary.appsMobileRoot, "targets", "widget"),
     surfaces,

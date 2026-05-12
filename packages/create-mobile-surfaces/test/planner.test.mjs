@@ -224,7 +224,12 @@ describe("planChanges — surface picker", () => {
   it("defaults to all surfaces when no selection is provided", () => {
     const evidence = evidenceWithJsonConfig({ ios: { bundleIdentifier: "x" } });
     const plan = planChanges({ evidence, manifest: fullWidgetManifest });
-    assert.deepEqual(plan.surfaces, { homeWidget: true, controlWidget: true });
+    assert.deepEqual(plan.surfaces, {
+      homeWidget: true,
+      controlWidget: true,
+      lockAccessoryWidget: true,
+      standbyWidget: true,
+    });
     assert.ok(
       plan.widgetFilesToCopy.some((p) => p.endsWith("MobileSurfacesHomeWidget.swift")),
     );

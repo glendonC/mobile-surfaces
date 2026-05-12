@@ -2,16 +2,17 @@
 
 Mobile Surfaces is a starter and reference architecture for iOS Live Activities, Dynamic Island, home-screen widgets, and iOS 18 control widgets in Expo apps. If you are new to these Apple surfaces, start with the root [`README.md`](../README.md), then use the path below that matches your job.
 
-## Start Here If...
+## Reading Paths
 
-| If you want to... | Read these first |
-| --- | --- |
-| Try the starter app | [`README.md`](../README.md), [`ios-environment.md`](./ios-environment.md), [`troubleshooting.md`](./troubleshooting.md) |
-| Add Mobile Surfaces to an existing Expo app | [`packages/create-mobile-surfaces/README.md`](../packages/create-mobile-surfaces/README.md), [`architecture.md`](./architecture.md), [`compatibility.md`](./compatibility.md) |
-| Write a backend integration | [`backend-integration.md`](./backend-integration.md), [`push.md`](./push.md), [`packages/surface-contracts/README.md`](../packages/surface-contracts/README.md) |
-| Understand every surface and `kind` value | [`multi-surface.md`](./multi-surface.md), [`schema-migration.md`](./schema-migration.md), [`architecture.md`](./architecture.md) |
-| Debug a silent failure | [`troubleshooting.md`](./troubleshooting.md), [`push.md`](./push.md), [`AGENTS.md`](../AGENTS.md) |
-| Maintain or release the repo | [`release.md`](./release.md), [`roadmap.md`](./roadmap.md), [`traps.md`](./traps.md) |
+Pick the persona that fits, read the three docs in order, then come back here for the full reference.
+
+| Persona | I am building... | Read these three, in order |
+| --- | --- | --- |
+| **Backend integrator** | A service that emits snapshots and sends APNs pushes from Node, no mobile work | [`backend-integration.md`](./backend-integration.md) -> [`push.md`](./push.md) -> [`troubleshooting.md`](./troubleshooting.md) |
+| **Mobile app developer** | An iPhone app on the starter, every surface wired up locally | [`../README.md`](../README.md) -> [`ios-environment.md`](./ios-environment.md) -> [`multi-surface.md`](./multi-surface.md) |
+| **Foreign Expo integrator** | An existing Expo app that adopts Mobile Surfaces without forking the starter | [`../packages/create-mobile-surfaces/README.md`](../packages/create-mobile-surfaces/README.md) -> [`compatibility.md`](./compatibility.md) -> [`architecture.md`](./architecture.md) |
+| **Contributor / maintainer** | A change to this repo, or a release of the linked packages | [`architecture.md`](./architecture.md) -> [`traps.md`](./traps.md) -> [`release.md`](./release.md) |
+| **Triaging a silent failure** | A live bug where the Lock Screen is empty or APNs returns 200 with no effect | [`troubleshooting.md`](./troubleshooting.md) -> [`push.md`](./push.md) -> [`../AGENTS.md`](../AGENTS.md) |
 
 ## Glossary
 

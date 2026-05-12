@@ -1,0 +1,36 @@
+{
+  "name": "@mobile-surfaces/validators",
+  "version": "2.1.0",
+  "description": "Shared identity validators for Mobile Surfaces. Single source of truth consumed by both the create-mobile-surfaces CLI and scripts/rename-starter.mjs.",
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/glendonC/mobile-surfaces#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/glendonC/mobile-surfaces.git",
+    "directory": "packages/validators"
+  },
+  "bugs": {
+    "url": "https://github.com/glendonC/mobile-surfaces/issues"
+  },
+  "keywords": [
+    "mobile-surfaces",
+    "validators"
+  ],
+  "author": "Glendon Chin <glendonchin@gmail.com>",
+  "engines": {
+    "node": ">=18"
+  },
+  "sideEffects": false,
+  "type": "module",
+  "main": "./src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src"
+  ]
+}

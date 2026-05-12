@@ -25,6 +25,8 @@ import { makeTextFileFilter, walkFiles } from "./fs-walk.mjs";
 const SELECTION_KEY_BY_ID = Object.freeze({
   "home-widget": "homeWidget",
   "control-widget": "controlWidget",
+  "lock-accessory-widget": "lockAccessoryWidget",
+  "standby-widget": "standbyWidget",
 });
 
 // Skip these directories when walking. The strip pass runs on a freshly
@@ -189,6 +191,14 @@ const GREENFIELD_FILES_BY_SURFACE = Object.freeze({
     "apps/mobile/targets/widget/MobileSurfacesControlWidget.swift",
     "data/surface-fixtures/control-toggle.json",
   ],
+  lockAccessoryWidget: [
+    "apps/mobile/targets/widget/MobileSurfacesLockAccessoryWidget.swift",
+    "data/surface-fixtures/lock-accessory-circular.json",
+  ],
+  standbyWidget: [
+    "apps/mobile/targets/widget/MobileSurfacesStandbyWidget.swift",
+    "data/surface-fixtures/standby-card.json",
+  ],
 });
 
 // In add-to-existing, only the widget target dir is copied; fixtures and
@@ -197,12 +207,16 @@ const GREENFIELD_FILES_BY_SURFACE = Object.freeze({
 const WIDGET_DIR_FILES_BY_SURFACE = Object.freeze({
   homeWidget: ["MobileSurfacesHomeWidget.swift"],
   controlWidget: ["MobileSurfacesControlWidget.swift"],
+  lockAccessoryWidget: ["MobileSurfacesLockAccessoryWidget.swift"],
+  standbyWidget: ["MobileSurfacesStandbyWidget.swift"],
 });
 
 // Fixture-index entries to drop, keyed by selection key.
 const FIXTURE_INDEX_PATH_BY_SURFACE = Object.freeze({
   homeWidget: "./widget-dashboard.json",
   controlWidget: "./control-toggle.json",
+  lockAccessoryWidget: "./lock-accessory-circular.json",
+  standbyWidget: "./standby-card.json",
 });
 
 function deleteRelativeFiles({ rootDir, surfaces, byKey }) {
@@ -302,5 +316,7 @@ export function formatSurfaceSummary(surfaces) {
   const parts = ["live activity"];
   if (surfaces.homeWidget) parts.push("home widget");
   if (surfaces.controlWidget) parts.push("control widget");
+  if (surfaces.lockAccessoryWidget) parts.push("lock accessory");
+  if (surfaces.standbyWidget) parts.push("standby");
   return parts.join(", ");
 }

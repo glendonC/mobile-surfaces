@@ -10,6 +10,7 @@ import { parseArgs } from "node:util";
 import { z } from "zod";
 import { liveSurfaceSnapshot } from "../packages/surface-contracts/src/schema.ts";
 import { buildReport, emitDiagnosticReport } from "./lib/diagnostics.mjs";
+import { canonicalSchemaUrl } from "./lib/schema-url.mjs";
 
 const { values } = parseArgs({
   options: {
@@ -20,17 +21,8 @@ const { values } = parseArgs({
 
 const TOOL = "build-schema";
 const schema = z.toJSONSchema(liveSurfaceSnapshot, { target: "draft-2020-12" });
-// Pin $id to major.minor so a future minor that adds a discriminated-union
-// variant can ship a new schema URL without yanking what consumers already
-// reference. Forks (any package name other than the upstream) get no $id —
-// otherwise the URL would point at a tarball that isn't published.
-const surfaceContractsPkg = JSON.parse(
-  readFileSync(resolve("packages/surface-contracts/package.json"), "utf8"),
-);
-if (surfaceContractsPkg.name === "@mobile-surfaces/surface-contracts") {
-  const [major, minor] = surfaceContractsPkg.version.split(".");
-  schema.$id = `https://unpkg.com/@mobile-surfaces/surface-contracts@${major}.${minor}/schema.json`;
-}
+const schemaUrl = canonicalSchemaUrl();
+if (schemaUrl) schema.$id = schemaUrl;
 schema.title = "LiveSurfaceSnapshot";
 
 const out = JSON.stringify(schema, null, 2) + "\n";

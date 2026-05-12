@@ -16,6 +16,8 @@ import { task } from "./ui.mjs";
 const DEFAULT_SURFACES = Object.freeze({
   homeWidget: true,
   controlWidget: true,
+  lockAccessoryWidget: true,
+  standbyWidget: true,
 });
 
 const execFileAsync = promisify(execFile);
@@ -78,7 +80,12 @@ export async function runTasks({ config, target }) {
   // runs — even with every surface selected, this pass removes the
   // SURFACE-BEGIN/END marker comments so users never see them in their
   // generated project.
-  const surfaces = config.surfaces ?? DEFAULT_SURFACES;
+  // Merge rather than replace: callers can pass a partial { homeWidget,
+  // controlWidget } and still get the defaults for any newer keys they don't
+  // know about (lockAccessoryWidget, standbyWidget). Without the merge, an
+  // undefined key would be treated as "deselected" and the strip pass would
+  // drop a surface the caller never opted out of.
+  const surfaces = { ...DEFAULT_SURFACES, ...(config.surfaces ?? {}) };
   await task("Trimming to selected surfaces", async () => {
     applyStripGreenfield({ rootDir: target, surfaces });
   });

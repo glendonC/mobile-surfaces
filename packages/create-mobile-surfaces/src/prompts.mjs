@@ -132,7 +132,15 @@ export async function runPrompts({ initialName, overrides = {}, yes = false, ui 
     scheme,
     bundleId,
     teamId: teamId || null,
-    surfaces: { homeWidget, controlWidget },
+    // lockAccessoryWidget and standbyWidget are always-on in the picker; they
+    // are flag-only opt-outs so the interactive flow stays focused on the two
+    // marquee surfaces. Overrides come through unchanged from --no-* flags.
+    surfaces: {
+      homeWidget,
+      controlWidget,
+      lockAccessoryWidget: overrides.lockAccessoryWidget ?? true,
+      standbyWidget: overrides.standbyWidget ?? true,
+    },
     installNow,
     // Pass through the New Architecture override only when the user supplied
     // a flag. Interactive runs that don't pass --new-arch / --no-new-arch

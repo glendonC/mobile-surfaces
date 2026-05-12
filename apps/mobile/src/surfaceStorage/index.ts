@@ -1,6 +1,8 @@
 import { ExtensionStorage } from "@bacons/apple-targets";
 import {
   toControlValueProvider,
+  toLockAccessoryEntry,
+  toStandbyEntry,
   toWidgetTimelineEntry,
   type LiveSurfaceSnapshot,
 } from "@mobile-surfaces/surface-contracts";
@@ -8,8 +10,12 @@ import {
 const APP_GROUP = "group.com.example.mobilesurfaces";
 const WIDGET_KIND = "MobileSurfacesHomeWidget";
 const CONTROL_KIND = "MobileSurfacesControlWidget";
+const LOCK_ACCESSORY_KIND = "MobileSurfacesLockAccessoryWidget";
+const STANDBY_KIND = "MobileSurfacesStandbyWidget";
 const WIDGET_CURRENT_SURFACE_ID_KEY = "surface.widget.currentSurfaceId";
 const CONTROL_CURRENT_SURFACE_ID_KEY = "surface.control.currentSurfaceId";
+const LOCK_ACCESSORY_CURRENT_SURFACE_ID_KEY = "surface.lockAccessory.currentSurfaceId";
+const STANDBY_CURRENT_SURFACE_ID_KEY = "surface.standby.currentSurfaceId";
 
 const storage = new ExtensionStorage(APP_GROUP);
 
@@ -62,6 +68,30 @@ export async function toggleControlSurface(
     ExtensionStorage.reloadControls(CONTROL_KIND);
   } catch (cause) {
     throw new SurfaceStorageError("toggleControl", entry.surfaceId, cause);
+  }
+  return entry;
+}
+
+export async function refreshLockAccessorySurface(snapshot: LiveSurfaceSnapshot) {
+  const entry = toLockAccessoryEntry(snapshot);
+  try {
+    storage.set(snapshotKey(entry.surfaceId), JSON.stringify(entry));
+    storage.set(LOCK_ACCESSORY_CURRENT_SURFACE_ID_KEY, entry.surfaceId);
+    ExtensionStorage.reloadWidget(LOCK_ACCESSORY_KIND);
+  } catch (cause) {
+    throw new SurfaceStorageError("refreshLockAccessory", entry.surfaceId, cause);
+  }
+  return entry;
+}
+
+export async function refreshStandbySurface(snapshot: LiveSurfaceSnapshot) {
+  const entry = toStandbyEntry(snapshot);
+  try {
+    storage.set(snapshotKey(entry.surfaceId), JSON.stringify(entry));
+    storage.set(STANDBY_CURRENT_SURFACE_ID_KEY, entry.surfaceId);
+    ExtensionStorage.reloadWidget(STANDBY_KIND);
+  } catch (cause) {
+    throw new SurfaceStorageError("refreshStandby", entry.surfaceId, cause);
   }
   return entry;
 }
