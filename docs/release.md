@@ -19,6 +19,7 @@ Configure trusted publishing on npm for each published package:
 - `@mobile-surfaces/design-tokens`
 - `@mobile-surfaces/live-activity`
 - `@mobile-surfaces/push`
+- `@mobile-surfaces/validators`
 
 Use these trusted publisher settings:
 
@@ -76,6 +77,7 @@ npm view @mobile-surfaces/surface-contracts version
 npm view @mobile-surfaces/design-tokens version
 npm view @mobile-surfaces/live-activity version
 npm view @mobile-surfaces/push version
+npm view @mobile-surfaces/validators version
 ```
 
 Prefer `npm view` over the npm website immediately after publishing. The website can cache package pages and show an old version or README for a while even when the registry API and install resolution already point at the new version.
