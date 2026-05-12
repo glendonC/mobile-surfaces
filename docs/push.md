@@ -302,7 +302,7 @@ Channels are environment-scoped: a channel created with `--env=development` cann
 
 ## Error responses
 
-The full mapping mirrors `packages/push/src/reasons.ts` and `scripts/send-apns.mjs`'s `APNS_REASON_GUIDE`. The SDK exports a typed subclass per reason (see [Error class hierarchy](#error-class-hierarchy)) so callers can `instanceof`-narrow without parsing strings.
+The full mapping mirrors `packages/push/src/reasons.ts` and `scripts/send-apns.mjs`'s `APNS_REASON_GUIDE`. The SDK exports a typed subclass per reason (see [Error class hierarchy](#error-class-hierarchy)) so callers can `instanceof`-narrow without parsing strings. Seven of the subclasses are catalog-bound via `trapIdForErrorClass` and are the ones worth alerting on in production; see [`docs/observability.md`](./observability.md) for the recommended log shape and signal-by-signal alerting playbook.
 
 | Reason | Cause | Fix |
 | --- | --- | --- |

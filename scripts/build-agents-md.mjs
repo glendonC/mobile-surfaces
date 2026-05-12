@@ -154,6 +154,7 @@ const body = [
   "- [`docs/multi-surface.md`](docs/multi-surface.md): every `kind` value and the projection it drives.",
   "- [`docs/backend-integration.md`](docs/backend-integration.md): domain event to snapshot to APNs walkthrough.",
   "- [`docs/push.md`](docs/push.md): wire-layer reference, SDK, smoke script, token taxonomy, error reasons.",
+  "- [`docs/observability.md`](docs/observability.md): which catalog-bound errors are worth alerting on, what a stuck Live Activity looks like on the wire, recommended log shape.",
   "- [`docs/troubleshooting.md`](docs/troubleshooting.md): symptom-to-fix recipes for failures not in this catalog.",
   "- [`docs/traps.md`](docs/traps.md): schema and workflow for editing this catalog.",
   "",

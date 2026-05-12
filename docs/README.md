@@ -13,6 +13,7 @@ Pick the persona that fits, read the three docs in order, then come back here fo
 | **Foreign Expo integrator** | An existing Expo app that adopts Mobile Surfaces without forking the starter | [`../packages/create-mobile-surfaces/README.md`](../packages/create-mobile-surfaces/README.md) -> [`compatibility.md`](./compatibility.md) -> [`architecture.md`](./architecture.md) |
 | **Contributor / maintainer** | A change to this repo, or a release of the linked packages | [`architecture.md`](./architecture.md) -> [`traps.md`](./traps.md) -> [`release.md`](./release.md) |
 | **Triaging a silent failure** | A live bug where the Lock Screen is empty or APNs returns 200 with no effect | [`troubleshooting.md`](./troubleshooting.md) -> [`push.md`](./push.md) -> [`../AGENTS.md`](../AGENTS.md) |
+| **Wiring production telemetry** | A backend already in production, need to know what to log and alert on | [`observability.md`](./observability.md) -> [`push.md`](./push.md) -> [`../AGENTS.md`](../AGENTS.md) |
 
 ## Glossary
 
@@ -33,6 +34,7 @@ Pick the persona that fits, read the three docs in order, then come back here fo
 - [`multi-surface.md`](./multi-surface.md): every `kind` value, what ships today, when to emit each.
 - [`backend-integration.md`](./backend-integration.md): domain event to `LiveSurfaceSnapshot` to APNs walkthrough.
 - [`push.md`](./push.md): push SDK, token taxonomy, APNs hosts, error reasons, smoke scripts.
+- [`observability.md`](./observability.md): which catalog-bound errors are worth alerting on, hook signatures, recommended log shape, stuck Live Activity detection.
 - [`ios-environment.md`](./ios-environment.md): dev builds, App Groups, generated native folders, simulator/device loops.
 - [`compatibility.md`](./compatibility.md): pinned Expo SDK, React Native, iOS, Xcode, and `@bacons/apple-targets` row.
 - [`schema-migration.md`](./schema-migration.md): schema v0 to v1 promotion, missing-`kind` shim, JSON Schema `$id`, future evolution policy.
