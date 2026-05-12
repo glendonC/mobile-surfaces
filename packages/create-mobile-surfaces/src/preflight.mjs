@@ -63,7 +63,7 @@ async function checkXcode({ minimumMajor }) {
           ok: false,
           kind: "fail",
           title: `Xcode ${minimumMajor} or newer required (you have ${firstLine}).`,
-          fix: "Update via the Mac App Store, then run this again.",
+          fix: "Update via the Mac App Store before building iOS.",
         };
       }
       return { ok: true, detail: firstLine };
@@ -77,7 +77,7 @@ async function checkXcode({ minimumMajor }) {
       title: minimumMajor
         ? `Xcode ${minimumMajor} or newer required.`
         : "Xcode required.",
-      fix: "Install from the Mac App Store, then run this again.",
+      fix: "Install from the Mac App Store before building iOS.",
     };
   }
 }
@@ -160,7 +160,17 @@ function parseProjectNodeMajor(spec) {
   return m ? Number(m[1]) : null;
 }
 
-export async function runPreflight({ manifest }) {
+// Scaffold-required checks gate the act of writing files: without macOS,
+// a supported Node, and a package manager, the scaffold itself can't run.
+// Build-required checks gate the post-scaffold iOS build (install + prebuild
+// + xcodebuild). When the caller passed --no-install, the user has opted out
+// of that step, so a missing Xcode / simulator / CocoaPods is a deferred
+// problem (they'll hit it at `pnpm ios` time) rather than a blocking one.
+//
+// runPreflight reflects this: build-check failures get downgraded to warnings
+// in --no-install mode, so the scaffold still completes and the user sees the
+// same diagnostic copy as an advisory.
+export async function runPreflight({ manifest, willInstall = true }) {
   const projectMajor = parseProjectNodeMajor(manifest?.cliRequiredNode);
   const minimumIos = manifest?.deploymentTarget ?? "17.2";
   const minimumXcode = manifest?.minimumXcodeMajor ?? null;
@@ -170,29 +180,52 @@ export async function runPreflight({ manifest }) {
   // doesn't abort every other check. Each check today already wraps its own
   // exec; this is defense-in-depth so the next addition can't accidentally
   // kill the whole preflight.
-  const settled = await Promise.allSettled([
+  const scaffoldSettled = await Promise.allSettled([
     checkPlatform(),
     checkNode({ projectMajor }),
+    checkPnpm(),
+  ]);
+  const buildSettled = await Promise.allSettled([
     checkXcode({ minimumMajor: minimumXcode }),
     checkSimulatorRuntime({ minimumIos }),
-    checkPnpm(),
     checkCocoapods(),
   ]);
 
-  const results = settled.map((s, i) => {
-    if (s.status === "fulfilled") return s.value;
-    return {
-      ok: false,
-      title: `Preflight check #${i + 1} threw unexpectedly`,
-      fix: `Report this with the log: ${s.reason?.message ?? String(s.reason)}`,
-    };
-  });
+  const scaffoldResults = scaffoldSettled.map((s, i) =>
+    settledToResult(s, `scaffold check #${i + 1}`),
+  );
+  const buildResults = buildSettled
+    .map((s, i) => settledToResult(s, `build check #${i + 1}`))
+    .map((r) => (willInstall ? r : downgradeBuildFailureToWarning(r)));
 
+  const results = [...scaffoldResults, ...buildResults];
   const failures = results.filter((r) => !r.ok);
   const warnings = results.filter((r) => r.ok && r.kind === "warn");
   const passed = results.filter((r) => r.ok && !r.kind);
 
   return { failures, warnings, passed };
+}
+
+function settledToResult(settled, label) {
+  if (settled.status === "fulfilled") return settled.value;
+  return {
+    ok: false,
+    title: `${label} threw unexpectedly`,
+    fix: `Report this with the log: ${settled.reason?.message ?? String(settled.reason)}`,
+  };
+}
+
+// Exported for tests. Pure: takes a check result, returns the warn-mode
+// equivalent if it was a fail, otherwise passes through.
+export function downgradeBuildFailureToWarning(result) {
+  if (result.ok) return result;
+  return {
+    ok: true,
+    kind: "warn",
+    title: result.title,
+    fix: result.fix,
+    detail: result.detail,
+  };
 }
 
 // Rendered through the shared rail so the toolchain status threads into the

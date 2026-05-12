@@ -115,8 +115,14 @@ rail.blank();
 // --yes greenfield runs resolveYesConfig first so a malformed CLI invocation
 // surfaces as USER_ERROR, not ENV_ERROR. Each work path still gates on
 // preflight before any FS write or spawned tool.
+//
+// willInstall reflects the CLI flag, not the eventual config: --no-install
+// explicitly opts out of the post-scaffold iOS build, so build-toolchain
+// failures (Xcode, simulator, CocoaPods) downgrade to warnings. Default and
+// --install paths still hard-fail on those.
+const willInstall = overrides.installNow !== false;
 async function runPreflightOrExit() {
-  const preflight = await runPreflight({ manifest });
+  const preflight = await runPreflight({ manifest, willInstall });
   if (preflight.failures.length > 0) {
     renderFailures(preflight.failures);
     process.exit(EXIT_CODES.ENV_ERROR);
