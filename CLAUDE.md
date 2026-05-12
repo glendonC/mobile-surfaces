@@ -13,13 +13,13 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 
 ## Index
 
-29 rules total: 24 error, 4 warning, 1 info.
+28 rules total: 23 error, 4 warning, 1 info.
 
 | ID | Severity | Detection | Title |
 | --- | --- | --- | --- |
 | [MS001](#ms001-live-activity-adapter-boundary) | error | static | Live Activity adapter boundary |
 | [MS002](#ms002-activitykit-attribute-file-byte-identity) | error | static | ActivityKit attribute file byte-identity |
-| [MS003](#ms003-swift-contentstate-fields-match-zod-livesurfaceactivitycontentstate) | error | static | Swift ContentState fields match Zod liveSurfaceActivityContentState |
+| [MS003](#ms003-swift-contentstate-fields-and-json-keys-match-zod-livesurfaceactivitycontentstate) | error | static | Swift ContentState fields and JSON keys match Zod liveSurfaceActivityContentState |
 | [MS004](#ms004-swift-stage-enum-cases-match-zod-livesurfacestage) | error | static | Swift Stage enum cases match Zod liveSurfaceStage |
 | [MS006](#ms006-generated-json-schema-must-match-zod-source) | error | static | Generated JSON Schema must match Zod source |
 | [MS007](#ms007-all-committed-fixtures-must-parse-as-livesurfacesnapshot) | error | static | All committed fixtures must parse as LiveSurfaceSnapshot |
@@ -27,13 +27,12 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 | [MS009](#ms009-generated-typescript-fixtures-must-match-json-sources) | error | static | Generated TypeScript fixtures must match JSON sources |
 | [MS011](#ms011-activitykit-payload-size-ceiling-4-kb-5-kb-broadcast) | error | runtime | ActivityKit payload size ceiling (4 KB / 5 KB broadcast) |
 | [MS012](#ms012-ios-deployment-target-must-be-17-2-or-higher) | error | config | iOS deployment target must be 17.2 or higher |
-| [MS013](#ms013-app-group-entitlement-must-match-host-app-and-widget-extension) | error | config | App Group entitlement must match host app and widget extension |
+| [MS013](#ms013-app-group-entitlement-must-match-host-app-and-widget-extension) | error | static | App Group entitlement must match host app and widget extension |
 | [MS014](#ms014-apns-token-environment-must-match-the-build-environment) | error | runtime | APNs token environment must match the build environment |
 | [MS016](#ms016-subscribe-to-onpushtostarttoken-at-mount-not-on-demand) | error | static | Subscribe to onPushToStartToken at mount, not on demand |
 | [MS017](#ms017-apps-mobile-ios-is-generated-do-not-edit) | error | static | apps/mobile/ios/ is generated; do not edit |
 | [MS018](#ms018-apns-bundle-id-must-not-include-the-push-type-liveactivity-suffix) | error | runtime | APNS_BUNDLE_ID must not include the .push-type.liveactivity suffix |
 | [MS020](#ms020-per-activity-and-push-to-start-tokens-may-rotate-at-any-time) | error | static | Per-activity and push-to-start tokens may rotate at any time |
-| [MS022](#ms022-activitykit-content-state-json-keys-must-match-swift-contentstate) | error | static | ActivityKit content-state JSON keys must match Swift ContentState |
 | [MS024](#ms024-project-must-depend-on-mobile-surfaces-surface-contracts-and-push-when-sending) | error | config | Project must depend on @mobile-surfaces/surface-contracts (and push, when sending) |
 | [MS025](#ms025-app-group-declared-in-app-json) | error | config | App Group declared in app.json |
 | [MS026](#ms026-widget-target-managed-by-bacons-apple-targets) | error | config | Widget target managed by @bacons/apple-targets |
@@ -52,12 +51,12 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 - `app-group`: MS013, MS025
 - `cng`: MS017, MS029
 - `config`: MS012, MS013, MS017, MS018, MS025, MS027, MS029
-- `contract`: MS001, MS003, MS004, MS006, MS007, MS008, MS009, MS022, MS024
+- `contract`: MS001, MS003, MS004, MS006, MS007, MS008, MS009, MS024
 - `control`: MS013, MS026
 - `ios-version`: MS012, MS027
-- `live-activity`: MS001, MS002, MS003, MS004, MS011, MS015, MS016, MS019, MS021, MS022
+- `live-activity`: MS001, MS002, MS003, MS004, MS011, MS015, MS016, MS019, MS021
 - `push`: MS006, MS011, MS014, MS015, MS018, MS024, MS028, MS030
-- `swift`: MS002, MS003, MS004, MS022
+- `swift`: MS002, MS003, MS004
 - `tokens`: MS014, MS016, MS019, MS020, MS021, MS023, MS028, MS030
 - `toolchain`: MS010, MS026
 - `widget`: MS013, MS026
@@ -95,15 +94,15 @@ MobileSurfacesActivityAttributes.swift in packages/live-activity/ios/ and apps/m
 
 **See:** `docs/architecture.md#native-constraints`
 
-### MS003: Swift ContentState fields match Zod liveSurfaceActivityContentState
+### MS003: Swift ContentState fields and JSON keys match Zod liveSurfaceActivityContentState
 
 **severity:** error  •  **detection:** static (script-checkable)  •  **tags:** live-activity, swift, contract  •  **enforced by:** `scripts/check-activity-attributes.mjs`
 
-Field names and types in MobileSurfacesActivityAttributes.ContentState must match liveSurfaceActivityContentState in packages/surface-contracts/src/schema.ts.
+MobileSurfacesActivityAttributes.ContentState must declare the same fields, types, and JSON keys as liveSurfaceActivityContentState in packages/surface-contracts/src/schema.ts. Both Swift attribute files participate; the JSON-key shape is what ActivityKit decodes from the push payload.
 
-**Symptom.** Push lands but the Lock Screen view stays on its old state because the Codable decoder silently fails on a renamed key.
+**Symptom.** Push lands at APNs (200) but the Lock Screen view stays on its old state. The Codable decoder silently fails on a renamed key or a type mismatch and ActivityKit drops the update without surfacing an error.
 
-**Fix.** Update the Zod source first, regenerate the JSON Schema (pnpm surface:check), and mirror the field change into both Swift attribute files.
+**Fix.** Update the Zod source first, regenerate the JSON Schema (pnpm surface:check), then mirror the field change into both Swift attribute files. Project payloads through toLiveActivityContentState rather than hand-rolling JSON so the JS layer cannot diverge from the contract.
 
 ### MS004: Swift Stage enum cases match Zod liveSurfaceStage
 
@@ -183,13 +182,13 @@ Mobile Surfaces commits to push-to-start tokens (Activity<…>.pushToStartTokenU
 
 ### MS013: App Group entitlement must match host app and widget extension
 
-**severity:** error  •  **detection:** config (declarative file)  •  **tags:** app-group, widget, control, config
+**severity:** error  •  **detection:** static (script-checkable)  •  **tags:** app-group, widget, control, config  •  **enforced by:** `scripts/check-app-group-identity.mjs`
 
-apps/mobile/app.json and apps/mobile/targets/widget/expo-target.config.js must declare the same com.apple.security.application-groups identifier.
+apps/mobile/app.json, apps/mobile/targets/widget/generated.entitlements, MobileSurfacesSharedState.swift, and the host-side TS constants in apps/mobile/src must all declare the same com.apple.security.application-groups identifier.
 
 **Symptom.** Widget renders placeholder forever; control widget never reads the toggle state. No error: the entitlement mismatch makes both sides read separate App Group containers.
 
-**Fix.** Set the same group identifier on both sides (default 'group.com.example.mobilesurfaces'; rename via pnpm surface:rename) and rerun prebuild.
+**Fix.** Set the same group identifier on every side (default 'group.com.example.mobilesurfaces'; rename via pnpm surface:rename) and rerun prebuild. check-app-group-identity verifies parity across all five declaration sites.
 
 **See:** `docs/ios-environment.md`
 
@@ -252,16 +251,6 @@ Both pushTokenUpdates and pushToStartTokenUpdates may emit fresh values at any m
 **Fix.** Treat the latest event as authoritative. Re-store on every emission keyed by user/device id, and update the active record rather than appending.
 
 **See:** `docs/push.md#token-taxonomy`
-
-### MS022: ActivityKit content-state JSON keys must match Swift ContentState
-
-**severity:** error  •  **detection:** static (script-checkable)  •  **tags:** live-activity, swift, contract  •  **enforced by:** `scripts/check-activity-attributes.mjs`
-
-The Zod ActivityKit projection and MobileSurfacesActivityAttributes.ContentState must use the same JSON keys and value types; custom state files must mirror that shared shape.
-
-**Symptom.** APNs returns 200, but the Lock Screen stays on the prior content state. The Codable decoder silently fails on a key mismatch and ActivityKit drops the update.
-
-**Fix.** Project through toLiveActivityContentState rather than hand-rolling JSON. If you add or rename a content-state field, update the Zod source and both Swift attribute files in lockstep.
 
 ### MS024: Project must depend on @mobile-surfaces/surface-contracts (and push, when sending)
 

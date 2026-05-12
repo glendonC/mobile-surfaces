@@ -269,7 +269,11 @@ public class LiveActivityModule: Module {
           case .dismissed: return "dismissed"
           case .stale: return "stale"
           case .pending: return "pending"
-          @unknown default: return "active"
+          // Future-Apple-added cases surface as "unknown" rather than
+          // collapsing into "active". The JS layer treats unknown as a
+          // non-terminal observed state — neither dropping the activity from
+          // its tracking list nor pretending the activity is still healthy.
+          @unknown default: return "unknown"
           }
         }()
         self.sendEvent("onActivityStateChange", [

@@ -4,6 +4,7 @@
   "kind": "liveActivity",
   "id": "fixture-active-progress",
   "surfaceId": "surface-active-progress",
+  "updatedAt": "2026-05-12T18:32:11.482Z",
   "state": "active",
   "modeLabel": "active",
   "contextLabel": "progress",
