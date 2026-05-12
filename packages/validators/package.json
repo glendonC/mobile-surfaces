@@ -1,6 +1,6 @@
 {
   "name": "@mobile-surfaces/validators",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Shared identity validators for Mobile Surfaces. Single source of truth consumed by both the create-mobile-surfaces CLI and scripts/rename-starter.mjs.",
   "publishConfig": {
     "access": "public"
