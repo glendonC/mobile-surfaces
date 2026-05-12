@@ -57,5 +57,20 @@ export {
 export {
   TRAP_ID_BY_ERROR_CLASS,
   trapIdForErrorClass,
+  DOCS_PATH_BY_ERROR_CLASS,
+  DEFAULT_DOCS_BASE_URL,
+  FALLBACK_DOCS_PATH,
+  docsUrlForErrorClass,
 } from "./trap-bindings.ts";
 export type { TrapBoundErrorClassName } from "./trap-bindings.ts";
+
+// Re-exports from @mobile-surfaces/surface-contracts so an agent that catches
+// an ApnsError can resolve its full trap entry with one import. Without these
+// re-exports, a consumer would need to depend on both packages just to map
+// error.trapId -> catalog entry.
+export {
+  traps,
+  findTrap,
+  findTrapByErrorClass,
+} from "@mobile-surfaces/surface-contracts";
+export type { TrapEntry } from "@mobile-surfaces/surface-contracts";

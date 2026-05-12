@@ -4,7 +4,7 @@
 // reasons should add an entry there and a class below in alphabetical order.
 
 import { APNS_REASON_GUIDE } from "./reasons.ts";
-import { trapIdForErrorClass } from "./trap-bindings.ts";
+import { docsUrlForErrorClass, trapIdForErrorClass } from "./trap-bindings.ts";
 
 export interface ApnsErrorInit {
   reason: string;
@@ -28,6 +28,10 @@ export interface ApnsErrorInit {
  *   undefined when the class has no catalog binding. Resolved from the live
  *   subclass `name` via the generated trap-bindings table; subclasses never
  *   hand-stamp it.
+ * - `docsUrl`: full URL to the docs section that explains this error. Always
+ *   returns a URL — falls back to the canonical error-responses table for
+ *   unbound classes (e.g. UnknownApnsError) so agents can always fetch
+ *   context. Overridable globally via MOBILE_SURFACES_DOCS_BASE.
  */
 export class ApnsError extends Error {
   readonly reason: string;
@@ -53,6 +57,13 @@ export class ApnsError extends Error {
   // access. trapIdForErrorClass returns undefined for unbound classes.
   get trapId(): string | undefined {
     return trapIdForErrorClass(this.name);
+  }
+
+  // Same resolution pattern as trapId, but always returns a URL — the
+  // generator emits a fallback path for unbound classes so an agent catching
+  // any ApnsError can WebFetch the result without a null check.
+  get docsUrl(): string {
+    return docsUrlForErrorClass(this.name);
   }
 }
 
@@ -302,6 +313,10 @@ export class MissingApnsConfigError extends Error {
 
   get trapId(): string | undefined {
     return trapIdForErrorClass(this.name);
+  }
+
+  get docsUrl(): string {
+    return docsUrlForErrorClass(this.name);
   }
 }
 

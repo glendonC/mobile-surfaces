@@ -25,7 +25,11 @@ const {
   MissingApnsConfigError,
   ForbiddenError,
   trapIdForErrorClass,
+  docsUrlForErrorClass,
+  DEFAULT_DOCS_BASE_URL,
+  FALLBACK_DOCS_PATH,
   TRAP_ID_BY_ERROR_CLASS,
+  DOCS_PATH_BY_ERROR_CLASS,
 } = await import("../dist/index.js");
 
 const { reasonToError } = await import("../dist/errors.js");
@@ -112,6 +116,54 @@ test("trapIdForErrorClass and TRAP_ID_BY_ERROR_CLASS agree", () => {
     assert.equal(trapIdForErrorClass(name), trapId);
   }
   assert.equal(trapIdForErrorClass("DefinitelyNotAClass"), undefined);
+});
+
+test("typed errors expose a fetchable docsUrl from the generated bindings", () => {
+  // docsUrl is load-bearing for AI consumers: every caught error must yield a
+  // URL an agent can WebFetch for context, with no null check.
+  for (const [reason, Klass] of REASON_TABLE) {
+    const err = reasonToError(reason, { status: 400 });
+    assert.ok(
+      err.docsUrl.startsWith(DEFAULT_DOCS_BASE_URL),
+      `${Klass.name}.docsUrl should start with the default base`,
+    );
+    assert.ok(err.docsUrl.includes("docs/"), `${Klass.name}.docsUrl should reference a docs path`);
+  }
+});
+
+test("trap-bound errors resolve docsUrl through DOCS_PATH_BY_ERROR_CLASS", () => {
+  const err = reasonToError("PayloadTooLarge", { status: 413 });
+  const expectedPath = DOCS_PATH_BY_ERROR_CLASS.PayloadTooLargeError;
+  assert.equal(err.docsUrl, DEFAULT_DOCS_BASE_URL + expectedPath);
+});
+
+test("UnknownApnsError falls back to the canonical error-responses anchor", () => {
+  const err = reasonToError("SomethingMadeUp", { status: 400 });
+  assert.ok(err instanceof UnknownApnsError);
+  assert.equal(err.trapId, undefined);
+  assert.equal(err.docsUrl, DEFAULT_DOCS_BASE_URL + FALLBACK_DOCS_PATH);
+});
+
+test("MissingApnsConfigError exposes both trapId and docsUrl", () => {
+  const err = new MissingApnsConfigError(["keyId", "teamId"]);
+  assert.equal(err.trapId, "MS028");
+  assert.equal(
+    err.docsUrl,
+    DEFAULT_DOCS_BASE_URL + DOCS_PATH_BY_ERROR_CLASS.MissingApnsConfigError,
+  );
+});
+
+test("docsUrlForErrorClass always returns a fetchable URL", () => {
+  // Bound class — catalog path.
+  assert.equal(
+    docsUrlForErrorClass("BadDeviceTokenError"),
+    DEFAULT_DOCS_BASE_URL + DOCS_PATH_BY_ERROR_CLASS.BadDeviceTokenError,
+  );
+  // Unbound class — falls back rather than returning undefined.
+  assert.equal(
+    docsUrlForErrorClass("DefinitelyNotAClass"),
+    DEFAULT_DOCS_BASE_URL + FALLBACK_DOCS_PATH,
+  );
 });
 
 function klassToReason(Klass) {
