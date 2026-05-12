@@ -113,9 +113,24 @@ export async function copyTemplate({ target }) {
     return;
   }
 
-  // Dev mode: stream a clean copy of the tracked repo via `git archive` so
-  // we get exactly what would be published, ignoring node_modules and the
-  // gitignored ios/ tree.
+  // Dev mode default: stream a clean copy of the tracked repo via `git
+  // archive HEAD` so we get exactly what would be published, ignoring
+  // node_modules and the gitignored ios/ tree.
+  //
+  // Opt-in working-tree mode (MOBILE_SURFACES_SCAFFOLD_FROM_WORKING_TREE=1)
+  // copies tracked-and-uncommitted-and-untracked-but-not-gitignored files
+  // instead. This is what the snapshot-update test path wants: regenerating
+  // snapshots against HEAD means uncommitted source edits don't show up, so
+  // the regen ends up stale the moment the edit is committed (HEAD now has
+  // the new file, snapshot has the old hash). The working-tree path resolves
+  // that by capturing what the source tree looks like *now*. Production
+  // user-facing scaffolding keeps the HEAD-based behavior; nothing in the
+  // bin or template-manifest path sets this env var.
+  if (process.env.MOBILE_SURFACES_SCAFFOLD_FROM_WORKING_TREE === "1") {
+    await copyFromWorkingTree({ sourcePath: source.path, target });
+    return;
+  }
+
   await new Promise((resolve, reject) => {
     const archive = spawn("git", ["-C", source.path, "archive", "--format=tar", "HEAD"], {
       stdio: ["ignore", "pipe", "pipe"],
@@ -132,6 +147,45 @@ export async function copyTemplate({ target }) {
       reject(new Error(`tar -x exited with code ${code}`));
     });
   });
+}
+
+// Copy the working tree at sourcePath into target. Includes tracked files,
+// uncommitted modifications, and untracked files; excludes anything covered
+// by .gitignore (so node_modules and apps/mobile/ios/ stay out). Used only
+// when MOBILE_SURFACES_SCAFFOLD_FROM_WORKING_TREE=1 — see copyTemplate.
+async function copyFromWorkingTree({ sourcePath, target }) {
+  const list = await new Promise((resolve, reject) => {
+    const child = spawn(
+      "git",
+      ["-C", sourcePath, "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+      { stdio: ["ignore", "pipe", "pipe"] },
+    );
+    const chunks = [];
+    child.stdout.on("data", (d) => chunks.push(d));
+    child.stderr.on("data", (d) => logger.write(d.toString()));
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) return resolve(Buffer.concat(chunks).toString("utf8"));
+      reject(new Error(`git ls-files exited with code ${code}`));
+    });
+  });
+  const rels = list.split("\0").filter(Boolean);
+  for (const rel of rels) {
+    const src = path.join(sourcePath, rel);
+    // ls-files can list a path that's been deleted in the working tree but
+    // staying in the index, or a submodule entry that's a directory. Stat
+    // and skip anything that isn't a present, regular file.
+    let stat;
+    try {
+      stat = fs.lstatSync(src);
+    } catch {
+      continue;
+    }
+    if (!stat.isFile()) continue;
+    const dst = path.join(target, rel);
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
+    fs.copyFileSync(src, dst);
+  }
 }
 
 export async function renameIdentity({ target, config }) {

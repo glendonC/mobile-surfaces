@@ -21,6 +21,18 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SNAPSHOT_DIR = path.join(__dirname, "snapshots");
 const SHOULD_UPDATE = process.env.SNAPSHOT_UPDATE === "1";
 
+// When regenerating, capture the working tree (committed + uncommitted +
+// untracked-but-not-gitignored) rather than the default `git archive HEAD`.
+// Without this, editing a template file and running SNAPSHOT_UPDATE=1
+// produces snapshots pinned to the pre-edit state — the regen drifts again
+// the moment the edit is committed. See copyTemplate in scaffold.mjs.
+//
+// Verification mode (no SNAPSHOT_UPDATE) still uses HEAD so CI catches
+// "committed source drifted from snapshot" as it always has.
+if (SHOULD_UPDATE) {
+  process.env.MOBILE_SURFACES_SCAFFOLD_FROM_WORKING_TREE = "1";
+}
+
 const SCAFFOLD_CONFIG = Object.freeze({
   projectName: "snapshot-app",
   scheme: "snapshotapp",
