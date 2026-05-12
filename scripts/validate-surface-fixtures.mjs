@@ -9,6 +9,7 @@ import { resolve, join } from "node:path";
 import { parseArgs } from "node:util";
 import { liveSurfaceSnapshot } from "../packages/surface-contracts/src/schema.ts";
 import { buildReport, emitDiagnosticReport } from "./lib/diagnostics.mjs";
+import { canonicalSchemaUrl } from "./lib/schema-url.mjs";
 
 const { values } = parseArgs({
   options: { json: { type: "boolean", default: false } },
@@ -18,14 +19,22 @@ const TOOL = "validate-surface-fixtures";
 const fixtureDir = resolve("data/surface-fixtures");
 const indexPath = join(fixtureDir, "index.json");
 const entries = JSON.parse(readFileSync(indexPath, "utf8"));
+const expectedSchemaUrl = canonicalSchemaUrl();
 
 const fixtureIssues = [];
+const schemaUrlIssues = [];
 
 for (const entry of entries) {
   const filename = entry.replace(/^\.\//, "");
   const file = resolve(fixtureDir, filename);
   const fixture = JSON.parse(readFileSync(file, "utf8"));
-  const { $schema: _ignored, ...rest } = fixture;
+  const { $schema, ...rest } = fixture;
+  if (expectedSchemaUrl && typeof $schema === "string" && $schema !== expectedSchemaUrl) {
+    schemaUrlIssues.push({
+      path: filename,
+      message: `$schema points at ${$schema}; expected ${expectedSchemaUrl}`,
+    });
+  }
   const result = liveSurfaceSnapshot.safeParse(rest);
   if (!result.success) {
     for (const issue of result.error.issues) {
@@ -71,6 +80,24 @@ const checks = [
         ? "Every fixture on disk is referenced from index.json."
         : `${orphanIssues.length} fixture file${orphanIssues.length === 1 ? "" : "s"} not referenced from index.json.`,
     ...(orphanIssues.length > 0 ? { detail: { issues: orphanIssues } } : {}),
+  },
+  {
+    id: "fixtures-schema-url",
+    status: schemaUrlIssues.length === 0 ? "ok" : "fail",
+    summary:
+      schemaUrlIssues.length === 0
+        ? "Every fixture $schema URL matches the current package major.minor."
+        : `${schemaUrlIssues.length} fixture${schemaUrlIssues.length === 1 ? "" : "s"} pin a stale $schema URL.`,
+    trapId: "MS006",
+    ...(schemaUrlIssues.length > 0
+      ? {
+          detail: {
+            issues: schemaUrlIssues,
+            message:
+              "Update the fixture's $schema field to match the current @major.minor (see scripts/lib/schema-url.mjs).",
+          },
+        }
+      : {}),
   },
 ];
 

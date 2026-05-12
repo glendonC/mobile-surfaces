@@ -1,6 +1,6 @@
 # Mobile Surfaces
 
-Ship iOS Live Activities and Dynamic Island in a day, without becoming an iOS expert.
+A working baseline for iOS Live Activities, Dynamic Island, home-screen widgets, and iOS 18 control widgets. One snapshot shape drives every surface. Iterate against the simulator in an afternoon; a device-tested push round-trip is a weekend once you have an Apple Developer account and an APNs auth key.
 
 [![CI](https://github.com/glendonC/mobile-surfaces/actions/workflows/ci.yml/badge.svg)](https://github.com/glendonC/mobile-surfaces/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)

@@ -13,7 +13,7 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 
 ## Index
 
-30 rules total: 25 error, 4 warning, 1 info.
+29 rules total: 24 error, 4 warning, 1 info.
 
 | ID | Severity | Detection | Title |
 | --- | --- | --- | --- |
@@ -21,7 +21,6 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 | [MS002](#ms002-activitykit-attribute-file-byte-identity) | error | static | ActivityKit attribute file byte-identity |
 | [MS003](#ms003-swift-contentstate-fields-match-zod-livesurfaceactivitycontentstate) | error | static | Swift ContentState fields match Zod liveSurfaceActivityContentState |
 | [MS004](#ms004-swift-stage-enum-cases-match-zod-livesurfacestage) | error | static | Swift Stage enum cases match Zod liveSurfaceStage |
-| [MS005](#ms005-validator-regex-parity-between-rename-and-cli-scaffolder) | error | static | Validator regex parity between rename and CLI scaffolder |
 | [MS006](#ms006-generated-json-schema-must-match-zod-source) | error | static | Generated JSON Schema must match Zod source |
 | [MS007](#ms007-all-committed-fixtures-must-parse-as-livesurfacesnapshot) | error | static | All committed fixtures must parse as LiveSurfaceSnapshot |
 | [MS008](#ms008-snapshot-kind-must-match-its-projection-slice) | error | static | Snapshot kind must match its projection slice |
@@ -53,14 +52,14 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 - `app-group`: MS013, MS025
 - `cng`: MS017, MS029
 - `config`: MS012, MS013, MS017, MS018, MS025, MS027, MS029
-- `contract`: MS001, MS003, MS004, MS005, MS006, MS007, MS008, MS009, MS022, MS024
+- `contract`: MS001, MS003, MS004, MS006, MS007, MS008, MS009, MS022, MS024
 - `control`: MS013, MS026
 - `ios-version`: MS012, MS027
 - `live-activity`: MS001, MS002, MS003, MS004, MS011, MS015, MS016, MS019, MS021, MS022
 - `push`: MS006, MS011, MS014, MS015, MS018, MS024, MS028, MS030
 - `swift`: MS002, MS003, MS004, MS022
 - `tokens`: MS014, MS016, MS019, MS020, MS021, MS023, MS028, MS030
-- `toolchain`: MS005, MS010, MS026
+- `toolchain`: MS010, MS026
 - `widget`: MS013, MS026
 
 ## How to use this document
@@ -115,16 +114,6 @@ The Stage enum in MobileSurfacesActivityAttributes.swift must cover exactly the 
 **Symptom.** ContentState decodes but the stage value falls back to a default. Your Lock Screen never shows 'completing' even after the job is done.
 
 **Fix.** Add or remove cases in lockstep: Zod first, regenerate the schema, mirror into both Swift files.
-
-### MS005: Validator regex parity between rename and CLI scaffolder
-
-**severity:** error  •  **detection:** static (script-checkable)  •  **tags:** contract, toolchain  •  **enforced by:** `scripts/check-validator-sync.mjs`
-
-scripts/rename-starter.mjs and the create-mobile-surfaces CLI must share identical projectSlug, scheme, and bundleId regexes.
-
-**Symptom.** An identifier accepted at scaffold time is rejected by surface:rename later, or vice versa, and users hit it after they have committed work.
-
-**Fix.** Update both regexes in lockstep. The drift check covers projectSlug, scheme, and bundleId.
 
 ### MS006: Generated JSON Schema must match Zod source
 

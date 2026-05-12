@@ -54,6 +54,39 @@ export type LiveSurfaceNotificationSlice = z.infer<
   typeof liveSurfaceNotificationSlice
 >;
 
+export const liveSurfaceLockAccessoryFamily = z.enum([
+  "accessoryCircular",
+  "accessoryRectangular",
+  "accessoryInline",
+]);
+export type LiveSurfaceLockAccessoryFamily = z.infer<
+  typeof liveSurfaceLockAccessoryFamily
+>;
+
+export const liveSurfaceLockAccessorySlice = z
+  .object({
+    family: liveSurfaceLockAccessoryFamily,
+    gaugeValue: z.number().min(0).max(1).optional(),
+    shortText: z.string().max(20).optional(),
+  })
+  .strict();
+export type LiveSurfaceLockAccessorySlice = z.infer<
+  typeof liveSurfaceLockAccessorySlice
+>;
+
+export const liveSurfaceStandbyPresentation = z.enum(["card", "night"]);
+export type LiveSurfaceStandbyPresentation = z.infer<
+  typeof liveSurfaceStandbyPresentation
+>;
+
+export const liveSurfaceStandbySlice = z
+  .object({
+    presentation: liveSurfaceStandbyPresentation.default("card"),
+    tint: z.enum(["default", "monochrome"]).optional(),
+  })
+  .strict();
+export type LiveSurfaceStandbySlice = z.infer<typeof liveSurfaceStandbySlice>;
+
 // Base fields shared by every snapshot variant. We spread this into each
 // per-kind z.object below so types stay inferred from Zod (no hand-written
 // interfaces) while the discriminated union narrows on `kind`. Keeping the
@@ -124,6 +157,7 @@ export const liveSurfaceSnapshotLockAccessory = z
   .object({
     kind: z.literal("lockAccessory"),
     ...liveSurfaceSnapshotBaseShape,
+    lockAccessory: liveSurfaceLockAccessorySlice,
   })
   .strict();
 export type LiveSurfaceSnapshotLockAccessory = z.infer<
@@ -134,6 +168,7 @@ export const liveSurfaceSnapshotStandby = z
   .object({
     kind: z.literal("standby"),
     ...liveSurfaceSnapshotBaseShape,
+    standby: liveSurfaceStandbySlice,
   })
   .strict();
 export type LiveSurfaceSnapshotStandby = z.infer<

@@ -29,6 +29,10 @@ export const FLAG_OPTIONS = Object.freeze({
   "no-home-widget": { type: "boolean" },
   "control-widget": { type: "boolean" },
   "no-control-widget": { type: "boolean" },
+  "lock-accessory-widget": { type: "boolean" },
+  "no-lock-accessory-widget": { type: "boolean" },
+  "standby-widget": { type: "boolean" },
+  "no-standby-widget": { type: "boolean" },
   install: { type: "boolean" },
   "no-install": { type: "boolean" },
   "new-arch": { type: "boolean" },
@@ -80,6 +84,12 @@ export function flagsToOverrides(values) {
 
   if (values["no-control-widget"]) overrides.controlWidget = false;
   else if (values["control-widget"]) overrides.controlWidget = true;
+
+  if (values["no-lock-accessory-widget"]) overrides.lockAccessoryWidget = false;
+  else if (values["lock-accessory-widget"]) overrides.lockAccessoryWidget = true;
+
+  if (values["no-standby-widget"]) overrides.standbyWidget = false;
+  else if (values["standby-widget"]) overrides.standbyWidget = true;
 
   if (values["no-install"]) overrides.installNow = false;
   else if (values.install) overrides.installNow = true;
@@ -139,6 +149,8 @@ export function resolveYesConfig(overrides) {
   config.surfaces = {
     homeWidget: overrides.homeWidget ?? true,
     controlWidget: overrides.controlWidget ?? true,
+    lockAccessoryWidget: overrides.lockAccessoryWidget ?? true,
+    standbyWidget: overrides.standbyWidget ?? true,
   };
   config.installNow = overrides.installNow ?? true;
   // newArchEnabled left undefined when the user passed neither flag — the
@@ -185,6 +197,11 @@ Options:
   --no-home-widget          Exclude the home-screen widget.
   --control-widget          Include the iOS 18 control widget (default).
   --no-control-widget       Exclude the control widget.
+  --lock-accessory-widget   Include the Lock Screen accessory widget (default).
+  --no-lock-accessory-widget
+                            Exclude the Lock Screen accessory widget.
+  --standby-widget          Include the iOS 17 StandBy widget (default).
+  --no-standby-widget       Exclude the StandBy widget.
   --install                 Run pnpm install + expo prebuild after scaffold.
   --no-install              Skip post-scaffold install.
   --new-arch                Force Expo's New Architecture on (default).

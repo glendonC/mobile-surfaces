@@ -191,5 +191,50 @@ export const surfaceFixtureSnapshots = {
       "state": false,
       "intent": "toggleSurface"
     }
+  },
+  "lockAccessoryCircular": {
+    "schemaVersion": "1",
+    "kind": "lockAccessory",
+    "id": "fixture-lock-accessory-circular",
+    "surfaceId": "surface-lock-accessory-circular",
+    "state": "active",
+    "modeLabel": "lock accessory",
+    "contextLabel": "ring",
+    "statusLine": "lock screen · gauge",
+    "primaryText": "Surface 62%",
+    "secondaryText": "Lock screen accessory mirrors the active surface progress.",
+    "actionLabel": "Open surface",
+    "estimatedSeconds": 240,
+    "morePartsCount": 0,
+    "progress": 0.62,
+    "stage": "inProgress",
+    "deepLink": "mobilesurfaces://surface/surface-lock-accessory-circular",
+    "lockAccessory": {
+      "family": "accessoryCircular",
+      "gaugeValue": 0.62,
+      "shortText": "62%"
+    }
+  },
+  "standbyCard": {
+    "schemaVersion": "1",
+    "kind": "standby",
+    "id": "fixture-standby-card",
+    "surfaceId": "surface-standby-card",
+    "state": "active",
+    "modeLabel": "standby",
+    "contextLabel": "charging",
+    "statusLine": "standby · 45% complete",
+    "primaryText": "Surface in StandBy",
+    "secondaryText": "Visible while the device is charging on its side.",
+    "actionLabel": "Open surface",
+    "estimatedSeconds": 600,
+    "morePartsCount": 0,
+    "progress": 0.45,
+    "stage": "inProgress",
+    "deepLink": "mobilesurfaces://surface/surface-standby-card",
+    "standby": {
+      "presentation": "card",
+      "tint": "default"
+    }
   }
 } as const satisfies Record<string, LiveSurfaceSnapshot>;

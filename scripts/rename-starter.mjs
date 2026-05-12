@@ -25,6 +25,16 @@ import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
+// Import via relative path rather than the bare `@mobile-surfaces/validators`
+// specifier. This script runs inside a freshly-scaffolded project *before*
+// pnpm install, so workspace symlinks don't exist yet. The relative path
+// resolves to the same source file the CLI imports via the bare specifier.
+import {
+  validateBundleId,
+  validateScheme,
+  validateProjectSlug,
+  validateSwiftIdentifier,
+} from "../packages/validators/src/index.mjs";
 
 // Default identity matches the upstream mobile-surfaces project. On a fresh
 // checkout we substitute these literals; after the first run, the manifest at
@@ -267,12 +277,12 @@ function main() {
     appPackageName: values["app-package-name"] ?? `${values.slug ?? toKebab(values.name)}-app`,
   };
 
-  validateSwiftIdentifier(newIdentity.widgetTarget, "--widget-target");
-  validateSwiftIdentifier(newIdentity.swiftPrefix, "--swift-prefix");
-  validateScheme(newIdentity.scheme);
-  validateBundleId(newIdentity.bundleId);
-  validateSlug(newIdentity.slug, "--slug");
-  validateSlug(newIdentity.appPackageName, "--app-package-name");
+  assertValid("--widget-target", validateSwiftIdentifier(newIdentity.widgetTarget));
+  assertValid("--swift-prefix", validateSwiftIdentifier(newIdentity.swiftPrefix));
+  assertValid("--scheme", validateScheme(newIdentity.scheme));
+  assertValid("--bundle-id", validateBundleId(newIdentity.bundleId));
+  assertValid("--slug", validateProjectSlug(newIdentity.slug));
+  assertValid("--app-package-name", validateProjectSlug(newIdentity.appPackageName));
 
   const repoRoot = path.resolve(new URL("..", import.meta.url).pathname);
   process.chdir(repoRoot);
@@ -410,31 +420,12 @@ function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function validateSwiftIdentifier(s, label) {
-  if (!/^[A-Z][A-Za-z0-9_]*$/.test(s)) {
-    console.error(`${label} must be an UpperCamelCase Swift identifier (got ${JSON.stringify(s)})`);
-    process.exit(2);
-  }
-}
-function validateScheme(s) {
-  if (!/^[a-z][a-z0-9]*$/.test(s)) {
-    console.error(`--scheme must be lowercase letters and digits, starting with a letter (got ${JSON.stringify(s)})`);
-    process.exit(2);
-  }
-}
-function validateBundleId(s) {
-  if (!/^[A-Za-z][A-Za-z0-9-]*(\.[A-Za-z0-9-]+){1,}$/.test(s)) {
-    console.error(`--bundle-id must look like com.acme.foo (got ${JSON.stringify(s)})`);
-    process.exit(2);
-  }
-  if (/^com\.example\./i.test(s)) {
-    console.error(`--bundle-id com.example.* is a placeholder Apple rejects on upload. Use your real reverse-DNS prefix (e.g. com.acme.myapp).`);
-    process.exit(2);
-  }
-}
-function validateSlug(s, label) {
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(s)) {
-    console.error(`${label} must be kebab-case (got ${JSON.stringify(s)})`);
+// CLI consumes validators with a returns-string-or-undefined contract; this
+// script exits the process. Bridge with a single helper so every check
+// emits a consistent --flag-prefixed message and dies with status 2.
+function assertValid(label, message) {
+  if (message) {
+    console.error(`${label} ${message}`);
     process.exit(2);
   }
 }

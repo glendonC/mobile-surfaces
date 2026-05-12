@@ -529,6 +529,32 @@
         "deepLink": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9+\\-.]*:\\/\\/"
+        },
+        "lockAccessory": {
+          "type": "object",
+          "properties": {
+            "family": {
+              "type": "string",
+              "enum": [
+                "accessoryCircular",
+                "accessoryRectangular",
+                "accessoryInline"
+              ]
+            },
+            "gaugeValue": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "shortText": {
+              "type": "string",
+              "maxLength": 20
+            }
+          },
+          "required": [
+            "family"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -546,7 +572,8 @@
         "morePartsCount",
         "progress",
         "stage",
-        "deepLink"
+        "deepLink",
+        "lockAccessory"
       ],
       "additionalProperties": false
     },
@@ -627,6 +654,30 @@
         "deepLink": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9+\\-.]*:\\/\\/"
+        },
+        "standby": {
+          "type": "object",
+          "properties": {
+            "presentation": {
+              "default": "card",
+              "type": "string",
+              "enum": [
+                "card",
+                "night"
+              ]
+            },
+            "tint": {
+              "type": "string",
+              "enum": [
+                "default",
+                "monochrome"
+              ]
+            }
+          },
+          "required": [
+            "presentation"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -644,7 +695,8 @@
         "morePartsCount",
         "progress",
         "stage",
-        "deepLink"
+        "deepLink",
+        "standby"
       ],
       "additionalProperties": false
     }

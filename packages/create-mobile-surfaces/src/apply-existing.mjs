@@ -17,6 +17,8 @@ import { walkFiles } from "./fs-walk.mjs";
 const DEFAULT_SURFACES = Object.freeze({
   homeWidget: true,
   controlWidget: true,
+  lockAccessoryWidget: true,
+  standbyWidget: true,
 });
 
 // Concurrency cap for the per-file read+rewrite pass in applyWidgetRename.

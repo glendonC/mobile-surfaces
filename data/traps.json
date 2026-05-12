@@ -52,18 +52,6 @@
       "since": "1.0.0"
     },
     {
-      "id": "MS005",
-      "title": "Validator regex parity between rename and CLI scaffolder",
-      "severity": "error",
-      "detection": "static",
-      "tags": ["contract", "toolchain"],
-      "summary": "scripts/rename-starter.mjs and the create-mobile-surfaces CLI must share identical projectSlug, scheme, and bundleId regexes.",
-      "symptom": "An identifier accepted at scaffold time is rejected by surface:rename later, or vice versa, and users hit it after they have committed work.",
-      "fix": "Update both regexes in lockstep. The drift check covers projectSlug, scheme, and bundleId.",
-      "enforcement": { "script": "scripts/check-validator-sync.mjs" },
-      "since": "1.0.0"
-    },
-    {
       "id": "MS006",
       "title": "Generated JSON Schema must match Zod source",
       "severity": "error",

@@ -13,6 +13,10 @@ export {
   liveSurfaceWidgetSlice,
   liveSurfaceControlSlice,
   liveSurfaceNotificationSlice,
+  liveSurfaceLockAccessoryFamily,
+  liveSurfaceLockAccessorySlice,
+  liveSurfaceStandbyPresentation,
+  liveSurfaceStandbySlice,
   liveSurfaceActivityContentState,
   liveSurfaceAlertPayload,
   liveSurfaceStates,
@@ -38,6 +42,10 @@ export type {
   LiveSurfaceWidgetSlice,
   LiveSurfaceControlSlice,
   LiveSurfaceNotificationSlice,
+  LiveSurfaceLockAccessoryFamily,
+  LiveSurfaceLockAccessorySlice,
+  LiveSurfaceStandbyPresentation,
+  LiveSurfaceStandbySlice,
   LiveSurfaceActivityContentState,
   LiveSurfaceAlertPayload,
   SafeParseAnyVersionResult,
@@ -51,8 +59,12 @@ import type {
   LiveSurfaceSnapshotControl,
   LiveSurfaceSnapshotNotification,
   LiveSurfaceSnapshotLiveActivity,
+  LiveSurfaceSnapshotLockAccessory,
+  LiveSurfaceSnapshotStandby,
   LiveSurfaceKind,
   LiveSurfaceWidgetSlice,
+  LiveSurfaceLockAccessoryFamily,
+  LiveSurfaceStandbyPresentation,
   LiveSurfaceActivityContentState,
   LiveSurfaceAlertPayload,
 } from "./schema.ts";
@@ -78,6 +90,31 @@ export interface LiveSurfaceControlValueProvider {
   value: boolean | null;
   intent: string | null;
   label: string;
+  deepLink: string;
+}
+
+export interface LiveSurfaceLockAccessoryEntry {
+  kind: "lockAccessory";
+  snapshotId: string;
+  surfaceId: string;
+  state: LiveSurfaceSnapshot["state"];
+  family: LiveSurfaceLockAccessoryFamily;
+  headline: string;
+  shortText: string;
+  gaugeValue: number;
+  deepLink: string;
+}
+
+export interface LiveSurfaceStandbyEntry {
+  kind: "standby";
+  snapshotId: string;
+  surfaceId: string;
+  state: LiveSurfaceSnapshot["state"];
+  presentation: LiveSurfaceStandbyPresentation;
+  tint: "default" | "monochrome" | null;
+  headline: string;
+  subhead: string;
+  progress: number;
   deepLink: string;
 }
 
@@ -207,6 +244,57 @@ export function toControlValueProvider(
     intent: control.intent ?? null,
     label: labelCandidate,
     deepLink: controlSnap.deepLink,
+  };
+}
+
+export function toLockAccessoryEntry(
+  snapshot: LiveSurfaceSnapshot,
+): LiveSurfaceLockAccessoryEntry {
+  const accessory: LiveSurfaceSnapshotLockAccessory = assertSnapshotKind(
+    snapshot,
+    "lockAccessory",
+  );
+  // shortText is the constrained-length label families like accessoryInline
+  // and accessoryRectangular render. Coerce empty string to "absent" so the
+  // primaryText fallback fires (same pattern as toControlValueProvider).
+  const shortTextCandidate = accessory.lockAccessory.shortText?.length
+    ? accessory.lockAccessory.shortText
+    : accessory.primaryText;
+  // gaugeValue drives the circular ring and rectangular progress fill. Falls
+  // back to the snapshot's overall `progress` so callers don't have to repeat
+  // themselves when the gauge mirrors progress.
+  const gaugeValue = accessory.lockAccessory.gaugeValue ?? accessory.progress;
+  return {
+    kind: "lockAccessory",
+    snapshotId: accessory.id,
+    surfaceId: accessory.surfaceId,
+    state: accessory.state,
+    family: accessory.lockAccessory.family,
+    headline: accessory.primaryText,
+    shortText: shortTextCandidate,
+    gaugeValue,
+    deepLink: accessory.deepLink,
+  };
+}
+
+export function toStandbyEntry(
+  snapshot: LiveSurfaceSnapshot,
+): LiveSurfaceStandbyEntry {
+  const standbySnap: LiveSurfaceSnapshotStandby = assertSnapshotKind(
+    snapshot,
+    "standby",
+  );
+  return {
+    kind: "standby",
+    snapshotId: standbySnap.id,
+    surfaceId: standbySnap.surfaceId,
+    state: standbySnap.state,
+    presentation: standbySnap.standby.presentation,
+    tint: standbySnap.standby.tint ?? null,
+    headline: standbySnap.primaryText,
+    subhead: standbySnap.secondaryText,
+    progress: standbySnap.progress,
+    deepLink: standbySnap.deepLink,
   };
 }
 

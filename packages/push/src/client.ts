@@ -29,6 +29,15 @@ import { JwtCache, resolveKeyPem } from "./jwt.ts";
 import { DEFAULT_RETRY_POLICY, computeBackoffMs, sleep } from "./retry.ts";
 import type { RetryPolicy } from "./retry.ts";
 import { RETRYABLE_TRANSPORT_CODES, TERMINAL_REASONS } from "./reasons.ts";
+import {
+  extractChannelList,
+  normalizeChannelEntry,
+  tryParseChannelIdFromBody,
+  tryParseJson,
+} from "./channels.ts";
+import type { ChannelInfo } from "./channels.ts";
+
+export type { ChannelInfo } from "./channels.ts";
 
 // APNs payload ceilings per MS011. Per-activity and alert sends are bounded at
 // 4 KB; iOS 18 broadcast pushes get an extra 1 KB. The SDK enforces these
@@ -168,18 +177,6 @@ export interface SendResponse {
   apnsId: string;
   status: number;
   timestamp: Date;
-}
-
-export interface ChannelInfo {
-  channelId: string;
-  storagePolicy: "no-storage" | "most-recent-message";
-  /**
-   * Anything else Apple's response carried for this channel, preserved
-   * verbatim. Currently Apple returns only the channel-id + storage policy
-   * for `createChannel` and a list of channel-ids for `listChannels`; this
-   * field is here for forward-compat.
-   */
-  raw?: Record<string, unknown>;
 }
 
 interface ChannelManageResponse {
@@ -704,23 +701,44 @@ export class PushClient {
     });
   }
 
-  async #performManage(
+  // Shared retry loop for both device sends and channel-management requests.
+  // The two previously had near-identical loops differing only in the success
+  // return shape and which hook fields are populated; `mapSuccess` handles
+  // the success-shape difference and `hookMeta` carries the per-operation
+  // hook fields. JWT refresh on retry covers ExpiredProviderToken; transport-
+  // error retry uses the policy's backoff without consulting Retry-After
+  // (no response yet to honor).
+  async #executeWithRetry<TSuccess>(
+    transport: Http2Client,
     headers: Record<string, string>,
     body: string | undefined,
-    hookMeta: { operation: PushHookOperation; token?: string },
-  ): Promise<ChannelManageResponse> {
+    hookMeta: {
+      operation: PushHookOperation;
+      snapshotId?: string;
+      token?: string;
+      /** apns-id known up-front (device sends generate it client-side). */
+      apnsId?: string;
+    },
+    mapSuccess: (res: {
+      status: number;
+      headers: Record<string, string | string[] | undefined>;
+      body: string;
+    }) => TSuccess,
+  ): Promise<TSuccess> {
     let attempt = 0;
     while (true) {
       this.#assertOpen();
       const startedAt = Date.now();
       try {
-        const res = await this.#manage.request({
+        const res = await transport.request({
           headers,
           body,
           timeoutMs: this.#requestTimeoutMs,
         });
         const durationMs = Date.now() - startedAt;
-        const apnsId = pickHeader(res.headers, "apns-id");
+        // For management ops the apns-id is only known after response;
+        // device sends know it up-front and pass it via hookMeta.
+        const apnsId = hookMeta.apnsId ?? pickHeader(res.headers, "apns-id");
         if (res.status >= 200 && res.status < 300) {
           this.#fireResponseHook({
             ...hookMeta,
@@ -730,7 +748,7 @@ export class PushClient {
             status: res.status,
             durationMs,
           });
-          return { status: res.status, headers: res.headers, body: res.body };
+          return mapSuccess(res);
         }
         const apnsError = this.#errorFromResponse(res);
         const willRetry =
@@ -762,6 +780,7 @@ export class PushClient {
           ...hookMeta,
           attempt,
           isFinalAttempt: !willRetry,
+          apnsId: hookMeta.apnsId,
           durationMs: Date.now() - startedAt,
         });
         if (willRetry) {
@@ -774,7 +793,19 @@ export class PushClient {
     }
   }
 
-  async #performWithRetry(
+  #performManage(
+    headers: Record<string, string>,
+    body: string | undefined,
+    hookMeta: { operation: PushHookOperation; token?: string },
+  ): Promise<ChannelManageResponse> {
+    return this.#executeWithRetry(this.#manage, headers, body, hookMeta, (res) => ({
+      status: res.status,
+      headers: res.headers,
+      body: res.body,
+    }));
+  }
+
+  #performWithRetry(
     transport: Http2Client,
     headers: Record<string, string>,
     body: string,
@@ -785,68 +816,13 @@ export class PushClient {
       token?: string;
     },
   ): Promise<SendResponse> {
-    let attempt = 0;
-    while (true) {
-      this.#assertOpen();
-      const startedAt = Date.now();
-      try {
-        const res = await transport.request({
-          headers,
-          body,
-          timeoutMs: this.#requestTimeoutMs,
-        });
-        const durationMs = Date.now() - startedAt;
-        if (res.status >= 200 && res.status < 300) {
-          this.#fireResponseHook({
-            ...hookMeta,
-            attempt,
-            isFinalAttempt: true,
-            apnsId,
-            status: res.status,
-            durationMs,
-          });
-          return { apnsId, status: res.status, timestamp: new Date() };
-        }
-        const apnsError = this.#errorFromResponse(res);
-        const willRetry =
-          this.#shouldRetry(apnsError, attempt) &&
-          attempt < this.#retryPolicy.maxRetries;
-        this.#fireErrorHook(apnsError, {
-          ...hookMeta,
-          attempt,
-          isFinalAttempt: !willRetry,
-          apnsId,
-          status: res.status,
-          durationMs,
-        });
-        if (willRetry) {
-          await this.#waitForRetry(apnsError, attempt);
-          attempt += 1;
-          headers.authorization = `bearer ${this.#jwt.get()}`;
-          continue;
-        }
-        throw apnsError;
-      } catch (err) {
-        if (err instanceof ApnsError) {
-          throw err;
-        }
-        const willRetry =
-          isTransportError(err) && attempt < this.#retryPolicy.maxRetries;
-        this.#fireErrorHook(err, {
-          ...hookMeta,
-          attempt,
-          isFinalAttempt: !willRetry,
-          apnsId,
-          durationMs: Date.now() - startedAt,
-        });
-        if (willRetry) {
-          await sleep(computeBackoffMs(attempt, this.#retryPolicy));
-          attempt += 1;
-          continue;
-        }
-        throw err;
-      }
-    }
+    return this.#executeWithRetry(
+      transport,
+      headers,
+      body,
+      { ...hookMeta, apnsId },
+      (res) => ({ apnsId, status: res.status, timestamp: new Date() }),
+    );
   }
 
   #fireResponseHook(context: PushHookContext): void {
@@ -886,53 +862,6 @@ export class PushClient {
     }
     await sleep(computeBackoffMs(attempt, this.#retryPolicy, retryAfterMs));
   }
-}
-
-function tryParseJson(body: string): Record<string, unknown> | undefined {
-  if (!body) return undefined;
-  try {
-    const parsed = JSON.parse(body);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function tryParseChannelIdFromBody(body: string): string | undefined {
-  const parsed = tryParseJson(body);
-  if (!parsed) return undefined;
-  const candidate =
-    parsed["apns-channel-id"] ?? parsed["channel-id"] ?? parsed.channelId;
-  return typeof candidate === "string" ? candidate : undefined;
-}
-
-function extractChannelList(
-  parsed: Record<string, unknown> | undefined,
-): unknown[] {
-  if (!parsed) return [];
-  const candidate = parsed.channels ?? parsed["all-channels"];
-  return Array.isArray(candidate) ? candidate : [];
-}
-
-function normalizeChannelEntry(entry: unknown): ChannelInfo {
-  if (typeof entry === "string") {
-    return { channelId: entry, storagePolicy: "no-storage" };
-  }
-  if (entry && typeof entry === "object") {
-    const obj = entry as Record<string, unknown>;
-    const channelId = String(
-      obj["apns-channel-id"] ?? obj["channel-id"] ?? obj.channelId ?? "",
-    );
-    const policy = obj["message-storage-policy"];
-    const storagePolicy: "no-storage" | "most-recent-message" =
-      policy === 1 || policy === "most-recent-message"
-        ? "most-recent-message"
-        : "no-storage";
-    return { channelId, storagePolicy, raw: obj };
-  }
-  return { channelId: "", storagePolicy: "no-storage" };
 }
 
 /**

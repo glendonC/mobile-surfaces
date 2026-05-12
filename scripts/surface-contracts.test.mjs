@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   assertSnapshot,
   IncompleteProjectionError,
+  liveSurfaceAlertPayload,
   liveSurfaceSnapshot,
   liveSurfaceSnapshotV0,
   migrateV0ToV1,
@@ -12,7 +13,9 @@ import {
   toAlertPayload,
   toControlValueProvider,
   toLiveActivityContentState,
+  toLockAccessoryEntry,
   toNotificationContentPayload,
+  toStandbyEntry,
   toWidgetTimelineEntry,
 } from "../packages/surface-contracts/src/index.ts";
 
@@ -38,6 +41,15 @@ test("live activity projections reject non-live snapshots", () => {
 
   assert.throws(() => toLiveActivityContentState(widget), /Cannot project widget/);
   assert.throws(() => toAlertPayload(widget), /Cannot project widget/);
+});
+
+// toAlertPayload constructs its return shape by hand. Round-trip through the
+// liveSurfaceAlertPayload Zod schema so the two cannot drift: any field rename
+// or type change in the schema breaks this assertion before it ships.
+test("toAlertPayload output parses as liveSurfaceAlertPayload", () => {
+  const payload = toAlertPayload(queued);
+  const parsed = liveSurfaceAlertPayload.parse(payload);
+  assert.deepEqual(parsed, payload);
 });
 
 test("widget projection accepts widget snapshots and rejects mismatches", () => {
@@ -166,19 +178,115 @@ test("missing kind defaults to liveActivity (preprocess preserves v1 forward-com
   }
 });
 
-test("forward-compat kinds parse: lockAccessory and standby with no slice", () => {
-  const lock = liveSurfaceSnapshot.safeParse({
+test("kind/slice mismatch is rejected: lockAccessory kind without lockAccessory slice fails safeParse", () => {
+  const result = liveSurfaceSnapshot.safeParse({
     ...queued,
-    id: "fixture-lock",
+    id: "fixture-lock-missing-slice",
     kind: "lockAccessory",
   });
-  const standby = liveSurfaceSnapshot.safeParse({
+  assert.equal(result.success, false);
+});
+
+test("kind/slice mismatch is rejected: standby kind without standby slice fails safeParse", () => {
+  const result = liveSurfaceSnapshot.safeParse({
     ...queued,
-    id: "fixture-standby",
+    id: "fixture-standby-missing-slice",
     kind: "standby",
   });
-  assert.equal(lock.success, true);
-  assert.equal(standby.success, true);
+  assert.equal(result.success, false);
+});
+
+test("lockAccessory projection accepts lockAccessory snapshots and rejects mismatches", () => {
+  const accessory = assertSnapshot({
+    ...queued,
+    id: "fixture-lock-accessory",
+    surfaceId: "surface-lock-accessory",
+    kind: "lockAccessory",
+    progress: 0.42,
+    lockAccessory: {
+      family: "accessoryCircular",
+      gaugeValue: 0.8,
+      shortText: "80%",
+    },
+  });
+
+  assert.deepEqual(toLockAccessoryEntry(accessory), {
+    kind: "lockAccessory",
+    snapshotId: "fixture-lock-accessory",
+    surfaceId: "surface-lock-accessory",
+    state: "queued",
+    family: "accessoryCircular",
+    headline: queued.primaryText,
+    shortText: "80%",
+    gaugeValue: 0.8,
+    deepLink: queued.deepLink,
+  });
+  assert.throws(() => toLockAccessoryEntry(queued), /Cannot project liveActivity/);
+});
+
+test("toLockAccessoryEntry falls back to progress when gaugeValue is absent", () => {
+  const accessory = assertSnapshot({
+    ...queued,
+    id: "fixture-lock-fallback",
+    kind: "lockAccessory",
+    progress: 0.33,
+    lockAccessory: { family: "accessoryRectangular" },
+  });
+
+  assert.equal(toLockAccessoryEntry(accessory).gaugeValue, 0.33);
+});
+
+test("toLockAccessoryEntry falls back to primaryText when shortText is empty or absent", () => {
+  const empty = assertSnapshot({
+    ...queued,
+    id: "fixture-lock-empty",
+    kind: "lockAccessory",
+    lockAccessory: { family: "accessoryInline", shortText: "" },
+  });
+  const absent = assertSnapshot({
+    ...queued,
+    id: "fixture-lock-absent",
+    kind: "lockAccessory",
+    lockAccessory: { family: "accessoryInline" },
+  });
+  assert.equal(toLockAccessoryEntry(empty).shortText, queued.primaryText);
+  assert.equal(toLockAccessoryEntry(absent).shortText, queued.primaryText);
+});
+
+test("standby projection accepts standby snapshots and rejects mismatches", () => {
+  const standby = assertSnapshot({
+    ...queued,
+    id: "fixture-standby",
+    surfaceId: "surface-standby",
+    kind: "standby",
+    standby: { presentation: "night", tint: "monochrome" },
+  });
+
+  assert.deepEqual(toStandbyEntry(standby), {
+    kind: "standby",
+    snapshotId: "fixture-standby",
+    surfaceId: "surface-standby",
+    state: "queued",
+    presentation: "night",
+    tint: "monochrome",
+    headline: queued.primaryText,
+    subhead: queued.secondaryText,
+    progress: queued.progress,
+    deepLink: queued.deepLink,
+  });
+  assert.throws(() => toStandbyEntry(queued), /Cannot project liveActivity/);
+});
+
+test("toStandbyEntry applies presentation default and null tint when absent", () => {
+  const standby = assertSnapshot({
+    ...queued,
+    id: "fixture-standby-default",
+    kind: "standby",
+    standby: {},
+  });
+  const entry = toStandbyEntry(standby);
+  assert.equal(entry.presentation, "card");
+  assert.equal(entry.tint, null);
 });
 
 // ---------------------------------------------------------------------------

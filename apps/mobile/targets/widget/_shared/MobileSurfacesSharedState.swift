@@ -5,8 +5,12 @@ enum MobileSurfacesSharedState {
   static let appGroup = "group.com.example.mobilesurfaces"
   static let widgetCurrentSurfaceIdKey = "surface.widget.currentSurfaceId"
   static let controlCurrentSurfaceIdKey = "surface.control.currentSurfaceId"
+  static let lockAccessoryCurrentSurfaceIdKey = "surface.lockAccessory.currentSurfaceId"
+  static let standbyCurrentSurfaceIdKey = "surface.standby.currentSurfaceId"
   static let homeWidgetKind = "MobileSurfacesHomeWidget"
   static let controlWidgetKind = "MobileSurfacesControlWidget"
+  static let lockAccessoryWidgetKind = "MobileSurfacesLockAccessoryWidget"
+  static let standbyWidgetKind = "MobileSurfacesStandbyWidget"
 
   static var defaults: UserDefaults? {
     UserDefaults(suiteName: appGroup)
@@ -36,6 +40,28 @@ enum MobileSurfacesSharedState {
       return nil
     }
     return try? JSONDecoder().decode(MobileSurfacesControlSnapshot.self, from: data)
+  }
+
+  static func lockAccessorySnapshot() -> MobileSurfacesLockAccessorySnapshot? {
+    guard
+      let surfaceId = defaults?.string(forKey: lockAccessoryCurrentSurfaceIdKey),
+      let raw = defaults?.string(forKey: snapshotKey(surfaceId: surfaceId)),
+      let data = raw.data(using: .utf8)
+    else {
+      return nil
+    }
+    return try? JSONDecoder().decode(MobileSurfacesLockAccessorySnapshot.self, from: data)
+  }
+
+  static func standbySnapshot() -> MobileSurfacesStandbySnapshot? {
+    guard
+      let surfaceId = defaults?.string(forKey: standbyCurrentSurfaceIdKey),
+      let raw = defaults?.string(forKey: snapshotKey(surfaceId: surfaceId)),
+      let data = raw.data(using: .utf8)
+    else {
+      return nil
+    }
+    return try? JSONDecoder().decode(MobileSurfacesStandbySnapshot.self, from: data)
   }
 
   static func writeControlValue(_ value: Bool) {
@@ -78,5 +104,30 @@ struct MobileSurfacesControlSnapshot: Codable, Hashable {
   var value: Bool?
   var intent: String?
   var label: String
+  var deepLink: String
+}
+
+struct MobileSurfacesLockAccessorySnapshot: Codable, Hashable {
+  var kind: String
+  var snapshotId: String
+  var surfaceId: String
+  var state: String
+  var family: String
+  var headline: String
+  var shortText: String
+  var gaugeValue: Double
+  var deepLink: String
+}
+
+struct MobileSurfacesStandbySnapshot: Codable, Hashable {
+  var kind: String
+  var snapshotId: String
+  var surfaceId: String
+  var state: String
+  var presentation: String
+  var tint: String?
+  var headline: String
+  var subhead: String
+  var progress: Double
   var deepLink: String
 }
