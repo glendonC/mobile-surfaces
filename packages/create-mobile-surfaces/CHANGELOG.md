@@ -1,5 +1,82 @@
 # create-mobile-surfaces
 
+## 2.1.0
+
+### Patch Changes
+
+- 5067bde: Add orchestrator-level prompt tests for the existing-expo and monorepo flows. Both have had the `ui = defaultUi` DI seam since the prompt-flow DI refactor landed, but neither had a single test exercising it. Coverage now matches `runPrompts`:
+
+  - Happy path through `runExistingExpoPrompts` and `runMonorepoPrompts` with scripted fake-ui answers.
+  - Recap declined exits `SUCCESS` instead of restarting (asymmetry with greenfield's recursive restart is now pinned by test).
+  - `ExitPromptError` thrown mid-flow exits `SUCCESS` through the live `guard()` wrapper, exercising the cancellation contract end-to-end for both flows.
+
+  Also adds one cancellation test for `runPrompts` (mid-flow `ExitPromptError` through the second text prompt), closing the last gap from the prompt-flow audit.
+
+- 5067bde: - `applyWidgetRename` now reads + rewrites widget-target files with bounded concurrency (matching `apply-monorepo`'s identity-rewrite pass). Previously every file was read serially through `fs.readFileSync`, blocking the event loop on widget trees with many text files.
+  - `detectPackageManager` walks parent directories with one `readdirSync` + `Set` membership per level instead of up to four `existsSync` calls per level. Drops the upward lockfile probe from O(levels \* lockfiles) stat syscalls to O(levels) directory reads.
+  - `buildManifestFromLive` caches its result by `repoRoot` so repeated `loadTemplateManifest` calls in the same process (e.g. dev-smoke scripts, retried flows) reuse the parsed manifest instead of re-reading the 3-4 source files.
+  - `runStreamed` rejection errors now carry `err.logPath` (when the install log has been opened) so downstream handlers and stack traces point at the concrete log file without parsing surrounding output.
+  - `mode.mjs` no longer re-exports `renderRefuse` and `parsePnpmWorkspaceGlobs`. Tests and callers import directly from `./refuse.mjs` and `./workspace.mjs`, restoring `mode.mjs` to a pure detection module without presentation/utility coupling.
+- 4645fc6: Split the dense orchestrators in apply-existing.mjs and apply-monorepo.mjs into per-step private helpers. `applyToExisting` (was ~110 lines, 5 concerns) now reads as three named function calls — `applyPackageInstall`, `applyAppConfigPatch`, `applyWidgetCopyStripRename`. `applyMonorepo` (was ~115 lines, 6 concerns) reads as `stageAndCopyAppsMobile`, `stripSurfacesAndMarkers`, `rewriteIdentityInTree`, `patchAppJsonStep`, `rewriteWorkspaceDeps`, `mergeHostWorkspace`. Each helper keeps the inline rationale comment that explained why the step exists. No behavior change; the test suite (218 tests) passes unchanged.
+- 4645fc6: Share the CLI's "are we in a published tarball or a live monorepo" probe across `resolveTemplateRoot` (template-manifest.mjs) and `resolveTemplateSource` (scaffold.mjs) via a single cached `resolveCliMode()` helper. Both call sites previously stat'd the same `template/` directory and `pnpm-workspace.yaml` independently; the cache runs the probe once per process.
+
+  In `gatherExpoEvidence`, replace three sequential `existsSync` checks for `app.json` / `app.config.ts` / `app.config.js` with one `readdirSync`. Same priority order (json > ts > js), one syscall instead of up to three.
+
+- 4645fc6: Add a `withStubbedPrompts(overrides, fn)` helper to ui.mjs that wraps the setPrompts/try/finally/resetPrompts pattern. The reset is now structural rather than a discipline that a future contributor could omit. Migrate the six existing prompt-stubbing tests in prompts.test.mjs onto the helper.
+
+  Add a live inquirer retry-loop test using `@inquirer/testing`'s virtual-stream renderer. The existing DI-seam tests pin the contract shape (adaptValidate returns a string on reject) but never exercise the real `@inquirer/prompts.input` retry loop. The new test drives the prompt end-to-end: type a rejected value, observe the re-ask, type an accepted value, observe resolution. A future inquirer release that changed its validator contract (return string -> retry) would fail this test where the stubs would still pass.
+
+- 5067bde: CLI consistency pass across the three scaffolding modes:
+
+  - `renderRefuse` now throws on an unknown `evidence.reason` instead of silently falling back to the no-package-json copy. A future refuse branch added without updating the switch will surface as a loud bug rather than a misleading screen.
+  - The invalid-package-json refuse copy now names the file path and points at the common JSON syntax mistakes (trailing comma, unquoted key, unescaped quote), so a user who is not git-fluent has somewhere to start.
+  - Recap field labels are lowercase across all three modes (greenfield's existing style), aligning existing-expo and existing-monorepo with prompts.mjs.
+  - Plan-recap heading renamed from "What I'll add" to "Changes to apply" in existing-expo and existing-monorepo; "We'll add Mobile Surfaces" intro replaced with "Adds Mobile Surfaces". First-person voice is replaced with imperative across the consent moment.
+  - `--team-id` flag help now names the 10-character length and explains the skip path ("omit to skip and set later in app.json's ios.appleTeamId").
+  - existing-expo's success screen gains a "When you're ready" section (device run, APNs setup, real-device push) between "Try it now" and "Learn more", matching greenfield and monorepo.
+
+- cdaa373: Resolve `@mobile-surfaces/*` workspace refs to concrete published versions during template-manifest computation. Previously the existing-Expo apply phase emitted `workspace:*` specs for foreign installs, which the install step then marked as "skipped" with a "ships in next release" follow-up — wrong, since the linked release group keeps all five packages versioned in lockstep. `resolvePublishedMobileSurfacesVersion` now reads the version from `packages/<short-name>/package.json` and pins the install to that exact version. Non-`@mobile-surfaces` local refs (`file:`, foreign `workspace:*`) still get the skip marker. The skipped-package follow-up copy is also reworded so a user who sees it now understands the actual cause ("local-only refs") instead of an outdated "not on npm yet" message.
+- 5067bde: surface-contracts: wrap the `liveSurfaceSnapshot` discriminated union in `z.lazy()` so the preprocess + discriminated-union construction is deferred to the first `parse` / `safeParse` call instead of running at module import. Backends that import the package but rarely validate, and short-lived serverless invocations that rarely hit the codepath, no longer pay the construction cost on cold start. `.parse` / `.safeParse` pass through transparently; the per-kind variant schemas stay eagerly built and unchanged.
+
+  create-mobile-surfaces: tighten the apply phase for both existing-Expo and existing-monorepo flows so it walks each file once per substitution batch instead of N times. `rewriteContent` (apply-existing) now runs one regex pass with left-to-right alternation; `applySubstitutionsToString` (apply-monorepo) collapses literal substitutions into one alternation regex looked up via a Map. For the typical 6-literals + 1-regex monorepo rewrite, that drops from 7 passes to 2.
+
+  create-mobile-surfaces: collapse the standalone `applyAppleTeamId` and `applyNewArchEnabled` helpers into a single exported `applyAppJsonPatches`. Production already used the batched form; the standalone helpers existed only to keep unit tests focused. Tests now drive `applyAppJsonPatches` directly and a new combined-pass test pins that both writes land in one read-modify-write.
+
+  create-mobile-surfaces: add a decision-tree comment in `detectMode` so the precedence order is scannable without tracing, and reword `--no-new-arch` help to "use the legacy React Native bridge instead" rather than the bare "legacy bridge" jargon.
+
+- b89b0fa: Tighten the existing-expo and existing-monorepo error UX so a missing pnpm or CocoaPods on the user's PATH no longer falls through to the generic "a step failed" message. The existing-expo handler now mirrors the same PNPM_MISSING_TAG and COCOAPODS_MISSING_TAG arms the greenfield and monorepo handlers already had, so the user sees the same actionable "enable pnpm with corepack" / "install CocoaPods with brew" pointers regardless of which flow surfaces the missing tool.
+
+  Sharpen the applyFailed and applyInterrupted copy. Both messages now state explicitly that some edits may have landed (existing flows do not stage), and direct the user to git status plus the log to decide whether to fix and re-run or restore from git. Replaces "Something failed while applying changes" with a more direct "A step failed" lead.
+
+  Centralize the "Apply these changes?" recap confirm string in copy.mjs as `prompts.confirmExisting.message`, replacing the two hardcoded copies in existing-expo.mjs and existing-monorepo.mjs. Voice tuning now happens in one place.
+
+- 4092847: Pin eas-cli and typescript to exact versions in apps/mobile devDependencies (were ^16.25.1 and ^5.0.0). Matches the external-pin discipline already in place for @bacons/apple-targets and the workspace packages, so contributors no longer pick up transitive majors at install time.
+
+  Add an explicit publishConfig.access "public" to create-mobile-surfaces so the publish workflow does not rely solely on the files allow-list. Matches the publishConfig block already present on the four runtime packages and makes a future maintainer's intent unambiguous.
+
+- 1d97247: Scope the preflight by whether `--no-install` was passed. Today every code path that hits `runPreflight` validates the full toolchain up front — macOS, Node, pnpm, Xcode 26+, simulator runtimes, CocoaPods — and a missing or-too-old build dependency hard-fails the run before the user can even see the scaffolded tree. That made sense when every invocation immediately ran install + prebuild, but it's wrong for `--no-install`: the user has explicitly opted out of the build step, so the Xcode / simulator / CocoaPods gate is gating a step that isn't going to happen.
+
+  `runPreflight` now splits checks into two groups. The scaffold-required group (macOS, Node, pnpm) still hard-fails — those gate the act of writing files. The build-required group (Xcode, simulator, CocoaPods) only hard-fails when install is going to follow; with `--no-install` set those failures downgrade to warnings, so the scaffold completes and the user sees the same diagnostic copy as an advisory ("Update via the Mac App Store before building iOS"). The default and `--install` paths are unchanged — they still hard-fail on a missing or too-old iOS toolchain.
+
+  This also unblocks `pnpm cli:smoke:monorepo` in CI, which spawns the CLI bin with `--no-install` on a runner that doesn't have Xcode 26 yet.
+
+- effc0f6: Add a `setPrompts()` / `resetPrompts()` DI seam to `ui.mjs` so unit tests can inject stubs for the three @inquirer primitives (input, select, confirm) without driving an actual TTY. Live mode (the module default) is unchanged; tests opt in. Six new tests cover the askText / askConfirm / askSelect paths end-to-end: each bubbles an `ExitPromptError` thrown by the underlying primitive into `guard()` (which exits 0 with the "Cancelled" message), `ERR_USE_AFTER_CLOSE` takes the same path, and `askText` threads the adapted validator into `input` so accept returns `true` and reject returns the error string @inquirer/prompts expects.
+- 4645fc6: Dedup concurrent dials in `Http2Client.#ensureSession()`. When N callers hit `#ensureSession` while no session is open, they now all await the same `#dial()` promise instead of each opening their own. The in-flight promise is held in a single slot cleared in `.finally`, so a failed dial doesn't poison subsequent attempts. Previously cold-start parallel sends cost N TLS handshakes for N concurrent requests; post-GOAWAY recovery cost an extra dial per recovering stream.
+
+  Treat `NGHTTP2_INTERNAL_ERROR` on `ERR_HTTP2_STREAM_ERROR` as a retryable transport condition. Node surfaces session-level destruction as `ERR_HTTP2_SESSION_ERROR` when there's one in-flight stream, but as `NGHTTP2_INTERNAL_ERROR` on each stream when there are multiple. The single-stream path was already retried (the session-error code is in `RETRYABLE_TRANSPORT_CODES`); this aligns the parallel-stream path with the same behavior.
+
+  Add two test scenarios to `packages/push/test/client.test.mjs`: cold-start parallel sends share a single dial; parallel stream-resets recover via a single shared warm session. The first test would have caught the dial-dedup gap (sessionCount = 5 instead of 1 for 5 concurrent cold sends); the second pins the per-stream-reset recovery path.
+
+- 7a5d0a1: Add three typed APNs error classes to @mobile-surfaces/push: `ForbiddenError`, `InternalServerError`, `ServiceUnavailableError`. The three reason strings were already in `APNS_REASON_GUIDE` and (for the latter two) in `DEFAULT_RETRYABLE_REASONS`, but `reasonToError` had no cases for them so they fell through to `UnknownApnsError`. Observability hooks can now discriminate the three with `instanceof`.
+
+  Fix a retry gap on RST_STREAM. Node wraps a per-stream reset as `ERR_HTTP2_STREAM_ERROR` and exposes the protocol-level code (`NGHTTP2_REFUSED_STREAM`) in the message rather than on `err.code`, so a transient REFUSED_STREAM on a single stream was surfacing as a non-retryable error even though the protocol code is in `RETRYABLE_TRANSPORT_CODES`. `isTransportError` now recognizes that wrapper. The mock APNs server gained a `rstStream` flag and the client test suite pins the new retry path.
+
+  Add an inline invariant comment on `JwtCache.get()` explaining why `mintJwt` must stay synchronous (a future `await` between the freshness check and the `#entry` assignment would let two concurrent `get()` calls both re-mint).
+
+- 4645fc6: Add trap entry MS030 (APNs provider token must be valid and current) and bind `ForbiddenError`, `InvalidProviderTokenError`, and `ExpiredProviderTokenError` to it. Observability hooks reading `err.trapId` now return `"MS030"` for these three 403 auth-failure modes instead of `undefined`, so log aggregators and the diagnose bundle can route them to the catalog entry. The catalog's fix section distinguishes the three operator responses (mint a new key vs verify key/team ids vs check clock skew).
+- 5067bde: - `processFileContent` (strip.mjs) gains two edge-case tests: BEGIN/END marker id-set normalization (order-insensitive matching) and true nested regions where outer-strip swallows the inner, while outer-keep with inner-strip strips just the inner. Existing tests already covered single-id, multi-id sequential, unknown id, and unmatched begin/end. The new cases pin the id-set normalization invariant and nested-region handling so a future refactor cannot quietly regress either.
+  - New push client test runs six sequential GOAWAY cycles back to back. Extends the existing two-cycle pin: the SDK must dial a fresh session per destroyed session for the full burst (sessionCount asserted at 7, requests at 12). Parallel-send-during-rotation was considered but left to the dedicated cold-start dedup test, since interleaving destroys with mid-flight parallel streams makes the assertion flaky against `maxRetries: 1`.
+
 ## 2.0.2
 
 ### Patch Changes

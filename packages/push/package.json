@@ -1,6 +1,6 @@
 {
   "name": "@mobile-surfaces/push",
-  "version": "2.0.2",
+  "version": "2.1.0",
   "description": "Node SDK for sending Mobile Surfaces snapshots to Apple Push Notification service (APNs) — Live Activities, Dynamic Island, broadcast channels, and channel management.",
   "publishConfig": {
     "access": "public",
