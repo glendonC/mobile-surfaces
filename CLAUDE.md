@@ -27,7 +27,7 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 | [MS009](#ms009-generated-typescript-fixtures-must-match-json-sources) | error | static | Generated TypeScript fixtures must match JSON sources |
 | [MS011](#ms011-activitykit-payload-size-ceiling-4-kb-5-kb-broadcast) | error | runtime | ActivityKit payload size ceiling (4 KB / 5 KB broadcast) |
 | [MS012](#ms012-ios-deployment-target-must-be-17-2-or-higher) | error | config | iOS deployment target must be 17.2 or higher |
-| [MS013](#ms013-app-group-entitlement-must-match-host-app-and-widget-extension) | error | config | App Group entitlement must match host app and widget extension |
+| [MS013](#ms013-app-group-entitlement-must-match-host-app-and-widget-extension) | error | static | App Group entitlement must match host app and widget extension |
 | [MS014](#ms014-apns-token-environment-must-match-the-build-environment) | error | runtime | APNs token environment must match the build environment |
 | [MS016](#ms016-subscribe-to-onpushtostarttoken-at-mount-not-on-demand) | error | static | Subscribe to onPushToStartToken at mount, not on demand |
 | [MS017](#ms017-apps-mobile-ios-is-generated-do-not-edit) | error | static | apps/mobile/ios/ is generated; do not edit |
@@ -183,13 +183,13 @@ Mobile Surfaces commits to push-to-start tokens (Activity<…>.pushToStartTokenU
 
 ### MS013: App Group entitlement must match host app and widget extension
 
-**severity:** error  •  **detection:** config (declarative file)  •  **tags:** app-group, widget, control, config
+**severity:** error  •  **detection:** static (script-checkable)  •  **tags:** app-group, widget, control, config  •  **enforced by:** `scripts/check-app-group.mjs`
 
-apps/mobile/app.json and apps/mobile/targets/widget/expo-target.config.js must declare the same com.apple.security.application-groups identifier.
+apps/mobile/app.json and apps/mobile/targets/widget/expo-target.config.js must declare the same com.apple.security.application-groups identifier, and every Swift / TS reference to the App Group must match.
 
 **Symptom.** Widget renders placeholder forever; control widget never reads the toggle state. No error: the entitlement mismatch makes both sides read separate App Group containers.
 
-**Fix.** Set the same group identifier on both sides (default 'group.com.example.mobilesurfaces'; rename via pnpm surface:rename) and rerun prebuild.
+**Fix.** Set the same group identifier on both sides (default 'group.com.example.mobilesurfaces'; rename via pnpm surface:rename) and rerun prebuild. CI fails on drift via scripts/check-app-group.mjs.
 
 **See:** `docs/ios-environment.md`
 

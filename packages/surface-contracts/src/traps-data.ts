@@ -210,16 +210,19 @@ export const traps: readonly TrapEntry[] = [
     "id": "MS013",
     "title": "App Group entitlement must match host app and widget extension",
     "severity": "error",
-    "detection": "config",
+    "detection": "static",
     "tags": [
       "app-group",
       "widget",
       "control",
       "config"
     ],
-    "summary": "apps/mobile/app.json and apps/mobile/targets/widget/expo-target.config.js must declare the same com.apple.security.application-groups identifier.",
+    "summary": "apps/mobile/app.json and apps/mobile/targets/widget/expo-target.config.js must declare the same com.apple.security.application-groups identifier, and every Swift / TS reference to the App Group must match.",
     "symptom": "Widget renders placeholder forever; control widget never reads the toggle state. No error: the entitlement mismatch makes both sides read separate App Group containers.",
-    "fix": "Set the same group identifier on both sides (default 'group.com.example.mobilesurfaces'; rename via pnpm surface:rename) and rerun prebuild.",
+    "fix": "Set the same group identifier on both sides (default 'group.com.example.mobilesurfaces'; rename via pnpm surface:rename) and rerun prebuild. CI fails on drift via scripts/check-app-group.mjs.",
+    "enforcement": {
+      "script": "scripts/check-app-group.mjs"
+    },
     "docs": [
       "docs/ios-environment.md"
     ],
