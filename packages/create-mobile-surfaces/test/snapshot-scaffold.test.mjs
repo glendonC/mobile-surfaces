@@ -83,13 +83,24 @@ function normalizeForHash(rel, raw) {
 //     `pnpm changeset version` on release. Without this exclusion, every
 //     release PR breaks CI on its own changeset file, and the bot's
 //     "Version packages" PR breaks again when it deletes the file
+//   - **/CHANGELOG.md: rewritten on every release by `changeset version`,
+//     so without this exclusion every Version-packages PR drifts the
+//     snapshot. The snapshot's job is to catch template drift; CHANGELOG
+//     churn is a release artifact that says nothing about scaffold output
+//   - packages/surface-contracts/schema.json: the $id URL embeds the
+//     package's minor version, so every minor bump invalidates the file.
+//     Drift between Zod source and generated schema is already gated by
+//     MS006 (build-schema --check); the scaffold snapshot doesn't need to
+//     duplicate that signal
 const SCAFFOLD_PATH_EXCLUDES = [
   "packages/create-mobile-surfaces/test/",
   ".changeset/",
+  "packages/surface-contracts/schema.json",
 ];
 
 function isExcluded(rel) {
   if (rel.endsWith(".DS_Store")) return true;
+  if (rel === "CHANGELOG.md" || rel.endsWith("/CHANGELOG.md")) return true;
   for (const prefix of SCAFFOLD_PATH_EXCLUDES) {
     if (rel === prefix.replace(/\/$/, "")) return true;
     if (rel.startsWith(prefix)) return true;
