@@ -13,6 +13,7 @@ const {
   ClientClosedError,
   MissingApnsConfigError,
   PayloadTooLargeError,
+  __resetRetryPolicyDeprecationLatch,
 } = await import("../dist/index.js");
 
 import { generateEs256Pem, writeTempP8 } from "./fixtures/setup-cert.mjs";
@@ -271,6 +272,135 @@ test("retryable reason (InternalServerError) is retried then succeeds", async (t
   assert.equal(mock.requests.length, 2);
 });
 
+test("PushResult on first-try success reports one attempt and empty retry tracker", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const res = await client.alert("a".repeat(64), SNAPSHOT);
+  assert.equal(res.status, 200);
+  assert.equal(res.attempts, 1);
+  assert.deepEqual(res.retried, []);
+  assert.deepEqual(res.trapHits, []);
+  assert.ok(typeof res.apnsId === "string" && res.apnsId.length > 0);
+  assert.ok(res.latencyMs >= 0);
+});
+
+test("PushResult on retried success records the failed attempt and trap-bound reason", async (t) => {
+  // TooManyRequests is trap-bound (MS015); a retry that resolves should
+  // surface that on PushResult.retried[0].trapId and on trapHits.
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    if (calls === 1) {
+      return { status: 429, body: { reason: "TooManyRequests" } };
+    }
+    return { status: 200 };
+  });
+  const client = makeClient({
+    sendOrigin: mock.origin,
+    retryPolicy: { maxRetries: 3, baseDelayMs: 1, maxDelayMs: 5, jitter: false },
+  });
+  teardown(t, client, mock);
+
+  const res = await client.alert("b".repeat(64), SNAPSHOT);
+  assert.equal(res.status, 200);
+  assert.equal(res.attempts, 2);
+  assert.equal(res.retried.length, 1);
+  assert.equal(res.retried[0].attempt, 0);
+  assert.equal(res.retried[0].reason, "TooManyRequests");
+  assert.equal(res.retried[0].trapId, "MS015");
+  assert.ok(res.retried[0].backoffMs > 0);
+  assert.deepEqual(res.trapHits, ["MS015"]);
+});
+
+test("priority 10 retries with doubled backoff floor compared to priority 5", async (t) => {
+  // MS015: priority 10 is heavily budgeted by iOS. The SDK applies a fixed
+  // internal multiplier (2x base, 2x cap) when an apns-priority=10 request
+  // hits a retryable reason without a Retry-After header. With jitter off and
+  // baseDelayMs=10, priority 5 sees ~10ms on attempt 0; priority 10 sees ~20ms.
+  // Retry-After (when present) still wins — covered by the existing
+  // TooManyRequests Retry-After test above.
+  async function observeBackoff(operation) {
+    let calls = 0;
+    const mock = await startMockApns(() => {
+      calls += 1;
+      if (calls === 1) return { status: 500, body: { reason: "InternalServerError" } };
+      return { status: 200 };
+    });
+    const client = makeClient({
+      sendOrigin: mock.origin,
+      retryPolicy: { maxRetries: 3, baseDelayMs: 10, maxDelayMs: 1000, jitter: false },
+    });
+    teardown(t, client, mock);
+    const res =
+      operation === "alert"
+        ? await client.alert("p".repeat(64), SNAPSHOT)
+        : await client.update("q".repeat(64), SNAPSHOT);
+    return res.retried[0]?.backoffMs;
+  }
+
+  const p10Backoff = await observeBackoff("alert");  // alert defaults to priority 10
+  const p5Backoff = await observeBackoff("update");  // update defaults to priority 5
+  assert.equal(p5Backoff, 10, "priority-5 backoff uses base policy");
+  assert.equal(p10Backoff, 20, "priority-10 backoff is 2x base");
+});
+
+test("priority 10 caps retries at 2 even when policy allows more", async (t) => {
+  // The priority-10 floor clamps maxRetries to min(policy.maxRetries, 2) so a
+  // poorly-tuned policy can't burn budget hammering a throttled priority-10
+  // send. Priority-5 uses the full policy.
+  let alertCalls = 0;
+  let updateCalls = 0;
+  const alertMock = await startMockApns(() => {
+    alertCalls += 1;
+    return { status: 503, body: { reason: "ServiceUnavailable" } };
+  });
+  const alertClient = makeClient({
+    sendOrigin: alertMock.origin,
+    retryPolicy: { maxRetries: 5, baseDelayMs: 1, maxDelayMs: 5, jitter: false },
+  });
+  teardown(t, alertClient, alertMock);
+  await assert.rejects(() => alertClient.alert("r".repeat(64), SNAPSHOT));
+  assert.equal(alertCalls, 3, "priority-10 stops at 1 + 2 retries");
+
+  const updateMock = await startMockApns(() => {
+    updateCalls += 1;
+    return { status: 503, body: { reason: "ServiceUnavailable" } };
+  });
+  const updateClient = makeClient({
+    sendOrigin: updateMock.origin,
+    retryPolicy: { maxRetries: 5, baseDelayMs: 1, maxDelayMs: 5, jitter: false },
+  });
+  teardown(t, updateClient, updateMock);
+  await assert.rejects(() => updateClient.update("s".repeat(64), SNAPSHOT));
+  assert.equal(updateCalls, 6, "priority-5 uses the full policy retry count");
+});
+
+test("PushResult on retried success without trap binding leaves trapHits empty", async (t) => {
+  // ServiceUnavailable is retryable but not trap-bound; the retry-tracker
+  // should record the reason without polluting trapHits.
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    if (calls === 1) {
+      return { status: 503, body: { reason: "ServiceUnavailable" } };
+    }
+    return { status: 200 };
+  });
+  const client = makeClient({
+    sendOrigin: mock.origin,
+    retryPolicy: { maxRetries: 3, baseDelayMs: 1, maxDelayMs: 5, jitter: false },
+  });
+  teardown(t, client, mock);
+
+  const res = await client.alert("c".repeat(64), SNAPSHOT);
+  assert.equal(res.attempts, 2);
+  assert.equal(res.retried[0].reason, "ServiceUnavailable");
+  assert.equal(res.retried[0].trapId, undefined);
+  assert.deepEqual(res.trapHits, []);
+});
+
 test("retries are capped by maxRetries and final ApnsError is surfaced", async (t) => {
   let calls = 0;
   const mock = await startMockApns(() => {
@@ -320,6 +450,217 @@ test("invalid snapshot (Zod) -> InvalidSnapshotError with issue paths", async (t
       return true;
     },
   );
+});
+
+test("_unsafeRetryOverride is honored by the retry loop", async (t) => {
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    return { status: 503, body: { reason: "ServiceUnavailable" } };
+  });
+  const client = createPushClient({
+    keyId: "ABC1234567",
+    teamId: "TEAM123456",
+    keyPath: KEY.file,
+    bundleId: "com.example.test",
+    environment: "development",
+    _unsafeRetryOverride: { maxRetries: 0, baseDelayMs: 1, jitter: false },
+    idleTimeoutMs: 1_000,
+    [TEST_TRANSPORT_OVERRIDE]: { sendOrigin: mock.origin },
+  });
+  teardown(t, client, mock);
+
+  await assert.rejects(() => client.update("z".repeat(64), SNAPSHOT));
+  assert.equal(calls, 1, "maxRetries=0 means no retries");
+});
+
+test("_unsafeRetryOverride takes precedence over the deprecated retryPolicy alias", async (t) => {
+  __resetRetryPolicyDeprecationLatch();
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    return { status: 503, body: { reason: "ServiceUnavailable" } };
+  });
+  const client = createPushClient({
+    keyId: "ABC1234567",
+    teamId: "TEAM123456",
+    keyPath: KEY.file,
+    bundleId: "com.example.test",
+    environment: "development",
+    // Deprecated alias asks for 5 retries...
+    retryPolicy: { maxRetries: 5, baseDelayMs: 1, jitter: false },
+    // ...escape hatch clamps it back to 0.
+    _unsafeRetryOverride: { maxRetries: 0 },
+    idleTimeoutMs: 1_000,
+    [TEST_TRANSPORT_OVERRIDE]: { sendOrigin: mock.origin },
+  });
+  teardown(t, client, mock);
+
+  await assert.rejects(() => client.update("y".repeat(64), SNAPSHOT));
+  assert.equal(calls, 1, "_unsafeRetryOverride wins over retryPolicy");
+});
+
+test("setting the deprecated retryPolicy alias emits a one-time console.warn", async (t) => {
+  __resetRetryPolicyDeprecationLatch();
+  const original = console.warn;
+  const warnings = [];
+  console.warn = (...args) => warnings.push(args.map(String).join(" "));
+  t.after(() => {
+    console.warn = original;
+  });
+
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const c1 = createPushClient({
+    keyId: "ABC1234567",
+    teamId: "TEAM123456",
+    keyPath: KEY.file,
+    bundleId: "com.example.test",
+    environment: "development",
+    retryPolicy: { maxRetries: 1 },
+    [TEST_TRANSPORT_OVERRIDE]: { sendOrigin: mock.origin },
+  });
+  // Second client with the same legacy option must NOT re-warn (latch holds).
+  const c2 = createPushClient({
+    keyId: "ABC1234567",
+    teamId: "TEAM123456",
+    keyPath: KEY.file,
+    bundleId: "com.example.test",
+    environment: "development",
+    retryPolicy: { maxRetries: 1 },
+    [TEST_TRANSPORT_OVERRIDE]: { sendOrigin: mock.origin },
+  });
+  t.after(async () => {
+    await c1.close();
+    await c2.close();
+    await mock.close();
+  });
+
+  assert.equal(warnings.length, 1, "deprecation warning fires exactly once");
+  assert.match(warnings[0], /retryPolicy is deprecated/);
+});
+
+test("MOBILE_SURFACES_PUSH_DISABLE_RETRY=1 overrides everything and disables retries", async (t) => {
+  process.env.MOBILE_SURFACES_PUSH_DISABLE_RETRY = "1";
+  t.after(() => {
+    delete process.env.MOBILE_SURFACES_PUSH_DISABLE_RETRY;
+  });
+
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    return { status: 503, body: { reason: "ServiceUnavailable" } };
+  });
+  const client = createPushClient({
+    keyId: "ABC1234567",
+    teamId: "TEAM123456",
+    keyPath: KEY.file,
+    bundleId: "com.example.test",
+    environment: "development",
+    // Caller asks for 5 retries; env var overrides to 0.
+    _unsafeRetryOverride: { maxRetries: 5, baseDelayMs: 1, jitter: false },
+    idleTimeoutMs: 1_000,
+    [TEST_TRANSPORT_OVERRIDE]: { sendOrigin: mock.origin },
+  });
+  teardown(t, client, mock);
+
+  await assert.rejects(() => client.update("x".repeat(64), SNAPSHOT));
+  assert.equal(calls, 1, "env-var kill switch beats both retryPolicy and _unsafeRetryOverride");
+});
+
+test("describeSend returns the alert envelope without dispatching a request", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const plan = client.describeSend("alert", SNAPSHOT);
+  assert.equal(plan.operation, "alert");
+  assert.equal(plan.pushType, "alert");
+  assert.equal(plan.topic, "com.example.test");
+  assert.equal(plan.priority, 10);
+  assert.equal(plan.budgetLimit, 4096);
+  assert.ok(plan.withinBudget);
+  assert.deepEqual(plan.trapHits, []);
+  // Critically: no request reached the mock.
+  assert.equal(mock.requests.length, 0);
+});
+
+test("describeSend returns the right envelope for update/start/end/broadcast", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const update = client.describeSend("update", SNAPSHOT);
+  assert.equal(update.pushType, "liveactivity");
+  assert.equal(update.topic, "com.example.test.push-type.liveactivity");
+  assert.equal(update.priority, 5);
+
+  const start = client.describeSend("start", SNAPSHOT);
+  assert.equal(start.priority, 5);
+  assert.equal(start.topic, "com.example.test.push-type.liveactivity");
+
+  const end = client.describeSend("end", SNAPSHOT);
+  assert.equal(end.priority, 5);
+
+  const broadcast = client.describeSend("broadcast", SNAPSHOT);
+  assert.equal(broadcast.pushType, "liveactivity");
+  assert.equal(broadcast.topic, undefined, "broadcast is path-routed; no apns-topic");
+  assert.equal(broadcast.budgetLimit, 5120);
+
+  assert.equal(mock.requests.length, 0);
+});
+
+test("describeSend honors caller-provided priority override", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const plan = client.describeSend("update", SNAPSHOT, { priority: 10 });
+  assert.equal(plan.priority, 10);
+});
+
+test("describeSend reports MS011 on oversized payloads without throwing", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  // Build a snapshot whose secondaryText pushes serialized size past 4 KB.
+  const bloated = { ...SNAPSHOT, secondaryText: "x".repeat(5000) };
+  const plan = client.describeSend("update", bloated);
+  assert.equal(plan.withinBudget, false);
+  assert.ok(plan.payloadBytes > plan.budgetLimit);
+  assert.deepEqual(plan.trapHits, ["MS011"]);
+  assert.equal(mock.requests.length, 0);
+});
+
+test("describeSend effectiveRetryPolicy reflects priority-aware clamp", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({
+    sendOrigin: mock.origin,
+    retryPolicy: { maxRetries: 5, baseDelayMs: 100, maxDelayMs: 5000, jitter: false },
+  });
+  teardown(t, client, mock);
+
+  const p5 = client.describeSend("update", SNAPSHOT);
+  assert.equal(p5.effectiveRetryPolicy.maxRetries, 5, "priority 5 inherits the full policy");
+  assert.equal(p5.effectiveRetryPolicy.baseDelayMs, 100);
+
+  const p10 = client.describeSend("alert", SNAPSHOT);
+  assert.equal(p10.effectiveRetryPolicy.maxRetries, 2, "priority 10 caps at 2");
+  assert.equal(p10.effectiveRetryPolicy.baseDelayMs, 200, "priority 10 doubles base");
+  assert.equal(p10.effectiveRetryPolicy.maxDelayMs, 10000);
+});
+
+test("describeSend throws InvalidSnapshotError on broken snapshots, makes no request", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const broken = { ...SNAPSHOT, progress: "nope" };
+  assert.throws(
+    () => client.describeSend("alert", broken),
+    (err) => err instanceof InvalidSnapshotError,
+  );
+  assert.equal(mock.requests.length, 0);
 });
 
 test("close() refuses subsequent requests with ClientClosedError", async (t) => {

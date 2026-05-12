@@ -47,12 +47,15 @@ const MAX_PAYLOAD_BYTES_BROADCAST = 5120;
 
 type PayloadKind = "alert" | "update" | "start" | "end" | "broadcast";
 
+function payloadBudgetFor(kind: PayloadKind): number {
+  return kind === "broadcast" ? MAX_PAYLOAD_BYTES_BROADCAST : MAX_PAYLOAD_BYTES_DEFAULT;
+}
+
 function assertPayloadWithinLimit(
   payload: string,
   kind: PayloadKind,
 ): void {
-  const limit =
-    kind === "broadcast" ? MAX_PAYLOAD_BYTES_BROADCAST : MAX_PAYLOAD_BYTES_DEFAULT;
+  const limit = payloadBudgetFor(kind);
   const size = Buffer.byteLength(payload, "utf8");
   if (size > limit) {
     throw new PayloadTooLargeError({
@@ -73,8 +76,33 @@ export interface CreatePushClientOptions {
   bundleId: string;
   /** APNs environment to target. */
   environment: "development" | "production";
-  /** Override the retry policy. Defaults: 3 retries, 100ms base, 5s cap, jitter on. */
+  /**
+   * @deprecated Use `_unsafeRetryOverride` if you really need to tune retries.
+   * Kept as an alias for one minor version; emits a one-time deprecation
+   * warning when set. Will be removed in v3.
+   */
   retryPolicy?: Partial<RetryPolicy>;
+  /**
+   * Operational escape hatch for tests and SRE incident response. Named ugly
+   * on purpose: AI consumers should never reach for this, and the prefix is
+   * the marker that you're stepping outside the SDK's curated defaults.
+   *
+   * Use when:
+   * - A test needs deterministic retry timing (`{ maxRetries: 0, jitter: false }`).
+   * - You're draining traffic during an Apple-side incident.
+   * - You're handling a multi-tenant rate-limit budget the SDK can't model.
+   *
+   * Don't use for: tuning your "normal" retries. The defaults are
+   * priority-aware (priority-10 sends get a stricter profile automatically)
+   * and honor Retry-After. There is essentially no daily-driver tuning case.
+   *
+   * Precedence (highest wins):
+   *   1. MOBILE_SURFACES_PUSH_DISABLE_RETRY=1 (sets maxRetries=0)
+   *   2. _unsafeRetryOverride
+   *   3. retryPolicy (deprecated alias)
+   *   4. DEFAULT_RETRY_POLICY
+   */
+  _unsafeRetryOverride?: Partial<RetryPolicy>;
   /** ms with no in-flight requests before the HTTP/2 session is closed. Default 60_000. */
   idleTimeoutMs?: number;
   /**
@@ -173,10 +201,89 @@ export interface LiveActivityStartOptions extends SendOptions {
   attributesType?: string;
 }
 
-export interface SendResponse {
+/**
+ * One observed retry during a send. Emitted in order on `PushResult.retried`
+ * so an agent can reconstruct what happened without subscribing to hooks.
+ * `attempt` is 0-indexed and identifies the attempt that failed (attempt 0 is
+ * the first try). `reason` is the APNs reason string for HTTP failures or the
+ * Node error code (e.g. "ECONNRESET") for transport failures. `backoffMs` is
+ * the actual sleep before the next attempt — equal to Retry-After when APNs
+ * supplied it, otherwise the computed exponential backoff.
+ */
+export interface RetryEvent {
+  attempt: number;
+  reason: string;
+  backoffMs: number;
+  trapId?: string;
+}
+
+/**
+ * Result of a successful send. Carries enough structured context that an AI
+ * consumer can answer "did this work, how hard did the SDK try, did we trip
+ * any traps along the way?" without parsing log lines or subscribing to
+ * hooks. SendResponse is a backwards-compatible alias.
+ */
+export interface PushResult {
+  /** APNs request id (echoed in the apns-id response header). */
   apnsId: string;
+  /** HTTP status of the final, successful response (always 2xx). */
   status: number;
+  /** Wall-clock timestamp of the successful response. */
   timestamp: Date;
+  /** Total number of attempts made, including the successful one. >=1. */
+  attempts: number;
+  /** Cumulative wall-clock ms across all attempts (including backoff sleeps). */
+  latencyMs: number;
+  /** Ordered list of failed attempts preceding the success. Empty on first-try success. */
+  retried: ReadonlyArray<RetryEvent>;
+  /** Unique trap ids surfaced during retries. Empty when no trap-bound error fired. */
+  trapHits: ReadonlyArray<string>;
+}
+
+/** @deprecated Use `PushResult`. Kept for backwards compatibility. */
+export type SendResponse = PushResult;
+
+/** Operations describeSend can plan. Mirrors the public send methods. */
+export type DescribeSendOperation = "alert" | "update" | "start" | "end" | "broadcast";
+
+/**
+ * Side-effect-free description of what a send would do. Returned by
+ * `client.describeSend(...)`; lets an AI consumer (or a test) verify the
+ * envelope an APNs request would carry without making the network round-trip.
+ *
+ * Shares the same code path as the real send methods: payload construction,
+ * priority resolution, topic computation, and the priority-aware retry
+ * policy are all derived identically. The only thing describeSend skips is
+ * the JWT-signed HTTP/2 dispatch.
+ *
+ * `withinBudget` is false when the serialized payload exceeds the MS011
+ * ceiling (4 KB device / 5 KB broadcast). Unlike the live send, describeSend
+ * never throws on oversize; it surfaces the overrun via this flag and
+ * populates `trapHits` with "MS011" so an agent can fix the snapshot before
+ * committing.
+ */
+export interface DescribedSend {
+  operation: DescribeSendOperation;
+  /** apns-push-type the SDK would send. */
+  pushType: "alert" | "liveactivity";
+  /** apns-topic the SDK would send. Undefined for broadcast (path-routed). */
+  topic: string | undefined;
+  /** apns-priority that would be applied (caller override wins; otherwise the per-op default). */
+  priority: 5 | 10;
+  /** Serialized JSON payload size in bytes. */
+  payloadBytes: number;
+  /** MS011 ceiling for this kind of send (4096 device, 5120 broadcast). */
+  budgetLimit: number;
+  /** True when payloadBytes <= budgetLimit. */
+  withinBudget: boolean;
+  /** Catalog trap ids this send would currently trip. Empty on a clean plan. */
+  trapHits: ReadonlyArray<string>;
+  /**
+   * Retry policy that would apply on a TooManyRequests / transient failure.
+   * Reflects the priority-aware adjustment (priority-10 sends get a stricter
+   * profile) without exposing it as a knob.
+   */
+  effectiveRetryPolicy: RetryPolicy;
 }
 
 interface ChannelManageResponse {
@@ -358,6 +465,49 @@ function nowSec(): number {
   return Math.floor(Date.now() / 1000);
 }
 
+// Module-level latch so the deprecation warning fires once per process, not
+// once per createPushClient call. Tests can reset this via the named export
+// below; production code should never need to.
+let retryPolicyDeprecationWarned = false;
+
+/**
+ * Reset the one-time `retryPolicy` deprecation-warning latch. Test-only; the
+ * production path lets the warning fire once and stay quiet.
+ */
+export function __resetRetryPolicyDeprecationLatch(): void {
+  retryPolicyDeprecationWarned = false;
+}
+
+function resolveRetryPolicy(options: CreatePushClientOptions): RetryPolicy {
+  const fromDeprecated = options.retryPolicy;
+  if (fromDeprecated && !retryPolicyDeprecationWarned) {
+    retryPolicyDeprecationWarned = true;
+    const warn = (globalThis as { console?: { warn?: (...args: unknown[]) => void } })
+      .console?.warn;
+    if (warn) {
+      warn(
+        "[@mobile-surfaces/push] createPushClient.retryPolicy is deprecated; " +
+          "use _unsafeRetryOverride for the same effect. retryPolicy will be " +
+          "removed in v3. See docs/push.md#retry-policy.",
+      );
+    }
+  }
+  const merged: RetryPolicy = {
+    ...DEFAULT_RETRY_POLICY,
+    ...(fromDeprecated ?? {}),
+    ...(options._unsafeRetryOverride ?? {}),
+  };
+  // Env-var kill switch always wins. Use case: SRE drains traffic during an
+  // APNs incident without redeploying. The value is intentionally coarse
+  // (sets maxRetries=0) because finer tuning belongs in code, not env.
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } })
+    .process?.env;
+  if (env?.MOBILE_SURFACES_PUSH_DISABLE_RETRY === "1") {
+    return { ...merged, maxRetries: 0 };
+  }
+  return merged;
+}
+
 export class PushClient {
   readonly #options: Required<Pick<CreatePushClientOptions, "keyId" | "teamId" | "bundleId" | "environment">>;
   readonly #retryPolicy: RetryPolicy;
@@ -376,7 +526,7 @@ export class PushClient {
       bundleId: options.bundleId,
       environment: options.environment,
     };
-    this.#retryPolicy = { ...DEFAULT_RETRY_POLICY, ...(options.retryPolicy ?? {}) };
+    this.#retryPolicy = resolveRetryPolicy(options);
     this.#hooks = options.hooks ?? {};
 
     const keyPem = resolveKeyPem(options.keyPath);
@@ -413,7 +563,7 @@ export class PushClient {
     deviceToken: string,
     snapshot: LiveSurfaceSnapshot,
     options: SendOptions = {},
-  ): Promise<SendResponse> {
+  ): Promise<PushResult> {
     this.#assertOpen();
     const validated = validateSnapshot(snapshot);
     const live = snapshotMustBeLiveActivity(validated, "alert()");
@@ -438,7 +588,7 @@ export class PushClient {
     activityToken: string,
     snapshot: LiveSurfaceSnapshot,
     options: SendOptions = {},
-  ): Promise<SendResponse> {
+  ): Promise<PushResult> {
     this.#assertOpen();
     const validated = validateSnapshot(snapshot);
     const live = snapshotMustBeLiveActivity(validated, "update()");
@@ -467,7 +617,7 @@ export class PushClient {
     snapshot: LiveSurfaceSnapshot,
     attributes: Record<string, unknown>,
     options: LiveActivityStartOptions = {},
-  ): Promise<SendResponse> {
+  ): Promise<PushResult> {
     this.#assertOpen();
     const validated = validateSnapshot(snapshot);
     const live = snapshotMustBeLiveActivity(validated, "start()");
@@ -496,7 +646,7 @@ export class PushClient {
     activityToken: string,
     snapshot: LiveSurfaceSnapshot,
     options: SendOptions = {},
-  ): Promise<SendResponse> {
+  ): Promise<PushResult> {
     this.#assertOpen();
     const validated = validateSnapshot(snapshot);
     const live = snapshotMustBeLiveActivity(validated, "end()");
@@ -527,7 +677,7 @@ export class PushClient {
     channelId: string,
     snapshot: LiveSurfaceSnapshot,
     options: BroadcastOptions = {},
-  ): Promise<SendResponse> {
+  ): Promise<PushResult> {
     this.#assertOpen();
     const validated = validateSnapshot(snapshot);
     const live = snapshotMustBeLiveActivity(validated, "broadcast()");
@@ -553,6 +703,96 @@ export class PushClient {
       snapshotId: live.id,
       token: channelId,
     });
+  }
+
+  /**
+   * Side-effect-free plan of what a send would do. Returns the envelope the
+   * SDK would put on the wire (push type, topic, priority, payload bytes)
+   * plus the effective retry policy that would apply and any traps the send
+   * would trip (e.g. MS011 if oversized).
+   *
+   * Never dispatches an HTTP request; never mints a JWT. Safe to call without
+   * APNs credentials configured. Useful for AI consumers verifying a snapshot
+   * before committing, and for tests that want to assert the envelope without
+   * an APNs key.
+   *
+   * Throws `InvalidSnapshotError` only when the snapshot itself fails
+   * validation (Zod schema or kind mismatch) — the same contract as the live
+   * send. Oversized payloads surface via `withinBudget: false` + a "MS011"
+   * trapHit rather than throwing.
+   */
+  describeSend(
+    operation: DescribeSendOperation,
+    snapshot: LiveSurfaceSnapshot,
+    options: SendOptions | LiveActivityStartOptions | BroadcastOptions = {},
+  ): DescribedSend {
+    const validated = validateSnapshot(snapshot);
+    const live = snapshotMustBeLiveActivity(validated, `describeSend(${operation})`);
+    let pushType: "alert" | "liveactivity";
+    let topic: string | undefined;
+    let defaultPriority: 5 | 10;
+    let payload: string;
+    if (operation === "alert") {
+      pushType = "alert";
+      topic = this.#options.bundleId;
+      defaultPriority = 10;
+      payload = JSON.stringify(toAlertPayload(validated));
+    } else if (operation === "broadcast") {
+      pushType = "liveactivity";
+      topic = undefined;
+      defaultPriority = 5;
+      payload = JSON.stringify(
+        this.#buildActivityPayload(live, "update", undefined, options),
+      );
+    } else {
+      pushType = "liveactivity";
+      topic = `${this.#options.bundleId}.push-type.liveactivity`;
+      defaultPriority = 5;
+      if (operation === "start") {
+        const startOptions = options as LiveActivityStartOptions;
+        const attributesType = startOptions.attributesType ?? "MobileSurfacesActivityAttributes";
+        payload = JSON.stringify(
+          this.#buildActivityPayload(
+            live,
+            "start",
+            { attributesType, attributes: {} },
+            options,
+          ),
+        );
+      } else if (operation === "end") {
+        const dismissalSeconds = options.dismissalDateSeconds ?? nowSec();
+        payload = JSON.stringify(
+          this.#buildActivityPayload(live, "end", undefined, {
+            ...options,
+            dismissalDateSeconds: dismissalSeconds,
+          }),
+        );
+      } else {
+        payload = JSON.stringify(
+          this.#buildActivityPayload(live, "update", undefined, options),
+        );
+      }
+    }
+    const priority: 5 | 10 = options.priority ?? defaultPriority;
+    const payloadBytes = Buffer.byteLength(payload, "utf8");
+    const budgetKind: PayloadKind = operation === "broadcast" ? "broadcast" : operation;
+    const budgetLimit = payloadBudgetFor(budgetKind);
+    const withinBudget = payloadBytes <= budgetLimit;
+    const trapHits = withinBudget ? [] : ["MS011"];
+    const effectiveRetryPolicy = this.#effectivePolicyFor({
+      "apns-priority": String(priority),
+    });
+    return {
+      operation,
+      pushType,
+      topic,
+      priority,
+      payloadBytes,
+      budgetLimit,
+      withinBudget,
+      trapHits,
+      effectiveRetryPolicy,
+    };
   }
 
   /**
@@ -678,7 +918,7 @@ export class PushClient {
     defaultPriority: 5 | 10;
     apnsTopic: string;
     options: SendOptions;
-  }): Promise<SendResponse> {
+  }): Promise<PushResult> {
     assertPayloadWithinLimit(args.payload, args.operation as PayloadKind);
     const apnsId = args.options.apnsId ?? genApnsId();
     const priority = String(args.options.priority ?? args.defaultPriority);
@@ -708,6 +948,10 @@ export class PushClient {
   // hook fields. JWT refresh on retry covers ExpiredProviderToken; transport-
   // error retry uses the policy's backoff without consulting Retry-After
   // (no response yet to honor).
+  //
+  // The retry tracker (retried[], cumulative latency, unique trap hits) is
+  // accumulated across attempts and handed to mapSuccess so device sends can
+  // surface it on PushResult. Management ops can ignore it.
   async #executeWithRetry<TSuccess>(
     transport: Http2Client,
     headers: Record<string, string>,
@@ -719,13 +963,25 @@ export class PushClient {
       /** apns-id known up-front (device sends generate it client-side). */
       apnsId?: string;
     },
-    mapSuccess: (res: {
-      status: number;
-      headers: Record<string, string | string[] | undefined>;
-      body: string;
-    }) => TSuccess,
+    mapSuccess: (
+      res: {
+        status: number;
+        headers: Record<string, string | string[] | undefined>;
+        body: string;
+      },
+      tracker: { attempts: number; latencyMs: number; retried: RetryEvent[]; trapHits: string[] },
+    ) => TSuccess,
   ): Promise<TSuccess> {
     let attempt = 0;
+    const retried: RetryEvent[] = [];
+    const trapHitsSet = new Set<string>();
+    let cumulativeLatencyMs = 0;
+    // Priority 10 sends are budgeted aggressively by iOS (MS015); throttle
+    // recovery there should back off harder and give up sooner than priority
+    // 5 (which has more headroom). The differentiation is fixed internal
+    // behavior — no knob — so AI consumers never have to choose. Retry-After
+    // from APNs still wins when present (computeBackoffMs honors it).
+    const effectivePolicy = this.#effectivePolicyFor(headers);
     while (true) {
       this.#assertOpen();
       const startedAt = Date.now();
@@ -736,6 +992,7 @@ export class PushClient {
           timeoutMs: this.#requestTimeoutMs,
         });
         const durationMs = Date.now() - startedAt;
+        cumulativeLatencyMs += durationMs;
         // For management ops the apns-id is only known after response;
         // device sends know it up-front and pass it via hookMeta.
         const apnsId = hookMeta.apnsId ?? pickHeader(res.headers, "apns-id");
@@ -748,12 +1005,17 @@ export class PushClient {
             status: res.status,
             durationMs,
           });
-          return mapSuccess(res);
+          return mapSuccess(res, {
+            attempts: attempt + 1,
+            latencyMs: cumulativeLatencyMs,
+            retried,
+            trapHits: [...trapHitsSet],
+          });
         }
         const apnsError = this.#errorFromResponse(res);
         const willRetry =
           this.#shouldRetry(apnsError, attempt) &&
-          attempt < this.#retryPolicy.maxRetries;
+          attempt < effectivePolicy.maxRetries;
         this.#fireErrorHook(apnsError, {
           ...hookMeta,
           attempt,
@@ -763,7 +1025,15 @@ export class PushClient {
           durationMs,
         });
         if (willRetry) {
-          await this.#waitForRetry(apnsError, attempt);
+          const backoffMs = await this.#waitForRetry(apnsError, attempt, effectivePolicy);
+          cumulativeLatencyMs += backoffMs;
+          retried.push({
+            attempt,
+            reason: apnsError.reason,
+            backoffMs,
+            ...(apnsError.trapId ? { trapId: apnsError.trapId } : {}),
+          });
+          if (apnsError.trapId) trapHitsSet.add(apnsError.trapId);
           attempt += 1;
           // Refresh JWT in case the rejection was provider-token-related.
           headers.authorization = `bearer ${this.#jwt.get()}`;
@@ -776,15 +1046,24 @@ export class PushClient {
         }
         const willRetry =
           isTransportError(err) && attempt < this.#retryPolicy.maxRetries;
+        const durationMs = Date.now() - startedAt;
+        cumulativeLatencyMs += durationMs;
         this.#fireErrorHook(err, {
           ...hookMeta,
           attempt,
           isFinalAttempt: !willRetry,
           apnsId: hookMeta.apnsId,
-          durationMs: Date.now() - startedAt,
+          durationMs,
         });
         if (willRetry) {
-          await sleep(computeBackoffMs(attempt, this.#retryPolicy));
+          const backoffMs = computeBackoffMs(attempt, effectivePolicy);
+          await sleep(backoffMs);
+          cumulativeLatencyMs += backoffMs;
+          retried.push({
+            attempt,
+            reason: transportErrorCode(err) ?? "TransportError",
+            backoffMs,
+          });
           attempt += 1;
           continue;
         }
@@ -798,6 +1077,7 @@ export class PushClient {
     body: string | undefined,
     hookMeta: { operation: PushHookOperation; token?: string },
   ): Promise<ChannelManageResponse> {
+    // Management ops don't expose a PushResult, so the tracker is dropped.
     return this.#executeWithRetry(this.#manage, headers, body, hookMeta, (res) => ({
       status: res.status,
       headers: res.headers,
@@ -815,13 +1095,21 @@ export class PushClient {
       snapshotId?: string;
       token?: string;
     },
-  ): Promise<SendResponse> {
+  ): Promise<PushResult> {
     return this.#executeWithRetry(
       transport,
       headers,
       body,
       { ...hookMeta, apnsId },
-      (res) => ({ apnsId, status: res.status, timestamp: new Date() }),
+      (res, tracker) => ({
+        apnsId,
+        status: res.status,
+        timestamp: new Date(),
+        attempts: tracker.attempts,
+        latencyMs: tracker.latencyMs,
+        retried: tracker.retried,
+        trapHits: tracker.trapHits,
+      }),
     );
   }
 
@@ -855,13 +1143,50 @@ export class PushClient {
     return this.#retryPolicy.retryableReasons.has(err.reason);
   }
 
-  async #waitForRetry(err: ApnsError, attempt: number): Promise<void> {
+  async #waitForRetry(
+    err: ApnsError,
+    attempt: number,
+    policy: RetryPolicy,
+  ): Promise<number> {
     let retryAfterMs: number | undefined;
     if (err instanceof TooManyRequestsError && err.retryAfterSeconds !== undefined) {
       retryAfterMs = err.retryAfterSeconds * 1000;
     }
-    await sleep(computeBackoffMs(attempt, this.#retryPolicy, retryAfterMs));
+    const backoffMs = computeBackoffMs(attempt, policy, retryAfterMs);
+    await sleep(backoffMs);
+    return backoffMs;
   }
+
+  // Per-request retry policy adjusted for priority. Priority 10 (alerts, state
+  // transitions the user must see) gets a stricter profile: tighter retry
+  // count, harder backoff floor and cap. This is fixed internal behavior —
+  // not a constructor knob — because picking the right policy here is not
+  // something a calling agent should have to reason about. The base policy
+  // (possibly overridden via _unsafeRetryOverride for tests/SRE escape hatch)
+  // is the floor that priority-10 multiplies from.
+  //
+  // Apple does not publish exact rate-limit numbers, so the chosen multipliers
+  // are conservative: 2x base/cap, maxRetries clamped to 2. Retry-After from
+  // APNs still wins when present (computeBackoffMs honors it).
+  #effectivePolicyFor(headers: Record<string, string>): RetryPolicy {
+    const priority = headers["apns-priority"];
+    if (priority !== "10") return this.#retryPolicy;
+    return {
+      ...this.#retryPolicy,
+      maxRetries: Math.min(this.#retryPolicy.maxRetries, 2),
+      baseDelayMs: this.#retryPolicy.baseDelayMs * 2,
+      maxDelayMs: this.#retryPolicy.maxDelayMs * 2,
+    };
+  }
+}
+
+// Try to recover a Node error code from a transport error so retry-tracking
+// can record something meaningful (ECONNRESET, ETIMEDOUT, etc.) rather than a
+// generic "TransportError" string.
+function transportErrorCode(err: unknown): string | undefined {
+  if (typeof err !== "object" || err === null) return undefined;
+  const code = (err as { code?: unknown }).code;
+  return typeof code === "string" ? code : undefined;
 }
 
 /**

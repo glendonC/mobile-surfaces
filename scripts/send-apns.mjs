@@ -1,229 +1,73 @@
 #!/usr/bin/env node
-// Send a push to APNs from the local machine. Six modes:
+// Thin wrapper over @mobile-surfaces/push for one-off sends from the local
+// machine. Five send modes plus channel management:
 //   --type=alert                         regular notification (apns-push-type=alert)
 //   --type=liveactivity --activity-token=…       ActivityKit start/update/end on an existing activity
 //   --type=liveactivity --push-to-start-token=…  iOS 17.2+ remote start via push-to-start token (event=start only)
 //   --type=liveactivity --channel-id=…           iOS 18 broadcast push on a channel (event=update only)
-//   --channel-action=create|list|delete          iOS 18 channel management (separate host+port, not /3/device)
+//   --channel-action=create|list|delete          iOS 18 channel management
+//
+// The SDK is the single source of truth for JWT minting, HTTP/2 transport,
+// retry policy, and the APNs reason guide. This script's job is parse + dispatch
+// + print. If you find yourself reading APNs internals to debug this file,
+// look in packages/push/src/ first.
 //
 // Env (load from .env.local or shell):
 //   APNS_KEY_PATH        path to the .p8 APNs auth key
 //   APNS_KEY_ID          10-char key id from Apple Dev portal
 //   APNS_TEAM_ID         10-char team id
-//   APNS_BUNDLE_ID       e.g. com.example.mobilesurfaces
+//   APNS_BUNDLE_ID       e.g. com.example.mobilesurfaces (no .push-type.liveactivity suffix)
 //
-// Send-mode usage (POST /3/device/<token> on api{,.development}.push.apple.com:443):
-//   node scripts/send-apns.mjs --device-token=<hex> --type=alert --env=development
+// Usage examples (every send requires --snapshot-file — for credential-only
+// validation, use `pnpm surface:setup-apns` instead):
+//   node scripts/send-apns.mjs --device-token=<hex> --type=alert \
+//     --snapshot-file=./data/surface-fixtures/active-progress.json --env=development
 //   node scripts/send-apns.mjs --activity-token=<hex> --type=liveactivity \
 //     --event=update --snapshot-file=./data/surface-fixtures/active-progress.json --env=development
 //   node scripts/send-apns.mjs --push-to-start-token=<hex> --type=liveactivity \
-//     --event=start --attributes-file=./data/example-attributes.json --env=development
+//     --event=start --snapshot-file=./data/surface-fixtures/queued.json \
+//     --attributes-file=./data/example-attributes.json --env=development
 //
-// `device-token` is the APNs device token (regular pushes).
-// `activity-token` is the per-activity push token (`Activity.pushTokenUpdates`)
-//   for an existing Live Activity. Use for --event=update or --event=end and
-//   for --event=start when you have a pre-rotated activity-side token.
-// `push-to-start-token` is the app-wide push-to-start token from
-//   `Activity<…>.pushToStartTokenUpdates` (iOS 17.2+). Use only with
-//   --event=start. The HTTP path stays /3/device/<token>; the difference is
-//   solely which token your provider has on hand at request time.
-//   Caveat (FB21158660): a push-to-start token issued before the user
-//   force-quits the app remains valid against APNs but the OS will not
-//   actually start the activity until the user re-launches the app at least
-//   once. Plan rollouts and customer-support scripts accordingly.
+// Verification mode (--print / --describe): emits the request envelope the SDK
+// *would* dispatch (push type, topic, priority, payload bytes vs MS011 ceiling,
+// effective retry policy, trap hits) without making the network call. Useful
+// for AI-generated invocations and CI assertions that don't have APNs creds.
+//   node scripts/send-apns.mjs --device-token=<hex> --type=alert \
+//     --snapshot-file=./data/surface-fixtures/queued.json --print
 //
-// Live Activity events (for --activity-token / --push-to-start-token modes):
-//   --event=start    iOS 17.2+ remote start. Requires --attributes-file with
-//                    surfaceId and modeLabel; defaults --attributes-type to
-//                    MobileSurfacesActivityAttributes (override after rename).
-//   --event=update   ActivityKit content update.
-//   --event=end      End the activity. Sets dismissal-date to now unless
-//                    --dismissal-date is passed.
-//
-// Channel broadcast usage (POST /4/broadcasts/apps/<bundle-id> on the standard
-// APNs host — broadcast lives on a different path, not a different domain):
-//   node scripts/send-apns.mjs --type=liveactivity --channel-id=<base64> \
-//     --event=update --snapshot-file=./data/surface-fixtures/active-progress.json --env=development
-// Channels only support event=update; start/end are rejected before connect.
-// No apns-topic header is sent — broadcast routing uses the bundle-id in the
-// path. apns-channel-id is required.
-//
-// Channel management usage (api-manage-broadcast{,.sandbox}.push.apple.com:
-// port 2195 sandbox, 2196 production — verified against Apple's "Sending
-// channel management requests to APNs" doc, Sept-2024 revision):
-//   node scripts/send-apns.mjs --channel-action=create --env=development [--storage-policy=no-storage|most-recent-message]
-//   node scripts/send-apns.mjs --channel-action=list   --env=development
-//   node scripts/send-apns.mjs --channel-action=delete --channel-id=<base64> --env=development
-// Channel-management responses are printed in a compact form, not the
-// "HTTP / Topic / Push-type / Payload" footer used for sends — that footer
-// would be misleading for management traffic.
+// Machine-readable mode (--json): stdout becomes a stable JSON object with
+// deterministic keys and structured error context. Stderr stays human-readable.
+//   node scripts/send-apns.mjs --device-token=<hex> --type=alert \
+//     --snapshot-file=./data/surface-fixtures/queued.json --json
 //
 // `--stale-date=<unix-seconds>` and `--dismissal-date=<unix-seconds>` map
 // directly to the APNs `stale-date` and `dismissal-date` aps fields.
 //
-// `--priority` overrides apns-priority. Defaults: 5 for liveactivity (Apple
-// rate-limits priority 10 aggressively), 10 for alert. Use 10 only when the
-// update must be visible immediately.
+// `--priority` overrides apns-priority. Defaults: 5 for liveactivity (MS015 —
+// Apple rate-limits priority 10 aggressively), 10 for alert.
 
-import crypto from "node:crypto";
 import fs from "node:fs";
-import http2 from "node:http2";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { loadEnvFile } from "./lib/load-env.mjs";
+import { assertSnapshot } from "../packages/surface-contracts/src/index.ts";
 import {
-  assertSnapshot,
-  toAlertPayload,
-  toLiveActivityContentState,
-} from "../packages/surface-contracts/src/index.ts";
+  APNS_REASON_GUIDE,
+  ApnsError,
+  createPushClient,
+} from "../packages/push/src/index.ts";
 
 // Pick up APNs creds written by `pnpm surface:setup-apns`. Existing shell
 // exports still win — loadEnvFile only fills unset keys. Silent no-op when
 // no .env exists.
 loadEnvFile(".env");
 
-// Apple's APNs returns a JSON body with a `reason` enum on every non-2xx.
-// docs/troubleshooting.md (#31-44) maps these to causes; mirror the table here
-// so the script can print a fix below the raw Body line without making the
-// user switch tabs. Keep the raw Body intact for transcript fidelity.
-//
-// Channel/broadcast reason strings (BadChannelId, ChannelNotRegistered,
-// MissingChannelId, CannotCreateChannelConfig, InvalidPushType) verified
-// against Apple's "Handling error responses from APNs" doc:
-// https://developer.apple.com/documentation/usernotifications/handling-error-responses-from-apns
-// Two of these (BadChannelId, ChannelNotRegistered) replace the placeholder
-// "InvalidChannelId" name that's been circulating in third-party blog posts —
-// Apple separates "malformed/oversized" from "doesn't exist". Likewise the
-// max-channels error is "CannotCreateChannelConfig", not "ChannelLimitExceeded".
-export const APNS_REASON_GUIDE = {
-  BadDeviceToken: {
-    cause: "Token / environment mismatch.",
-    fix: "Use --env=development for dev-client / expo run:ios builds, --env=production only for TestFlight / App Store builds. Tokens from one environment do not authenticate against the other.",
-  },
-  InvalidProviderToken: {
-    cause: "JWT was rejected by APNs.",
-    fix: "Confirm APNS_KEY_ID (10 chars), APNS_TEAM_ID (10 chars), and the .p8 at APNS_KEY_PATH all match the same auth key in the Apple Developer portal. JWTs are also rejected when local clock skew exceeds ~1 hour — sync system time.",
-  },
-  TopicDisallowed: {
-    cause: "Auth key is not enabled for this bundle id, or APNS_BUNDLE_ID does not match apps/mobile/app.json's expo.ios.bundleIdentifier.",
-    fix: "For Live Activity pushes, the topic is automatically suffixed with .push-type.liveactivity. Do not include that suffix in APNS_BUNDLE_ID itself.",
-  },
-  Forbidden: {
-    cause: "Auth key was revoked.",
-    fix: "Generate a new APNs auth key in the Apple Developer portal and update APNS_KEY_PATH / APNS_KEY_ID.",
-  },
-  BadPriority: {
-    cause: "Priority is not 5 or 10.",
-    fix: "Use --priority=5 (default for Live Activity) or --priority=10 (immediate user-visible).",
-  },
-  BadExpirationDate: {
-    cause: "--stale-date or apns-expiration is malformed.",
-    fix: "Pass a positive unix-seconds integer. The script validates --stale-date and --dismissal-date locally, so this usually means clock skew or a stale state file. For broadcast on a No-Message-Stored channel, apns-expiration must be 0 — Apple rejects nonzero expirations there.",
-  },
-  BadDate: {
-    cause: "A timestamp field is malformed.",
-    fix: "Same as BadExpirationDate — confirm --stale-date / --dismissal-date are unix-seconds integers.",
-  },
-  MissingTopic: {
-    cause: "apns-topic header missing or wrong format.",
-    fix: "Set APNS_BUNDLE_ID to your bundle identifier (without .push-type.liveactivity suffix; the script appends it).",
-  },
-  PayloadTooLarge: {
-    cause: "ActivityKit payload exceeded 4 KB (5 KB for broadcast).",
-    fix: "Trim --state-file or --snapshot-file. Per-activity payloads are bounded at 4 KB; broadcast payloads at 5 KB.",
-  },
-  ExpiredProviderToken: {
-    cause: "JWT is older than 1 hour and APNs rejected it.",
-    fix: "JWTs are minted per script run with iat=now; this usually means system clock skew. Sync NTP and retry.",
-  },
-  TooManyRequests: {
-    cause: "Apple is rate-limiting your bundle id (or the Live Activity priority budget is exhausted).",
-    fix: "Back off. Live Activity priority 10 has aggressive budgets — drop to 5 unless the update is user-visible.",
-  },
-  // Channel / broadcast reasons. Strings copied verbatim from Apple's
-  // "Handling error responses from APNs" doc table.
-  MissingChannelId: {
-    cause: "The apns-channel-id header is missing.",
-    fix: "Pass --channel-id=<base64> for broadcast sends and channel-action=delete. The header is set automatically when the flag is provided.",
-  },
-  BadChannelId: {
-    cause: "The apns-channel-id header isn't properly encoded, or it's greater than the allowed length.",
-    fix: "Channel IDs are base64-encoded strings returned by --channel-action=create. Don't truncate, URL-decode, or re-encode them; pass the value through as-is.",
-  },
-  ChannelNotRegistered: {
-    cause: "The apns-channel-id header used in the request doesn't exist.",
-    fix: "Channels are environment-scoped — a channel created with --env=development cannot be reached with --env=production, and vice versa. Re-create the channel in the target environment, or list with --channel-action=list to confirm it exists.",
-  },
-  InvalidPushType: {
-    cause: "The apns-push-type attribute is set to an incorrect value. The only allowed value is LiveActivity (for channels).",
-    fix: "For broadcast/channel sends the script always sets apns-push-type=liveactivity. If you reach this from a custom payload, drop the override.",
-  },
-  CannotCreateChannelConfig: {
-    cause: "You have reached the maximum channel limit for your application.",
-    fix: "Apple allows up to 10,000 channels per app per environment. Use --channel-action=list to audit, then --channel-action=delete on stale channels before creating new ones.",
-  },
-  FeatureNotEnabled: {
-    cause: "Broadcast capability is not enabled for this bundle id.",
-    fix: "Enable broadcast for the auth key in the Apple Developer portal (Certificates, Identifiers & Profiles > Keys). The capability is per-key, not per-app.",
-  },
-  MissingPushType: {
-    cause: "The apns-push-type header is missing.",
-    fix: "The script sets this automatically; if you see this from a custom payload, restore --type=liveactivity.",
-  },
-};
-
-// Format a millisecond skew as "Nm Ss" for human-readable output.
-function formatSkew(ms) {
-  const totalSeconds = Math.round(Math.abs(ms) / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}m ${seconds}s`;
-}
+// Re-exported so scripts/send-apns.test.mjs can assert the catalog stays in
+// sync. The SDK is the only source.
+export { APNS_REASON_GUIDE };
 
 const REQUIRED_ENV = ["APNS_KEY_PATH", "APNS_KEY_ID", "APNS_TEAM_ID", "APNS_BUNDLE_ID"];
-
-// Apple .p8 keys are around 250 bytes. 64 KB is generous and prevents a
-// misconfigured APNS_KEY_PATH (e.g. pointing at a giant log) from blowing up
-// memory before we notice.
-const KEY_FILE_MAX_BYTES = 64 * 1024;
-
-// Read the APNs auth key without surfacing the resolved filesystem path in
-// error messages. The path is host-specific and can leak a user's home
-// directory layout into shared logs; APNS_KEY_PATH is the actionable name.
-function loadApnsKey() {
-  try {
-    const fd = fs.openSync(path.resolve(process.env.APNS_KEY_PATH), "r");
-    try {
-      const stat = fs.fstatSync(fd);
-      if (stat.size > KEY_FILE_MAX_BYTES) {
-        throw new Error(
-          `APNs auth key at APNS_KEY_PATH is ${stat.size} bytes (max ${KEY_FILE_MAX_BYTES}). Confirm APNS_KEY_PATH points at a .p8 file.`,
-        );
-      }
-      return fs.readFileSync(fd, "utf8");
-    } finally {
-      fs.closeSync(fd);
-    }
-  } catch (err) {
-    if (err && (err.code === "ENOENT" || err.code === "EACCES" || err.code === "EISDIR")) {
-      throw new Error(
-        `Could not read APNs auth key (${err.code}). Confirm APNS_KEY_PATH points at a readable .p8 file.`,
-      );
-    }
-    // Node fs errors carry the resolved absolute path on err.path and embed
-    // it in err.message; rethrowing as-is would surface the user's home
-    // directory layout (or a CI secret mount point) into operator logs. The
-    // `err.path` check is the fs-error tell — non-fs errors (e.g. the size
-    // guard above) re-throw untouched.
-    if (err && typeof err === "object" && typeof err.path === "string") {
-      throw new Error(
-        `Could not read APNs auth key${err.code ? ` (${err.code})` : ""}. Confirm APNS_KEY_PATH points at a readable .p8 file.`,
-      );
-    }
-    throw err;
-  }
-}
 
 // CLI option spec is shared between parse-time validation (importable, used by
 // tests) and the run-time send/manage path.
@@ -238,7 +82,6 @@ const PARSE_OPTIONS = {
   env: { type: "string", default: "development" },
   event: { type: "string", default: "update" },
   "snapshot-file": { type: "string" },
-  "state-file": { type: "string" },
   "attributes-file": { type: "string" },
   "attributes-type": {
     type: "string",
@@ -246,16 +89,21 @@ const PARSE_OPTIONS = {
   },
   "stale-date": { type: "string" },
   "dismissal-date": { type: "string" },
-  title: { type: "string", default: "Mobile Surfaces" },
-  body: { type: "string", default: "Push path is wired." },
   priority: { type: "string" },
+  print: { type: "boolean", default: false },
+  describe: { type: "boolean", default: false },
+  json: { type: "boolean", default: false },
 };
 
-// Hex-only validation for tokens that travel in URL paths (device,
-// activity, push-to-start). APNs tokens are 64-hex-char lowercase strings —
-// we accept any non-empty hex run because Apple has occasionally widened the
-// length and we don't want to false-reject a legitimate token.
+// Hex-only validation for tokens that travel in URL paths. APNs tokens are
+// 64-hex-char lowercase strings, but Apple has occasionally widened the
+// length; we accept any non-empty hex run rather than false-rejecting.
 const HEX_TOKEN_PATTERN = /^[0-9a-fA-F]+$/;
+
+const SETUP_REDIRECT =
+  "If you're trying to validate credentials, run `pnpm surface:setup-apns` " +
+  "— it probes APNs sandbox with a fake token and reports auth issues without " +
+  "needing a real device token or a snapshot fixture.";
 
 class ConfigError extends Error {
   constructor(message, exitCode = 2) {
@@ -276,6 +124,14 @@ function parseUnixSeconds(raw, label) {
   return n;
 }
 
+function parsePriority(raw) {
+  if (raw === undefined) return undefined;
+  if (raw !== "5" && raw !== "10") {
+    throw new ConfigError(`--priority must be 5 or 10 (got ${JSON.stringify(raw)})`);
+  }
+  return Number(raw);
+}
+
 // Parse argv and validate flag combinations. Throws ConfigError on any user
 // mistake (missing required flag, conflicting modes, malformed token). Returns
 // a normalized config object describing the operation. Pure — no I/O, no
@@ -287,6 +143,13 @@ export function parseAndValidateArgs(argv) {
     options: PARSE_OPTIONS,
     strict: true,
   });
+
+  // --print / --describe / --json are flags that compose orthogonally with
+  // every mode. Resolve them once up front.
+  const meta = {
+    print: Boolean(values.print || values.describe),
+    json: Boolean(values.json),
+  };
 
   // Mode selection precedence: channel-action > channel-id > push-to-start >
   // activity > device. Each subsequent mode also checks no earlier mode's
@@ -301,18 +164,18 @@ export function parseAndValidateArgs(argv) {
   ].filter(([, v]) => v !== undefined && v !== "");
 
   if (values["channel-action"] !== undefined) {
-    return validateChannelManagement(values, modeFlags);
+    return { ...validateChannelManagement(values, modeFlags), ...meta };
   }
 
   if (values["channel-id"] !== undefined) {
-    return validateBroadcast(values, modeFlags);
+    return { ...validateBroadcast(values, modeFlags), ...meta };
   }
 
   if (values["push-to-start-token"] !== undefined) {
-    return validatePushToStart(values, modeFlags);
+    return { ...validatePushToStart(values, modeFlags), ...meta };
   }
 
-  return validateDeviceSend(values);
+  return { ...validateDeviceSend(values), ...meta };
 }
 
 function validateChannelManagement(values, modeFlags) {
@@ -360,8 +223,6 @@ function validateChannelManagement(values, modeFlags) {
 }
 
 function validateBroadcast(values, modeFlags) {
-  // channel-id mode: the only other token allowed in the flag set is
-  // channel-id itself.
   for (const [name] of modeFlags) {
     if (name === "channel-id") continue;
     throw new ConfigError(
@@ -387,14 +248,19 @@ function validateBroadcast(values, modeFlags) {
     );
   }
 
+  if (!values["snapshot-file"]) {
+    throw new ConfigError(
+      `--channel-id (broadcast) requires --snapshot-file. ${SETUP_REDIRECT}`,
+    );
+  }
+
   return {
     mode: "broadcast",
     env: values.env,
     channelId: values["channel-id"],
     snapshotFile: values["snapshot-file"],
-    stateFile: values["state-file"],
     staleDate: parseUnixSeconds(values["stale-date"], "--stale-date"),
-    priority: values.priority,
+    priority: parsePriority(values.priority),
   };
 }
 
@@ -424,6 +290,12 @@ function validatePushToStart(values, modeFlags) {
     );
   }
 
+  if (!values["snapshot-file"]) {
+    throw new ConfigError(
+      `--event=start requires --snapshot-file. ${SETUP_REDIRECT}`,
+    );
+  }
+
   if (!values["attributes-file"]) {
     throw new ConfigError(
       "--event=start requires --attributes-file with surfaceId and modeLabel",
@@ -438,14 +310,11 @@ function validatePushToStart(values, modeFlags) {
     tokenSource: "push-to-start",
     env: values.env,
     snapshotFile: values["snapshot-file"],
-    stateFile: values["state-file"],
     attributesFile: values["attributes-file"],
     attributesType: values["attributes-type"],
     staleDate: parseUnixSeconds(values["stale-date"], "--stale-date"),
     dismissalDate: parseUnixSeconds(values["dismissal-date"], "--dismissal-date"),
-    priority: values.priority,
-    title: values.title,
-    body: values.body,
+    priority: parsePriority(values.priority),
   };
 }
 
@@ -463,6 +332,12 @@ function validateDeviceSend(values) {
     );
   }
 
+  if (!values["snapshot-file"]) {
+    throw new ConfigError(
+      `--type=${values.type} requires --snapshot-file. ${SETUP_REDIRECT}`,
+    );
+  }
+
   if (isLiveActivity && values.event === "start" && !values["attributes-file"]) {
     throw new ConfigError(
       "--event=start requires --attributes-file with surfaceId and modeLabel",
@@ -477,50 +352,12 @@ function validateDeviceSend(values) {
     tokenSource: isLiveActivity ? "activity" : "device",
     env: values.env,
     snapshotFile: values["snapshot-file"],
-    stateFile: values["state-file"],
     attributesFile: values["attributes-file"],
     attributesType: values["attributes-type"],
     staleDate: parseUnixSeconds(values["stale-date"], "--stale-date"),
     dismissalDate: parseUnixSeconds(values["dismissal-date"], "--dismissal-date"),
-    priority: values.priority,
-    title: values.title,
-    body: values.body,
+    priority: parsePriority(values.priority),
   };
-}
-
-// Resolve the standard APNs send-host (used for /3/device/<token> and
-// /4/broadcasts/apps/<bundle-id>) for the chosen environment.
-function sendHost(env) {
-  return env === "production" ? "api.push.apple.com" : "api.development.push.apple.com";
-}
-
-// Resolve the channel-management host+port. Apple uses a separate domain and
-// non-standard ports for management traffic — verified against
-// https://developer.apple.com/documentation/usernotifications/sending-channel-management-requests-to-apns
-// (Establish a connection with APNs section): sandbox uses
-// `api-manage-broadcast.sandbox.push.apple.com:2195`, production uses
-// `api-manage-broadcast.push.apple.com:2196`.
-function manageHost(env) {
-  return env === "production"
-    ? { host: "api-manage-broadcast.push.apple.com", port: 2196 }
-    : { host: "api-manage-broadcast.sandbox.push.apple.com", port: 2195 };
-}
-
-function base64Url(buf) {
-  return Buffer.from(buf).toString("base64").replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
-}
-
-function makeJwt(keyPem, keyId, teamId) {
-  const header = base64Url(JSON.stringify({ alg: "ES256", kid: keyId, typ: "JWT" }));
-  const payload = base64Url(
-    JSON.stringify({ iss: teamId, iat: Math.floor(Date.now() / 1000) }),
-  );
-  const signingInput = `${header}.${payload}`;
-  const sig = crypto
-    .createSign("SHA256")
-    .update(signingInput)
-    .sign({ key: keyPem, dsaEncoding: "ieee-p1363" });
-  return `${signingInput}.${base64Url(sig)}`;
 }
 
 function readSnapshotFile(filePath) {
@@ -529,302 +366,245 @@ function readSnapshotFile(filePath) {
   return assertSnapshot(snapshot);
 }
 
-function buildAlertPayload(config) {
-  const snapshot = config.snapshotFile ? readSnapshotFile(config.snapshotFile) : null;
-  return snapshot
-    ? toAlertPayload(snapshot)
-    : {
-        aps: {
-          alert: { title: config.title, body: config.body },
-          sound: "default",
-        },
-        liveSurface: { kind: "smoke_test" },
-      };
-}
-
-function buildLiveActivityPayload(config, { includeAttributes }) {
-  let contentState = JSON.parse(
-    fs.readFileSync(path.resolve("./scripts/sample-state.json"), "utf8"),
-  );
-  if (config.snapshotFile) {
-    contentState = toLiveActivityContentState(readSnapshotFile(config.snapshotFile));
-  }
-  if (config.stateFile) {
-    contentState = JSON.parse(fs.readFileSync(config.stateFile, "utf8"));
-  }
-
-  const aps = {
-    timestamp: Math.floor(Date.now() / 1000),
-    event: config.event,
-    "content-state": contentState,
-  };
-
-  if (includeAttributes && config.event === "start") {
-    const attrSource = JSON.parse(fs.readFileSync(config.attributesFile, "utf8"));
-    if (typeof attrSource.surfaceId !== "string" || typeof attrSource.modeLabel !== "string") {
-      throw new ConfigError(
-        `--attributes-file ${config.attributesFile} must include string fields surfaceId and modeLabel`,
-      );
-    }
-    aps["attributes-type"] = config.attributesType;
-    aps.attributes = {
-      surfaceId: attrSource.surfaceId,
-      modeLabel: attrSource.modeLabel,
-    };
-  }
-
-  if (config.staleDate !== undefined) aps["stale-date"] = config.staleDate;
-
-  if (config.event === "end") {
-    aps["dismissal-date"] = config.dismissalDate ?? Math.floor(Date.now() / 1000);
-  } else if (config.dismissalDate !== undefined) {
-    aps["dismissal-date"] = config.dismissalDate;
-  }
-
-  return { aps };
-}
-
-function buildBroadcastPayload(config) {
-  // Broadcast is always an update — start/end were rejected at parse time.
-  let contentState = JSON.parse(
-    fs.readFileSync(path.resolve("./scripts/sample-state.json"), "utf8"),
-  );
-  if (config.snapshotFile) {
-    contentState = toLiveActivityContentState(readSnapshotFile(config.snapshotFile));
-  }
-  if (config.stateFile) {
-    contentState = JSON.parse(fs.readFileSync(config.stateFile, "utf8"));
-  }
-
-  const aps = {
-    timestamp: Math.floor(Date.now() / 1000),
-    event: "update",
-    "content-state": contentState,
-  };
-  if (config.staleDate !== undefined) aps["stale-date"] = config.staleDate;
-  return { aps };
-}
-
-function buildDeviceHeaders(config, jwt, bundleId) {
-  const isLiveActivity = config.type === "liveactivity";
-  const apnsTopic = isLiveActivity
-    ? `${bundleId}.push-type.liveactivity`
-    : bundleId;
-  const priority = config.priority ?? (isLiveActivity ? "5" : "10");
-  const headers = {
-    ":method": "POST",
-    ":path": `/3/device/${config.token}`,
-    authorization: `bearer ${jwt}`,
-    "apns-topic": apnsTopic,
-    "apns-push-type": isLiveActivity ? "liveactivity" : "alert",
-    "apns-priority": priority,
-    "content-type": "application/json",
-  };
-  if (isLiveActivity) {
-    headers["apns-expiration"] = String(Math.floor(Date.now() / 1000) + 3600);
-  }
-  return headers;
-}
-
-function buildBroadcastHeaders(config, jwt, bundleId) {
-  // Apple "Sending broadcast push notification requests to APNs" doc:
-  // path is /4/broadcasts/apps/<bundle ID>, no apns-topic, channel id in
-  // apns-channel-id header, push-type liveactivity. apns-expiration is
-  // required; the script sets 0 for No-Storage compatibility.
-  const priority = config.priority ?? "5";
-  return {
-    ":method": "POST",
-    ":path": `/4/broadcasts/apps/${bundleId}`,
-    authorization: `bearer ${jwt}`,
-    "apns-channel-id": config.channelId,
-    "apns-push-type": "liveactivity",
-    "apns-priority": priority,
-    "apns-expiration": "0",
-    "content-type": "application/json",
-  };
-}
-
-// Translate a CLI-friendly storage-policy flag value to Apple's wire format.
-// The doc table uses numeric values: 0 = No Message Stored, 1 = Most Recent
-// Message Stored.
-function storagePolicyToWire(flagValue) {
-  return flagValue === "most-recent-message" ? 1 : 0;
-}
-
-function printApnsReason(bodyText) {
-  if (!bodyText) return;
-  try {
-    const parsed = JSON.parse(bodyText);
-    if (parsed && typeof parsed.reason === "string") {
-      const guide = APNS_REASON_GUIDE[parsed.reason];
-      if (guide) {
-        console.log(`APNs reason: ${parsed.reason} — ${guide.cause}`);
-        console.log(`Fix: ${guide.fix}`);
-      } else {
-        console.log(`APNs reason: ${parsed.reason} — not in the local guide. Check Apple's APNs documentation.`);
-      }
-    }
-  } catch {
-    // Body wasn't JSON; leave the raw output alone.
-  }
-}
-
-function printSkewWarning(responseHeaders) {
-  const dateHeader = responseHeaders.date;
-  if (!dateHeader) return;
-  const serverMs = new Date(dateHeader).getTime();
-  if (!Number.isFinite(serverMs)) return;
-  const skewMs = Math.abs(Date.now() - serverMs);
-  if (skewMs > 5 * 60 * 1000) {
-    console.log(
-      `⚠ Local clock skew vs APNs: ${formatSkew(skewMs)}. JWTs become invalid past ~1 hour of skew. Sync system time before debugging InvalidProviderToken.`,
+function readAttributesFile(filePath) {
+  const attrSource = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  if (typeof attrSource.surfaceId !== "string" || typeof attrSource.modeLabel !== "string") {
+    throw new ConfigError(
+      `--attributes-file ${filePath} must include string fields surfaceId and modeLabel`,
     );
   }
+  return {
+    surfaceId: attrSource.surfaceId,
+    modeLabel: attrSource.modeLabel,
+  };
 }
 
-function http2Request({ origin, headers, body }) {
-  return new Promise((resolve, reject) => {
-    const client = http2.connect(origin);
-    client.on("error", (err) => reject(err));
-    const req = client.request(headers);
-    req.setEncoding("utf8");
-    let status = 0;
-    let responseHeaders = {};
-    let bodyText = "";
-    req.on("response", (h) => {
-      status = h[":status"];
-      responseHeaders = h;
-    });
-    req.on("data", (chunk) => (bodyText += chunk));
-    req.on("end", () => {
-      client.close();
-      resolve({ status, responseHeaders, bodyText });
-    });
-    req.on("error", (err) => reject(err));
-    if (body !== undefined) req.write(body);
-    req.end();
+function makeClient(env) {
+  return createPushClient({
+    keyId: process.env.APNS_KEY_ID,
+    teamId: process.env.APNS_TEAM_ID,
+    keyPath: process.env.APNS_KEY_PATH,
+    bundleId: process.env.APNS_BUNDLE_ID,
+    environment: env,
   });
+}
+
+// Map a CLI mode to the SDK describe-operation name.
+function describeOperationFor(config) {
+  if (config.mode === "broadcast") return "broadcast";
+  if (config.mode === "device-send") {
+    if (config.type === "alert") return "alert";
+    return config.event; // start | update | end
+  }
+  throw new Error(`describeSend not applicable to mode=${config.mode}`);
+}
+
+// Emit a JSON object on stdout (deterministic key order) when --json is set;
+// otherwise format human-readable output. Errors always include `ok: false`
+// and a structured `error` block when --json is set.
+function emit(payload, { json, exitCode = 0 } = {}) {
+  if (json) {
+    process.stdout.write(JSON.stringify(payload) + "\n");
+    return exitCode;
+  }
+  if (payload.ok && payload.kind === "send") {
+    console.log(`HTTP ${payload.status}`);
+    if (payload.topic) console.log(`Topic: ${payload.topic}`);
+    if (payload.pushType) console.log(`Push-type: ${payload.pushType}`);
+    if (payload.priority !== undefined) console.log(`Priority: ${payload.priority}`);
+    if (payload.apnsId) console.log(`apns-id: ${payload.apnsId}`);
+    console.log(`Attempts: ${payload.attempts} (latency ${payload.latencyMs}ms)`);
+    if (payload.trapHits?.length) console.log(`Trap hits: ${payload.trapHits.join(", ")}`);
+    if (payload.retried?.length) {
+      console.log(`Retries:`);
+      for (const r of payload.retried) {
+        const tag = r.trapId ? ` [${r.trapId}]` : "";
+        console.log(`  attempt ${r.attempt}: ${r.reason}${tag} (backoff ${r.backoffMs}ms)`);
+      }
+    }
+  } else if (payload.ok && payload.kind === "describe") {
+    console.log(`Plan (--print): NOT dispatching to APNs`);
+    console.log(`Operation: ${payload.operation}`);
+    if (payload.topic) console.log(`Topic: ${payload.topic}`);
+    console.log(`Push-type: ${payload.pushType}`);
+    console.log(`Priority: ${payload.priority}`);
+    console.log(`Payload bytes: ${payload.payloadBytes} / ${payload.budgetLimit} (MS011)`);
+    console.log(`Within budget: ${payload.withinBudget}`);
+    if (payload.trapHits.length) console.log(`Trap hits: ${payload.trapHits.join(", ")}`);
+  } else if (payload.ok && payload.kind === "channel-create") {
+    console.log(`HTTP 201`);
+    console.log(`Created channel-id: ${payload.channelId}`);
+    console.log(`Storage policy: ${payload.storagePolicy}`);
+  } else if (payload.ok && payload.kind === "channel-list") {
+    console.log(`HTTP 200`);
+    console.log(`Channels: ${payload.channels.length}`);
+    for (const ch of payload.channels) {
+      console.log(`  ${ch.channelId} (${ch.storagePolicy ?? "unknown-policy"})`);
+    }
+  } else if (payload.ok && payload.kind === "channel-delete") {
+    console.log(`HTTP 204`);
+    console.log(`Deleted channel-id: ${payload.channelId}`);
+  } else {
+    const err = payload.error ?? {};
+    console.error(`Error: ${err.message ?? "unknown error"}`);
+    if (err.reason) console.error(`APNs reason: ${err.reason}`);
+    if (err.trapId) console.error(`Trap: ${err.trapId}`);
+    if (err.docsUrl) console.error(`Docs: ${err.docsUrl}`);
+    if (err.fix) console.error(`Fix: ${err.fix}`);
+  }
+  return exitCode;
+}
+
+function errorPayload(err) {
+  if (err instanceof ApnsError) {
+    const guide = APNS_REASON_GUIDE[err.reason];
+    return {
+      ok: false,
+      error: {
+        message: err.message,
+        reason: err.reason,
+        status: err.status,
+        apnsId: err.apnsId,
+        trapId: err.trapId,
+        docsUrl: err.docsUrl,
+        fix: guide?.fix,
+      },
+    };
+  }
+  if (err && err.name === "InvalidSnapshotError") {
+    return {
+      ok: false,
+      error: {
+        message: err.message,
+        issues: err.issues ?? [],
+      },
+    };
+  }
+  return {
+    ok: false,
+    error: { message: err?.message ?? String(err) },
+  };
 }
 
 async function runDeviceSend(config) {
-  ensureEnv();
-  const keyPem = loadApnsKey();
-  const jwt = makeJwt(keyPem, process.env.APNS_KEY_ID, process.env.APNS_TEAM_ID);
-  const payload =
-    config.type === "liveactivity"
-      ? JSON.stringify(buildLiveActivityPayload(config, { includeAttributes: true }))
-      : JSON.stringify(buildAlertPayload(config));
-  const headers = buildDeviceHeaders(config, jwt, process.env.APNS_BUNDLE_ID);
-  const { status, responseHeaders, bodyText } = await http2Request({
-    origin: `https://${sendHost(config.env)}:443`,
-    headers,
-    body: payload,
-  });
-  console.log(`HTTP ${status}`);
-  console.log(`Topic: ${headers["apns-topic"]}`);
-  console.log(`Push-type: ${headers["apns-push-type"]}`);
-  console.log(`Payload: ${payload}`);
-  if (bodyText) console.log(`Body: ${bodyText}`);
-  printApnsReason(bodyText);
-  printSkewWarning(responseHeaders);
-  return status >= 200 && status < 300 ? 0 : 1;
+  const client = makeClient(config.env);
+  try {
+    const snapshot = readSnapshotFile(config.snapshotFile);
+    const options = {};
+    if (config.staleDate !== undefined) options.staleDateSeconds = config.staleDate;
+    if (config.dismissalDate !== undefined) options.dismissalDateSeconds = config.dismissalDate;
+    if (config.priority !== undefined) options.priority = config.priority;
+
+    if (config.print) {
+      const op = describeOperationFor(config);
+      const planOptions = { ...options };
+      if (config.type === "liveactivity" && config.event === "start") {
+        planOptions.attributesType = config.attributesType;
+      }
+      const plan = client.describeSend(op, snapshot, planOptions);
+      return emit({ ok: true, kind: "describe", ...plan }, { json: config.json });
+    }
+
+    if (config.type === "alert") {
+      const res = await client.alert(config.token, snapshot, options);
+      return emit(formatSendPayload({ res, pushType: "alert", topic: bundleTopic("alert"), priority: options.priority ?? 10 }), { json: config.json });
+    }
+    if (config.event === "start") {
+      const attributes = readAttributesFile(config.attributesFile);
+      const res = await client.start(config.token, snapshot, attributes, {
+        ...options,
+        attributesType: config.attributesType,
+      });
+      return emit(formatSendPayload({ res, pushType: "liveactivity", topic: bundleTopic("liveactivity"), priority: options.priority ?? 5 }), { json: config.json });
+    }
+    if (config.event === "end") {
+      const res = await client.end(config.token, snapshot, options);
+      return emit(formatSendPayload({ res, pushType: "liveactivity", topic: bundleTopic("liveactivity"), priority: options.priority ?? 5 }), { json: config.json });
+    }
+    const res = await client.update(config.token, snapshot, options);
+    return emit(formatSendPayload({ res, pushType: "liveactivity", topic: bundleTopic("liveactivity"), priority: options.priority ?? 5 }), { json: config.json });
+  } finally {
+    await client.close();
+  }
 }
 
 async function runBroadcastSend(config) {
-  ensureEnv();
-  const keyPem = loadApnsKey();
-  const jwt = makeJwt(keyPem, process.env.APNS_KEY_ID, process.env.APNS_TEAM_ID);
-  const payload = JSON.stringify(buildBroadcastPayload(config));
-  const headers = buildBroadcastHeaders(config, jwt, process.env.APNS_BUNDLE_ID);
-  const { status, responseHeaders, bodyText } = await http2Request({
-    origin: `https://${sendHost(config.env)}:443`,
-    headers,
-    body: payload,
-  });
-  console.log(`HTTP ${status}`);
-  console.log(`Path: ${headers[":path"]}`);
-  console.log(`Channel-id: ${headers["apns-channel-id"]}`);
-  console.log(`Push-type: ${headers["apns-push-type"]}`);
-  console.log(`Payload: ${payload}`);
-  if (bodyText) console.log(`Body: ${bodyText}`);
-  printApnsReason(bodyText);
-  printSkewWarning(responseHeaders);
-  return status >= 200 && status < 300 ? 0 : 1;
+  const client = makeClient(config.env);
+  try {
+    const snapshot = readSnapshotFile(config.snapshotFile);
+    const options = {};
+    if (config.staleDate !== undefined) options.staleDateSeconds = config.staleDate;
+    if (config.priority !== undefined) options.priority = config.priority;
+
+    if (config.print) {
+      const plan = client.describeSend("broadcast", snapshot, options);
+      return emit({ ok: true, kind: "describe", ...plan }, { json: config.json });
+    }
+
+    const res = await client.broadcast(config.channelId, snapshot, options);
+    return emit(formatSendPayload({ res, pushType: "liveactivity", topic: undefined, priority: options.priority ?? 5 }), { json: config.json });
+  } finally {
+    await client.close();
+  }
 }
 
 async function runChannelManagement(config) {
-  ensureEnv();
-  const keyPem = loadApnsKey();
-  const jwt = makeJwt(keyPem, process.env.APNS_KEY_ID, process.env.APNS_TEAM_ID);
-  const bundleId = process.env.APNS_BUNDLE_ID;
-  const { host, port } = manageHost(config.env);
-  const origin = `https://${host}:${port}`;
-
-  let headers;
-  let body;
-  if (config.action === "create") {
-    headers = {
-      ":method": "POST",
-      ":path": `/1/apps/${bundleId}/channels`,
-      authorization: `bearer ${jwt}`,
-      "content-type": "application/json",
-    };
-    // Apple body fields: message-storage-policy (0 = No Message Stored,
-    // 1 = Most Recent Message Stored), push-type (only "LiveActivity" allowed).
-    body = JSON.stringify({
-      "message-storage-policy": storagePolicyToWire(config.storagePolicy),
-      "push-type": "LiveActivity",
-    });
-  } else if (config.action === "list") {
-    headers = {
-      ":method": "GET",
-      ":path": `/1/apps/${bundleId}/all-channels`,
-      authorization: `bearer ${jwt}`,
-    };
-  } else {
-    // delete
-    headers = {
-      ":method": "DELETE",
-      ":path": `/1/apps/${bundleId}/channels`,
-      authorization: `bearer ${jwt}`,
-      "apns-channel-id": config.channelId,
-    };
+  if (config.print) {
+    // Management ops have no payload-shape question to answer; --print on
+    // them is a no-op describing the action the client would take.
+    return emit({
+      ok: true,
+      kind: "describe",
+      operation: `channel-${config.action}`,
+      env: config.env,
+      channelId: config.channelId ?? null,
+      storagePolicy: config.action === "create" ? config.storagePolicy : null,
+    }, { json: config.json });
   }
 
-  const { status, responseHeaders, bodyText } = await http2Request({
-    origin,
-    headers,
-    body,
-  });
-
-  // Compact print path — channel management responses use status conventions
-  // that the standard send footer would obscure (201 create, 200 list, 204
-  // delete; channel id arrives in a header on create, body on list).
-  console.log(`HTTP ${status}`);
-  console.log(`Action: channel-${config.action}`);
-  console.log(`Endpoint: ${origin}${headers[":path"]}`);
-  if (config.action === "create") {
-    const newChannelId = responseHeaders["apns-channel-id"];
-    if (newChannelId) console.log(`Created channel-id: ${newChannelId}`);
-  }
-  if (config.action === "delete" && status === 204) {
-    console.log(`Deleted channel-id: ${config.channelId}`);
-  }
-  if (bodyText) {
-    try {
-      const parsed = JSON.parse(bodyText);
-      console.log(`Body: ${JSON.stringify(parsed, null, 2)}`);
-    } catch {
-      console.log(`Body: ${bodyText}`);
+  const client = makeClient(config.env);
+  try {
+    if (config.action === "create") {
+      const info = await client.createChannel({ storagePolicy: config.storagePolicy });
+      return emit({
+        ok: true,
+        kind: "channel-create",
+        channelId: info.channelId,
+        storagePolicy: info.storagePolicy,
+      }, { json: config.json });
     }
+    if (config.action === "list") {
+      const channels = await client.listChannels();
+      return emit({ ok: true, kind: "channel-list", channels }, { json: config.json });
+    }
+    await client.deleteChannel(config.channelId);
+    return emit({ ok: true, kind: "channel-delete", channelId: config.channelId }, { json: config.json });
+  } finally {
+    await client.close();
   }
-  printApnsReason(bodyText);
-  printSkewWarning(responseHeaders);
+}
 
-  // Treat the documented success codes as exit 0 even if outside the generic
-  // 2xx band (they are 2xx, but be explicit).
-  const expectedSuccess = config.action === "create" ? 201 : config.action === "list" ? 200 : 204;
-  return status === expectedSuccess ? 0 : 1;
+function formatSendPayload({ res, pushType, topic, priority }) {
+  return {
+    ok: true,
+    kind: "send",
+    apnsId: res.apnsId,
+    status: res.status,
+    pushType,
+    topic,
+    priority,
+    attempts: res.attempts,
+    latencyMs: res.latencyMs,
+    retried: res.retried,
+    trapHits: res.trapHits,
+  };
+}
+
+function bundleTopic(pushType) {
+  const bundleId = process.env.APNS_BUNDLE_ID;
+  return pushType === "liveactivity"
+    ? `${bundleId}.push-type.liveactivity`
+    : bundleId;
 }
 
 function ensureEnv() {
@@ -837,9 +617,10 @@ function ensureEnv() {
 
 export async function main(argv = process.argv.slice(2)) {
   // Env check runs before arg parsing to preserve the original script's
-  // ordering — older docs and runbooks tell users to expect "Missing env:
-  // APNS_KEY_PATH" as the first failure on a fresh checkout, before any
-  // CLI-flag confusion.
+  // ordering — older runbooks expect "Missing env: APNS_KEY_PATH" as the
+  // first failure on a fresh checkout. --print can skip the env check
+  // because describeSend has no APNs round-trip; but createPushClient still
+  // wants the auth options populated, so we keep the check unconditional.
   try {
     ensureEnv();
   } catch (err) {
@@ -870,7 +651,8 @@ export async function main(argv = process.argv.slice(2)) {
       console.error(err.message);
       return err.exitCode ?? 2;
     }
-    throw err;
+    emit(errorPayload(err), { json: config.json, exitCode: 1 });
+    return 1;
   }
 }
 

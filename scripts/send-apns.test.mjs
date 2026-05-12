@@ -35,6 +35,7 @@ test("accepts a hex-only --push-to-start-token (no separators)", () => {
     "--push-to-start-token=deadbeefcafe1234",
     "--type=liveactivity",
     "--event=start",
+    "--snapshot-file=./data/surface-fixtures/queued.json",
     "--attributes-file=./scripts/sample-state.json",
   ]);
   assert.equal(config.mode, "device-send");
@@ -106,10 +107,12 @@ test("accepts --channel-id with --event=update", () => {
     "--type=liveactivity",
     "--event=update",
     "--env=development",
+    "--snapshot-file=./data/surface-fixtures/active-progress.json",
   ]);
   assert.equal(config.mode, "broadcast");
   assert.equal(config.channelId, "dHN0LXNyY2gtY2hubA==");
   assert.equal(config.env, "development");
+  assert.equal(config.snapshotFile, "./data/surface-fixtures/active-progress.json");
 });
 
 test("rejects --channel-action=delete without --channel-id", () => {
@@ -159,18 +162,35 @@ test("rejects --channel-action with a stray --device-token", () => {
   );
 });
 
-test("preserves existing alert-mode default", () => {
-  const config = parseAndValidateArgs(["--device-token=deadbeef"]);
+test("alert mode requires --snapshot-file (no smoke-test fallback)", () => {
+  // The old --title/--body default fallback is gone; alert is now snapshot-only.
+  // Credential-only validation lives in scripts/setup-apns.mjs.
+  expectError(
+    ["--device-token=deadbeef"],
+    (err) => {
+      assert.match(err.message, /--snapshot-file/);
+      assert.match(err.message, /surface:setup-apns/);
+    },
+  );
+});
+
+test("alert mode accepts --device-token with --snapshot-file", () => {
+  const config = parseAndValidateArgs([
+    "--device-token=deadbeef",
+    "--snapshot-file=./data/surface-fixtures/queued.json",
+  ]);
   assert.equal(config.mode, "device-send");
   assert.equal(config.type, "alert");
   assert.equal(config.token, "deadbeef");
+  assert.equal(config.snapshotFile, "./data/surface-fixtures/queued.json");
 });
 
-test("preserves existing liveactivity --activity-token mode", () => {
+test("liveactivity --activity-token --event=update accepts --snapshot-file", () => {
   const config = parseAndValidateArgs([
     "--activity-token=deadbeef",
     "--type=liveactivity",
     "--event=update",
+    "--snapshot-file=./data/surface-fixtures/active-progress.json",
   ]);
   assert.equal(config.mode, "device-send");
   assert.equal(config.type, "liveactivity");
@@ -178,10 +198,77 @@ test("preserves existing liveactivity --activity-token mode", () => {
   assert.equal(config.event, "update");
 });
 
+test("liveactivity send without --snapshot-file fails with setup redirect", () => {
+  expectError(
+    [
+      "--activity-token=deadbeef",
+      "--type=liveactivity",
+      "--event=update",
+    ],
+    (err) => {
+      assert.match(err.message, /--snapshot-file/);
+      assert.match(err.message, /surface:setup-apns/);
+    },
+  );
+});
+
 test("rejects liveactivity send without --activity-token", () => {
   expectError(
     ["--type=liveactivity", "--event=update"],
     (err) => assert.match(err.message, /Missing --activity-token/),
+  );
+});
+
+test("--print flag sets the print meta on a valid config", () => {
+  const config = parseAndValidateArgs([
+    "--device-token=deadbeef",
+    "--snapshot-file=./data/surface-fixtures/queued.json",
+    "--print",
+  ]);
+  assert.equal(config.print, true);
+  assert.equal(config.json, false);
+});
+
+test("--describe is treated as an alias for --print", () => {
+  const config = parseAndValidateArgs([
+    "--device-token=deadbeef",
+    "--snapshot-file=./data/surface-fixtures/queued.json",
+    "--describe",
+  ]);
+  assert.equal(config.print, true);
+});
+
+test("--json flag sets the json meta on a valid config", () => {
+  const config = parseAndValidateArgs([
+    "--device-token=deadbeef",
+    "--snapshot-file=./data/surface-fixtures/queued.json",
+    "--json",
+  ]);
+  assert.equal(config.json, true);
+});
+
+test("--priority accepts 5 or 10, rejects others", () => {
+  const p5 = parseAndValidateArgs([
+    "--device-token=deadbeef",
+    "--snapshot-file=./data/surface-fixtures/queued.json",
+    "--priority=5",
+  ]);
+  assert.equal(p5.priority, 5);
+
+  const p10 = parseAndValidateArgs([
+    "--device-token=deadbeef",
+    "--snapshot-file=./data/surface-fixtures/queued.json",
+    "--priority=10",
+  ]);
+  assert.equal(p10.priority, 10);
+
+  expectError(
+    [
+      "--device-token=deadbeef",
+      "--snapshot-file=./data/surface-fixtures/queued.json",
+      "--priority=7",
+    ],
+    (err) => assert.match(err.message, /--priority must be 5 or 10/),
   );
 });
 

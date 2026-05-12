@@ -6,13 +6,18 @@ export {
   PushClient,
   createPushClient,
   TEST_TRANSPORT_OVERRIDE,
+  __resetRetryPolicyDeprecationLatch,
 } from "./client.ts";
 export type {
   CreatePushClientOptions,
   SendOptions,
   BroadcastOptions,
   LiveActivityStartOptions,
+  PushResult,
+  RetryEvent,
   SendResponse,
+  DescribedSend,
+  DescribeSendOperation,
   ChannelInfo,
   PushHooks,
   PushHookContext,
