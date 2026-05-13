@@ -356,6 +356,20 @@ interface TestTransportOverride {
    * waiting for the 30s production default. Production code never sets this.
    */
   requestTimeoutMs?: number;
+  /**
+   * Override the JwtCache refresh window. Lets refresh-on-retry tests force
+   * the cache to mint a fresh token between attempts without waiting out the
+   * 50-minute production window. Production code never sets this.
+   */
+  jwtRefreshIntervalMs?: number;
+  /**
+   * Override the JwtCache `now()` source. Paired with `jwtRefreshIntervalMs`
+   * so refresh-on-retry tests can also push the iat claim into a later
+   * second between attempts (mintJwt's iat resolution is one second, so two
+   * mints in the same wall-clock second produce byte-identical tokens).
+   * Production code never sets this.
+   */
+  jwtNow?: () => number;
 }
 
 function sendOriginFor(env: "development" | "production"): string {
@@ -570,18 +584,24 @@ export class PushClient {
     this.#retryPolicy = resolveRetryPolicy(options);
     this.#hooks = options.hooks ?? {};
 
-    const keyPem = resolveKeyPem(options.keyPath);
-    this.#jwt = new JwtCache({
-      keyPem,
-      keyId: options.keyId,
-      teamId: options.teamId,
-    });
-
     const idleTimeoutMs = options.idleTimeoutMs ?? 60_000;
     const override = (options as unknown as Record<symbol, unknown>)[
       TEST_TRANSPORT_OVERRIDE
     ] as TestTransportOverride | undefined;
     this.#requestTimeoutMs = override?.requestTimeoutMs;
+
+    const keyPem = resolveKeyPem(options.keyPath);
+    this.#jwt = new JwtCache(
+      {
+        keyPem,
+        keyId: options.keyId,
+        teamId: options.teamId,
+      },
+      {
+        refreshIntervalMs: override?.jwtRefreshIntervalMs,
+        now: override?.jwtNow,
+      },
+    );
 
     this.#send = new Http2Client({
       origin: override?.sendOrigin ?? sendOriginFor(options.environment),

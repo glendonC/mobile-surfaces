@@ -12,7 +12,12 @@ const {
   InvalidSnapshotError,
   ClientClosedError,
   MissingApnsConfigError,
+  InvalidApnsConfigError,
   PayloadTooLargeError,
+  FeatureNotEnabledError,
+  ChannelNotRegisteredError,
+  BadChannelIdError,
+  CannotCreateChannelConfigError,
 } = await import("../dist/index.js");
 
 import { generateEs256Pem, writeTempP8 } from "./fixtures/setup-cert.mjs";
@@ -631,6 +636,35 @@ test("createPushClient throws MissingApnsConfigError when required options are m
   );
 });
 
+test("createPushClient rejects a pre-suffixed bundleId at construct time (MS018)", () => {
+  const baseConfig = {
+    keyId: "ABC1234567",
+    teamId: "TEAM123456",
+    keyPath: KEY.file,
+    environment: "development",
+  };
+  assert.throws(
+    () =>
+      createPushClient({
+        ...baseConfig,
+        bundleId: "com.example.test.push-type.liveactivity",
+      }),
+    (err) => {
+      assert.ok(err instanceof InvalidApnsConfigError, "InvalidApnsConfigError");
+      assert.equal(err.field, "bundleId");
+      assert.equal(err.trapId, "MS018");
+      assert.match(err.message, /push-type\.liveactivity/);
+      return true;
+    },
+  );
+  // Bare bundleId still passes the guard.
+  const client = createPushClient({
+    ...baseConfig,
+    bundleId: "com.example.test",
+  });
+  client.close();
+});
+
 test("hooks.onResponse fires with operation, snapshotId, and apnsId on success", async (t) => {
   const mock = await startMockApns(() => ({
     status: 200,
@@ -763,7 +797,7 @@ test("transport drop mid-flight is retried on a fresh session", { timeout: 5000 
   const mock = await startMockApns(() => {
     calls += 1;
     if (calls === 1) {
-      // Server forcibly drops the h2 session mid-stream — equivalent to
+      // Server forcibly drops the h2 session mid-stream - equivalent to
       // GOAWAY immediately followed by a socket close. The SDK's transport
       // layer should treat this as a retryable transport error and dial a
       // fresh session for the retry.
@@ -791,7 +825,7 @@ test("RST_STREAM on a single request is retried without dropping the session", {
     calls += 1;
     if (calls === 1) {
       // Per-stream reset (REFUSED_STREAM, in RETRYABLE_TRANSPORT_CODES).
-      // The session itself stays alive — APNs / a proxy resetting one
+      // The session itself stays alive - APNs / a proxy resetting one
       // stream is distinct from a GOAWAY/close that tears down the
       // whole connection. The SDK should retry on the same session.
       return { rstStream: true };
@@ -1014,7 +1048,7 @@ test("ETIMEDOUT on a hanging stream is retried through the transport-retry layer
 test("cold-start parallel sends share a single dial (no double-dial race)", { timeout: 5000 }, async (t) => {
   // Pins the in-flight dial dedup: even when N requests are kicked off
   // before any session exists, #ensureSession must return the same connect
-  // promise to all concurrent callers — otherwise the SDK would race-dial N
+  // promise to all concurrent callers - otherwise the SDK would race-dial N
   // sessions and burn an extra TLS handshake per concurrent request at
   // startup. sessionCount === 1 after the batch is what holds.
   const mock = await startMockApns(() => ({ status: 200 }));
@@ -1196,7 +1230,7 @@ test("legacy retryPolicy option still applies but logs a one-time deprecation", 
     await legacy2.close();
   });
 
-  // update() is priority 5 — the priority-10 stretch will not interfere
+  // update() is priority 5 - the priority-10 stretch will not interfere
   // with the user-set maxRetries=1.
   await assert.rejects(() => legacy1.update("d".repeat(64), SNAPSHOT));
   assert.equal(calls, 2, "legacy retryPolicy=maxRetries:1 should yield 2 calls");
@@ -1240,6 +1274,395 @@ test("MOBILE_SURFACES_PUSH_DISABLE_RETRY=1 forces maxRetries to 0", async (t) =>
 
   await assert.rejects(() => client.update("e".repeat(64), SNAPSHOT));
   assert.equal(calls, 1, "env kill-switch should force a single attempt");
+});
+
+// --- prevalidated fast path ----------------------------------------------
+//
+// The fast path lets callers skip the per-send Zod parse by passing
+// { prevalidated: true }. We prove it actually skips the parse by feeding a
+// snapshot whose `progress` is a string (which the schema rejects) and
+// observing that:
+//   - slow path: throws InvalidSnapshotError (Zod fired)
+//   - fast path: the SDK assembles the payload using the unchecked string and
+//                APNs receives content-state.progress as the same string,
+//                which only happens if validateSnapshot() was not called.
+//
+// The fast path still runs the kind-vs-method check and the MS011 byte
+// ceiling; both behaviors are asserted below.
+
+const ZOD_BAD_SNAPSHOT = { ...SNAPSHOT, progress: "not-a-number" };
+
+test("prevalidated: slow path (default) rejects a Zod-malformed snapshot", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.update("z".repeat(64), ZOD_BAD_SNAPSHOT),
+    (err) => err instanceof InvalidSnapshotError,
+  );
+  assert.equal(mock.requests.length, 0, "slow path should reject before contacting APNs");
+});
+
+test("prevalidated: update() fast path skips Zod and forwards the snapshot verbatim", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await client.update("z".repeat(64), ZOD_BAD_SNAPSHOT, { prevalidated: true });
+  const payload = JSON.parse(mock.requests[0].body);
+  // If Zod had run it would have rejected; the string survives into the
+  // projected content-state, proving the parse was skipped.
+  assert.equal(payload.aps["content-state"].progress, "not-a-number");
+});
+
+test("prevalidated: alert() fast path skips Zod", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await client.alert("z".repeat(64), ZOD_BAD_SNAPSHOT, { prevalidated: true });
+  const body = JSON.parse(mock.requests[0].body);
+  // alert() routes through liveActivityAlertPayloadFromSnapshot, not the
+  // content-state projection, so the absence of a thrown InvalidSnapshotError
+  // here is the proof that validateSnapshot() did not run.
+  assert.equal(body.aps.alert.title, SNAPSHOT.primaryText);
+});
+
+test("prevalidated: start() fast path skips Zod", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await client.start(
+    "z".repeat(64),
+    ZOD_BAD_SNAPSHOT,
+    { surfaceId: SNAPSHOT.surfaceId },
+    { prevalidated: true },
+  );
+  const payload = JSON.parse(mock.requests[0].body);
+  assert.equal(payload.aps.event, "start");
+  assert.equal(payload.aps["content-state"].progress, "not-a-number");
+});
+
+test("prevalidated: end() fast path skips Zod", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await client.end("z".repeat(64), ZOD_BAD_SNAPSHOT, { prevalidated: true });
+  const payload = JSON.parse(mock.requests[0].body);
+  assert.equal(payload.aps.event, "end");
+  assert.equal(payload.aps["content-state"].progress, "not-a-number");
+});
+
+test("prevalidated: broadcast() fast path skips Zod", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await client.broadcast("ChanFast", ZOD_BAD_SNAPSHOT, { prevalidated: true });
+  const payload = JSON.parse(mock.requests[0].body);
+  assert.equal(payload.aps["content-state"].progress, "not-a-number");
+  assert.equal(mock.requests[0].headers["apns-channel-id"], "ChanFast");
+});
+
+test("prevalidated: kind-vs-method check still fires on a wrong-kind snapshot", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  // The widget snapshot is valid against the schema but is not liveActivity-kind.
+  // The fast path skips Zod but still runs snapshotMustBeLiveActivity().
+  await assert.rejects(
+    () => client.update("z".repeat(64), WIDGET_SNAPSHOT, { prevalidated: true }),
+    (err) => {
+      assert.ok(err instanceof InvalidSnapshotError);
+      assert.match(err.message, /liveActivity/);
+      return true;
+    },
+  );
+  assert.equal(mock.requests.length, 0);
+});
+
+test("prevalidated: MS011 byte ceiling still enforced on the fast path", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const fat = { ...SNAPSHOT, secondaryText: "x".repeat(5000) };
+  await assert.rejects(
+    () => client.update("z".repeat(64), fat, { prevalidated: true }),
+    (err) => err instanceof PayloadTooLargeError,
+  );
+  assert.equal(mock.requests.length, 0);
+});
+
+// --- JWT refresh on retry (MS030) ----------------------------------------
+//
+// The SDK refreshes the bearer header from this.#jwt.get() after every
+// backoff sleep (client.ts around the `headers.authorization = ...` line).
+// JwtCache returns a cached token until refreshIntervalMs elapses; once it
+// elapses, the next get() re-mints with a fresh iat. The test seam plumbed
+// through TEST_TRANSPORT_OVERRIDE drives the cache's refreshIntervalMs and
+// now() so the retry path observably re-mints between attempts without
+// needing to wait out the 50-minute production window.
+
+function decodeJwtIat(jwt) {
+  const [, payload] = jwt.split(".");
+  const b64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+  return JSON.parse(Buffer.from(padded, "base64").toString("utf8")).iat;
+}
+
+test("ExpiredProviderToken retry re-mints the JWT with a later iat", async (t) => {
+  // Apple returns 403 ExpiredProviderToken when the JWT's iat is older than
+  // 60min. The SDK's contract (and reasons.ts comment) is: refresh JWTs every
+  // 50min; if APNs rejects with ExpiredProviderToken anyway, the next retry
+  // mints a fresh token. This test pins the refresh: capture the bearer on
+  // each attempt and assert the second mint carries a strictly-greater iat.
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    if (calls === 1) {
+      return {
+        status: 403,
+        headers: { "apns-id": "expired-1" },
+        body: { reason: "ExpiredProviderToken" },
+      };
+    }
+    return { status: 200, headers: { "apns-id": "ok-after-refresh" } };
+  });
+  // Drive a virtual clock so the second mint lands at iat = first + 1, well
+  // past the configured 10ms refresh window. The cache's nowMs - iatMs check
+  // sees 1000ms elapsed and re-mints synchronously inside get().
+  let virtualNowMs = 1_700_000_000_000;
+  const client = createPushClient({
+    keyId: "ABC1234567",
+    teamId: "TEAM123456",
+    keyPath: KEY.file,
+    bundleId: "com.example.test",
+    environment: "development",
+    idleTimeoutMs: 1_000,
+    _unsafeRetryOverride: {
+      maxRetries: 1,
+      baseDelayMs: 1,
+      maxDelayMs: 2,
+      jitter: false,
+      // ExpiredProviderToken is not in DEFAULT_RETRYABLE_REASONS; widen so
+      // the SDK retries it. The refresh-on-retry path runs regardless of
+      // which reason triggered the retry.
+      retryableReasons: new Set(["ExpiredProviderToken"]),
+    },
+    [TEST_TRANSPORT_OVERRIDE]: {
+      sendOrigin: mock.origin,
+      jwtRefreshIntervalMs: 10,
+      jwtNow: () => virtualNowMs,
+    },
+  });
+  teardown(t, client, mock);
+
+  // Bump the virtual clock past refreshIntervalMs before the second attempt.
+  // The retry path calls this.#jwt.get() after sleep; with the bumped clock,
+  // the cache treats the first entry as stale and re-mints.
+  const origSleep = global.setTimeout;
+  // Bump the clock when the SDK schedules its backoff sleep. setTimeout is
+  // the only async wait between the rejected first attempt and the JWT
+  // refresh call, so it's a reliable hook.
+  global.setTimeout = (fn, ms, ...rest) => {
+    virtualNowMs += 1000;
+    return origSleep(fn, ms, ...rest);
+  };
+  t.after(() => {
+    global.setTimeout = origSleep;
+  });
+
+  const res = await client.alert("a".repeat(64), SNAPSHOT, {
+    apnsId: "ok-after-refresh",
+  });
+  assert.equal(res.status, 200);
+  assert.equal(mock.requests.length, 2);
+
+  // Two distinct bearer tokens were sent. The iat second on attempt 2 must
+  // be strictly greater than attempt 1, proving a fresh mint happened.
+  const auth1 = String(mock.requests[0].headers.authorization).replace(
+    /^bearer /,
+    "",
+  );
+  const auth2 = String(mock.requests[1].headers.authorization).replace(
+    /^bearer /,
+    "",
+  );
+  assert.notEqual(auth1, auth2, "bearer must differ between attempts");
+  const iat1 = decodeJwtIat(auth1);
+  const iat2 = decodeJwtIat(auth2);
+  assert.ok(
+    iat2 > iat1,
+    `iat must advance across refresh (iat1=${iat1}, iat2=${iat2})`,
+  );
+});
+
+test("JwtCache returns the cached token across retries when the window has not elapsed", async (t) => {
+  // Counter-test to the refresh case above: if backoff stays well inside the
+  // refresh window, the SDK must NOT re-mint - it should send the same bearer
+  // on every attempt. Pins that the refresh path is gated by the cache's
+  // freshness check rather than firing unconditionally on every retry.
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    if (calls === 1) {
+      return { status: 503, body: { reason: "ServiceUnavailable" } };
+    }
+    return { status: 200 };
+  });
+  const fixedNowMs = 1_700_000_000_000;
+  const client = createPushClient({
+    keyId: "ABC1234567",
+    teamId: "TEAM123456",
+    keyPath: KEY.file,
+    bundleId: "com.example.test",
+    environment: "development",
+    idleTimeoutMs: 1_000,
+    _unsafeRetryOverride: {
+      maxRetries: 1,
+      baseDelayMs: 1,
+      maxDelayMs: 2,
+      jitter: false,
+    },
+    [TEST_TRANSPORT_OVERRIDE]: {
+      sendOrigin: mock.origin,
+      // 50-minute window, virtual clock frozen: cache stays fresh across
+      // the whole test.
+      jwtRefreshIntervalMs: 50 * 60 * 1000,
+      jwtNow: () => fixedNowMs,
+    },
+  });
+  teardown(t, client, mock);
+
+  const res = await client.alert("a".repeat(64), SNAPSHOT);
+  assert.equal(res.status, 200);
+  assert.equal(mock.requests.length, 2);
+  const auth1 = mock.requests[0].headers.authorization;
+  const auth2 = mock.requests[1].headers.authorization;
+  assert.equal(auth1, auth2, "bearer must be identical when window has not elapsed");
+});
+
+// --- broadcast / channel-admin failure modes (MS031, MS034) --------------
+//
+// Happy-path coverage for broadcast / createChannel / listChannels /
+// deleteChannel lives earlier in this file. These tests pin the typed-error
+// surface end-to-end: a non-2xx APNs response with a known reason string
+// should throw the matching ApnsError subclass, carry the catalog trapId,
+// expose a docsUrl, and embed the reason guide's operator-facing Fix copy.
+
+test("broadcast() 403 FeatureNotEnabled throws FeatureNotEnabledError with MS034 binding", async (t) => {
+  const mock = await startMockApns(() => ({
+    status: 403,
+    headers: { "apns-id": "fne-1" },
+    body: { reason: "FeatureNotEnabled" },
+  }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.broadcast("ChannelXYZ", SNAPSHOT),
+    (err) => {
+      assert.ok(err instanceof FeatureNotEnabledError);
+      assert.equal(err.reason, "FeatureNotEnabled");
+      assert.equal(err.status, 403);
+      assert.equal(err.apnsId, "fne-1");
+      assert.equal(err.trapId, "MS034");
+      assert.ok(err.docsUrl, "docsUrl should resolve from the MS034 binding");
+      assert.match(err.docsUrl, /ms034/);
+      // The base ApnsError formatter embeds the reasons.ts guide entry.
+      assert.match(err.message, /Fix:/);
+      assert.match(err.message, /Broadcast/);
+      return true;
+    },
+  );
+});
+
+test("broadcast() 410 ChannelNotRegistered throws ChannelNotRegisteredError with MS031 binding", async (t) => {
+  const mock = await startMockApns(() => ({
+    status: 410,
+    headers: { "apns-id": "cnr-1" },
+    body: { reason: "ChannelNotRegistered" },
+  }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.broadcast("ChannelNoSuch", SNAPSHOT),
+    (err) => {
+      assert.ok(err instanceof ChannelNotRegisteredError);
+      assert.equal(err.reason, "ChannelNotRegistered");
+      assert.equal(err.status, 410);
+      assert.equal(err.apnsId, "cnr-1");
+      assert.equal(err.trapId, "MS031");
+      assert.ok(err.docsUrl, "docsUrl should resolve from the MS031 binding");
+      assert.match(err.docsUrl, /ms031/);
+      assert.match(err.message, /Fix:/);
+      // Channels are environment-scoped - the reason guide names that
+      // operationally. Catch a regression that drops the guide text.
+      assert.match(err.message, /environment-scoped/);
+      return true;
+    },
+  );
+});
+
+test("createChannel() 400 BadChannelId throws BadChannelIdError with MS031 binding", async (t) => {
+  const mock = await startMockApns(() => ({
+    status: 400,
+    headers: { "apns-id": "bci-1" },
+    body: { reason: "BadChannelId" },
+  }));
+  const client = makeClient({ manageOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.createChannel({ storagePolicy: "no-storage" }),
+    (err) => {
+      assert.ok(err instanceof BadChannelIdError);
+      assert.equal(err.reason, "BadChannelId");
+      assert.equal(err.status, 400);
+      assert.equal(err.apnsId, "bci-1");
+      assert.equal(err.trapId, "MS031");
+      assert.ok(err.docsUrl, "docsUrl should resolve from the MS031 binding");
+      assert.match(err.message, /Fix:/);
+      assert.match(err.message, /base64/);
+      return true;
+    },
+  );
+});
+
+test("createChannel() 400 CannotCreateChannelConfig throws CannotCreateChannelConfigError", async (t) => {
+  // CannotCreateChannelConfigError is intentionally NOT bound to a trap in
+  // trap-bindings.ts (the MS031 errorClasses list excludes it; the cap-reached
+  // failure mode is operational, not a Mobile Surfaces silent-fail trap). The
+  // typed class still has to surface so callers can pattern-match on it; this
+  // test pins that contract and the absence of a catalog binding.
+  const mock = await startMockApns(() => ({
+    status: 400,
+    headers: { "apns-id": "ccc-1" },
+    body: { reason: "CannotCreateChannelConfig" },
+  }));
+  const client = makeClient({ manageOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.createChannel({ storagePolicy: "no-storage" }),
+    (err) => {
+      assert.ok(err instanceof CannotCreateChannelConfigError);
+      assert.equal(err.reason, "CannotCreateChannelConfig");
+      assert.equal(err.status, 400);
+      assert.equal(err.apnsId, "ccc-1");
+      assert.equal(err.trapId, undefined, "unbound class returns undefined trapId");
+      assert.equal(err.docsUrl, undefined);
+      assert.match(err.message, /Fix:/);
+      assert.match(err.message, /10,000 channels/);
+      return true;
+    },
+  );
 });
 
 // --- cleanup --------------------------------------------------------------
