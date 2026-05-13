@@ -65,6 +65,29 @@ const STAR = "═".repeat(60);
 const treeClean = isTreeClean();
 const skipped = [];
 
+// On a clean tree, refresh the bundled template tarball before running
+// cli:test. Without this, the scaffold snapshot test compares the
+// materialized tree (built from a possibly-stale template.tgz on disk)
+// against the committed snapshots; if the dev rebuilt the tarball before
+// the most recent commit, the local test passes against a tarball that
+// does not reflect HEAD, while CI (which has no tarball cached) runs from
+// `git archive HEAD` and fails on the same files. CI catches the drift,
+// dry-run misses it. Refreshing here closes the hole.
+//
+// Skipped on a dirty tree because build-template refuses uncommitted
+// changes. Local cli:test will then run against whatever tarball is on
+// disk; the snapshot test is best-effort in that path. Commit your work
+// and rerun release:dry-run for the strict gate.
+if (treeClean) {
+  console.log(`\n${STAR}\n[setup] refresh bundled template tarball\n${STAR}`);
+  try {
+    await run(["pnpm", "--filter", "create-mobile-surfaces", "build:template"]);
+  } catch {
+    console.error("✗ build:template failed; cli:test would run against a stale tarball.");
+    process.exit(1);
+  }
+}
+
 let failed = null;
 for (let i = 0; i < GATES.length; i += 1) {
   const gate = GATES[i];
