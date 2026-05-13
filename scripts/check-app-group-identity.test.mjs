@@ -1,10 +1,9 @@
 // End-to-end tests for scripts/check-app-group-identity.mjs.
 //
-// MS013 is the App-Group-must-match check. Drift between any of the four
-// declaration sites + the two TS consumer files renders widgets blank with
-// no error log, so the script needs to detect every form of mismatch and
-// every form of consumer regression (re-introduced local literal, missing
-// import).
+// MS013 is the App-Group-must-match check. Drift between any of the five
+// declaration sites renders widgets blank with no error log, so the script
+// must detect every form of mismatch and every form of missing/malformed
+// source.
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -59,15 +58,7 @@ enum MobileSurfacesSharedState {
 `;
 }
 
-function configTs(group) {
-  return `export const APP_GROUP = "${group}";\n`;
-}
-
-function consumerOk() {
-  return 'import { APP_GROUP } from "../config";\nconsole.log(APP_GROUP);\n';
-}
-
-function consumerWithLiteral(group) {
+function tsConsumer(group) {
   return `const APP_GROUP = "${group}";\nconsole.log(APP_GROUP);\n`;
 }
 
@@ -75,18 +66,16 @@ function withWorkspace({
   appGroupApp = CANONICAL,
   appGroupWidgetPlist = CANONICAL,
   appGroupSwift = CANONICAL,
-  appGroupConfig = CANONICAL,
-  surfaceStorage = consumerOk(),
-  checkSetup = consumerOk(),
+  appGroupSurfaceStorage = CANONICAL,
+  appGroupCheckSetup = CANONICAL,
 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "ms-check-appgrp-"));
   const writes = {
     "apps/mobile/app.json": appJson(appGroupApp),
     "apps/mobile/targets/widget/generated.entitlements": widgetEntitlements(appGroupWidgetPlist),
     "apps/mobile/targets/widget/_shared/MobileSurfacesSharedState.swift": sharedStateSwift(appGroupSwift),
-    "apps/mobile/src/config.ts": configTs(appGroupConfig),
-    "apps/mobile/src/surfaceStorage/index.ts": surfaceStorage,
-    "apps/mobile/src/diagnostics/checkSetup.ts": checkSetup,
+    "apps/mobile/src/surfaceStorage/index.ts": tsConsumer(appGroupSurfaceStorage),
+    "apps/mobile/src/diagnostics/checkSetup.ts": tsConsumer(appGroupCheckSetup),
   };
   for (const [relPath, contents] of Object.entries(writes)) {
     const full = join(dir, relPath);
@@ -104,13 +93,12 @@ function runCheck(cwd) {
   });
 }
 
-test("baseline: every source declares the canonical identifier and consumers import it", () => {
+test("baseline: every source declares the canonical identifier", () => {
   const ws = withWorkspace();
   try {
     const r = runCheck(ws.dir);
     assert.equal(r.status, 0, r.stdout + r.stderr);
-    assert.match(r.stdout, /All 4 sources resolve to "group\.com\.example\.mobilesurfaces"/);
-    assert.match(r.stdout, /TS consumer\(s\) import APP_GROUP from src\/config\.ts/);
+    assert.match(r.stdout, /All 5 sources resolve to "group\.com\.example\.mobilesurfaces"/);
   } finally {
     ws.cleanup();
   }
@@ -140,37 +128,19 @@ test("flags a Swift shared-state file declaring a different App Group identifier
   }
 });
 
-test("flags src/config.ts declaring a different App Group identifier", () => {
-  const ws = withWorkspace({ appGroupConfig: "group.com.example.fork" });
-  try {
-    const r = runCheck(ws.dir);
-    assert.notEqual(r.status, 0);
-    assert.match(r.stdout + r.stderr, /config\.ts|src\/config/);
-  } finally {
-    ws.cleanup();
-  }
-});
-
-test("flags a TS consumer that re-declares APP_GROUP as a local literal", () => {
-  // Regression: consumers must import APP_GROUP from "../config" so the
-  // TS layer cannot silently re-fork the identifier.
-  const ws = withWorkspace({
-    surfaceStorage: consumerWithLiteral(CANONICAL),
-  });
+test("flags surfaceStorage/index.ts declaring a different App Group identifier", () => {
+  const ws = withWorkspace({ appGroupSurfaceStorage: "group.com.example.fork" });
   try {
     const r = runCheck(ws.dir);
     assert.notEqual(r.status, 0);
     assert.match(r.stdout + r.stderr, /surfaceStorage/);
-    assert.match(r.stdout + r.stderr, /import APP_GROUP from .*config/i);
   } finally {
     ws.cleanup();
   }
 });
 
-test("flags a TS consumer that does not import APP_GROUP from ../config", () => {
-  const ws = withWorkspace({
-    checkSetup: 'console.log("no APP_GROUP usage");\n',
-  });
+test("flags diagnostics/checkSetup.ts declaring a different App Group identifier", () => {
+  const ws = withWorkspace({ appGroupCheckSetup: "group.com.example.other" });
   try {
     const r = runCheck(ws.dir);
     assert.notEqual(r.status, 0);
@@ -182,7 +152,6 @@ test("flags a TS consumer that does not import APP_GROUP from ../config", () => 
 
 test("flags a missing source file", () => {
   const ws = withWorkspace();
-  // Wipe one declaration site after staging.
   rmSync(join(ws.dir, "apps/mobile/targets/widget/generated.entitlements"));
   try {
     const r = runCheck(ws.dir);
