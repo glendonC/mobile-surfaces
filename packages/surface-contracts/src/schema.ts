@@ -259,6 +259,119 @@ export type LiveSurfaceActivityContentState = z.infer<
   typeof liveSurfaceActivityContentState
 >;
 
+// Output schemas for the non-alert projections. The projection helpers in
+// index.ts already return strongly-typed results, but TypeScript-only types
+// cannot defend against a future helper edit that silently widens the
+// returned shape (or a fixture edit that drives the helper into a runtime-
+// only branch the type checker missed). Pairing each helper with an output
+// schema lets the drift test in scripts/surface-contracts.test.mjs project
+// every committed fixture through its helper, parse the result, and fail
+// closed on any divergence.
+//
+// Optional fields are modeled with `.optional()` to mirror the projection
+// helpers' "drop empty / falsy" behavior (toNotificationContentPayload omits
+// category/threadId when empty; toStandbyEntry sets tint to null when
+// absent — see the helper for the exact rule).
+
+export const liveSurfaceWidgetTimelineEntry = z
+  .object({
+    kind: z.literal("widget"),
+    snapshotId: z.string(),
+    surfaceId: z.string(),
+    state: liveSurfaceState,
+    family: z.enum(["systemSmall", "systemMedium", "systemLarge"]).optional(),
+    reloadPolicy: z.enum(["manual", "afterDate"]).optional(),
+    headline: z.string(),
+    subhead: z.string(),
+    progress: z.number().min(0).max(1),
+    deepLink: z.string(),
+  })
+  .strict();
+export type LiveSurfaceWidgetTimelineEntryOutput = z.infer<
+  typeof liveSurfaceWidgetTimelineEntry
+>;
+
+export const liveSurfaceControlValueProvider = z
+  .object({
+    kind: z.literal("control"),
+    snapshotId: z.string(),
+    surfaceId: z.string(),
+    controlKind: z.enum(["toggle", "button", "deepLink"]),
+    value: z.boolean().nullable(),
+    intent: z.string().nullable(),
+    label: z.string().min(1),
+    deepLink: z.string(),
+  })
+  .strict();
+export type LiveSurfaceControlValueProviderOutput = z.infer<
+  typeof liveSurfaceControlValueProvider
+>;
+
+export const liveSurfaceLockAccessoryEntry = z
+  .object({
+    kind: z.literal("lockAccessory"),
+    snapshotId: z.string(),
+    surfaceId: z.string(),
+    state: liveSurfaceState,
+    family: liveSurfaceLockAccessoryFamily,
+    headline: z.string(),
+    shortText: z.string(),
+    gaugeValue: z.number().min(0).max(1),
+    deepLink: z.string(),
+  })
+  .strict();
+export type LiveSurfaceLockAccessoryEntryOutput = z.infer<
+  typeof liveSurfaceLockAccessoryEntry
+>;
+
+export const liveSurfaceStandbyEntry = z
+  .object({
+    kind: z.literal("standby"),
+    snapshotId: z.string(),
+    surfaceId: z.string(),
+    state: liveSurfaceState,
+    presentation: liveSurfaceStandbyPresentation,
+    tint: z.enum(["default", "monochrome"]).nullable(),
+    headline: z.string(),
+    subhead: z.string(),
+    progress: z.number().min(0).max(1),
+    deepLink: z.string(),
+  })
+  .strict();
+export type LiveSurfaceStandbyEntryOutput = z.infer<
+  typeof liveSurfaceStandbyEntry
+>;
+
+export const liveSurfaceNotificationContentPayload = z
+  .object({
+    aps: z
+      .object({
+        alert: z
+          .object({
+            title: z.string(),
+            body: z.string(),
+          })
+          .strict(),
+        sound: z.literal("default"),
+        category: z.string().optional(),
+        "thread-id": z.string().optional(),
+      })
+      .strict(),
+    liveSurface: z
+      .object({
+        kind: z.literal("surface_notification"),
+        snapshotId: z.string(),
+        surfaceId: z.string(),
+        state: liveSurfaceState,
+        deepLink: z.string(),
+      })
+      .strict(),
+  })
+  .strict();
+export type LiveSurfaceNotificationContentPayloadOutput = z.infer<
+  typeof liveSurfaceNotificationContentPayload
+>;
+
 // Derived arrays preserve the older string-list export surface for consumers
 // who only need the union members. Tuple-narrow so downstream `as const`
 // patterns keep working.

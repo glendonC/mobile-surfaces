@@ -3,8 +3,14 @@ import assert from "node:assert/strict";
 import {
   assertSnapshot,
   IncompleteProjectionError,
+  liveSurfaceActivityContentState,
+  liveSurfaceControlValueProvider,
+  liveSurfaceLockAccessoryEntry,
+  liveSurfaceNotificationContentPayload,
   liveSurfaceSnapshot,
   liveSurfaceSnapshotV1,
+  liveSurfaceStandbyEntry,
+  liveSurfaceWidgetTimelineEntry,
   migrateV1ToV2,
   safeParseAnyVersion,
   safeParseSnapshot,
@@ -674,6 +680,84 @@ test("toLiveActivityContentState accepts empty secondaryText (schema permits emp
   const projected = toLiveActivityContentState(live);
   assert.equal(projected.subhead, "");
   assert.equal(projected.headline, queued.primaryText);
+});
+
+// --- Projection output-schema drift tests --------------------------------
+
+// Each helper has both a runtime helper and a Zod output schema. If a helper
+// edit silently widens the returned shape (or a fixture edit pushes the
+// helper down an untyped branch), the schema parse fails here — closing the
+// gap between "TypeScript says it works" and "the wire format actually
+// validates."
+const PROJECTION_BY_KIND = {
+  liveActivity: {
+    project: toLiveActivityContentState,
+    schema: liveSurfaceActivityContentState,
+  },
+  widget: {
+    project: toWidgetTimelineEntry,
+    schema: liveSurfaceWidgetTimelineEntry,
+  },
+  control: {
+    project: toControlValueProvider,
+    schema: liveSurfaceControlValueProvider,
+  },
+  lockAccessory: {
+    project: toLockAccessoryEntry,
+    schema: liveSurfaceLockAccessoryEntry,
+  },
+  standby: {
+    project: toStandbyEntry,
+    schema: liveSurfaceStandbyEntry,
+  },
+  notification: {
+    project: toNotificationContentPayload,
+    schema: liveSurfaceNotificationContentPayload,
+  },
+};
+
+test("every fixture projects to a payload that parses via its output schema", () => {
+  for (const [name, snapshot] of Object.entries(surfaceFixtureSnapshots)) {
+    const handler = PROJECTION_BY_KIND[snapshot.kind];
+    assert.ok(handler, `fixture "${name}" has unknown kind ${snapshot.kind}`);
+    const projected = handler.project(snapshot);
+    const result = handler.schema.safeParse(projected);
+    if (!result.success) {
+      const issues = result.error.issues
+        .map((i) => `${i.path.join(".") || "<root>"}: ${i.message}`)
+        .join("; ");
+      assert.fail(
+        `Fixture "${name}" (kind=${snapshot.kind}) projected output fails its schema: ${issues}`,
+      );
+    }
+    // Parsed result should be structurally identical to the helper output.
+    // .strict() schemas mean any helper-introduced excess key would have
+    // already failed safeParse; deepEqual here pins the value-level shape.
+    assert.deepEqual(result.data, projected, `kind=${snapshot.kind} fixture=${name}`);
+  }
+});
+
+test("output schemas reject helper drift: widget entry without snapshotId", () => {
+  // Negative case to ensure the schemas would actually catch drift if a helper
+  // started omitting a required field. Constructed by hand rather than
+  // patching the helper — patching the helper would also break the positive
+  // test above and leave us with two failing tests for one issue.
+  const widget = surfaceFixtureSnapshots["widget-large-onsite"] ??
+    surfaceFixtureSnapshots["widget-small"] ??
+    Object.values(surfaceFixtureSnapshots).find((s) => s.kind === "widget");
+  const projected = toWidgetTimelineEntry(widget);
+  const { snapshotId: _drop, ...drifted } = projected;
+  const result = liveSurfaceWidgetTimelineEntry.safeParse(drifted);
+  assert.equal(result.success, false);
+});
+
+test("output schemas reject extra fields a helper might accidentally introduce", () => {
+  const standby = Object.values(surfaceFixtureSnapshots).find((s) => s.kind === "standby");
+  assert.ok(standby, "expected at least one standby fixture");
+  const projected = toStandbyEntry(standby);
+  const inflated = { ...projected, extraField: "drifted in" };
+  const result = liveSurfaceStandbyEntry.safeParse(inflated);
+  assert.equal(result.success, false, "strict schema must reject excess keys");
 });
 
 test("liveSurfaceSnapshot exposes a Standard Schema (~standard) interface", () => {
