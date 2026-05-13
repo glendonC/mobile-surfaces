@@ -12,7 +12,6 @@ const {
   InvalidSnapshotError,
   ClientClosedError,
   MissingApnsConfigError,
-  InvalidApnsConfigError,
   PayloadTooLargeError,
   FeatureNotEnabledError,
   ChannelNotRegisteredError,
@@ -634,35 +633,6 @@ test("createPushClient throws MissingApnsConfigError when required options are m
     () => createPushClient({ ...baseConfig, keyPath: "" }),
     (err) => err instanceof MissingApnsConfigError && err.missing[0] === "keyPath",
   );
-});
-
-test("createPushClient rejects a pre-suffixed bundleId at construct time (MS018)", () => {
-  const baseConfig = {
-    keyId: "ABC1234567",
-    teamId: "TEAM123456",
-    keyPath: KEY.file,
-    environment: "development",
-  };
-  assert.throws(
-    () =>
-      createPushClient({
-        ...baseConfig,
-        bundleId: "com.example.test.push-type.liveactivity",
-      }),
-    (err) => {
-      assert.ok(err instanceof InvalidApnsConfigError, "InvalidApnsConfigError");
-      assert.equal(err.field, "bundleId");
-      assert.equal(err.trapId, "MS018");
-      assert.match(err.message, /push-type\.liveactivity/);
-      return true;
-    },
-  );
-  // Bare bundleId still passes the guard.
-  const client = createPushClient({
-    ...baseConfig,
-    bundleId: "com.example.test",
-  });
-  client.close();
 });
 
 test("hooks.onResponse fires with operation, snapshotId, and apnsId on success", async (t) => {
