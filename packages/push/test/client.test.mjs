@@ -443,6 +443,123 @@ test("end() defaults dismissal-date to now", async (t) => {
   assert.ok(dismissal >= before && dismissal <= after + 1);
 });
 
+// --- describeSend dry-run -------------------------------------------------
+
+test("describeSend(alert) returns the request that would be sent without contacting APNs", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const description = client.describeSend({
+    operation: "alert",
+    deviceToken: "a".repeat(64),
+    snapshot: SNAPSHOT,
+    options: { apnsId: "fixed-id-describe" },
+  });
+
+  assert.equal(description.operation, "alert");
+  assert.equal(description.method, "POST");
+  assert.equal(description.path, `/3/device/${"a".repeat(64)}`);
+  assert.equal(description.pushType, "alert");
+  assert.equal(description.topic, "com.example.test");
+  assert.equal(description.priority, 10);
+  assert.equal(description.apnsId, "fixed-id-describe");
+  assert.equal(description.snapshotKind, "liveActivity");
+  assert.equal(description.target, "a".repeat(64));
+  assert.equal(description.payloadJson, JSON.stringify(description.payload));
+  assert.ok(description.payloadBytes > 0);
+  assert.equal(description.payloadLimitBytes, 4096);
+  assert.equal(description.withinLimit, true);
+
+  // No network traffic.
+  assert.equal(mock.requests.length, 0);
+});
+
+test("describeSend(update) targets the liveactivity push-type and per-activity topic", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const description = client.describeSend({
+    operation: "update",
+    activityToken: "b".repeat(64),
+    snapshot: SNAPSHOT,
+  });
+  assert.equal(description.pushType, "liveactivity");
+  assert.equal(description.topic, "com.example.test.push-type.liveactivity");
+  assert.equal(description.priority, 5);
+  assert.equal(description.payload.aps.event, "update");
+});
+
+test("describeSend(start) carries attributesType into the description", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const description = client.describeSend({
+    operation: "start",
+    pushToStartToken: "c".repeat(64),
+    snapshot: SNAPSHOT,
+    attributes: { surfaceId: SNAPSHOT.surfaceId },
+    options: { attributesType: "MyAttrs" },
+  });
+  assert.equal(description.attributesType, "MyAttrs");
+  assert.equal(description.payload.aps["attributes-type"], "MyAttrs");
+  assert.deepEqual(description.payload.aps.attributes, {
+    surfaceId: SNAPSHOT.surfaceId,
+  });
+});
+
+test("describeSend(broadcast) uses the channel path with null topic and broadcast ceiling", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const description = client.describeSend({
+    operation: "broadcast",
+    channelId: "ChanXYZ",
+    snapshot: SNAPSHOT,
+  });
+  assert.equal(description.path, "/4/broadcasts/apps/com.example.test");
+  assert.equal(description.topic, null);
+  assert.equal(description.channelId, "ChanXYZ");
+  assert.equal(description.payloadLimitBytes, 5120);
+  assert.equal(description.expirationSeconds, 0);
+});
+
+test("describeSend validates the snapshot before describing", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  assert.throws(
+    () => client.describeSend({ operation: "alert", deviceToken: "x", snapshot: WIDGET_SNAPSHOT }),
+    (err) => {
+      assert.ok(err instanceof InvalidSnapshotError);
+      assert.match(err.message, /liveActivity/);
+      return true;
+    },
+  );
+});
+
+test("describeSend reports withinLimit=false for an oversize payload without throwing", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const fat = {
+    ...SNAPSHOT,
+    secondaryText: "x".repeat(5000),
+  };
+  const description = client.describeSend({
+    operation: "alert",
+    deviceToken: "d".repeat(64),
+    snapshot: fat,
+  });
+  assert.ok(description.payloadBytes > 4096, "fixture should exceed 4 KB");
+  assert.equal(description.withinLimit, false);
+});
+
 // --- hooks + config validation -------------------------------------------
 
 test("createPushClient throws MissingApnsConfigError when required options are missing", () => {

@@ -19,6 +19,8 @@ export type {
   PushHooks,
   PushHookContext,
   PushHookOperation,
+  DescribeSendInput,
+  SendDescription,
 } from "./client.ts";
 
 export type { RetryPolicy } from "./retry.ts";
