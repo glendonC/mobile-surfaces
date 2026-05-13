@@ -22,6 +22,10 @@ import {
   liveSurfaceStage,
 } from "../packages/surface-contracts/src/schema.ts";
 import { buildReport, emitDiagnosticReport } from "./lib/diagnostics.mjs";
+import {
+  parseContentState,
+  parseStageCases,
+} from "./lib/swift-content-state.mjs";
 
 const { values } = parseArgs({
   options: { json: { type: "boolean", default: false } },
@@ -76,8 +80,23 @@ if (!byteIdentical) {
 
 // ---------- Structural Swift <-> Zod check ----------
 
-const swiftFields = parseContentState(moduleSource, modulePath);
-const swiftStages = parseStageCases(moduleSource, modulePath);
+const moduleRel = path.relative(process.cwd(), modulePath);
+const parsed = parseContentState(moduleSource);
+if (!parsed.ok) {
+  emitDiagnosticReport(
+    buildReport(TOOL, [
+      {
+        id: "parse-content-state",
+        status: "fail",
+        summary: `Could not parse ContentState in Swift source: ${parsed.reason}`,
+        detail: { paths: [moduleRel] },
+      },
+    ]),
+    { json: values.json },
+  );
+}
+const swiftFields = parsed.fields;
+const swiftStages = parseStageCases(moduleSource) ?? [];
 
 const zodFields = Object.entries(liveSurfaceActivityContentState.shape).map(
   ([name, schema]) => ({ name, expected: expectedSwiftType(name, schema) }),
@@ -87,40 +106,61 @@ const zodStages = liveSurfaceStage.options;
 const fieldIssues = [];
 const stageIssues = [];
 
-const swiftNames = new Set(swiftFields.map((f) => f.name));
-const zodNames = new Set(zodFields.map((f) => f.name));
-for (const f of zodFields) {
-  if (!swiftNames.has(f.name)) {
-    fieldIssues.push({
-      path: f.name,
-      message: `present in Zod liveSurfaceActivityContentState, missing from Swift ContentState (${path.relative(process.cwd(), modulePath)})`,
-    });
-  }
-}
+// MS003 hinges on the JSON key, not the Swift property name: ActivityKit
+// decodes the push payload through Codable, which keys off the
+// CodingKeys-resolved name. A `case headline = "title"` decouples the two,
+// so an MS003 check that compares Swift identifiers misses it. We match
+// Zod keys against Swift jsonKey first, then surface property/type drift
+// against the Swift property that owns that jsonKey.
+const swiftByJsonKey = new Map();
 for (const f of swiftFields) {
-  if (!zodNames.has(f.name)) {
-    fieldIssues.push({
-      path: `${path.relative(process.cwd(), modulePath)}:${f.line}`,
-      message: `field "${f.name}" present in Swift ContentState, missing from Zod liveSurfaceActivityContentState`,
-    });
-  }
+  if (f.jsonKey === null) continue;
+  swiftByJsonKey.set(f.jsonKey, f);
 }
+const zodKeySet = new Set(zodFields.map((f) => f.name));
 
-const swiftByName = new Map(swiftFields.map((f) => [f.name, f]));
-for (const f of zodFields) {
-  const swift = swiftByName.get(f.name);
-  if (!swift) continue;
-  if (f.expected === null) {
+for (const z of zodFields) {
+  const swift = swiftByJsonKey.get(z.name);
+  if (!swift) {
     fieldIssues.push({
-      path: f.name,
+      path: z.name,
+      message: `Zod liveSurfaceActivityContentState has key "${z.name}", but no Swift property in ${moduleRel} serializes to that JSON key.`,
+    });
+    continue;
+  }
+  if (z.expected === null) {
+    fieldIssues.push({
+      path: z.name,
       message: `Zod schema is unsupported by this checker (extend expectedSwiftType to teach it)`,
     });
     continue;
   }
-  if (swift.type !== f.expected) {
+  if (swift.type !== z.expected) {
     fieldIssues.push({
-      path: `${path.relative(process.cwd(), modulePath)}:${swift.line}`,
-      message: `field "${f.name}": Zod expects ${f.expected}, Swift has ${swift.type}`,
+      path: `${moduleRel}:${swift.line}`,
+      message: `field "${swift.name}" (JSON key "${swift.jsonKey}"): Zod expects ${z.expected}, Swift has ${swift.type}`,
+    });
+  }
+  if (swift.name !== z.name) {
+    fieldIssues.push({
+      path: `${moduleRel}:${swift.line}`,
+      message: `CodingKeys remap: Swift property "${swift.name}" serializes as JSON key "${swift.jsonKey}". Zod expects "${z.name}" -> drop the rename or update Zod to match.`,
+    });
+  }
+}
+
+for (const f of swiftFields) {
+  if (f.jsonKey === null) {
+    fieldIssues.push({
+      path: `${moduleRel}:${f.line}`,
+      message: `Swift property "${f.name}" is excluded from CodingKeys, so it never reaches the wire. Add it to CodingKeys or remove the property.`,
+    });
+    continue;
+  }
+  if (!zodKeySet.has(f.jsonKey)) {
+    fieldIssues.push({
+      path: `${moduleRel}:${f.line}`,
+      message: `Swift property "${f.name}" serializes as JSON key "${f.jsonKey}", which is not present in Zod liveSurfaceActivityContentState.`,
     });
   }
 }
@@ -138,7 +178,7 @@ for (const s of zodStages) {
 for (const s of swiftStages) {
   if (!zodStageNames.has(s.name)) {
     stageIssues.push({
-      path: `${path.relative(process.cwd(), modulePath)}:${s.line}`,
+      path: `${moduleRel}:${s.line}`,
       message: `stage case "${s.name}" present in Swift Stage enum, missing from Zod liveSurfaceStage`,
     });
   }
@@ -203,62 +243,6 @@ function findAttributesFile(dir) {
     return null;
   }
   return matches[0];
-}
-
-function parseContentState(swiftSrc, sourcePath) {
-  const block = swiftSrc.match(
-    /public\s+struct\s+ContentState\s*:[^{]*\{([\s\S]*?)\n\s*\}/,
-  );
-  if (!block) {
-    emitDiagnosticReport(
-      buildReport(TOOL, [
-        {
-          id: "parse-content-state",
-          status: "fail",
-          summary: `No \`public struct ContentState\` block in Swift source.`,
-          detail: { paths: [sourcePath] },
-        },
-      ]),
-      { json: values.json },
-    );
-  }
-  const body = block[1];
-  const startOffset = block.index + block[0].indexOf(body);
-  const fields = [];
-  for (const m of body.matchAll(/var\s+(\w+)\s*:\s*([\w<>?]+)/g)) {
-    const absoluteOffset = startOffset + m.index;
-    const line = swiftSrc.slice(0, absoluteOffset).split("\n").length;
-    fields.push({ name: m[1], type: m[2], line });
-  }
-  return fields;
-}
-
-function parseStageCases(swiftSrc, sourcePath) {
-  const block = swiftSrc.match(
-    /enum\s+Stage\s*:[^{]*\{([\s\S]*?)\n\s*\}/,
-  );
-  if (!block) {
-    emitDiagnosticReport(
-      buildReport(TOOL, [
-        {
-          id: "parse-stage",
-          status: "fail",
-          summary: `No \`enum Stage\` block in Swift source.`,
-          detail: { paths: [sourcePath] },
-        },
-      ]),
-      { json: values.json },
-    );
-  }
-  const body = block[1];
-  const startOffset = block.index + block[0].indexOf(body);
-  const cases = [];
-  for (const m of body.matchAll(/case\s+(\w+)/g)) {
-    const absoluteOffset = startOffset + m.index;
-    const line = swiftSrc.slice(0, absoluteOffset).split("\n").length;
-    cases.push({ name: m[1], line });
-  }
-  return cases;
 }
 
 // Resolve a Zod field schema to the Swift type it should serialize as.
