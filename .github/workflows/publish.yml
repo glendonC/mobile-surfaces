@@ -52,4 +52,21 @@ jobs:
           version: pnpm release:version
           publish: pnpm changeset publish
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # CHANGESETS_PAT is a fine-grained Personal Access Token scoped to
+          # this repo with Contents: read/write and Pull requests: read/write.
+          # Using a PAT instead of the default GITHUB_TOKEN is the documented
+          # changesets/action workaround for a GitHub policy: PRs opened or
+          # updated by the implicit GITHUB_TOKEN do not trigger downstream
+          # workflows (a safeguard against runaway workflow loops). That
+          # suppression meant the required `checks` status check from ci.yml
+          # never fired on the bot's Version packages PR, leaving it
+          # permanently un-mergeable under the main-branch ruleset. A
+          # PAT-authored PR is treated like a user-authored PR and does
+          # trigger ci.yml.
+          #
+          # Rotation: GitHub emails the token owner ~7 days before expiry.
+          # Regenerate the PAT at https://github.com/settings/personal-access-tokens
+          # and update the CHANGESETS_PAT repo secret at
+          # https://github.com/glendonC/mobile-surfaces/settings/secrets/actions.
+          # The secret name does not change; no workflow edit needed.
+          GITHUB_TOKEN: ${{ secrets.CHANGESETS_PAT }}
