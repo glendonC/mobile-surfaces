@@ -1,9 +1,10 @@
 {
-  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@2.1/schema.json",
-  "schemaVersion": "1",
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@3.0/schema.json",
+  "schemaVersion": "2",
   "kind": "liveActivity",
   "id": "fixture-active-countdown",
   "surfaceId": "surface-active-countdown",
+  "updatedAt": "2026-05-12T18:31:30.000Z",
   "state": "active",
   "modeLabel": "countdown",
   "contextLabel": "timer",
@@ -11,9 +12,11 @@
   "primaryText": "Countdown in progress",
   "secondaryText": "Preview time-sensitive progress changes without connecting a backend.",
   "actionLabel": "Continue",
-  "estimatedSeconds": 30,
-  "morePartsCount": 0,
   "progress": 0.35,
-  "stage": "inProgress",
-  "deepLink": "mobilesurfaces://surface/surface-active-countdown"
+  "deepLink": "mobilesurfaces://surface/surface-active-countdown",
+  "liveActivity": {
+    "stage": "inProgress",
+    "estimatedSeconds": 30,
+    "morePartsCount": 0
+  }
 }

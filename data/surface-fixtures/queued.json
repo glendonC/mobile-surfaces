@@ -1,9 +1,10 @@
 {
-  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@2.1/schema.json",
-  "schemaVersion": "1",
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@3.0/schema.json",
+  "schemaVersion": "2",
   "kind": "liveActivity",
   "id": "fixture-queued",
   "surfaceId": "surface-queued",
+  "updatedAt": "2026-05-12T18:30:00.000Z",
   "state": "queued",
   "modeLabel": "queued",
   "contextLabel": "starter",
@@ -11,9 +12,11 @@
   "primaryText": "Surface queued",
   "secondaryText": "Use this as the initial state before a Live Activity starts changing.",
   "actionLabel": "Open surface",
-  "estimatedSeconds": 900,
-  "morePartsCount": 0,
   "progress": 0,
-  "stage": "prompted",
-  "deepLink": "mobilesurfaces://surface/surface-queued"
+  "deepLink": "mobilesurfaces://surface/surface-queued",
+  "liveActivity": {
+    "stage": "prompted",
+    "estimatedSeconds": 900,
+    "morePartsCount": 0
+  }
 }

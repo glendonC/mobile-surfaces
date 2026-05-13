@@ -1,6 +1,6 @@
 {
   "name": "create-mobile-surfaces",
-  "version": "2.1.1",
+  "version": "3.0.0",
   "description": "Guided installer for the Mobile Surfaces Expo iOS Live Activity starter.",
   "publishConfig": {
     "access": "public"

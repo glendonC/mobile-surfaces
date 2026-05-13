@@ -4,10 +4,11 @@ import type { LiveSurfaceSnapshot } from "./index";
 // Edit the JSON fixtures, then run pnpm surface:check.
 export const surfaceFixtureSnapshots = {
   "queued": {
-    "schemaVersion": "1",
+    "schemaVersion": "2",
     "kind": "liveActivity",
     "id": "fixture-queued",
     "surfaceId": "surface-queued",
+    "updatedAt": "2026-05-12T18:30:00.000Z",
     "state": "queued",
     "modeLabel": "queued",
     "contextLabel": "starter",
@@ -15,17 +16,20 @@ export const surfaceFixtureSnapshots = {
     "primaryText": "Surface queued",
     "secondaryText": "Use this as the initial state before a Live Activity starts changing.",
     "actionLabel": "Open surface",
-    "estimatedSeconds": 900,
-    "morePartsCount": 0,
     "progress": 0,
-    "stage": "prompted",
-    "deepLink": "mobilesurfaces://surface/surface-queued"
+    "deepLink": "mobilesurfaces://surface/surface-queued",
+    "liveActivity": {
+      "stage": "prompted",
+      "estimatedSeconds": 900,
+      "morePartsCount": 0
+    }
   },
   "attention": {
-    "schemaVersion": "1",
+    "schemaVersion": "2",
     "kind": "liveActivity",
     "id": "fixture-attention",
     "surfaceId": "surface-attention",
+    "updatedAt": "2026-05-12T18:30:30.000Z",
     "state": "attention",
     "modeLabel": "attention",
     "contextLabel": "urgent",
@@ -33,18 +37,20 @@ export const surfaceFixtureSnapshots = {
     "primaryText": "Attention needed",
     "secondaryText": "Use this state for alert-worthy pushes or prominent ActivityKit updates.",
     "actionLabel": "Review",
-    "estimatedSeconds": 120,
-    "morePartsCount": 1,
     "progress": 0.15,
-    "stage": "prompted",
-    "deepLink": "mobilesurfaces://surface/surface-attention"
+    "deepLink": "mobilesurfaces://surface/surface-attention",
+    "liveActivity": {
+      "stage": "prompted",
+      "estimatedSeconds": 120,
+      "morePartsCount": 1
+    }
   },
   "activeProgress": {
-    "schemaVersion": "1",
+    "schemaVersion": "2",
     "kind": "liveActivity",
     "id": "fixture-active-progress",
     "surfaceId": "surface-active-progress",
-    "updatedAt": "2026-05-12T18:32:11.482Z",
+    "updatedAt": "2026-05-12T18:31:00.000Z",
     "state": "active",
     "modeLabel": "active",
     "contextLabel": "progress",
@@ -52,17 +58,20 @@ export const surfaceFixtureSnapshots = {
     "primaryText": "Surface in progress",
     "secondaryText": "The same snapshot feeds the app view and ActivityKit content state.",
     "actionLabel": "View progress",
-    "estimatedSeconds": 360,
-    "morePartsCount": 0,
     "progress": 0.5,
-    "stage": "inProgress",
-    "deepLink": "mobilesurfaces://surface/surface-active-progress"
+    "deepLink": "mobilesurfaces://surface/surface-active-progress",
+    "liveActivity": {
+      "stage": "inProgress",
+      "estimatedSeconds": 360,
+      "morePartsCount": 0
+    }
   },
   "activeCountdown": {
-    "schemaVersion": "1",
+    "schemaVersion": "2",
     "kind": "liveActivity",
     "id": "fixture-active-countdown",
     "surfaceId": "surface-active-countdown",
+    "updatedAt": "2026-05-12T18:31:30.000Z",
     "state": "active",
     "modeLabel": "countdown",
     "contextLabel": "timer",
@@ -70,17 +79,20 @@ export const surfaceFixtureSnapshots = {
     "primaryText": "Countdown in progress",
     "secondaryText": "Preview time-sensitive progress changes without connecting a backend.",
     "actionLabel": "Continue",
-    "estimatedSeconds": 30,
-    "morePartsCount": 0,
     "progress": 0.35,
-    "stage": "inProgress",
-    "deepLink": "mobilesurfaces://surface/surface-active-countdown"
+    "deepLink": "mobilesurfaces://surface/surface-active-countdown",
+    "liveActivity": {
+      "stage": "inProgress",
+      "estimatedSeconds": 30,
+      "morePartsCount": 0
+    }
   },
   "paused": {
-    "schemaVersion": "1",
+    "schemaVersion": "2",
     "kind": "liveActivity",
     "id": "fixture-paused",
     "surfaceId": "surface-paused",
+    "updatedAt": "2026-05-12T18:32:00.000Z",
     "state": "paused",
     "modeLabel": "paused",
     "contextLabel": "waiting",
@@ -88,17 +100,20 @@ export const surfaceFixtureSnapshots = {
     "primaryText": "Surface paused",
     "secondaryText": "A paused surface can stay visible without noisy updates.",
     "actionLabel": "Open surface",
-    "estimatedSeconds": 1800,
-    "morePartsCount": 0,
     "progress": 0.4,
-    "stage": "prompted",
-    "deepLink": "mobilesurfaces://surface/surface-paused"
+    "deepLink": "mobilesurfaces://surface/surface-paused",
+    "liveActivity": {
+      "stage": "prompted",
+      "estimatedSeconds": 1800,
+      "morePartsCount": 0
+    }
   },
   "badTiming": {
-    "schemaVersion": "1",
+    "schemaVersion": "2",
     "kind": "liveActivity",
     "id": "fixture-bad-timing",
     "surfaceId": "surface-none-bad-timing",
+    "updatedAt": "2026-05-12T18:32:30.000Z",
     "state": "bad_timing",
     "modeLabel": "bad timing",
     "contextLabel": "suppressed",
@@ -106,18 +121,20 @@ export const surfaceFixtureSnapshots = {
     "primaryText": "Surface suppressed",
     "secondaryText": "Use this state when the app decides not to interrupt the user.",
     "actionLabel": "Snooze",
-    "estimatedSeconds": 0,
-    "morePartsCount": 0,
     "progress": 0,
-    "stage": "completing",
-    "deepLink": "mobilesurfaces://today"
+    "deepLink": "mobilesurfaces://today",
+    "liveActivity": {
+      "stage": "completing",
+      "estimatedSeconds": 0,
+      "morePartsCount": 0
+    }
   },
   "completed": {
-    "schemaVersion": "1",
+    "schemaVersion": "2",
     "kind": "liveActivity",
     "id": "fixture-completed",
     "surfaceId": "surface-completed",
-    "updatedAt": "2026-05-12T18:34:42.917Z",
+    "updatedAt": "2026-05-12T18:33:00.000Z",
     "state": "completed",
     "modeLabel": "completed",
     "contextLabel": "finished",
@@ -125,17 +142,20 @@ export const surfaceFixtureSnapshots = {
     "primaryText": "Surface completed",
     "secondaryText": "End the activity locally or with an ActivityKit push.",
     "actionLabel": "Done",
-    "estimatedSeconds": 0,
-    "morePartsCount": 0,
     "progress": 1,
-    "stage": "completing",
-    "deepLink": "mobilesurfaces://surface/surface-completed"
+    "deepLink": "mobilesurfaces://surface/surface-completed",
+    "liveActivity": {
+      "stage": "completing",
+      "estimatedSeconds": 0,
+      "morePartsCount": 0
+    }
   },
   "activeDetails": {
-    "schemaVersion": "1",
+    "schemaVersion": "2",
     "kind": "liveActivity",
     "id": "fixture-active-details",
     "surfaceId": "surface-active-details",
+    "updatedAt": "2026-05-12T18:33:30.000Z",
     "state": "active",
     "modeLabel": "details",
     "contextLabel": "expanded",
@@ -143,17 +163,20 @@ export const surfaceFixtureSnapshots = {
     "primaryText": "Surface has more detail",
     "secondaryText": "Use morePartsCount when a surface has additional detail in the app.",
     "actionLabel": "View details",
-    "estimatedSeconds": 420,
-    "morePartsCount": 2,
     "progress": 0.75,
-    "stage": "inProgress",
-    "deepLink": "mobilesurfaces://surface/surface-active-details"
+    "deepLink": "mobilesurfaces://surface/surface-active-details",
+    "liveActivity": {
+      "stage": "inProgress",
+      "estimatedSeconds": 420,
+      "morePartsCount": 2
+    }
   },
   "widgetDashboard": {
-    "schemaVersion": "1",
+    "schemaVersion": "2",
     "kind": "widget",
     "id": "fixture-widget-dashboard",
     "surfaceId": "surface-widget-dashboard",
+    "updatedAt": "2026-05-12T18:34:00.000Z",
     "state": "active",
     "modeLabel": "widget",
     "contextLabel": "home",
@@ -161,10 +184,7 @@ export const surfaceFixtureSnapshots = {
     "primaryText": "Widget surface synced",
     "secondaryText": "This snapshot is written through the App Group and rendered by the home-screen widget.",
     "actionLabel": "Open surface",
-    "estimatedSeconds": 300,
-    "morePartsCount": 1,
     "progress": 0.62,
-    "stage": "inProgress",
     "deepLink": "mobilesurfaces://surface/surface-widget-dashboard",
     "widget": {
       "family": "systemMedium",
@@ -172,10 +192,11 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "controlToggle": {
-    "schemaVersion": "1",
+    "schemaVersion": "2",
     "kind": "control",
     "id": "fixture-control-toggle",
     "surfaceId": "surface-control-toggle",
+    "updatedAt": "2026-05-12T18:34:30.000Z",
     "state": "active",
     "modeLabel": "control",
     "contextLabel": "toggle",
@@ -183,10 +204,7 @@ export const surfaceFixtureSnapshots = {
     "primaryText": "Control surface",
     "secondaryText": "This snapshot backs the iOS 18 control widget toggle.",
     "actionLabel": "Surface toggle",
-    "estimatedSeconds": 0,
-    "morePartsCount": 0,
     "progress": 1,
-    "stage": "inProgress",
     "deepLink": "mobilesurfaces://surface/surface-control-toggle",
     "control": {
       "kind": "toggle",
@@ -195,10 +213,11 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "lockAccessoryCircular": {
-    "schemaVersion": "1",
+    "schemaVersion": "2",
     "kind": "lockAccessory",
     "id": "fixture-lock-accessory-circular",
     "surfaceId": "surface-lock-accessory-circular",
+    "updatedAt": "2026-05-12T18:35:00.000Z",
     "state": "active",
     "modeLabel": "lock accessory",
     "contextLabel": "ring",
@@ -206,10 +225,7 @@ export const surfaceFixtureSnapshots = {
     "primaryText": "Surface 62%",
     "secondaryText": "Lock screen accessory mirrors the active surface progress.",
     "actionLabel": "Open surface",
-    "estimatedSeconds": 240,
-    "morePartsCount": 0,
     "progress": 0.62,
-    "stage": "inProgress",
     "deepLink": "mobilesurfaces://surface/surface-lock-accessory-circular",
     "lockAccessory": {
       "family": "accessoryCircular",
@@ -218,10 +234,11 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "standbyCard": {
-    "schemaVersion": "1",
+    "schemaVersion": "2",
     "kind": "standby",
     "id": "fixture-standby-card",
     "surfaceId": "surface-standby-card",
+    "updatedAt": "2026-05-12T18:35:30.000Z",
     "state": "active",
     "modeLabel": "standby",
     "contextLabel": "charging",
@@ -229,10 +246,7 @@ export const surfaceFixtureSnapshots = {
     "primaryText": "Surface in StandBy",
     "secondaryText": "Visible while the device is charging on its side.",
     "actionLabel": "Open surface",
-    "estimatedSeconds": 600,
-    "morePartsCount": 0,
     "progress": 0.45,
-    "stage": "inProgress",
     "deepLink": "mobilesurfaces://surface/surface-standby-card",
     "standby": {
       "presentation": "card",

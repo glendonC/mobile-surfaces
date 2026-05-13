@@ -1,10 +1,10 @@
 {
-  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@2.1/schema.json",
-  "schemaVersion": "1",
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@3.0/schema.json",
+  "schemaVersion": "2",
   "kind": "liveActivity",
   "id": "fixture-completed",
   "surfaceId": "surface-completed",
-  "updatedAt": "2026-05-12T18:34:42.917Z",
+  "updatedAt": "2026-05-12T18:33:00.000Z",
   "state": "completed",
   "modeLabel": "completed",
   "contextLabel": "finished",
@@ -12,9 +12,11 @@
   "primaryText": "Surface completed",
   "secondaryText": "End the activity locally or with an ActivityKit push.",
   "actionLabel": "Done",
-  "estimatedSeconds": 0,
-  "morePartsCount": 0,
   "progress": 1,
-  "stage": "completing",
-  "deepLink": "mobilesurfaces://surface/surface-completed"
+  "deepLink": "mobilesurfaces://surface/surface-completed",
+  "liveActivity": {
+    "stage": "completing",
+    "estimatedSeconds": 0,
+    "morePartsCount": 0
+  }
 }

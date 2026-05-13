@@ -9,9 +9,9 @@
           "const": "liveActivity"
         },
         "schemaVersion": {
-          "default": "1",
+          "default": "2",
           "type": "string",
-          "const": "1"
+          "const": "2"
         },
         "id": {
           "type": "string",
@@ -57,32 +57,43 @@
         "actionLabel": {
           "type": "string"
         },
-        "estimatedSeconds": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 9007199254740991
-        },
-        "morePartsCount": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 9007199254740991
-        },
         "progress": {
           "type": "number",
           "minimum": 0,
           "maximum": 1
         },
-        "stage": {
-          "type": "string",
-          "enum": [
-            "prompted",
-            "inProgress",
-            "completing"
-          ]
-        },
         "deepLink": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9+\\-.]*:\\/\\/"
+        },
+        "liveActivity": {
+          "type": "object",
+          "properties": {
+            "stage": {
+              "type": "string",
+              "enum": [
+                "prompted",
+                "inProgress",
+                "completing"
+              ]
+            },
+            "estimatedSeconds": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "morePartsCount": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "stage",
+            "estimatedSeconds",
+            "morePartsCount"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -90,17 +101,16 @@
         "schemaVersion",
         "id",
         "surfaceId",
+        "updatedAt",
         "state",
         "modeLabel",
         "contextLabel",
         "statusLine",
         "primaryText",
         "secondaryText",
-        "estimatedSeconds",
-        "morePartsCount",
         "progress",
-        "stage",
-        "deepLink"
+        "deepLink",
+        "liveActivity"
       ],
       "additionalProperties": false
     },
@@ -112,9 +122,9 @@
           "const": "widget"
         },
         "schemaVersion": {
-          "default": "1",
+          "default": "2",
           "type": "string",
-          "const": "1"
+          "const": "2"
         },
         "id": {
           "type": "string",
@@ -160,28 +170,10 @@
         "actionLabel": {
           "type": "string"
         },
-        "estimatedSeconds": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 9007199254740991
-        },
-        "morePartsCount": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 9007199254740991
-        },
         "progress": {
           "type": "number",
           "minimum": 0,
           "maximum": 1
-        },
-        "stage": {
-          "type": "string",
-          "enum": [
-            "prompted",
-            "inProgress",
-            "completing"
-          ]
         },
         "deepLink": {
           "type": "string",
@@ -214,16 +206,14 @@
         "schemaVersion",
         "id",
         "surfaceId",
+        "updatedAt",
         "state",
         "modeLabel",
         "contextLabel",
         "statusLine",
         "primaryText",
         "secondaryText",
-        "estimatedSeconds",
-        "morePartsCount",
         "progress",
-        "stage",
         "deepLink",
         "widget"
       ],
@@ -237,9 +227,9 @@
           "const": "control"
         },
         "schemaVersion": {
-          "default": "1",
+          "default": "2",
           "type": "string",
-          "const": "1"
+          "const": "2"
         },
         "id": {
           "type": "string",
@@ -285,28 +275,10 @@
         "actionLabel": {
           "type": "string"
         },
-        "estimatedSeconds": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 9007199254740991
-        },
-        "morePartsCount": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 9007199254740991
-        },
         "progress": {
           "type": "number",
           "minimum": 0,
           "maximum": 1
-        },
-        "stage": {
-          "type": "string",
-          "enum": [
-            "prompted",
-            "inProgress",
-            "completing"
-          ]
         },
         "deepLink": {
           "type": "string",
@@ -341,16 +313,14 @@
         "schemaVersion",
         "id",
         "surfaceId",
+        "updatedAt",
         "state",
         "modeLabel",
         "contextLabel",
         "statusLine",
         "primaryText",
         "secondaryText",
-        "estimatedSeconds",
-        "morePartsCount",
         "progress",
-        "stage",
         "deepLink",
         "control"
       ],
@@ -364,9 +334,9 @@
           "const": "notification"
         },
         "schemaVersion": {
-          "default": "1",
+          "default": "2",
           "type": "string",
-          "const": "1"
+          "const": "2"
         },
         "id": {
           "type": "string",
@@ -412,28 +382,10 @@
         "actionLabel": {
           "type": "string"
         },
-        "estimatedSeconds": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 9007199254740991
-        },
-        "morePartsCount": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 9007199254740991
-        },
         "progress": {
           "type": "number",
           "minimum": 0,
           "maximum": 1
-        },
-        "stage": {
-          "type": "string",
-          "enum": [
-            "prompted",
-            "inProgress",
-            "completing"
-          ]
         },
         "deepLink": {
           "type": "string",
@@ -457,16 +409,14 @@
         "schemaVersion",
         "id",
         "surfaceId",
+        "updatedAt",
         "state",
         "modeLabel",
         "contextLabel",
         "statusLine",
         "primaryText",
         "secondaryText",
-        "estimatedSeconds",
-        "morePartsCount",
         "progress",
-        "stage",
         "deepLink",
         "notification"
       ],
@@ -480,9 +430,9 @@
           "const": "lockAccessory"
         },
         "schemaVersion": {
-          "default": "1",
+          "default": "2",
           "type": "string",
-          "const": "1"
+          "const": "2"
         },
         "id": {
           "type": "string",
@@ -528,28 +478,10 @@
         "actionLabel": {
           "type": "string"
         },
-        "estimatedSeconds": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 9007199254740991
-        },
-        "morePartsCount": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 9007199254740991
-        },
         "progress": {
           "type": "number",
           "minimum": 0,
           "maximum": 1
-        },
-        "stage": {
-          "type": "string",
-          "enum": [
-            "prompted",
-            "inProgress",
-            "completing"
-          ]
         },
         "deepLink": {
           "type": "string",
@@ -587,16 +519,14 @@
         "schemaVersion",
         "id",
         "surfaceId",
+        "updatedAt",
         "state",
         "modeLabel",
         "contextLabel",
         "statusLine",
         "primaryText",
         "secondaryText",
-        "estimatedSeconds",
-        "morePartsCount",
         "progress",
-        "stage",
         "deepLink",
         "lockAccessory"
       ],
@@ -610,9 +540,9 @@
           "const": "standby"
         },
         "schemaVersion": {
-          "default": "1",
+          "default": "2",
           "type": "string",
-          "const": "1"
+          "const": "2"
         },
         "id": {
           "type": "string",
@@ -658,28 +588,10 @@
         "actionLabel": {
           "type": "string"
         },
-        "estimatedSeconds": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 9007199254740991
-        },
-        "morePartsCount": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 9007199254740991
-        },
         "progress": {
           "type": "number",
           "minimum": 0,
           "maximum": 1
-        },
-        "stage": {
-          "type": "string",
-          "enum": [
-            "prompted",
-            "inProgress",
-            "completing"
-          ]
         },
         "deepLink": {
           "type": "string",
@@ -715,22 +627,20 @@
         "schemaVersion",
         "id",
         "surfaceId",
+        "updatedAt",
         "state",
         "modeLabel",
         "contextLabel",
         "statusLine",
         "primaryText",
         "secondaryText",
-        "estimatedSeconds",
-        "morePartsCount",
         "progress",
-        "stage",
         "deepLink",
         "standby"
       ],
       "additionalProperties": false
     }
   ],
-  "$id": "https://unpkg.com/@mobile-surfaces/surface-contracts@2.1/schema.json",
+  "$id": "https://unpkg.com/@mobile-surfaces/surface-contracts@3.0/schema.json",
   "title": "LiveSurfaceSnapshot"
 }

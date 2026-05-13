@@ -1,9 +1,10 @@
 {
-  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@2.1/schema.json",
-  "schemaVersion": "1",
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@3.0/schema.json",
+  "schemaVersion": "2",
   "kind": "liveActivity",
   "id": "fixture-paused",
   "surfaceId": "surface-paused",
+  "updatedAt": "2026-05-12T18:32:00.000Z",
   "state": "paused",
   "modeLabel": "paused",
   "contextLabel": "waiting",
@@ -11,9 +12,11 @@
   "primaryText": "Surface paused",
   "secondaryText": "A paused surface can stay visible without noisy updates.",
   "actionLabel": "Open surface",
-  "estimatedSeconds": 1800,
-  "morePartsCount": 0,
   "progress": 0.4,
-  "stage": "prompted",
-  "deepLink": "mobilesurfaces://surface/surface-paused"
+  "deepLink": "mobilesurfaces://surface/surface-paused",
+  "liveActivity": {
+    "stage": "prompted",
+    "estimatedSeconds": 1800,
+    "morePartsCount": 0
+  }
 }

@@ -1,9 +1,10 @@
 {
-  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@2.1/schema.json",
-  "schemaVersion": "1",
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@3.0/schema.json",
+  "schemaVersion": "2",
   "kind": "standby",
   "id": "fixture-standby-card",
   "surfaceId": "surface-standby-card",
+  "updatedAt": "2026-05-12T18:35:30.000Z",
   "state": "active",
   "modeLabel": "standby",
   "contextLabel": "charging",
@@ -11,10 +12,7 @@
   "primaryText": "Surface in StandBy",
   "secondaryText": "Visible while the device is charging on its side.",
   "actionLabel": "Open surface",
-  "estimatedSeconds": 600,
-  "morePartsCount": 0,
   "progress": 0.45,
-  "stage": "inProgress",
   "deepLink": "mobilesurfaces://surface/surface-standby-card",
   "standby": {
     "presentation": "card",
