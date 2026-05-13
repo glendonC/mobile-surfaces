@@ -1,5 +1,11 @@
 # @mobile-surfaces/validators
 
+## 3.0.0
+
+### Major Changes
+
+- Linked-group bump for the v2 schema release in `@mobile-surfaces/surface-contracts`. No behavior change in this package; the identity validators (`validateProjectSlug`, `validateScheme`, `validateBundleId`, `validateTeamId`, `validateSwiftIdentifier`, `toScheme`, `toBundleId`, `toSwiftPrefix`) are unchanged.
+
 ## 2.1.1
 
 ### Patch Changes

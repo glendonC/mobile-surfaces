@@ -1,5 +1,11 @@
 # mobile-surfaces-app
 
+## 1.0.9
+
+### Patch Changes
+
+- Updated dependencies for the v2 schema release. The workspace deps are now on `@mobile-surfaces/surface-contracts@3.0.0`, `@mobile-surfaces/design-tokens@3.0.0`, and `@mobile-surfaces/live-activity@3.0.0`. The harness reads through projection helpers, which were updated upstream; no consumer-side code changes were required in this app.
+
 ## 1.0.8
 
 ### Patch Changes

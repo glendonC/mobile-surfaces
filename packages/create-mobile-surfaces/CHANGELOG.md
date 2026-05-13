@@ -1,5 +1,11 @@
 # create-mobile-surfaces
 
+## 3.0.0
+
+### Major Changes
+
+- Linked-group bump for the v2 schema release in `@mobile-surfaces/surface-contracts`. The bundled template now ships v2-shaped fixtures (`schemaVersion: "2"`, `updatedAt` populated on every snapshot, `liveActivity` slice on liveActivity-kind snapshots) and the harness reads from them. No flow change in the greenfield, existing-Expo, or existing-monorepo modes; the apply-and-rewrite logic is unchanged. Generated projects from `npm create mobile-surfaces@latest` will run against the v2 contract; projects scaffolded against 2.x.y keep parsing through the v1 -> v2 codec until they migrate or the codec is removed in 4.0.
+
 ## 2.1.1
 
 ### Patch Changes

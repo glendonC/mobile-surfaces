@@ -1,5 +1,11 @@
 # @mobile-surfaces/live-activity
 
+## 3.0.0
+
+### Major Changes
+
+- Linked-group bump for the v2 schema release in `@mobile-surfaces/surface-contracts`. No behavior change in this package; the native module, JS adapter, and event listeners are unchanged. The `LiveSurfaceActivityContentState` type re-exported from this package now sources from v2-shaped snapshots (which is identical in shape to v1 since the content-state fields did not move).
+
 ## 2.1.1
 
 ### Patch Changes

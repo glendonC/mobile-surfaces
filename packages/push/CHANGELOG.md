@@ -1,5 +1,17 @@
 # @mobile-surfaces/push
 
+## 3.0.0
+
+### Major Changes
+
+- Add `liveActivityAlertPayload` (Zod schema) and `liveActivityAlertPayloadFromSnapshot` (helper). Moved here from `@mobile-surfaces/surface-contracts@2.x` where they were named `liveSurfaceAlertPayload` and `toAlertPayload`. The `aps` envelope is APNs wire format, not a contract concern; the helper now lives next to the SDK that sends it.
+
+  The helper's argument type is `LiveSurfaceSnapshotLiveActivity` rather than the full `LiveSurfaceSnapshot` union; callers narrow at the call site (the SDK already does via `snapshot.kind === "liveActivity"`). The runtime kind check that the previous `toAlertPayload` carried is no longer the helper's job. The inner wire discriminator `kind: "surface_snapshot"` is unchanged so consumer apps that already parse alert payloads on-device keep working.
+
+- `PushClient.alert()` now consumes the snapshot through `liveActivityAlertPayloadFromSnapshot` from this package rather than importing `toAlertPayload` from surface-contracts. No public-API behavior change; the same payload shape lands on APNs.
+
+- v2 schema compatibility: `PushClient` accepts both v2 and v1 snapshots transparently. The SDK validates inputs through `liveSurfaceSnapshot.safeParse`, which now strictly accepts v2 only; v1 payloads need to be migrated upstream via `safeParseAnyVersion` from `@mobile-surfaces/surface-contracts`. The v1 codec lives for the entire 3.x release line.
+
 ## 2.1.1
 
 ### Patch Changes
