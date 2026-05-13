@@ -15,6 +15,8 @@ import {
   // SURFACE-BEGIN: control-widget
   controlSurfaceFixtures,
   // SURFACE-END: control-widget
+  lockAccessorySurfaceFixtures,
+  standbySurfaceFixtures,
   surfaceFixtures,
   // SURFACE-BEGIN: home-widget
   widgetSurfaceFixtures,
@@ -28,6 +30,8 @@ import {
 // SURFACE-BEGIN: home-widget control-widget
 import {
   // SURFACE-BEGIN: home-widget
+  refreshLockAccessorySurface,
+  refreshStandbySurface,
   refreshWidgetSurface,
   // SURFACE-END: home-widget
   // SURFACE-BEGIN: control-widget
@@ -227,6 +231,42 @@ export function LiveActivityHarness() {
   }, []);
   // SURFACE-END: home-widget
 
+  const handleRefreshLockAccessory = useCallback(async () => {
+    const snapshot = Object.values(lockAccessorySurfaceFixtures)[0];
+    if (!snapshot) {
+      setError("No lockAccessory fixture is available.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const entry = await refreshLockAccessorySurface(snapshot);
+      setSurfaceStatus(`Lock accessory refreshed: ${entry.headline}`);
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  const handleRefreshStandby = useCallback(async () => {
+    const snapshot = Object.values(standbySurfaceFixtures)[0];
+    if (!snapshot) {
+      setError("No StandBy fixture is available.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const entry = await refreshStandbySurface(snapshot);
+      setSurfaceStatus(`StandBy refreshed: ${entry.headline}`);
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
   // SURFACE-BEGIN: control-widget
   const handleToggleControl = useCallback(async () => {
     const snapshot = Object.values(controlSurfaceFixtures)[0];
@@ -356,6 +396,30 @@ export function LiveActivityHarness() {
         />
       </Section>
       {/* SURFACE-END: control-widget */}
+
+      <Section label="Lock Screen accessory">
+        <Text style={styles.value}>
+          Writes the lockAccessory fixture into the App Group and reloads the
+          accessory family widget.
+        </Text>
+        <Btn
+          label="refresh lock accessory"
+          onPress={handleRefreshLockAccessory}
+          disabled={busy}
+        />
+      </Section>
+
+      <Section label="StandBy">
+        <Text style={styles.value}>
+          Writes the StandBy fixture into the App Group and reloads the night-mode
+          surface.
+        </Text>
+        <Btn
+          label="refresh StandBy"
+          onPress={handleRefreshStandby}
+          disabled={busy}
+        />
+      </Section>
 
       {/* SURFACE-BEGIN: home-widget control-widget */}
       {surfaceStatus ? (
