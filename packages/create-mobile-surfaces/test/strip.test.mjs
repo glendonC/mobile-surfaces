@@ -20,8 +20,22 @@ afterEach(() => {
   }
 });
 
-const ALL_ON = { homeWidget: true, controlWidget: true };
-const ALL_OFF = { homeWidget: false, controlWidget: false };
+const ALL_ON = {
+  homeWidget: true,
+  controlWidget: true,
+  lockAccessoryWidget: true,
+  standbyWidget: true,
+};
+// Strip-test "all off" covers every optional surface, not just home/control —
+// shared scaffolding like the surfaceStorage import block and the
+// setSurfaceStatus state hook only get stripped when every surface that
+// participates in them is off.
+const ALL_OFF = {
+  homeWidget: false,
+  controlWidget: false,
+  lockAccessoryWidget: false,
+  standbyWidget: false,
+};
 const HOME_OFF = { homeWidget: false, controlWidget: true };
 const CONTROL_OFF = { homeWidget: true, controlWidget: false };
 
@@ -456,6 +470,8 @@ describe("applyStripGreenfield — integration against real source files", () =>
       "./active-details.json",
       "./widget-dashboard.json",
       "./control-toggle.json",
+      "./lock-accessory-circular.json",
+      "./standby-card.json",
     ]);
   });
 
@@ -598,7 +614,10 @@ describe("applyStripGreenfield - regenerateFixtures failure", () => {
 
 describe("formatSurfaceSummary", () => {
   it("always includes live activity and lists selected widgets", () => {
-    assert.equal(formatSurfaceSummary(ALL_ON), "live activity, home widget, control widget");
+    assert.equal(
+      formatSurfaceSummary(ALL_ON),
+      "live activity, home widget, control widget, lock accessory, standby",
+    );
     assert.equal(formatSurfaceSummary(HOME_OFF), "live activity, control widget");
     assert.equal(formatSurfaceSummary(CONTROL_OFF), "live activity, home widget");
     assert.equal(formatSurfaceSummary(ALL_OFF), "live activity");
