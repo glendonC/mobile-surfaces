@@ -59,3 +59,9 @@ export {
   trapIdForErrorClass,
 } from "./trap-bindings.ts";
 export type { TrapBoundErrorClassName } from "./trap-bindings.ts";
+
+export {
+  liveActivityAlertPayload,
+  liveActivityAlertPayloadFromSnapshot,
+} from "./payloads.ts";
+export type { LiveActivityAlertPayload } from "./payloads.ts";

@@ -6,13 +6,13 @@
 import crypto from "node:crypto";
 import {
   liveSurfaceSnapshot,
-  toAlertPayload,
   toLiveActivityContentState,
 } from "@mobile-surfaces/surface-contracts";
 import type {
   LiveSurfaceSnapshot,
   LiveSurfaceSnapshotLiveActivity,
 } from "@mobile-surfaces/surface-contracts";
+import { liveActivityAlertPayloadFromSnapshot } from "./payloads.ts";
 
 import {
   ApnsError,
@@ -417,7 +417,7 @@ export class PushClient {
     this.#assertOpen();
     const validated = validateSnapshot(snapshot);
     const live = snapshotMustBeLiveActivity(validated, "alert()");
-    const payload = JSON.stringify(toAlertPayload(validated));
+    const payload = JSON.stringify(liveActivityAlertPayloadFromSnapshot(live));
     return this.#sendDevice({
       operation: "alert",
       snapshotId: live.id,

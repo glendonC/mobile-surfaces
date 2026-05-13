@@ -3,14 +3,12 @@ import assert from "node:assert/strict";
 import {
   assertSnapshot,
   IncompleteProjectionError,
-  liveSurfaceAlertPayload,
   liveSurfaceSnapshot,
   liveSurfaceSnapshotV1,
   migrateV1ToV2,
   safeParseAnyVersion,
   safeParseSnapshot,
   surfaceFixtureSnapshots,
-  toAlertPayload,
   toControlValueProvider,
   toLiveActivityContentState,
   toLockAccessoryEntry,
@@ -48,16 +46,6 @@ test("live activity projections reject non-live snapshots", () => {
   });
 
   assert.throws(() => toLiveActivityContentState(widget), /Cannot project widget/);
-  assert.throws(() => toAlertPayload(widget), /Cannot project widget/);
-});
-
-// toAlertPayload constructs its return shape by hand. Round-trip through the
-// liveSurfaceAlertPayload Zod schema so the two cannot drift: any field rename
-// or type change in the schema breaks this assertion before it ships.
-test("toAlertPayload output parses as liveSurfaceAlertPayload", () => {
-  const payload = toAlertPayload(queued);
-  const parsed = liveSurfaceAlertPayload.parse(payload);
-  assert.deepEqual(parsed, payload);
 });
 
 test("widget projection accepts widget snapshots and rejects mismatches", () => {

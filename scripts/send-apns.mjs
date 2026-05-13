@@ -74,9 +74,9 @@ import { parseArgs } from "node:util";
 import { loadEnvFile } from "./lib/load-env.mjs";
 import {
   assertSnapshot,
-  toAlertPayload,
   toLiveActivityContentState,
 } from "../packages/surface-contracts/src/index.ts";
+import { liveActivityAlertPayloadFromSnapshot } from "../packages/push/src/payloads.ts";
 
 // Pick up APNs creds written by `pnpm surface:setup-apns`. Existing shell
 // exports still win — loadEnvFile only fills unset keys. Silent no-op when
@@ -531,15 +531,21 @@ function readSnapshotFile(filePath) {
 
 function buildAlertPayload(config) {
   const snapshot = config.snapshotFile ? readSnapshotFile(config.snapshotFile) : null;
-  return snapshot
-    ? toAlertPayload(snapshot)
-    : {
-        aps: {
-          alert: { title: config.title, body: config.body },
-          sound: "default",
-        },
-        liveSurface: { kind: "smoke_test" },
-      };
+  if (snapshot) {
+    if (snapshot.kind !== "liveActivity") {
+      throw new Error(
+        `--type=alert requires a liveActivity-kind snapshot; got kind="${snapshot.kind}".`,
+      );
+    }
+    return liveActivityAlertPayloadFromSnapshot(snapshot);
+  }
+  return {
+    aps: {
+      alert: { title: config.title, body: config.body },
+      sound: "default",
+    },
+    liveSurface: { kind: "smoke_test" },
+  };
 }
 
 function buildLiveActivityPayload(config, { includeAttributes }) {
