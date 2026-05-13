@@ -9,7 +9,7 @@
  * operator needs to act on a logged error: human title, severity, the
  * symptom they're seeing, the fix, and a docsUrl pointing at the rendered
  * catalog. Other catalog fields (tags, enforcement script, since version)
- * stay out of the bundle - consult data/traps.json or the rendered CLAUDE.md
+ * stay out of the bundle — consult data/traps.json or the rendered CLAUDE.md
  * for the full record.
  */
 export interface TrapBinding {
