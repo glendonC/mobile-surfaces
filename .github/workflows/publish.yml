@@ -27,7 +27,18 @@ jobs:
       NPM_CONFIG_ACCESS: public
       NPM_CONFIG_PROVENANCE: true
     steps:
+      # Use CHANGESETS_PAT for checkout so the git remote URL is configured
+      # with PAT credentials. When changesets/action later pushes to
+      # changeset-release/main, the push is PAT-authored, which makes the
+      # bot's PR a "user-equivalent" event and lets ci.yml fire on the
+      # pull_request trigger. Without this, the push reuses the default
+      # GITHUB_TOKEN credentials set by actions/checkout, GitHub suppresses
+      # the downstream workflow, and the required `checks` status never
+      # reports on the Version packages PR — leaving it un-mergeable under
+      # the main-branch ruleset and forcing a close-and-reopen workaround.
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.CHANGESETS_PAT }}
       - uses: pnpm/action-setup@v4
         with:
           version: 10.7.1
