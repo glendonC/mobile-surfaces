@@ -15,8 +15,12 @@ import {
   // SURFACE-BEGIN: control-widget
   controlSurfaceFixtures,
   // SURFACE-END: control-widget
+  // SURFACE-BEGIN: lock-accessory-widget
   lockAccessorySurfaceFixtures,
+  // SURFACE-END: lock-accessory-widget
+  // SURFACE-BEGIN: standby-widget
   standbySurfaceFixtures,
+  // SURFACE-END: standby-widget
   surfaceFixtures,
   // SURFACE-BEGIN: home-widget
   widgetSurfaceFixtures,
@@ -27,18 +31,22 @@ import {
   getDeviceApnsToken,
   requestNotificationPermissions,
 } from "../notifications";
-// SURFACE-BEGIN: home-widget control-widget
+// SURFACE-BEGIN: home-widget control-widget lock-accessory-widget standby-widget
 import {
   // SURFACE-BEGIN: home-widget
-  refreshLockAccessorySurface,
-  refreshStandbySurface,
   refreshWidgetSurface,
   // SURFACE-END: home-widget
   // SURFACE-BEGIN: control-widget
   toggleControlSurface,
   // SURFACE-END: control-widget
+  // SURFACE-BEGIN: lock-accessory-widget
+  refreshLockAccessorySurface,
+  // SURFACE-END: lock-accessory-widget
+  // SURFACE-BEGIN: standby-widget
+  refreshStandbySurface,
+  // SURFACE-END: standby-widget
 } from "../surfaceStorage";
-// SURFACE-END: home-widget control-widget
+// SURFACE-END: home-widget control-widget lock-accessory-widget standby-widget
 import { DemoModeCard } from "../components/DemoModeCard";
 import { SetupStatusPanel } from "../components/SetupStatusPanel";
 import { TrapErrorCard } from "../components/TrapErrorCard";
@@ -50,9 +58,9 @@ export function LiveActivityHarness() {
   const [pushToken, setPushToken] = useState<string | null>(null);
   const [pushToStartToken, setPushToStartToken] = useState<string | null>(null);
   const [apnsToken, setApnsToken] = useState<string | null>(null);
-  // SURFACE-BEGIN: home-widget control-widget
+  // SURFACE-BEGIN: home-widget control-widget lock-accessory-widget standby-widget
   const [surfaceStatus, setSurfaceStatus] = useState<string | null>(null);
-  // SURFACE-END: home-widget control-widget
+  // SURFACE-END: home-widget control-widget lock-accessory-widget standby-widget
   // SURFACE-BEGIN: control-widget
   const [controlOn, setControlOn] = useState(false);
   // SURFACE-END: control-widget
@@ -231,6 +239,7 @@ export function LiveActivityHarness() {
   }, []);
   // SURFACE-END: home-widget
 
+  // SURFACE-BEGIN: lock-accessory-widget
   const handleRefreshLockAccessory = useCallback(async () => {
     const snapshot = Object.values(lockAccessorySurfaceFixtures)[0];
     if (!snapshot) {
@@ -248,7 +257,9 @@ export function LiveActivityHarness() {
       setBusy(false);
     }
   }, []);
+  // SURFACE-END: lock-accessory-widget
 
+  // SURFACE-BEGIN: standby-widget
   const handleRefreshStandby = useCallback(async () => {
     const snapshot = Object.values(standbySurfaceFixtures)[0];
     if (!snapshot) {
@@ -266,6 +277,7 @@ export function LiveActivityHarness() {
       setBusy(false);
     }
   }, []);
+  // SURFACE-END: standby-widget
 
   // SURFACE-BEGIN: control-widget
   const handleToggleControl = useCallback(async () => {
@@ -397,6 +409,7 @@ export function LiveActivityHarness() {
       </Section>
       {/* SURFACE-END: control-widget */}
 
+      {/* SURFACE-BEGIN: lock-accessory-widget */}
       <Section label="Lock Screen accessory">
         <Text style={styles.value}>
           Writes the lockAccessory fixture into the App Group and reloads the
@@ -408,7 +421,9 @@ export function LiveActivityHarness() {
           disabled={busy}
         />
       </Section>
+      {/* SURFACE-END: lock-accessory-widget */}
 
+      {/* SURFACE-BEGIN: standby-widget */}
       <Section label="StandBy">
         <Text style={styles.value}>
           Writes the StandBy fixture into the App Group and reloads the night-mode
@@ -420,14 +435,15 @@ export function LiveActivityHarness() {
           disabled={busy}
         />
       </Section>
+      {/* SURFACE-END: standby-widget */}
 
-      {/* SURFACE-BEGIN: home-widget control-widget */}
+      {/* SURFACE-BEGIN: home-widget control-widget lock-accessory-widget standby-widget */}
       {surfaceStatus ? (
         <Section label="Widget/control status">
           <Text style={styles.value}>{surfaceStatus}</Text>
         </Section>
       ) : null}
-      {/* SURFACE-END: home-widget control-widget */}
+      {/* SURFACE-END: home-widget control-widget lock-accessory-widget standby-widget */}
 
       <Section label="APNs device token (for regular alerts)">
         <Text style={styles.value} selectable>
