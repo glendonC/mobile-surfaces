@@ -34,3 +34,59 @@ test("liveActivityAlertPayloadFromSnapshot pulls fields from the snapshot", () =
   assert.equal(payload.liveSurface.state, queued.state);
   assert.equal(payload.liveSurface.deepLink, queued.deepLink);
 });
+
+// MS011 payload-size ceilings. Per-activity Live Activity pushes are bounded
+// at 4 KB; iOS 18 broadcast pushes get an extra 1 KB. Pin every committed
+// liveActivity fixture against both ceilings so a fixture edit that bloats
+// the payload past Apple's limit fails CI rather than failing in production
+// (where APNs would return 413 silently for some surface combinations and
+// drop the update for others).
+const MAX_PAYLOAD_BYTES_DEFAULT = 4096;
+const MAX_PAYLOAD_BYTES_BROADCAST = 5120;
+const TRAP_ID = "MS011";
+
+const LIVE_ACTIVITY_FIXTURES = Object.entries(surfaceFixtureSnapshots).filter(
+  ([, snap]) => snap.kind === "liveActivity",
+);
+
+test(`every liveActivity fixture stays within the MS011 per-activity 4 KB ceiling`, () => {
+  assert.ok(
+    LIVE_ACTIVITY_FIXTURES.length > 0,
+    "expected at least one liveActivity fixture",
+  );
+  for (const [name, snap] of LIVE_ACTIVITY_FIXTURES) {
+    const payload = liveActivityAlertPayloadFromSnapshot(snap);
+    const bytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
+    assert.ok(
+      bytes <= MAX_PAYLOAD_BYTES_DEFAULT,
+      `fixture "${name}" payload is ${bytes} bytes; exceeds MS011 per-activity ceiling of ${MAX_PAYLOAD_BYTES_DEFAULT}. Trap: ${TRAP_ID}.`,
+    );
+  }
+});
+
+test(`every liveActivity fixture stays within the MS011 broadcast 5 KB ceiling`, () => {
+  for (const [name, snap] of LIVE_ACTIVITY_FIXTURES) {
+    const payload = liveActivityAlertPayloadFromSnapshot(snap);
+    const bytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
+    assert.ok(
+      bytes <= MAX_PAYLOAD_BYTES_BROADCAST,
+      `fixture "${name}" payload is ${bytes} bytes; exceeds MS011 broadcast ceiling of ${MAX_PAYLOAD_BYTES_BROADCAST}. Trap: ${TRAP_ID}.`,
+    );
+  }
+});
+
+test("a snapshot bloated past 4 KB triggers the MS011 catch", () => {
+  // Negative case so a future regression where the ceiling check itself was
+  // weakened would surface. Use a fixture as the base then attach a long
+  // secondaryText to push past the per-activity limit.
+  const fat = {
+    ...queued,
+    secondaryText: "x".repeat(5000),
+  };
+  const payload = liveActivityAlertPayloadFromSnapshot(fat);
+  const bytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
+  assert.ok(
+    bytes > MAX_PAYLOAD_BYTES_DEFAULT,
+    `negative test depends on the fattened payload exceeding ${MAX_PAYLOAD_BYTES_DEFAULT}; got ${bytes}`,
+  );
+});
