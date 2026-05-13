@@ -80,7 +80,7 @@ const client = createPushClient({
   keyPath: process.env.APNS_KEY_PATH!,    // path to .p8 OR Buffer of raw PEM
   bundleId: process.env.APNS_BUNDLE_ID!,  // bundle id without .push-type.liveactivity suffix
   environment: "development",             // "development" | "production"
-  retryPolicy: {                          // optional override; see "Retry policy" below
+  _unsafeRetryOverride: {                 // operator-grade override; see "Retry policy" below
     maxRetries: 3,
     baseDelayMs: 100,
     maxDelayMs: 5000,
@@ -225,7 +225,7 @@ import { createPushClient, DEFAULT_RETRY_POLICY } from "@mobile-surfaces/push";
 
 const client = createPushClient({
   // ...
-  retryPolicy: {
+  _unsafeRetryOverride: {
     ...DEFAULT_RETRY_POLICY,
     maxRetries: 5,
     baseDelayMs: 250,
@@ -233,6 +233,10 @@ const client = createPushClient({
   },
 });
 ```
+
+The option is named `_unsafeRetryOverride` because changing it usually goes wrong: the defaults are tuned against MS015's iOS budget rules and the priority-aware stretch. The legacy name `retryPolicy` still works in 3.x but logs a one-time deprecation warning per process; it will be removed in 4.0.
+
+For incidents, set the env var `MOBILE_SURFACES_PUSH_DISABLE_RETRY=1` (or any non-empty value) to force `maxRetries: 0` across every client in the process. This wins over any in-code override — it's an operator kill-switch.
 
 `computeBackoffMs` lives in `packages/push/src/retry.ts` if you want to reuse the same backoff math elsewhere; the default formula is `min(base * 2^attempt, max) + random(0, base)` with jitter.
 

@@ -36,7 +36,7 @@ function makeClient({ sendOrigin, manageOrigin, retryPolicy } = {}) {
     keyPath: KEY.file,
     bundleId: "com.example.test",
     environment: "development",
-    retryPolicy,
+    _unsafeRetryOverride: retryPolicy,
     idleTimeoutMs: 1_000,
     [TEST_TRANSPORT_OVERRIDE]: {
       sendOrigin,
@@ -675,7 +675,7 @@ test("hooks.onError fires per-attempt with isFinalAttempt true on the giving-up 
     bundleId: "com.example.test",
     environment: "development",
     idleTimeoutMs: 1_000,
-    retryPolicy: { maxRetries: 2, baseDelayMs: 1, maxDelayMs: 2, jitter: false },
+    _unsafeRetryOverride: { maxRetries: 2, baseDelayMs: 1, maxDelayMs: 2, jitter: false },
     hooks: {
       onError: (err, ctx) => errors.push({ err, ctx }),
     },
@@ -998,7 +998,7 @@ test("ETIMEDOUT on a hanging stream is retried through the transport-retry layer
     bundleId: "com.example.test",
     environment: "development",
     idleTimeoutMs: 1_000,
-    retryPolicy: { maxRetries: 1, baseDelayMs: 1, maxDelayMs: 5, jitter: false },
+    _unsafeRetryOverride: { maxRetries: 1, baseDelayMs: 1, maxDelayMs: 5, jitter: false },
     [TEST_TRANSPORT_OVERRIDE]: {
       sendOrigin: mock.origin,
       requestTimeoutMs: 50,
@@ -1149,6 +1149,97 @@ test("PayloadTooLargeError thrown by pre-flight carries trapId MS011", async (t)
       return true;
     },
   );
+});
+
+// --- retry policy override naming + env kill-switch ---------------------
+
+test("legacy retryPolicy option still applies but logs a one-time deprecation", async (t) => {
+  // Tests cohabit a single Node process; the deprecation flag is set lazily
+  // on first use of the legacy field. Reset stderr capture, instantiate
+  // twice, assert the warning fired exactly once.
+  const warnings = [];
+  const origWarn = console.warn;
+  console.warn = (...args) => warnings.push(args.join(" "));
+  t.after(() => {
+    console.warn = origWarn;
+  });
+
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    return { status: 503, body: { reason: "ServiceUnavailable" } };
+  });
+  t.after(() => mock.close());
+
+  const legacy1 = createPushClient({
+    keyId: "ABC1234567",
+    teamId: "TEAM123456",
+    keyPath: KEY.file,
+    bundleId: "com.example.test",
+    environment: "development",
+    retryPolicy: { maxRetries: 1, baseDelayMs: 1, maxDelayMs: 5, jitter: false },
+    idleTimeoutMs: 1_000,
+    [TEST_TRANSPORT_OVERRIDE]: { sendOrigin: mock.origin },
+  });
+  const legacy2 = createPushClient({
+    keyId: "ABC1234567",
+    teamId: "TEAM123456",
+    keyPath: KEY.file,
+    bundleId: "com.example.test",
+    environment: "development",
+    retryPolicy: { maxRetries: 1, baseDelayMs: 1, maxDelayMs: 5, jitter: false },
+    idleTimeoutMs: 1_000,
+    [TEST_TRANSPORT_OVERRIDE]: { sendOrigin: mock.origin },
+  });
+  t.after(async () => {
+    await legacy1.close();
+    await legacy2.close();
+  });
+
+  // update() is priority 5 — the priority-10 stretch will not interfere
+  // with the user-set maxRetries=1.
+  await assert.rejects(() => legacy1.update("d".repeat(64), SNAPSHOT));
+  assert.equal(calls, 2, "legacy retryPolicy=maxRetries:1 should yield 2 calls");
+
+  const deprecation = warnings.find((w) => w.includes("_unsafeRetryOverride"));
+  assert.ok(deprecation, "expected a deprecation warning naming the new option");
+  const occurrences = warnings.filter((w) =>
+    w.includes("_unsafeRetryOverride"),
+  ).length;
+  assert.equal(occurrences, 1, "deprecation should fire at most once per process");
+});
+
+test("MOBILE_SURFACES_PUSH_DISABLE_RETRY=1 forces maxRetries to 0", async (t) => {
+  const before = process.env.MOBILE_SURFACES_PUSH_DISABLE_RETRY;
+  process.env.MOBILE_SURFACES_PUSH_DISABLE_RETRY = "1";
+  t.after(() => {
+    if (before === undefined) {
+      delete process.env.MOBILE_SURFACES_PUSH_DISABLE_RETRY;
+    } else {
+      process.env.MOBILE_SURFACES_PUSH_DISABLE_RETRY = before;
+    }
+  });
+
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    return { status: 503, body: { reason: "ServiceUnavailable" } };
+  });
+  // Even with a generous override, the env kill-switch wins.
+  const client = createPushClient({
+    keyId: "ABC1234567",
+    teamId: "TEAM123456",
+    keyPath: KEY.file,
+    bundleId: "com.example.test",
+    environment: "development",
+    _unsafeRetryOverride: { maxRetries: 5, baseDelayMs: 1, maxDelayMs: 5, jitter: false },
+    idleTimeoutMs: 1_000,
+    [TEST_TRANSPORT_OVERRIDE]: { sendOrigin: mock.origin },
+  });
+  teardown(t, client, mock);
+
+  await assert.rejects(() => client.update("e".repeat(64), SNAPSHOT));
+  assert.equal(calls, 1, "env kill-switch should force a single attempt");
 });
 
 // --- cleanup --------------------------------------------------------------
