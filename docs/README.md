@@ -25,7 +25,7 @@ Pick the persona that fits, read the three docs in order, then come back here fo
 - **LiveSurfaceSnapshot**: The one JSON-like shape your app or backend emits. Every surface derives its render input or APNs payload from it.
 - **Projection**: A pure helper that turns a `LiveSurfaceSnapshot` into the smaller shape a surface needs, such as ActivityKit `content-state` or a widget timeline entry.
 - **`kind`**: The discriminator inside `LiveSurfaceSnapshot`. It tells the validator which branch is valid: `liveActivity`, `widget`, `control`, `notification`, `lockAccessory`, or `standby`.
-- **Schema version**: The wire-format version inside snapshots (`schemaVersion: "1"`). This is separate from npm package versions like `1.2.0`.
+- **Schema version**: The wire-format version inside snapshots (`schemaVersion: "2"` in v3.x; `"1"` in v2.x and earlier). This is separate from npm package versions like `1.2.0`.
 - **Trusted publishing**: npm publishing through GitHub Actions OIDC. No npm token is stored in the repo.
 
 ## Full Reference

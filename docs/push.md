@@ -95,7 +95,7 @@ One client per `(auth-key, environment, bundleId)` tuple. A single client multip
 
 ### `alert(deviceToken, snapshot, options?)`
 
-Plain alert push. Snapshot must be `kind: "liveActivity"`; payload is built via `toAlertPayload`.
+Plain alert push. Snapshot must be `kind: "liveActivity"`; payload is built via `liveActivityAlertPayloadFromSnapshot` (also exported from this package for callers who want to construct the payload by hand).
 
 ```ts
 import { surfaceFixtureSnapshots } from "@mobile-surfaces/surface-contracts";
@@ -344,7 +344,7 @@ The full mapping mirrors `packages/push/src/reasons.ts` and `scripts/send-apns.m
 ### Common flags
 
 - `--env=development|production`: picks the host pair (default `development`).
-- `--snapshot-file=./data/surface-fixtures/active-progress.json`: load a `LiveSurfaceSnapshot` from disk; the script projects it through `toAlertPayload` or `toLiveActivityContentState` as appropriate.
+- `--snapshot-file=./data/surface-fixtures/active-progress.json`: load a `LiveSurfaceSnapshot` from disk; the script projects it through `liveActivityAlertPayloadFromSnapshot` or `toLiveActivityContentState` as appropriate.
 - `--state-file=./scripts/sample-state.json`: bypass the projection and ship a raw ActivityKit `content-state` JSON. Useful for testing renderer behavior without going through the contract.
 - `--attributes-file=…`: required for `--event=start`. JSON file with `surfaceId` and `modeLabel`. The surface fixtures match this shape.
 - `--attributes-type=MobileSurfacesActivityAttributes`: override the type name after `pnpm surface:rename`.

@@ -1,38 +1,65 @@
 # Schema Migration
 
-`LiveSurfaceSnapshot` is at `schemaVersion: "1"`. Version `1` introduced the multi-projection contract: a top-level `kind` discriminator and per-kind slices for `widget`, `control`, and `notification`. This page covers what changed, how to migrate stored payloads, how to handle in-flight payloads at the edge, and the policy for future evolution.
+`LiveSurfaceSnapshot` is at `schemaVersion: "2"`. Version `2` moved liveActivity-only timing and stage hints out of the base shape, promoted `updatedAt` to required, and tightened the discriminated union to require an explicit `kind`. This page covers what changed, how to migrate stored payloads from v1, how to handle in-flight payloads at the edge, and the policy for future evolution.
 
-## What changed in v1
+## What changed in v2
 
-| Concern | v0 | v1 |
+| Concern | v1 | v2 |
 | --- | --- | --- |
-| `schemaVersion` | `"0"` | `"1"` |
-| Shape | Single object (Live-Activity-shaped) | `z.discriminatedUnion("kind", […])` over six branches |
-| `kind` field | Did not exist | Required: `"liveActivity" \| "widget" \| "control" \| "lockAccessory" \| "standby" \| "notification"` |
-| Per-kind slices | None | `widget`, `control`, and `notification` branches carry strict slices |
-| JSON Schema output | Single object | `oneOf` with `const`-discriminated branches |
-| `$id` | `…@0/schema.json` | `https://unpkg.com/@mobile-surfaces/surface-contracts@2.0/schema.json` (major.minor) |
+| `schemaVersion` | `"1"` | `"2"` |
+| `stage`, `estimatedSeconds`, `morePartsCount` | Required on every kind (base shape) | Required on `liveActivity` only; carried inside the new `liveActivity` slice |
+| `updatedAt` | Optional | Required |
+| Missing-`kind` preprocess | Defaulted bare snapshots to `liveActivity` | Removed; `kind` must be set explicitly |
+| `liveSurfaceAlertPayload` / `toAlertPayload` | Exported from `@mobile-surfaces/surface-contracts` | Renamed and moved to `@mobile-surfaces/push` as `liveActivityAlertPayload` / `liveActivityAlertPayloadFromSnapshot` |
+| `$id` | `https://unpkg.com/@mobile-surfaces/surface-contracts@2.1/schema.json` | `https://unpkg.com/@mobile-surfaces/surface-contracts@3.0/schema.json` |
 
-The base fields shared by every v1 branch are identical to the v0 fields (`id`, `surfaceId`, `state`, `modeLabel`, `contextLabel`, `statusLine`, `primaryText`, `secondaryText`, `actionLabel?`, `estimatedSeconds`, `morePartsCount`, `progress`, `stage`, `deepLink`). v0 → v1 promotion is therefore lossless: every v0 payload becomes a v1 `kind: "liveActivity"` snapshot with no slice attached.
+The base fields shared by every v2 branch are `id`, `surfaceId`, `updatedAt`, `state`, `modeLabel`, `contextLabel`, `statusLine`, `primaryText`, `secondaryText`, `actionLabel?`, `progress`, and `deepLink`. The `liveActivity` kind carries an additional slice `{ stage, estimatedSeconds, morePartsCount }`. Every other kind carries the slice it had in v1 (`widget`, `control`, `notification`, `lockAccessory`, `standby`).
 
-## Migrating stored payloads
+The four changes that motivated the bump are documented in `notes/v2-schema-rfc.md` (development-time only). At a glance:
 
-If you have a database, blob store, or queue holding v0 snapshots, use `migrateV0ToV1` for an explicit promotion:
+- **Base-shape correctness.** v1 forced control and widget fixtures to carry meaningless `stage: "inProgress"` and `morePartsCount: 0` filler. v2 puts those fields where they have semantics.
+- **Ordering.** v1 made `updatedAt` optional; consumers cannot drop out-of-order pushes on a field producers may not set. v2 requires it.
+- **Package boundary.** `liveSurfaceAlertPayload` is an APNs envelope shape. It belongs in `@mobile-surfaces/push` next to the SDK that sends it, not in the contract package.
+- **Explicit discriminator.** The v1 missing-`kind` preprocess was a back-compat shim for a v0 that was never published. v2 drops it.
+
+## Migrating stored payloads from v1
+
+If you have a database, blob store, or queue holding v1 snapshots, use `migrateV1ToV2` for an explicit promotion:
 
 ```ts
 import {
-  liveSurfaceSnapshotV0,
-  migrateV0ToV1,
+  liveSurfaceSnapshotV1,
+  migrateV1ToV2,
+  liveSurfaceSnapshot,
   type LiveSurfaceSnapshot,
 } from "@mobile-surfaces/surface-contracts";
 
 function promote(stored: unknown): LiveSurfaceSnapshot {
-  const v0 = liveSurfaceSnapshotV0.parse(stored);
-  return migrateV0ToV1(v0);
+  const v1 = liveSurfaceSnapshotV1.parse(stored);
+  const v2Like = migrateV1ToV2(v1);
+  // v2 requires updatedAt. migrateV1ToV2 does not synthesize one because
+  // a "now" timestamp on an old stored payload silently breaks ordering.
+  // Belt-and-braces: re-parse against the live v2 schema.
+  return liveSurfaceSnapshot.parse(v2Like);
 }
 ```
 
-`migrateV0ToV1` is a pure transform on an already-parsed v0 value. It does not validate the result against the v1 schema (the input has already been validated against v0, and the v1 base shape is a strict superset). If you want belt-and-braces, run `liveSurfaceSnapshot.parse(migrateV0ToV1(v0))`.
+`migrateV1ToV2` is a pure transform on an already-parsed v1 value. The mapping is mechanical:
+
+- `kind: "liveActivity"`: `stage`, `estimatedSeconds`, and `morePartsCount` move out of the base and under the new `liveActivity` slice. Everything else passes through.
+- Every other `kind`: the three liveActivity-only fields are dropped (they had no semantics on those kinds in v1 either; v1 just required them on every branch).
+- `schemaVersion` bumps to `"2"`. `kind` is preserved.
+- `updatedAt`: if present in v1, passes through; if absent, the result is left with `updatedAt: undefined`, which fails v2 parse on the explicit re-parse step.
+
+If the caller knows it is safe to fill `updatedAt` for legacy records (e.g. backfill jobs migrating a snapshot store), use the opt-in fallback:
+
+```ts
+const v2 = migrateV1ToV2(v1, {
+  updatedAtFallback: storedAtTimestamp ?? new Date().toISOString(),
+});
+```
+
+The default is to fail loudly because synthesizing "now" for a snapshot stored an hour ago breaks the very ordering semantic that `updatedAt` exists to provide.
 
 ## Migrating in-flight payloads
 
@@ -43,70 +70,66 @@ import { safeParseAnyVersion } from "@mobile-surfaces/surface-contracts";
 
 const result = safeParseAnyVersion(rawBody);
 if (!result.success) {
-  return reject(result.error); // ZodError from the v1 attempt
+  return reject(result.error); // ZodError from the v2 attempt
 }
 
 if (result.deprecationWarning) {
   log.warn(result.deprecationWarning, { snapshotId: result.data.id });
 }
 
-handle(result.data); // always v1
+handle(result.data); // always v2
 ```
 
 Behavior:
 
-1. Try the strict v1 discriminated union first.
-2. On v1 failure, try v0; on success, promote via `migrateV0ToV1` and attach a `deprecationWarning` string so callers can log telemetry.
-3. On both failures, return the v1 `ZodError` (the more informative message for new producers).
+1. Try the strict v2 discriminated union first.
+2. On v2 failure, try v1; on success, promote via `migrateV1ToV2` and attach a `deprecationWarning` string so callers can log telemetry.
+3. On both failures, return the v2 `ZodError` (the more informative message for new producers).
 
-The codec is the only blessed migration entry point. Do not write your own `if (payload.schemaVersion === "0")` ladder, since that branch will multiply when v2 lands.
+A v1 payload that lacks `updatedAt` (legal in v1) still fails on the codec path because `safeParseAnyVersion` does not synthesize `updatedAt`. The downstream error tells callers exactly which field is missing. The opt-in `updatedAtFallback` is only available through direct `migrateV1ToV2` calls; the wire-edge convenience wrapper stays strict.
 
-## Missing-`kind` back-compat
+The codec is the only blessed migration entry point. Do not write your own `if (payload.schemaVersion === "1")` ladder, since that branch will multiply when v3 lands.
 
-Some externally stored snapshots predate the discriminator entirely: they have `schemaVersion: "1"` but no `kind` field, because they were authored against an early v1 shape that defaulted the discriminator. The schema's `.preprocess()` shim handles this:
+## Deprecation timeline
 
-```ts
-// from packages/surface-contracts/src/schema.ts
-export const liveSurfaceSnapshot = z.preprocess(
-  (value) => {
-    if (
-      value !== null &&
-      typeof value === "object" &&
-      !Array.isArray(value) &&
-      !("kind" in (value as Record<string, unknown>))
-    ) {
-      return { ...(value as Record<string, unknown>), kind: "liveActivity" };
-    }
-    return value;
-  },
-  z.discriminatedUnion("kind", [/* … */]),
-);
-```
+The v1 codec lives for the entire 3.x major release line.
 
-A snapshot missing `kind` parses as a `liveActivity` branch. Authored fixtures in this repo always set `kind` explicitly, and the projection helpers (`toLiveActivityContentState`, `toWidgetTimelineEntry`, etc.) all narrow on `kind`, so the shim is a one-way back-compat ramp, not a license to omit the field in new code.
+| Release | Codec state | Producer guidance |
+| --- | --- | --- |
+| 3.0.0 | v1 codec on. `safeParseAnyVersion` emits a `deprecationWarning` on every v1 parse. | Start migrating producers to v2. |
+| 3.x.y | v1 codec on for every release in the 3.x line. Same warning. | Migrate at any point during 3.x. |
+| 4.0.0 | v1 codec removed. v1 payloads fail with a v2 `ZodError`. | Must be on v2 before bumping past 3.x. |
+
+The cost of carrying the codec for an entire major (one frozen Zod schema, one pure transform, one branch in `safeParseAnyVersion`) is roughly 200 lines. The benefit is that downstream installs pinned to `^3.0.0` keep parsing v1 payloads through every 3.x minor without any required producer-side change. Removing the codec on a minor would violate the "no breaking changes on a minor" rule the linked-group release cadence advertises.
+
+## v0 is no longer supported
+
+v0 was a single-object pre-discriminator shape that never shipped publicly; the codec was reconstructed from a single internal commit during the v1 release. v0 support was carried through the v1 release line, then removed in 3.0.0 because no external consumer ever held v0 payloads at rest.
+
+If you have a v0 payload somewhere unexpectedly (it should not happen, but the file is here for completeness), pin `@mobile-surfaces/surface-contracts@2.x` to access `migrateV0ToV1`, run the migration once, store the v1 result, then upgrade to 3.x.
 
 ## Schema Version vs Package Version
 
 `schemaVersion` is the wire-format version inside every snapshot. npm package versions are release versions for the package that ships the validator, helpers, TypeScript types, and JSON Schema.
 
-The package can publish many releases while `schemaVersion` stays `"1"`. Only a breaking wire-format change bumps `schemaVersion`.
+The package can publish many releases while `schemaVersion` stays `"2"`. Only a breaking wire-format change bumps `schemaVersion`.
 
 ## JSON Schema `$id` Pinning
 
 `scripts/build-schema.mjs` pins `$id` to the current package **major.minor**:
 
 ```text
-https://unpkg.com/@mobile-surfaces/surface-contracts@2.0/schema.json
+https://unpkg.com/@mobile-surfaces/surface-contracts@3.0/schema.json
 ```
 
-Pinning to `2.0` rather than `2` lets a future minor that adds a discriminated-union variant (e.g. a `kind: "interactiveAlert"` branch) publish at `@2.1/schema.json` without invalidating the URL existing consumers reference. Backends that want to track the latest minor automatically can pin to `@2/schema.json` (unpkg resolves the major), but the canonical `$id` stamped into the schema is the major.minor URL. The generator derives major.minor from the surface-contracts `package.json` version, so the URL rotates automatically on minor bumps.
+Pinning to `3.0` rather than `3` lets a future minor that adds a discriminated-union variant publish at `@3.1/schema.json` without invalidating the URL existing consumers reference. Backends that want to track the latest minor automatically can pin to `@3/schema.json` (unpkg resolves the major), but the canonical `$id` stamped into the schema is the major.minor URL. Older URLs (`@2.1/schema.json`, `@2.0/schema.json`) stay resolvable forever; unpkg never deletes a published artifact.
 
 ## Future evolution policy
 
 - **Bump `schemaVersion`** only on a breaking change: renaming or removing a field, changing a type, tightening a constraint (e.g. an enum drops a value, a string gains a regex it did not have before), or anything that makes a previously valid payload fail to parse.
 - **Additive optional fields are non-breaking.** Adding a new `actionLabel`-style optional field, or a new `kind` branch with its own optional slice, does not require a bump.
-- **A new `kind` value is a minor bump on the published JSON Schema** (new `oneOf` branch, new `$id` at `@1.N/schema.json`). The TypeScript union widens, but no existing payload becomes invalid.
-- **When v2 lands**, the migration story extends naturally: add `liveSurfaceSnapshotV1` (frozen at the v2 cutover), `migrateV1ToV2`, and update `safeParseAnyVersion` to chain v0 → v1 → v2. Consumers using the codec do not need to change call sites.
+- **A new `kind` value is a minor bump on the published JSON Schema** (new `oneOf` branch, new `$id` at `@3.N/schema.json`). The TypeScript union widens, but no existing payload becomes invalid.
+- **When v3 lands**, the migration story extends naturally: add `liveSurfaceSnapshotV2` (frozen at the v3 cutover), `migrateV2ToV3`, and update `safeParseAnyVersion` to chain v3 -> v2. Consumers using the codec do not need to change call sites; the v1 codec ages out at the 4.0 boundary regardless of when v3 lands.
 
 ## Standard Schema interop
 
@@ -117,7 +140,7 @@ import { liveSurfaceSnapshot } from "@mobile-surfaces/surface-contracts";
 
 // Standard Schema's vendor-agnostic interface.
 const standard = liveSurfaceSnapshot["~standard"];
-// → { vendor: "zod", version: 1, validate, jsonSchema }
+// -> { vendor: "zod", version: 1, validate, jsonSchema }
 
 // Example: a Valibot-style consumer that only knows Standard Schema.
 function validate<T>(

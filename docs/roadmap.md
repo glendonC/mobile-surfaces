@@ -17,12 +17,11 @@ See [`compatibility.md`](./compatibility.md) for the canonical pinned row.
 
 ### Phase 2: Multi-projection contract
 
-`LiveSurfaceSnapshot` is a true `z.discriminatedUnion("kind", […])` at `schemaVersion: "1"` with six members: `liveActivity`, `widget`, `control`, `lockAccessory`, `standby`, `notification`. Per-kind slices (`widget`, `control`, `notification`) are strict objects attached to their respective branches.
+`LiveSurfaceSnapshot` is a true `z.discriminatedUnion("kind", […])` with six members: `liveActivity`, `widget`, `control`, `lockAccessory`, `standby`, `notification`. Per-kind slices (`liveActivity`, `widget`, `control`, `notification`, `lockAccessory`, `standby`) are strict objects attached to their respective branches.
 
 - The published JSON Schema is `oneOf` with `const`-discriminated branches, proper kind ↔ slice enforcement, not a loose union.
-- A `.preprocess()` shim defaults missing-`kind` payloads to `"liveActivity"` so externally stored snapshots from before the discriminator still parse. Authored fixtures in this repo always set `kind` explicitly.
-- Migration codec ships in `packages/surface-contracts`: `liveSurfaceSnapshotV0`, `migrateV0ToV1`, `safeParseAnyVersion`. See [`schema-migration.md`](./schema-migration.md).
-- `$id` pins to `https://unpkg.com/@mobile-surfaces/surface-contracts@2.0/schema.json` (major.minor) so a future minor that adds a discriminated-union variant can publish a new URL without yanking what consumers reference.
+- Migration codec ships in `packages/surface-contracts`. Through 2.x: `liveSurfaceSnapshotV0`, `migrateV0ToV1`, `safeParseAnyVersion` plus a missing-`kind` preprocess shim. From 3.0 forward: `liveSurfaceSnapshotV1`, `migrateV1ToV2`, `safeParseAnyVersion` chained v2 -> v1; the v0 codec and the missing-`kind` preprocess were removed. See [`schema-migration.md`](./schema-migration.md).
+- `$id` pins to `https://unpkg.com/@mobile-surfaces/surface-contracts@<major.minor>/schema.json` so a future minor that adds a discriminated-union variant can publish a new URL without yanking what consumers reference. The current URL is `@3.0/schema.json`; `@2.1`, `@2.0` etc. stay resolvable on unpkg.
 - Standard Schema interop is live: Zod 4.x implements `~standard` (`{ vendor: "zod", version: 1, validate, jsonSchema }`) on every exported schema. A fixture-validation test pins this so it cannot regress.
 
 ### Phase 3: Home widget + iOS 18 control widget
@@ -51,6 +50,17 @@ The notification content extension is intentionally not included in this slice; 
 - Linked release group includes it (`.changeset/config.json`) so it always co-versions with `@mobile-surfaces/surface-contracts`, `@mobile-surfaces/design-tokens`, `@mobile-surfaces/live-activity`, and `create-mobile-surfaces`.
 
 `scripts/send-apns.mjs` is intentionally NOT refactored to import from the SDK; it stays as a self-contained protocol-reference script that can be read top-to-bottom without indirection.
+
+### v2 schema (3.0.0 release)
+
+Reshape that addressed the four audit findings v1 could not patch:
+
+- `stage`, `estimatedSeconds`, and `morePartsCount` moved out of the base shape into a new `liveActivity` slice. Other kinds stop carrying liveActivity-only values.
+- `updatedAt` promoted from optional to required so consumers can drop out-of-order pushes.
+- `liveSurfaceAlertPayload` and `toAlertPayload` moved to `@mobile-surfaces/push` and renamed `liveActivityAlertPayload` / `liveActivityAlertPayloadFromSnapshot`. The `aps` envelope is APNs wire format and belongs next to the SDK that sends it.
+- v0 codec dropped (it was reconstructed from an internal commit and never consumed externally). The missing-`kind` preprocess removed alongside it; v2 producers must set `kind` explicitly.
+
+The v1->v2 migration codec lives for the entire 3.x release line and is removed in 4.0.0. See [`schema-migration.md`](./schema-migration.md) for the deprecation timeline and worked examples.
 
 ### CLI
 
