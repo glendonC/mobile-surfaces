@@ -9,7 +9,7 @@
  * operator needs to act on a logged error: human title, severity, the
  * symptom they're seeing, the fix, and a docsUrl pointing at the rendered
  * catalog. Other catalog fields (tags, enforcement script, since version)
- * stay out of the bundle — consult data/traps.json or the rendered CLAUDE.md
+ * stay out of the bundle - consult data/traps.json or the rendered CLAUDE.md
  * for the full record.
  */
 export interface TrapBinding {
@@ -23,11 +23,18 @@ export interface TrapBinding {
 }
 
 export const TRAP_ID_BY_ERROR_CLASS = {
+  BadChannelIdError: "MS031",
+  BadDateError: "MS032",
   BadDeviceTokenError: "MS014",
+  BadExpirationDateError: "MS032",
+  ChannelNotRegisteredError: "MS031",
   ExpiredProviderTokenError: "MS030",
+  FeatureNotEnabledError: "MS034",
   ForbiddenError: "MS030",
   InvalidProviderTokenError: "MS030",
   MissingApnsConfigError: "MS028",
+  MissingChannelIdError: "MS031",
+  MissingTopicError: "MS035",
   PayloadTooLargeError: "MS011",
   TooManyRequestsError: "MS015",
   TopicDisallowedError: "MS018",
@@ -43,7 +50,7 @@ export const TRAP_BINDINGS = {
     severity: "error",
     summary: "Per-activity Live Activity pushes are bounded at 4 KB; iOS 18 broadcast pushes at 5 KB.",
     symptom: "APNs returns 413 PayloadTooLarge, or accepts the payload but iOS silently drops the update. Long localized strings or accumulated morePartsCount details are common offenders.",
-    fix: "Trim the snapshot. Shorten secondaryText, lower morePartsCount, or split a state into two smaller pushes. Validate by sending the projection through toLiveActivityContentState and measuring.",
+    fix: "Trim the payload. Per-activity payloads are bounded at 4 KB; broadcast payloads at 5 KB. Shorten secondaryText, lower morePartsCount, or split a state into two smaller pushes. Validate by sending the projection through toLiveActivityContentState and measuring.",
     docsUrl: "https://github.com/glendonC/mobile-surfaces/blob/main/CLAUDE.md#ms011-activitykit-payload-size-ceiling-4-kb-5-kb-broadcast",
   },
   MS014: {
@@ -99,6 +106,42 @@ export const TRAP_BINDINGS = {
     symptom: "All sends fail with 403. ForbiddenError means the auth key was revoked in the Apple Developer portal. InvalidProviderTokenError means the JWT is malformed or signed with the wrong key id / team id. ExpiredProviderTokenError means the JWT is older than 60 minutes (typically clock skew, since the SDK refreshes at 50 minutes).",
     fix: "ForbiddenError: mint a new auth key in the Apple Developer portal and update APNS_KEY_ID / APNS_KEY_PATH. InvalidProviderTokenError: verify APNS_KEY_ID matches the key file and APNS_TEAM_ID matches the developer account. ExpiredProviderTokenError: check system clock alignment against NTP; if the SDK is long-lived, confirm createPushClient is not being held past process restarts without re-minting.",
     docsUrl: "https://github.com/glendonC/mobile-surfaces/blob/main/CLAUDE.md#ms030-apns-provider-token-must-be-valid-and-current",
+  },
+  MS031: {
+    id: "MS031",
+    title: "Channel management failures (missing, malformed, or unregistered channel id)",
+    severity: "error",
+    summary: "Broadcast and channel-admin calls reject when the channel id is missing from the request, malformed on the wire, or refers to a channel that was never created in the target environment.",
+    symptom: "Broadcast or channel management fails with 400 (missing or bad channel id) or 410 (not registered). Common root causes: the channel was created against the opposite APNs environment, or the id was URL-decoded, truncated, or otherwise mutated before being sent back.",
+    fix: "MissingChannelId: pass channelId to broadcast() or deleteChannel(). BadChannelId: use the id returned by createChannel() verbatim with no URL-decoding or truncation. ChannelNotRegistered: channels are environment-scoped, so re-create the channel in the target environment or call listChannels() to confirm the id exists there.",
+    docsUrl: "https://github.com/glendonC/mobile-surfaces/blob/main/CLAUDE.md#ms031-channel-management-failures-missing-malformed-or-unregistered-channel-id",
+  },
+  MS032: {
+    id: "MS032",
+    title: "Activity timestamp fields must be valid unix-seconds integers",
+    severity: "error",
+    summary: "APNs rejects Live Activity pushes whose date fields (staleDateSeconds, dismissalDateSeconds, apns-expiration) are not positive unix-seconds integers, and rejects broadcast sends to a no-storage channel that carry a nonzero apns-expiration.",
+    symptom: "APNs returns 400 BadDate or 400 BadExpirationDate. The push payload looked valid locally but a date field was a millisecond timestamp, a negative number, or a non-integer; or apns-expiration was set on a no-storage broadcast channel.",
+    fix: "Confirm every date field is a positive unix-seconds integer (not milliseconds, not Date.now()). For broadcast on a no-storage channel, apns-expiration must be 0; the SDK's broadcast() already enforces this.",
+    docsUrl: "https://github.com/glendonC/mobile-surfaces/blob/main/CLAUDE.md#ms032-activity-timestamp-fields-must-be-valid-unix-seconds-integers",
+  },
+  MS034: {
+    id: "MS034",
+    title: "Broadcast capability must be enabled on the APNs auth key",
+    severity: "error",
+    summary: "iOS 18 broadcast pushes and channel-admin calls require the 'Broadcast to Live Activity' capability on the APNs auth key. The capability is per-key, not per-app, and is invisible until the first send fails.",
+    symptom: "createChannel() or broadcast() fails with 403 FeatureNotEnabled. The auth key is otherwise valid and other push types succeed; only broadcast-related calls reject.",
+    fix: "Enable broadcast in the Apple Developer portal under Certificates, Identifiers & Profiles > Keys > select the key > edit > tick 'Broadcast to Live Activity'. Save and retry; no client change is needed.",
+    docsUrl: "https://github.com/glendonC/mobile-surfaces/blob/main/CLAUDE.md#ms034-broadcast-capability-must-be-enabled-on-the-apns-auth-key",
+  },
+  MS035: {
+    id: "MS035",
+    title: "apns-topic header missing or bundleId misconfigured",
+    severity: "error",
+    summary: "APNs requires an apns-topic header on every request; the SDK derives it from APNS_BUNDLE_ID and a missing or empty bundle id produces a malformed topic at send time.",
+    symptom: "APNs returns 400 MissingTopic. The bundle id was unset or an empty string, so the SDK emitted only the .push-type.liveactivity suffix (or nothing) as the topic header.",
+    fix: "Confirm APNS_BUNDLE_ID is set to the bare bundle identifier (e.g. com.example.app). Do not include the .push-type.liveactivity suffix; the SDK appends it internally. See MS018 for the inverse failure (suffix included by mistake).",
+    docsUrl: "https://github.com/glendonC/mobile-surfaces/blob/main/CLAUDE.md#ms035-apns-topic-header-missing-or-bundleid-misconfigured",
   },
 } as const satisfies Record<string, TrapBinding>;
 

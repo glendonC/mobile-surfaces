@@ -13,7 +13,7 @@ export type TrapSeverity = z.infer<typeof trapSeverity>;
 // repo-local script. `config` rules read declarative files (app.json,
 // package.json, expo-target.config.js). `runtime` rules surface only at
 // runtime (token env crossing, APNs response codes). `advisory` rules are
-// awareness-only — they document caveats with no programmatic check.
+// awareness-only - they document caveats with no programmatic check.
 export const trapDetection = z.enum([
   "static",
   "config",
@@ -36,6 +36,8 @@ export const trapTag = z.enum([
   "ios-version",
   "cng",
   "app-group",
+  "channels",
+  "ios18",
 ]);
 export type TrapTag = z.infer<typeof trapTag>;
 
