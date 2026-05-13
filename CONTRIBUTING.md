@@ -2,6 +2,24 @@
 
 Thanks for helping improve Mobile Surfaces. By participating you agree to follow our [Code of Conduct](./CODE_OF_CONDUCT.md).
 
+## Branch and Release Workflow
+
+Never push to `main` directly. The repo runs a Changesets release flow: merging to `main` triggers a `Version packages` PR that the bot auto-merges and then `publish.yml` runs `npm publish` against a fixed-version snapshot. A direct push to `main` races that bot and produces the diverged-history class of bug — the recovery is a non-trivial rebase resolving edit-delete conflicts against freshly bumped CHANGELOGs.
+
+The flow for every change, large or small:
+
+1. **Branch off `main`** — `git checkout -b <topic>`. No work happens on `main` ever, including doc fixes and changeset additions.
+2. **Make the change**, including any `changeset` entry that the change requires. Run `pnpm changeset` for any user-facing change to a published package. Doc-only edits and internal tooling do not need a changeset.
+3. **Run `pnpm release:dry-run` locally before pushing.** It runs every gate CI runs (`surface:check`, full test suite, scaffold snapshot, site build, typecheck) plus the regen-drift check. If anything fails, `pnpm release:fix` regenerates the derived files (`CLAUDE.md`/`AGENTS.md`, trap-bindings, traps-data, JSON schema, surface fixtures, scaffold snapshots). Commit the regen, re-run dry-run.
+4. **Open a PR** via `gh pr create` or the GitHub UI. CI runs the same chain dry-run did. Wait for green.
+5. **Merge the PR.** Squash-merge is fine for a single-commit change; merge-commit preserves more provenance for multi-commit work.
+6. **Wait for the Changesets `Version packages` PR** to appear (within ~1 minute of the merge to `main`). It rolls up every pending changeset into version bumps and CHANGELOG entries. Inspect the diff; if it looks right, merge it.
+7. **Watch `publish.yml`** fire on the release commit. It runs the trusted-publisher OIDC flow and pushes new versions to npm. Verify with `npm view @mobile-surfaces/<pkg> version`.
+
+Cherry-picking commits between branches is forbidden in normal flow. Cherry-picks lose the regen step (every recent "regenerate X after cherry-pick" commit in `git log` is a symptom). When you need work from one branch on another, rebase or merge — never cherry-pick — and run `pnpm release:fix` on the receiving side.
+
+`pnpm setup:hooks` installs an opt-in `pre-push` hook that enforces the rules locally: refuses non-fast-forward pushes, refuses direct-to-`main` pushes, and runs `pnpm release:dry-run` before the push completes. Run it once on every clone you work from.
+
 ## Two-Consumer Rule
 
 Do not add a new abstraction (helper, type, contract field, adapter slot, config knob) until two real call sites in this repo need it. One consumer is a special case; two is a pattern. This rule is the main way Mobile Surfaces resists starter rot — most "wouldn't it be cleaner if…" PRs should be deferred until a second consumer materializes.
