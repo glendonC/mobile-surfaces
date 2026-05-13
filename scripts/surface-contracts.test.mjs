@@ -5,9 +5,7 @@ import {
   IncompleteProjectionError,
   liveSurfaceAlertPayload,
   liveSurfaceSnapshot,
-  liveSurfaceSnapshotV0,
   liveSurfaceSnapshotV1,
-  migrateV0ToV1,
   migrateV1ToV2,
   safeParseAnyVersion,
   safeParseSnapshot,
@@ -309,51 +307,6 @@ test("toStandbyEntry applies presentation default and null tint when absent", ()
 });
 
 // ---------------------------------------------------------------------------
-// v0 -> v1 migration codec (legacy; removed in 4.0)
-// ---------------------------------------------------------------------------
-
-const v0Sample = {
-  schemaVersion: "0",
-  id: "fixture-v0",
-  surfaceId: "surface-v0",
-  state: "queued",
-  modeLabel: "queued",
-  contextLabel: "starter",
-  statusLine: "queued · ready",
-  primaryText: "Surface queued",
-  secondaryText: "v0 sample payload",
-  actionLabel: "Open",
-  estimatedSeconds: 60,
-  morePartsCount: 0,
-  progress: 0,
-  stage: "prompted",
-  deepLink: "mobilesurfaces://surface/surface-v0",
-};
-
-test("liveSurfaceSnapshotV0 parses a v0 sample payload", () => {
-  const parsed = liveSurfaceSnapshotV0.parse(v0Sample);
-  assert.equal(parsed.schemaVersion, "0");
-});
-
-test("migrateV0ToV1 promotes a v0 payload to a v1 liveActivity snapshot", () => {
-  const v0 = liveSurfaceSnapshotV0.parse(v0Sample);
-  const v1 = migrateV0ToV1(v0);
-  assert.equal(v1.schemaVersion, "1");
-  assert.equal(v1.kind, "liveActivity");
-  assert.equal(v1.id, v0Sample.id);
-  assert.equal(v1.surfaceId, v0Sample.surfaceId);
-  assert.equal(v1.state, v0Sample.state);
-  assert.equal(v1.deepLink, v0Sample.deepLink);
-
-  // Round-trip through the frozen v1 parser to prove the migrated value
-  // is a valid v1 snapshot. (Cannot round-trip through liveSurfaceSnapshot
-  // here because that is now v2; the chained codec inside
-  // safeParseAnyVersion handles v0 -> v1 -> v2.)
-  const reparsed = liveSurfaceSnapshotV1.parse(v1);
-  assert.equal(reparsed.schemaVersion, "1");
-});
-
-// ---------------------------------------------------------------------------
 // v1 -> v2 migration codec
 // ---------------------------------------------------------------------------
 
@@ -484,19 +437,6 @@ test("safeParseAnyVersion accepts a v1 payload and surfaces a v1 deprecation war
   }
 });
 
-test("safeParseAnyVersion accepts a v0 payload and surfaces a v0 deprecation warning", () => {
-  const result = safeParseAnyVersion(v0Sample);
-  assert.equal(result.success, true);
-  if (result.success) {
-    assert.equal(result.data.schemaVersion, "2");
-    assert.equal(result.data.kind, "liveActivity");
-    assert.match(
-      result.deprecationWarning ?? "",
-      /v0 is deprecated/i,
-    );
-  }
-});
-
 test("safeParseAnyVersion fails with v2 error when no version parses", () => {
   const result = safeParseAnyVersion({ schemaVersion: "999", nonsense: true });
   assert.equal(result.success, false);
@@ -505,8 +445,7 @@ test("safeParseAnyVersion fails with v2 error when no version parses", () => {
   }
 });
 
-test("strict assertSnapshot does NOT auto-migrate v0 or v1 payloads", () => {
-  assert.throws(() => assertSnapshot(v0Sample));
+test("strict assertSnapshot does NOT auto-migrate v1 payloads", () => {
   assert.throws(() => assertSnapshot(v1LiveActivitySample));
 });
 

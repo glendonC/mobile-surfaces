@@ -305,8 +305,8 @@ export const liveSurfaceKinds = liveSurfaceKind.options as unknown as readonly [
 ];
 
 /**
- * Strict v1 parser. Throws on any payload that does not match the v1
- * discriminated union. Does NOT auto-migrate v0 payloads — for that, use
+ * Strict v2 parser. Throws on any payload that does not match the v2
+ * discriminated union. Does NOT auto-migrate v1 payloads — for that, use
  * {@link safeParseAnyVersion}.
  */
 export function assertSnapshot(value: unknown): LiveSurfaceSnapshot {
@@ -314,62 +314,11 @@ export function assertSnapshot(value: unknown): LiveSurfaceSnapshot {
 }
 
 /**
- * Strict v1 safe-parse. Returns Zod's standard SafeParseReturnType. Does NOT
- * auto-migrate v0 payloads — for that, use {@link safeParseAnyVersion}.
+ * Strict v2 safe-parse. Returns Zod's standard SafeParseReturnType. Does NOT
+ * auto-migrate v1 payloads — for that, use {@link safeParseAnyVersion}.
  */
 export function safeParseSnapshot(value: unknown) {
   return liveSurfaceSnapshot.safeParse(value);
-}
-
-// ---------------------------------------------------------------------------
-// v0 → v1 migration codec
-//
-// v0 was the pre-multi-projection shape: a single liveActivity-shaped object
-// with no `kind` discriminator and no projection slices. v1 adds `kind` and
-// per-kind slices. We keep the v0 schema verbatim here (reconstructed from
-// commit a834bad's packages/surface-contracts/src/schema.ts) so historical
-// payloads can be promoted without manual editing.
-// ---------------------------------------------------------------------------
-
-export const liveSurfaceSnapshotV0 = z
-  .object({
-    schemaVersion: z.literal("0"),
-    id: z.string().min(1),
-    surfaceId: z.string().min(1),
-    state: liveSurfaceState,
-    modeLabel: z.string().min(1),
-    contextLabel: z.string(),
-    statusLine: z.string(),
-    primaryText: z.string().min(1),
-    secondaryText: z.string(),
-    actionLabel: z.string().optional(),
-    estimatedSeconds: z.int().min(0),
-    morePartsCount: z.int().min(0),
-    progress: z.number().min(0).max(1),
-    stage: liveSurfaceStage,
-    deepLink: z.string().regex(/^[a-z][a-z0-9+\-.]*:\/\//),
-  })
-  .strict();
-export type LiveSurfaceSnapshotV0 = z.infer<typeof liveSurfaceSnapshotV0>;
-
-/**
- * Pure v0->v1 transform. Promotes a parsed v0 payload to a v1
- * liveActivity-kind snapshot. v0 had no projection slices, so the result
- * always has `kind: "liveActivity"` with no `widget` / `control` /
- * `notification` slice.
- *
- * Returns LiveSurfaceSnapshotV1 (not the live v2 type) so the function
- * keeps a sensible signature alongside migrateV1ToV2 in the chained
- * codec path inside safeParseAnyVersion. Both helpers are removed in
- * 4.0.0 when v0 and v1 fall out of the support window.
- */
-export function migrateV0ToV1(v0: LiveSurfaceSnapshotV0): LiveSurfaceSnapshotV1 {
-  const { schemaVersion: _v0Version, ...rest } = v0;
-  return {
-    ...rest,
-    schemaVersion: "1",
-    kind: "liveActivity",
-  } as LiveSurfaceSnapshotV1;
 }
 
 export type SafeParseAnyVersionSuccess = {
@@ -451,11 +400,10 @@ export function migrateV1ToV2(
 }
 
 /**
- * Multi-version safe-parse. Tries v2 (strict) first; falls back to v1
- * (frozen, with the v1 missing-kind preprocess) and migrates the result;
- * falls back further to v0 (legacy, removed in the next commit) and
- * promotes through v1 to v2. Returns the v2 ZodError when every attempt
- * fails so callers see the most relevant message.
+ * Multi-version safe-parse. Tries v2 (strict) first; on failure, tries v1
+ * (frozen, with the v1 missing-kind preprocess) and migrates the result.
+ * Returns the v2 ZodError when both attempts fail so callers see the most
+ * relevant message.
  *
  * On v1->v2 migration, the result carries a `deprecationWarning` so
  * telemetry can surface producers still on the old shape; see
@@ -483,32 +431,6 @@ export function safeParseAnyVersion(value: unknown): SafeParseAnyVersionResult {
     // and migrateV1ToV2 deliberately does not synthesize one. Surface the
     // v2 ZodError so callers see the missing-field path explicitly.
     return { success: false, error: v2Recheck.error };
-  }
-  const v0 = liveSurfaceSnapshotV0.safeParse(value);
-  if (v0.success) {
-    const viaV1 = migrateV0ToV1(v0.data);
-    const v1Reparsed = liveSurfaceSnapshotV1.safeParse(viaV1);
-    if (v1Reparsed.success) {
-      // v0 never carried an updatedAt field (it predates the addition in
-      // 2.1). There is no v0 producer to ask to populate it, so synthesize
-      // a wall-clock "now" during the v0 -> v2 migration. This is the only
-      // codepath that auto-synthesizes; explicit migrateV1ToV2 calls keep
-      // the default-fail behavior so a v1 producer cannot mistakenly rely
-      // on it.
-      const migrated = migrateV1ToV2(v1Reparsed.data, {
-        updatedAtFallback: new Date().toISOString(),
-      });
-      const v2Recheck = liveSurfaceSnapshot.safeParse(migrated);
-      if (v2Recheck.success) {
-        return {
-          success: true,
-          data: v2Recheck.data,
-          deprecationWarning:
-            'liveSurfaceSnapshot v0 is deprecated and will be removed in @mobile-surfaces/surface-contracts@4.0. Migrate producers to schemaVersion "2".',
-        };
-      }
-      return { success: false, error: v2Recheck.error };
-    }
   }
   return { success: false, error: v2.error };
 }
