@@ -271,6 +271,74 @@ test("retryable reason (InternalServerError) is retried then succeeds", async (t
   assert.equal(mock.requests.length, 2);
 });
 
+test("PushResult records first-try success with attempts=1 and empty retried", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200, headers: { "apns-id": "first-try" } }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const res = await client.alert("a".repeat(64), SNAPSHOT, { apnsId: "first-try" });
+  assert.equal(res.attempts, 1);
+  assert.deepEqual(res.retried, []);
+  assert.deepEqual(res.trapHits, []);
+  assert.equal(typeof res.latencyMs, "number");
+  assert.ok(res.latencyMs >= 0, "latencyMs should be non-negative");
+});
+
+test("PushResult records each retried attempt with reason, status, and backoff", async (t) => {
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    if (calls === 1) return { status: 503, body: { reason: "ServiceUnavailable" } };
+    if (calls === 2) return { status: 500, body: { reason: "InternalServerError" } };
+    return { status: 200, headers: { "apns-id": "ok-after-2" } };
+  });
+  const client = makeClient({
+    sendOrigin: mock.origin,
+    retryPolicy: { maxRetries: 3, baseDelayMs: 1, maxDelayMs: 5, jitter: false },
+  });
+  teardown(t, client, mock);
+
+  const res = await client.alert("b".repeat(64), SNAPSHOT, { apnsId: "ok-after-2" });
+  assert.equal(res.attempts, 3);
+  assert.equal(res.retried.length, 2);
+  assert.equal(res.retried[0].reason, "ServiceUnavailable");
+  assert.equal(res.retried[0].status, 503);
+  assert.ok(res.retried[0].backoffMs >= 0);
+  assert.equal(res.retried[1].reason, "InternalServerError");
+  assert.equal(res.retried[1].status, 500);
+  // Neither retried reason is bound to a trap; trapHits stays empty.
+  assert.deepEqual(res.trapHits, []);
+});
+
+test("PushResult.trapHits dedupes trapIds touched across retries", async (t) => {
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    if (calls <= 2) {
+      return {
+        status: 429,
+        headers: { "retry-after": "0" },
+        body: { reason: "TooManyRequests" },
+      };
+    }
+    return { status: 200, headers: { "apns-id": "after-throttle" } };
+  });
+  const client = makeClient({
+    sendOrigin: mock.origin,
+    retryPolicy: { maxRetries: 3, baseDelayMs: 1, maxDelayMs: 5, jitter: false },
+  });
+  teardown(t, client, mock);
+
+  const res = await client.alert("c".repeat(64), SNAPSHOT, { apnsId: "after-throttle" });
+  assert.equal(res.attempts, 3);
+  assert.deepEqual(
+    res.retried.map((r) => r.trapId),
+    ["MS015", "MS015"],
+    "both retried attempts should carry the TooManyRequests trapId",
+  );
+  assert.deepEqual(res.trapHits, ["MS015"], "trapHits should dedupe");
+});
+
 test("retries are capped by maxRetries and final ApnsError is surfaced", async (t) => {
   let calls = 0;
   const mock = await startMockApns(() => {

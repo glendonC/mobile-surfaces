@@ -12,6 +12,8 @@ export type {
   SendOptions,
   BroadcastOptions,
   LiveActivityStartOptions,
+  PushResult,
+  RetryAttempt,
   SendResponse,
   ChannelInfo,
   PushHooks,

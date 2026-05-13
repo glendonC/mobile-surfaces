@@ -173,10 +173,66 @@ export interface LiveActivityStartOptions extends SendOptions {
   attributesType?: string;
 }
 
-export interface SendResponse {
+/**
+ * Per-attempt record of a retry the SDK decided to perform. Populated in
+ * `PushResult.retried` in the order the retries occurred. The successful
+ * (final) attempt is never recorded here — `attempts` counts it instead.
+ */
+export interface RetryAttempt {
+  /**
+   * APNs reason string ("TooManyRequests", "ServiceUnavailable") for response
+   * errors, or transport error code ("ETIMEDOUT", "ECONNRESET") when the
+   * attempt failed before a response arrived.
+   */
+  reason: string;
+  /**
+   * Trap catalog id when the failure maps to a typed APNs error class.
+   * Undefined for transport errors and for response errors without a
+   * catalog binding.
+   */
+  trapId?: string;
+  /** HTTP status from APNs. Undefined for transport-level failures. */
+  status?: number;
+  /** Wall-clock backoff ms slept after this attempt before the next. */
+  backoffMs: number;
+}
+
+/**
+ * Result of a successful send. `apnsId`, `status`, and `timestamp` are the
+ * legacy SendResponse shape; the additional fields surface retry behavior
+ * and trap activity so consumers can wire dashboards (or assert on first-try
+ * health) without re-implementing the same accounting in their hooks.
+ *
+ * - `attempts` is 1-indexed: 1 on first-try success, 2+ when at least one
+ *   retry preceded the eventual 2xx.
+ * - `latencyMs` measures wall-clock from the first request issue to the
+ *   final response, including every backoff sleep in between.
+ * - `retried` records each failed attempt the SDK retried, in order.
+ * - `trapHits` is the deduplicated set of trap ids touched across retries.
+ *   Empty on healthy first-try sends; non-empty marks a request that hit
+ *   the catalog at least once (useful as a metric label).
+ */
+export interface PushResult {
   apnsId: string;
   status: number;
   timestamp: Date;
+  attempts: number;
+  latencyMs: number;
+  retried: readonly RetryAttempt[];
+  trapHits: readonly string[];
+}
+
+/**
+ * @deprecated Use `PushResult`. Kept as a type alias so existing callers
+ * compile without changes; the in-memory shape is identical.
+ */
+export type SendResponse = PushResult;
+
+interface RetryMeta {
+  attempts: number;
+  latencyMs: number;
+  retried: readonly RetryAttempt[];
+  trapHits: readonly string[];
 }
 
 interface ChannelManageResponse {
@@ -413,7 +469,7 @@ export class PushClient {
     deviceToken: string,
     snapshot: LiveSurfaceSnapshot,
     options: SendOptions = {},
-  ): Promise<SendResponse> {
+  ): Promise<PushResult> {
     this.#assertOpen();
     const validated = validateSnapshot(snapshot);
     const live = snapshotMustBeLiveActivity(validated, "alert()");
@@ -438,7 +494,7 @@ export class PushClient {
     activityToken: string,
     snapshot: LiveSurfaceSnapshot,
     options: SendOptions = {},
-  ): Promise<SendResponse> {
+  ): Promise<PushResult> {
     this.#assertOpen();
     const validated = validateSnapshot(snapshot);
     const live = snapshotMustBeLiveActivity(validated, "update()");
@@ -467,7 +523,7 @@ export class PushClient {
     snapshot: LiveSurfaceSnapshot,
     attributes: Record<string, unknown>,
     options: LiveActivityStartOptions = {},
-  ): Promise<SendResponse> {
+  ): Promise<PushResult> {
     this.#assertOpen();
     const validated = validateSnapshot(snapshot);
     const live = snapshotMustBeLiveActivity(validated, "start()");
@@ -496,7 +552,7 @@ export class PushClient {
     activityToken: string,
     snapshot: LiveSurfaceSnapshot,
     options: SendOptions = {},
-  ): Promise<SendResponse> {
+  ): Promise<PushResult> {
     this.#assertOpen();
     const validated = validateSnapshot(snapshot);
     const live = snapshotMustBeLiveActivity(validated, "end()");
@@ -527,7 +583,7 @@ export class PushClient {
     channelId: string,
     snapshot: LiveSurfaceSnapshot,
     options: BroadcastOptions = {},
-  ): Promise<SendResponse> {
+  ): Promise<PushResult> {
     this.#assertOpen();
     const validated = validateSnapshot(snapshot);
     const live = snapshotMustBeLiveActivity(validated, "broadcast()");
@@ -719,12 +775,17 @@ export class PushClient {
       /** apns-id known up-front (device sends generate it client-side). */
       apnsId?: string;
     },
-    mapSuccess: (res: {
-      status: number;
-      headers: Record<string, string | string[] | undefined>;
-      body: string;
-    }) => TSuccess,
+    mapSuccess: (
+      res: {
+        status: number;
+        headers: Record<string, string | string[] | undefined>;
+        body: string;
+      },
+      meta: RetryMeta,
+    ) => TSuccess,
   ): Promise<TSuccess> {
+    const overallStart = Date.now();
+    const retried: RetryAttempt[] = [];
     let attempt = 0;
     while (true) {
       this.#assertOpen();
@@ -748,7 +809,12 @@ export class PushClient {
             status: res.status,
             durationMs,
           });
-          return mapSuccess(res);
+          return mapSuccess(res, {
+            attempts: attempt + 1,
+            latencyMs: Date.now() - overallStart,
+            retried,
+            trapHits: distinctTrapHits(retried),
+          });
         }
         const apnsError = this.#errorFromResponse(res);
         const willRetry =
@@ -763,7 +829,14 @@ export class PushClient {
           durationMs,
         });
         if (willRetry) {
-          await this.#waitForRetry(apnsError, attempt);
+          const backoffMs = this.#computeRetryBackoffMs(apnsError, attempt);
+          retried.push({
+            reason: apnsError.reason,
+            trapId: apnsError.trapId,
+            status: res.status,
+            backoffMs,
+          });
+          await sleep(backoffMs);
           attempt += 1;
           // Refresh JWT in case the rejection was provider-token-related.
           headers.authorization = `bearer ${this.#jwt.get()}`;
@@ -784,7 +857,12 @@ export class PushClient {
           durationMs: Date.now() - startedAt,
         });
         if (willRetry) {
-          await sleep(computeBackoffMs(attempt, this.#retryPolicy));
+          const backoffMs = computeBackoffMs(attempt, this.#retryPolicy);
+          retried.push({
+            reason: transportErrorReason(err),
+            backoffMs,
+          });
+          await sleep(backoffMs);
           attempt += 1;
           continue;
         }
@@ -798,6 +876,10 @@ export class PushClient {
     body: string | undefined,
     hookMeta: { operation: PushHookOperation; token?: string },
   ): Promise<ChannelManageResponse> {
+    // Channel-management callers don't read PushResult metadata today; drop
+    // it on the floor to keep the ChannelInfo shape stable. If we ever
+    // surface retry stats on management ops we'll thread `meta` into a new
+    // field on ChannelInfo rather than changing this signature.
     return this.#executeWithRetry(this.#manage, headers, body, hookMeta, (res) => ({
       status: res.status,
       headers: res.headers,
@@ -815,13 +897,21 @@ export class PushClient {
       snapshotId?: string;
       token?: string;
     },
-  ): Promise<SendResponse> {
+  ): Promise<PushResult> {
     return this.#executeWithRetry(
       transport,
       headers,
       body,
       { ...hookMeta, apnsId },
-      (res) => ({ apnsId, status: res.status, timestamp: new Date() }),
+      (res, meta) => ({
+        apnsId,
+        status: res.status,
+        timestamp: new Date(),
+        attempts: meta.attempts,
+        latencyMs: meta.latencyMs,
+        retried: meta.retried,
+        trapHits: meta.trapHits,
+      }),
     );
   }
 
@@ -855,13 +945,35 @@ export class PushClient {
     return this.#retryPolicy.retryableReasons.has(err.reason);
   }
 
-  async #waitForRetry(err: ApnsError, attempt: number): Promise<void> {
+  #computeRetryBackoffMs(err: ApnsError, attempt: number): number {
     let retryAfterMs: number | undefined;
     if (err instanceof TooManyRequestsError && err.retryAfterSeconds !== undefined) {
       retryAfterMs = err.retryAfterSeconds * 1000;
     }
-    await sleep(computeBackoffMs(attempt, this.#retryPolicy, retryAfterMs));
+    return computeBackoffMs(attempt, this.#retryPolicy, retryAfterMs);
   }
+}
+
+// Distill the retry-attempts log into the set of distinct trap ids that
+// surfaced before the eventual success. Returns a fresh tuple-typed array
+// so RetryMeta.trapHits is safe to expose as `readonly`.
+function distinctTrapHits(retried: readonly RetryAttempt[]): readonly string[] {
+  const seen = new Set<string>();
+  for (const r of retried) {
+    if (r.trapId) seen.add(r.trapId);
+  }
+  return [...seen];
+}
+
+// Best-effort label for a transport-level failure. Falls back to a static
+// string so `retried[].reason` is always populated; the precise classification
+// already happened in isTransportError.
+function transportErrorReason(err: unknown): string {
+  if (err && typeof err === "object") {
+    const code = (err as { code?: unknown }).code;
+    if (typeof code === "string" && code.length > 0) return code;
+  }
+  return "TransportError";
 }
 
 /**
