@@ -1,5 +1,15 @@
 # mobile-surfaces-app
 
+## 1.0.10
+
+### Patch Changes
+
+- Add harness refresh buttons for the lockAccessory and StandBy surfaces. Both wire to the existing `refreshLockAccessorySurface` / `refreshStandbySurface` helpers in `surfaceStorage`, which were already shipping the entries into the App Group; the harness UI now has a way to exercise them. Sections are gated by the matching surface markers so the strip pipeline preserves them only when those surfaces are scaffolded in.
+- Updated dependencies
+  - @mobile-surfaces/surface-contracts@3.1.0
+  - @mobile-surfaces/design-tokens@3.1.0
+  - @mobile-surfaces/live-activity@3.1.0
+
 ## 1.0.9
 
 ### Patch Changes
