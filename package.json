@@ -86,7 +86,10 @@
     "cli:smoke:existing": "pnpm --filter create-mobile-surfaces smoke:existing",
     "cli:smoke:monorepo": "pnpm --filter create-mobile-surfaces smoke:monorepo",
     "cli:test": "pnpm --filter create-mobile-surfaces test",
-    "typecheck": "pnpm build && pnpm --filter mobile-surfaces-app typecheck"
+    "typecheck": "pnpm build && pnpm --filter mobile-surfaces-app typecheck",
+    "release:dry-run": "node scripts/release-dry-run.mjs",
+    "release:fix": "node scripts/release-fix.mjs",
+    "setup:hooks": "node scripts/setup-hooks.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "2.31.0",
