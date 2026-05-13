@@ -1,6 +1,6 @@
 {
   "name": "@mobile-surfaces/surface-contracts",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "Shared LiveSurfaceSnapshot contract, generated fixtures, and ActivityKit/APNs mapping helpers for Mobile Surfaces.",
   "publishConfig": {
     "access": "public",
