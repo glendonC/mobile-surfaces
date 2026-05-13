@@ -78,7 +78,23 @@ export interface CreatePushClientOptions {
   bundleId: string;
   /** APNs environment to target. */
   environment: "development" | "production";
-  /** Override the retry policy. Defaults: 3 retries, 100ms base, 5s cap, jitter on. */
+  /**
+   * Operator-grade override of the retry policy. Defaults — 3 retries, 100ms
+   * base, 5s cap, jitter on — are tuned against MS015's iOS budget rules and
+   * the priority-aware stretch in `effectiveRetryPolicy`. Changing these is
+   * usually wrong; the name is prefixed `_unsafe` to make that visible at
+   * the call site.
+   *
+   * Even with this set, the kill-switch `MOBILE_SURFACES_PUSH_DISABLE_RETRY`
+   * env var still forces `maxRetries: 0` if truthy.
+   */
+  _unsafeRetryOverride?: Partial<RetryPolicy>;
+  /**
+   * @deprecated Renamed to `_unsafeRetryOverride` in 3.1.0; the old name is
+   * still honored but logs a one-time deprecation warning per process and
+   * will be removed in 4.0. If both options are set, `_unsafeRetryOverride`
+   * wins and this field is ignored.
+   */
   retryPolicy?: Partial<RetryPolicy>;
   /** ms with no in-flight requests before the HTTP/2 session is closed. Default 60_000. */
   idleTimeoutMs?: number;
@@ -414,6 +430,50 @@ function isTransportError(err: unknown): boolean {
   return false;
 }
 
+/**
+ * Env var operators set when they need to disable the SDK's retry logic
+ * entirely (e.g. during an APNs incident where retries are amplifying load).
+ * Any non-empty value counts as truthy; the SDK does not parse "false" or
+ * "0" specially — the kill-switch is an ops bypass, set it or unset it.
+ */
+const DISABLE_RETRY_ENV_VAR = "MOBILE_SURFACES_PUSH_DISABLE_RETRY";
+
+/**
+ * Process-wide flag so the `retryPolicy` deprecation warning fires at most
+ * once even when many PushClients are instantiated. Per-process, not
+ * per-client; the warning is not actionable on every send.
+ */
+let retryPolicyDeprecationLogged = false;
+
+function resolveRetryPolicy(options: CreatePushClientOptions): RetryPolicy {
+  const override = options._unsafeRetryOverride ?? options.retryPolicy;
+  if (
+    options.retryPolicy &&
+    !options._unsafeRetryOverride &&
+    !retryPolicyDeprecationLogged
+  ) {
+    retryPolicyDeprecationLogged = true;
+    console.warn(
+      "[@mobile-surfaces/push] `retryPolicy` is deprecated; rename to `_unsafeRetryOverride`. " +
+        "The old name will be removed in 4.0.",
+    );
+  }
+  const merged: RetryPolicy = { ...DEFAULT_RETRY_POLICY, ...(override ?? {}) };
+  if (isRetryDisabledByEnv()) {
+    // Env-level kill-switch overrides any user override. Operators reach for
+    // this during an APNs incident where retries are amplifying load; we
+    // honor it unconditionally so a misconfigured deployment cannot bypass
+    // the bypass.
+    return { ...merged, maxRetries: 0 };
+  }
+  return merged;
+}
+
+function isRetryDisabledByEnv(): boolean {
+  const v = process.env[DISABLE_RETRY_ENV_VAR];
+  return typeof v === "string" && v.length > 0;
+}
+
 // Per MS028: createPushClient validates presence of every required option and
 // rejects fast. Empty strings are treated as missing — config files that read
 // "${MISSING_VAR}" or similar would otherwise pass a typeof check.
@@ -507,7 +567,7 @@ export class PushClient {
       bundleId: options.bundleId,
       environment: options.environment,
     };
-    this.#retryPolicy = { ...DEFAULT_RETRY_POLICY, ...(options.retryPolicy ?? {}) };
+    this.#retryPolicy = resolveRetryPolicy(options);
     this.#hooks = options.hooks ?? {};
 
     const keyPem = resolveKeyPem(options.keyPath);
