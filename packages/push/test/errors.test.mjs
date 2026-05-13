@@ -26,6 +26,10 @@ const {
   ForbiddenError,
   trapIdForErrorClass,
   TRAP_ID_BY_ERROR_CLASS,
+  TRAP_BINDINGS,
+  docsUrlForErrorClass,
+  findTrap,
+  findTrapByErrorClass,
 } = await import("../dist/index.js");
 
 const { reasonToError } = await import("../dist/errors.js");
@@ -112,6 +116,62 @@ test("trapIdForErrorClass and TRAP_ID_BY_ERROR_CLASS agree", () => {
     assert.equal(trapIdForErrorClass(name), trapId);
   }
   assert.equal(trapIdForErrorClass("DefinitelyNotAClass"), undefined);
+});
+
+test("typed errors expose docsUrl from the generated bindings", () => {
+  const err = reasonToError("PayloadTooLarge", { status: 413 });
+  assert.equal(
+    err.docsUrl,
+    "https://github.com/glendonC/mobile-surfaces/blob/main/CLAUDE.md#ms011-activitykit-payload-size-ceiling-4-kb-5-kb-broadcast",
+  );
+  // MissingApnsConfigError is bound to MS028 but is not an APNs-response
+  // error; it still needs to carry the doc pointer for the createPushClient
+  // throw path.
+  const cfg = new MissingApnsConfigError(["keyId"]);
+  assert.equal(
+    cfg.docsUrl,
+    "https://github.com/glendonC/mobile-surfaces/blob/main/CLAUDE.md#ms028-apns-auth-key-environment-variables-must-be-set-before-sending",
+  );
+});
+
+test("unbound error classes return undefined docsUrl", () => {
+  const err = reasonToError("BadPriority", { status: 400 });
+  assert.equal(err.docsUrl, undefined);
+});
+
+test("findTrap and findTrapByErrorClass surface full bindings", () => {
+  const direct = findTrap("MS011");
+  assert.ok(direct, "MS011 should be findable");
+  assert.equal(direct.id, "MS011");
+  assert.equal(direct.severity, "error");
+  assert.ok(direct.title.length > 0);
+  assert.ok(direct.fix.length > 0);
+  assert.ok(direct.docsUrl.startsWith("https://github.com/"));
+
+  const viaClass = findTrapByErrorClass("PayloadTooLargeError");
+  assert.deepEqual(viaClass, direct, "lookup paths should converge");
+
+  assert.equal(findTrap("MS999"), undefined);
+  assert.equal(findTrapByErrorClass("UnboundError"), undefined);
+});
+
+test("TRAP_BINDINGS covers every bound error class", () => {
+  // Every id surfaced through TRAP_ID_BY_ERROR_CLASS must resolve to a full
+  // binding — otherwise an error's docsUrl getter would silently return
+  // undefined even though the trapId is known.
+  for (const trapId of new Set(Object.values(TRAP_ID_BY_ERROR_CLASS))) {
+    assert.ok(
+      TRAP_BINDINGS[trapId],
+      `TRAP_BINDINGS missing entry for ${trapId}`,
+    );
+  }
+});
+
+test("docsUrlForErrorClass equals findTrapByErrorClass(name).docsUrl", () => {
+  for (const name of Object.keys(TRAP_ID_BY_ERROR_CLASS)) {
+    assert.equal(docsUrlForErrorClass(name), findTrapByErrorClass(name).docsUrl);
+  }
+  assert.equal(docsUrlForErrorClass("UnboundError"), undefined);
 });
 
 function klassToReason(Klass) {

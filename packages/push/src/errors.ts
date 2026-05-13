@@ -4,7 +4,7 @@
 // reasons should add an entry there and a class below in alphabetical order.
 
 import { APNS_REASON_GUIDE } from "./reasons.ts";
-import { trapIdForErrorClass } from "./trap-bindings.ts";
+import { docsUrlForErrorClass, trapIdForErrorClass } from "./trap-bindings.ts";
 
 export interface ApnsErrorInit {
   reason: string;
@@ -28,6 +28,9 @@ export interface ApnsErrorInit {
  *   undefined when the class has no catalog binding. Resolved from the live
  *   subclass `name` via the generated trap-bindings table; subclasses never
  *   hand-stamp it.
+ * - `docsUrl`: URL pointing at the rendered catalog entry for this error's
+ *   trap, when bound. Operators paste this into a browser to read the fix.
+ *   Same lazy lookup as `trapId`; returns undefined for unbound classes.
  */
 export class ApnsError extends Error {
   readonly reason: string;
@@ -53,6 +56,10 @@ export class ApnsError extends Error {
   // access. trapIdForErrorClass returns undefined for unbound classes.
   get trapId(): string | undefined {
     return trapIdForErrorClass(this.name);
+  }
+
+  get docsUrl(): string | undefined {
+    return docsUrlForErrorClass(this.name);
   }
 }
 
@@ -302,6 +309,10 @@ export class MissingApnsConfigError extends Error {
 
   get trapId(): string | undefined {
     return trapIdForErrorClass(this.name);
+  }
+
+  get docsUrl(): string | undefined {
+    return docsUrlForErrorClass(this.name);
   }
 }
 
