@@ -1,5 +1,28 @@
 # @mobile-surfaces/push
 
+## 3.1.0
+
+### Minor Changes
+
+- SDK ergonomics pass focused on backend observability and operator dry-runs.
+
+  - Every `ApnsError` now exposes `docsUrl`, a stable GitHub anchor URL pointing at the rendered trap catalog entry for the failure. The URL travels alongside `trapId` so log aggregators can stamp both without juggling two maps. New helpers `findTrap(trapId)`, `findTrapByErrorClass(className)`, and `docsUrlForErrorClass(className)` are exported, backed by a generated `TRAP_BINDINGS` table that ships only the catalog subset reachable through a typed error class. The generator anchors URLs against the same slug algorithm `scripts/build-agents-md.mjs` uses, so the URLs line up with the CLAUDE.md table of contents.
+
+  - Send methods now return `PushResult` with `attempts`, `latencyMs`, `retried[]`, and `trapHits[]` populated. `attempts` is 1-indexed (1 on first-try success), `retried[]` records each retried attempt's reason, status, backoff, and trap id, and `trapHits[]` is the deduplicated set of trap ids touched along the way. `SendResponse` stays exported as a type alias so existing callers compile unchanged.
+
+  - New `client.describeSend(input)` returns a side-effect-free preview of the request the matching `send()` would issue: method, path, push-type, topic, priority, expiration, payload bytes, and the MS011 ceiling status. No JWT is minted; no socket is opened. The discriminated input mirrors the public send signatures (`alert`, `update`, `start`, `end`, `broadcast`) so backends can preflight a send before paying for the round-trip.
+
+  - Priority-aware retry stretch: priority 10 sends now clamp `maxRetries` to at most 2 and double both `baseDelayMs` and `maxDelayMs` to honor MS015's iOS budget rules. The base policy is unchanged for priority 5 sends (Live Activity content updates). The transformation is exported as `effectiveRetryPolicy(base, priority)` so callers can audit what the SDK will actually do.
+
+  - The `retryPolicy` option renamed to `_unsafeRetryOverride`. Changing the retry policy is usually wrong — the defaults are tuned against MS015 and the priority-aware stretch — so the new name surfaces that risk at the call site. The legacy `retryPolicy` field still works in 3.x but logs a one-time deprecation per process and will be removed in 4.0.
+
+  - New env-level kill-switch `MOBILE_SURFACES_PUSH_DISABLE_RETRY=1` (or any non-empty value) forces `maxRetries: 0` across every client in the process. Operators reach for this during an APNs incident where retries are amplifying load; it wins over any in-code override.
+
+### Patch Changes
+
+- Updated dependencies
+  - @mobile-surfaces/surface-contracts@3.1.0
+
 ## 3.0.0
 
 ### Major Changes

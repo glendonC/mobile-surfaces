@@ -1,5 +1,11 @@
 # @mobile-surfaces/design-tokens
 
+## 3.1.0
+
+### Minor Changes
+
+- Lockstep release with the rest of the Mobile Surfaces linked group. No source changes in this package; the bump keeps `@mobile-surfaces/design-tokens` aligned with `@mobile-surfaces/surface-contracts@3.1.0` so consumers pin a single matching version across the family.
+
 ## 3.0.0
 
 ### Major Changes

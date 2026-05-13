@@ -1,5 +1,17 @@
 # @mobile-surfaces/surface-contracts
 
+## 3.1.0
+
+### Minor Changes
+
+- Publish output Zod schemas for the five non-alert projection helpers and pin every committed fixture against them.
+
+  - New exports: `liveSurfaceWidgetTimelineEntry`, `liveSurfaceControlValueProvider`, `liveSurfaceLockAccessoryEntry`, `liveSurfaceStandbyEntry`, and `liveSurfaceNotificationContentPayload`, along with their inferred output types (`LiveSurfaceWidgetTimelineEntryOutput`, etc.). The activity content state schema already existed; the rest of the projection surface now matches it.
+
+  - A round-trip drift test in `scripts/surface-contracts.test.mjs` projects every committed fixture through its helper, parses the result via the matching schema, and asserts structural equality. Helpers and schemas can no longer drift in silence — a future helper edit that widens the returned shape (or a fixture edit that pushes the helper down an untyped branch) fails CI rather than failing in production.
+
+  - Negative drift cases are pinned too: dropping a required field, or attaching an excess key, both fail their output schema (`.strict()` on every output object).
+
 ## 3.0.0
 
 ### Major Changes

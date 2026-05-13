@@ -1,5 +1,11 @@
 # @mobile-surfaces/validators
 
+## 3.1.0
+
+### Minor Changes
+
+- Lockstep release with the rest of the Mobile Surfaces linked group. No source changes in this package; the bump keeps `@mobile-surfaces/validators` aligned with the rest of the family at `3.1.0`.
+
 ## 3.0.0
 
 ### Major Changes
