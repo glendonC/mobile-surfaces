@@ -18,6 +18,49 @@ function expectError(argv, predicate) {
   assert.ok(threw, `expected parseAndValidateArgs to throw for ${argv.join(" ")}`);
 }
 
+test("--print is forwarded into the parsed config for device-send mode", () => {
+  const config = parseAndValidateArgs([
+    "--device-token=" + "a".repeat(64),
+    "--type=alert",
+    "--print",
+  ]);
+  assert.equal(config.print, true);
+  assert.equal(config.describe, false);
+  assert.equal(config.json, false);
+});
+
+test("--describe and --json are forwarded for broadcast mode", () => {
+  const config = parseAndValidateArgs([
+    "--channel-id=AAAA==",
+    "--type=liveactivity",
+    "--event=update",
+    "--describe",
+    "--json",
+  ]);
+  assert.equal(config.mode, "broadcast");
+  assert.equal(config.describe, true);
+  assert.equal(config.json, true);
+});
+
+test("--print is forwarded for channel management", () => {
+  const config = parseAndValidateArgs([
+    "--channel-action=list",
+    "--print",
+  ]);
+  assert.equal(config.mode, "channel-management");
+  assert.equal(config.print, true);
+});
+
+test("--print/--describe default to false when omitted", () => {
+  const config = parseAndValidateArgs([
+    "--device-token=" + "b".repeat(64),
+    "--type=alert",
+  ]);
+  assert.equal(config.print, false);
+  assert.equal(config.describe, false);
+  assert.equal(config.json, false);
+});
+
 test("rejects --push-to-start-token containing non-hex characters", () => {
   expectError(
     [

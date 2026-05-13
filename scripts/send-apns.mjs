@@ -64,6 +64,15 @@
 // `--priority` overrides apns-priority. Defaults: 5 for liveactivity (Apple
 // rate-limits priority 10 aggressively), 10 for alert. Use 10 only when the
 // update must be visible immediately.
+//
+// Dry-run flags (no JWT, no socket, no APNS_KEY_* required — only
+// APNS_BUNDLE_ID is read so the topic/path can be shaped):
+//   --print     Emit just the payload bytes the script would send.
+//   --describe  Emit the full request preview (path, headers, payload size,
+//               MS011 ceiling status).
+//   --json      Emit the response (or the dry-run preview) as a single JSON
+//               record on stdout instead of the human-readable footer. Pairs
+//               with --print / --describe for CI consumption.
 
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -249,6 +258,9 @@ const PARSE_OPTIONS = {
   title: { type: "string", default: "Mobile Surfaces" },
   body: { type: "string", default: "Push path is wired." },
   priority: { type: "string" },
+  print: { type: "boolean", default: false },
+  describe: { type: "boolean", default: false },
+  json: { type: "boolean", default: false },
 };
 
 // Hex-only validation for tokens that travel in URL paths (device,
@@ -356,6 +368,9 @@ function validateChannelManagement(values, modeFlags) {
     env: values.env,
     channelId: values["channel-id"],
     storagePolicy: values["storage-policy"],
+    print: values.print,
+    describe: values.describe,
+    json: values.json,
   };
 }
 
@@ -395,6 +410,9 @@ function validateBroadcast(values, modeFlags) {
     stateFile: values["state-file"],
     staleDate: parseUnixSeconds(values["stale-date"], "--stale-date"),
     priority: values.priority,
+    print: values.print,
+    describe: values.describe,
+    json: values.json,
   };
 }
 
@@ -446,6 +464,9 @@ function validatePushToStart(values, modeFlags) {
     priority: values.priority,
     title: values.title,
     body: values.body,
+    print: values.print,
+    describe: values.describe,
+    json: values.json,
   };
 }
 
@@ -485,6 +506,9 @@ function validateDeviceSend(values) {
     priority: values.priority,
     title: values.title,
     body: values.body,
+    print: values.print,
+    describe: values.describe,
+    json: values.json,
   };
 }
 
@@ -632,6 +656,32 @@ function buildDeviceHeaders(config, jwt, bundleId) {
   return headers;
 }
 
+// Build the payload bytes for any send-mode config without minting a JWT or
+// opening a socket. Used by --print and --describe so CI pipelines (and
+// `pnpm push:describe` workflows) can preflight payloads without APNs creds.
+function buildPayloadOnly(config, bundleId) {
+  if (config.mode === "broadcast") {
+    return JSON.stringify(buildBroadcastPayload(config));
+  }
+  // device-send: alert or liveactivity (with optional start-attributes).
+  if (config.type === "liveactivity") {
+    return JSON.stringify(
+      buildLiveActivityPayload(config, { includeAttributes: true }),
+    );
+  }
+  return JSON.stringify(buildAlertPayload(config));
+}
+
+// Headers the script would write if a JWT had been minted. Authorization is
+// stubbed as "<not-minted>" so callers don't confuse a describe output with
+// a real token leak. Mirrors buildDeviceHeaders / buildBroadcastHeaders.
+function buildHeadersForDescribe(config, bundleId) {
+  if (config.mode === "broadcast") {
+    return buildBroadcastHeaders(config, "<not-minted>", bundleId);
+  }
+  return buildDeviceHeaders(config, "<not-minted>", bundleId);
+}
+
 function buildBroadcastHeaders(config, jwt, bundleId) {
   // Apple "Sending broadcast push notification requests to APNs" doc:
   // path is /4/broadcasts/apps/<bundle ID>, no apns-topic, channel id in
@@ -726,6 +776,24 @@ async function runDeviceSend(config) {
     headers,
     body: payload,
   });
+  if (config.json) {
+    emitJsonResponse({
+      mode: config.mode,
+      type: config.type,
+      event: config.event,
+      env: config.env,
+      method: "POST",
+      path: headers[":path"],
+      topic: headers["apns-topic"] ?? null,
+      pushType: headers["apns-push-type"],
+      priority: headers["apns-priority"],
+      payloadBytes: Buffer.byteLength(payload, "utf8"),
+      status,
+      apnsId: responseHeaders["apns-id"] ?? null,
+      body: bodyText || null,
+    });
+    return status >= 200 && status < 300 ? 0 : 1;
+  }
   console.log(`HTTP ${status}`);
   console.log(`Topic: ${headers["apns-topic"]}`);
   console.log(`Push-type: ${headers["apns-push-type"]}`);
@@ -747,6 +815,22 @@ async function runBroadcastSend(config) {
     headers,
     body: payload,
   });
+  if (config.json) {
+    emitJsonResponse({
+      mode: config.mode,
+      env: config.env,
+      method: "POST",
+      path: headers[":path"],
+      channelId: headers["apns-channel-id"],
+      pushType: headers["apns-push-type"],
+      priority: headers["apns-priority"],
+      payloadBytes: Buffer.byteLength(payload, "utf8"),
+      status,
+      apnsId: responseHeaders["apns-id"] ?? null,
+      body: bodyText || null,
+    });
+    return status >= 200 && status < 300 ? 0 : 1;
+  }
   console.log(`HTTP ${status}`);
   console.log(`Path: ${headers[":path"]}`);
   console.log(`Channel-id: ${headers["apns-channel-id"]}`);
@@ -756,6 +840,27 @@ async function runBroadcastSend(config) {
   printApnsReason(bodyText);
   printSkewWarning(responseHeaders);
   return status >= 200 && status < 300 ? 0 : 1;
+}
+
+// Single JSON record per --json invocation. APNs reason / fix guidance is
+// attached when the response body parses as JSON; otherwise the body is
+// returned verbatim so log aggregators can decide how to handle it.
+function emitJsonResponse(record) {
+  let reason = null;
+  let fix = null;
+  if (record.body) {
+    try {
+      const parsed = JSON.parse(record.body);
+      if (parsed && typeof parsed.reason === "string") {
+        reason = parsed.reason;
+        const guide = APNS_REASON_GUIDE[reason];
+        if (guide) fix = guide.fix;
+      }
+    } catch {
+      // Body not JSON — fall through with body intact.
+    }
+  }
+  console.log(JSON.stringify({ ...record, reason, fix }, null, 2));
 }
 
 async function runChannelManagement(config) {
@@ -803,6 +908,27 @@ async function runChannelManagement(config) {
     body,
   });
 
+  const expectedSuccess = config.action === "create" ? 201 : config.action === "list" ? 200 : 204;
+
+  if (config.json) {
+    emitJsonResponse({
+      mode: "channel-management",
+      action: config.action,
+      env: config.env,
+      method: headers[":method"],
+      path: headers[":path"],
+      origin,
+      channelId:
+        config.action === "create"
+          ? responseHeaders["apns-channel-id"] ?? null
+          : config.channelId ?? null,
+      status,
+      apnsId: responseHeaders["apns-id"] ?? null,
+      body: bodyText || null,
+    });
+    return status === expectedSuccess ? 0 : 1;
+  }
+
   // Compact print path — channel management responses use status conventions
   // that the standard send footer would obscure (201 create, 200 list, 204
   // delete; channel id arrives in a header on create, body on list).
@@ -827,9 +953,6 @@ async function runChannelManagement(config) {
   printApnsReason(bodyText);
   printSkewWarning(responseHeaders);
 
-  // Treat the documented success codes as exit 0 even if outside the generic
-  // 2xx band (they are 2xx, but be explicit).
-  const expectedSuccess = config.action === "create" ? 201 : config.action === "list" ? 200 : 204;
   return status === expectedSuccess ? 0 : 1;
 }
 
@@ -845,9 +968,13 @@ export async function main(argv = process.argv.slice(2)) {
   // Env check runs before arg parsing to preserve the original script's
   // ordering — older docs and runbooks tell users to expect "Missing env:
   // APNS_KEY_PATH" as the first failure on a fresh checkout, before any
-  // CLI-flag confusion.
+  // CLI-flag confusion. Dry-run flags (--print, --describe) skip the env
+  // check: CI pipelines often run these without APNs creds in the
+  // environment, and the script touches neither the auth key nor the
+  // network.
+  let config;
   try {
-    ensureEnv();
+    config = parseAndValidateArgs(argv);
   } catch (err) {
     if (err instanceof ConfigError) {
       console.error(err.message);
@@ -856,9 +983,20 @@ export async function main(argv = process.argv.slice(2)) {
     throw err;
   }
 
-  let config;
+  if (config.print || config.describe) {
+    try {
+      return runDryRun(config);
+    } catch (err) {
+      if (err instanceof ConfigError) {
+        console.error(err.message);
+        return err.exitCode ?? 2;
+      }
+      throw err;
+    }
+  }
+
   try {
-    config = parseAndValidateArgs(argv);
+    ensureEnv();
   } catch (err) {
     if (err instanceof ConfigError) {
       console.error(err.message);
@@ -878,6 +1016,119 @@ export async function main(argv = process.argv.slice(2)) {
     }
     throw err;
   }
+}
+
+// Dry-run handler for --print and --describe. APNS_BUNDLE_ID is the only env
+// var the dry-run touches (it shapes the topic / channel-path); the script
+// throws ConfigError when it's missing so CI failures are actionable rather
+// than NaN-quiet. JWT is never minted.
+function runDryRun(config) {
+  // Channel-management dry-runs don't have a snapshot payload; describe just
+  // the request shape.
+  if (config.mode === "channel-management") {
+    return runDryRunChannelManagement(config);
+  }
+  const bundleId = process.env.APNS_BUNDLE_ID;
+  if (!bundleId) {
+    throw new ConfigError(
+      "Missing env: APNS_BUNDLE_ID (needed even for --print/--describe to shape the topic header).",
+    );
+  }
+  const payloadJson = buildPayloadOnly(config, bundleId);
+  if (config.print) {
+    if (config.json) {
+      console.log(JSON.stringify({ payload: JSON.parse(payloadJson) }, null, 2));
+    } else {
+      console.log(payloadJson);
+    }
+    return 0;
+  }
+  // --describe: full request preview.
+  const headers = buildHeadersForDescribe(config, bundleId);
+  const payloadBytes = Buffer.byteLength(payloadJson, "utf8");
+  const limitBytes = config.mode === "broadcast" ? 5120 : 4096;
+  const description = {
+    mode: config.mode,
+    env: config.env,
+    method: "POST",
+    path: headers[":path"],
+    pushType: headers["apns-push-type"],
+    topic: headers["apns-topic"] ?? null,
+    channelId: headers["apns-channel-id"] ?? null,
+    priority: headers["apns-priority"],
+    expiration: headers["apns-expiration"] ?? null,
+    payloadBytes,
+    payloadLimitBytes: limitBytes,
+    withinLimit: payloadBytes <= limitBytes,
+    payload: JSON.parse(payloadJson),
+  };
+  if (config.json) {
+    console.log(JSON.stringify(description, null, 2));
+  } else {
+    console.log(`Method: ${description.method}`);
+    console.log(`Path:   ${description.path}`);
+    console.log(`Push-type: ${description.pushType}`);
+    if (description.topic) console.log(`Topic: ${description.topic}`);
+    if (description.channelId) console.log(`Channel-id: ${description.channelId}`);
+    console.log(`Priority: ${description.priority}`);
+    if (description.expiration) console.log(`Expiration: ${description.expiration}`);
+    console.log(
+      `Payload (${description.payloadBytes}/${description.payloadLimitBytes} bytes${description.withinLimit ? "" : " — OVER LIMIT"}): ${payloadJson}`,
+    );
+  }
+  return description.withinLimit ? 0 : 1;
+}
+
+function runDryRunChannelManagement(config) {
+  const bundleId = process.env.APNS_BUNDLE_ID;
+  if (!bundleId) {
+    throw new ConfigError(
+      "Missing env: APNS_BUNDLE_ID (needed for --print/--describe to shape the management path).",
+    );
+  }
+  const { host, port } = manageHost(config.env);
+  const origin = `https://${host}:${port}`;
+  let path;
+  let method;
+  let body;
+  if (config.action === "create") {
+    method = "POST";
+    path = `/1/apps/${bundleId}/channels`;
+    body = {
+      "message-storage-policy": storagePolicyToWire(config.storagePolicy),
+      "push-type": "LiveActivity",
+    };
+  } else if (config.action === "list") {
+    method = "GET";
+    path = `/1/apps/${bundleId}/all-channels`;
+  } else {
+    method = "DELETE";
+    path = `/1/apps/${bundleId}/channels`;
+  }
+  const description = {
+    mode: "channel-management",
+    action: config.action,
+    env: config.env,
+    method,
+    origin,
+    path,
+    channelId: config.channelId ?? null,
+    body: body ?? null,
+  };
+  if (config.print) {
+    console.log(body !== undefined ? JSON.stringify(body, null, config.json ? 2 : 0) : "");
+    return 0;
+  }
+  if (config.json) {
+    console.log(JSON.stringify(description, null, 2));
+  } else {
+    console.log(`Action: channel-${config.action}`);
+    console.log(`Endpoint: ${origin}${path}`);
+    console.log(`Method: ${method}`);
+    if (description.channelId) console.log(`Channel-id: ${description.channelId}`);
+    if (body) console.log(`Body: ${JSON.stringify(body)}`);
+  }
+  return 0;
 }
 
 // Only run when executed directly (`node scripts/send-apns.mjs …`). When
