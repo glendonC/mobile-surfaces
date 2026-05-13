@@ -13,7 +13,7 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 
 ## Index
 
-28 rules total: 23 error, 4 warning, 1 info.
+32 rules total: 27 error, 4 warning, 1 info.
 
 | ID | Severity | Detection | Title |
 | --- | --- | --- | --- |
@@ -40,6 +40,10 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 | [MS028](#ms028-apns-auth-key-environment-variables-must-be-set-before-sending) | error | runtime | APNs auth key environment variables must be set before sending |
 | [MS029](#ms029-generated-apps-mobile-ios-is-gitignored) | error | config | Generated apps/mobile/ios/ is gitignored |
 | [MS030](#ms030-apns-provider-token-must-be-valid-and-current) | error | runtime | APNs provider token must be valid and current |
+| [MS031](#ms031-channel-management-failures-missing-malformed-or-unregistered-channel-id) | error | runtime | Channel management failures (missing, malformed, or unregistered channel id) |
+| [MS032](#ms032-activity-timestamp-fields-must-be-valid-unix-seconds-integers) | error | runtime | Activity timestamp fields must be valid unix-seconds integers |
+| [MS034](#ms034-broadcast-capability-must-be-enabled-on-the-apns-auth-key) | error | runtime | Broadcast capability must be enabled on the APNs auth key |
+| [MS035](#ms035-apns-topic-header-missing-or-bundleid-misconfigured) | error | runtime | apns-topic header missing or bundleId misconfigured |
 | [MS010](#ms010-toolchain-preflight-node-24-pnpm-xcode-26) | warning | config | Toolchain preflight (Node 24, pnpm, Xcode 26+) |
 | [MS015](#ms015-push-priority-5-vs-10-budget-rules) | warning | runtime | Push priority 5 vs 10 budget rules |
 | [MS021](#ms021-discard-per-activity-tokens-when-the-activity-ends) | warning | runtime | Discard per-activity tokens when the activity ends |
@@ -49,13 +53,15 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 ## Rules by tag
 
 - `app-group`: MS013, MS025
+- `channels`: MS031, MS034
 - `cng`: MS017, MS029
-- `config`: MS012, MS013, MS017, MS018, MS025, MS027, MS029
+- `config`: MS012, MS013, MS017, MS018, MS025, MS027, MS029, MS034, MS035
 - `contract`: MS001, MS003, MS004, MS006, MS007, MS008, MS009, MS024
 - `control`: MS013, MS026
 - `ios-version`: MS012, MS027
-- `live-activity`: MS001, MS002, MS003, MS004, MS011, MS015, MS016, MS019, MS021
-- `push`: MS006, MS011, MS014, MS015, MS018, MS024, MS028, MS030
+- `ios18`: MS031, MS034
+- `live-activity`: MS001, MS002, MS003, MS004, MS011, MS015, MS016, MS019, MS021, MS032
+- `push`: MS006, MS011, MS014, MS015, MS018, MS024, MS028, MS030, MS031, MS032, MS034, MS035
 - `swift`: MS002, MS003, MS004
 - `tokens`: MS014, MS016, MS019, MS020, MS021, MS023, MS028, MS030
 - `toolchain`: MS010, MS026
@@ -162,7 +168,7 @@ Per-activity Live Activity pushes are bounded at 4 KB; iOS 18 broadcast pushes a
 
 **Symptom.** APNs returns 413 PayloadTooLarge, or accepts the payload but iOS silently drops the update. Long localized strings or accumulated morePartsCount details are common offenders.
 
-**Fix.** Trim the snapshot. Shorten secondaryText, lower morePartsCount, or split a state into two smaller pushes. Validate by sending the projection through toLiveActivityContentState and measuring.
+**Fix.** Trim the payload. Per-activity payloads are bounded at 4 KB; broadcast payloads at 5 KB. Shorten secondaryText, lower morePartsCount, or split a state into two smaller pushes. Validate by sending the projection through toLiveActivityContentState and measuring.
 
 **See:** `docs/push.md#error-responses`
 
@@ -172,7 +178,7 @@ Per-activity Live Activity pushes are bounded at 4 KB; iOS 18 broadcast pushes a
 
 **severity:** error  •  **detection:** config (declarative file)  •  **tags:** ios-version, config  •  **ios min:** 17.2
 
-Mobile Surfaces commits to push-to-start tokens (Activity<…>.pushToStartTokenUpdates) without if #available ceremony; deployment target below 17.2 breaks the live-activity adapter at compile time.
+Mobile Surfaces commits to push-to-start tokens (Activity<...>.pushToStartTokenUpdates) without if #available ceremony; deployment target below 17.2 breaks the live-activity adapter at compile time.
 
 **Symptom.** Swift compile errors on pushToStartTokenUpdates references, or a build that succeeds on a lower target only because the symbol was guarded, and then push-to-start silently never works on iOS 16 devices.
 
@@ -208,11 +214,11 @@ Tokens minted by a development build cannot authenticate against the production 
 
 **severity:** error  •  **detection:** static (script-checkable)  •  **tags:** tokens, live-activity  •  **ios min:** 17.2
 
-iOS only delivers push-to-start tokens through Activity<…>.pushToStartTokenUpdates as an async sequence; getPushToStartToken() always resolves null.
+iOS only delivers push-to-start tokens through Activity<...>.pushToStartTokenUpdates as an async sequence; getPushToStartToken() always resolves null.
 
 **Symptom.** Backend never receives a push-to-start token, or only receives one after a manual app re-launch. Remote Live Activity start never fires for users who have not opened the app since install.
 
-**Fix.** Subscribe via liveActivityAdapter.addListener('onPushToStartToken', …) inside a mount-time effect. Re-store the token on every emission, since Apple may rotate at cold launch or system rotation.
+**Fix.** Subscribe via liveActivityAdapter.addListener('onPushToStartToken', ...) inside a mount-time effect. Re-store the token on every emission, since Apple may rotate at cold launch or system rotation.
 
 **See:** `docs/push.md#token-taxonomy`
 
@@ -333,6 +339,54 @@ APNs returns 403 with reason Forbidden, InvalidProviderToken, or ExpiredProvider
 **Symptom.** All sends fail with 403. ForbiddenError means the auth key was revoked in the Apple Developer portal. InvalidProviderTokenError means the JWT is malformed or signed with the wrong key id / team id. ExpiredProviderTokenError means the JWT is older than 60 minutes (typically clock skew, since the SDK refreshes at 50 minutes).
 
 **Fix.** ForbiddenError: mint a new auth key in the Apple Developer portal and update APNS_KEY_ID / APNS_KEY_PATH. InvalidProviderTokenError: verify APNS_KEY_ID matches the key file and APNS_TEAM_ID matches the developer account. ExpiredProviderTokenError: check system clock alignment against NTP; if the SDK is long-lived, confirm createPushClient is not being held past process restarts without re-minting.
+
+**See:** `docs/push.md#error-responses`
+
+### MS031: Channel management failures (missing, malformed, or unregistered channel id)
+
+**severity:** error  •  **detection:** runtime (only at send/receive)  •  **tags:** push, channels, ios18
+
+Broadcast and channel-admin calls reject when the channel id is missing from the request, malformed on the wire, or refers to a channel that was never created in the target environment.
+
+**Symptom.** Broadcast or channel management fails with 400 (missing or bad channel id) or 410 (not registered). Common root causes: the channel was created against the opposite APNs environment, or the id was URL-decoded, truncated, or otherwise mutated before being sent back.
+
+**Fix.** MissingChannelId: pass channelId to broadcast() or deleteChannel(). BadChannelId: use the id returned by createChannel() verbatim with no URL-decoding or truncation. ChannelNotRegistered: channels are environment-scoped, so re-create the channel in the target environment or call listChannels() to confirm the id exists there.
+
+**See:** `docs/push.md#error-responses`
+
+### MS032: Activity timestamp fields must be valid unix-seconds integers
+
+**severity:** error  •  **detection:** runtime (only at send/receive)  •  **tags:** push, live-activity
+
+APNs rejects Live Activity pushes whose date fields (staleDateSeconds, dismissalDateSeconds, apns-expiration) are not positive unix-seconds integers, and rejects broadcast sends to a no-storage channel that carry a nonzero apns-expiration.
+
+**Symptom.** APNs returns 400 BadDate or 400 BadExpirationDate. The push payload looked valid locally but a date field was a millisecond timestamp, a negative number, or a non-integer; or apns-expiration was set on a no-storage broadcast channel.
+
+**Fix.** Confirm every date field is a positive unix-seconds integer (not milliseconds, not Date.now()). For broadcast on a no-storage channel, apns-expiration must be 0; the SDK's broadcast() already enforces this.
+
+**See:** `docs/push.md#error-responses`
+
+### MS034: Broadcast capability must be enabled on the APNs auth key
+
+**severity:** error  •  **detection:** runtime (only at send/receive)  •  **tags:** push, channels, ios18, config
+
+iOS 18 broadcast pushes and channel-admin calls require the 'Broadcast to Live Activity' capability on the APNs auth key. The capability is per-key, not per-app, and is invisible until the first send fails.
+
+**Symptom.** createChannel() or broadcast() fails with 403 FeatureNotEnabled. The auth key is otherwise valid and other push types succeed; only broadcast-related calls reject.
+
+**Fix.** Enable broadcast in the Apple Developer portal under Certificates, Identifiers & Profiles > Keys > select the key > edit > tick 'Broadcast to Live Activity'. Save and retry; no client change is needed.
+
+**See:** `docs/push.md#error-responses`
+
+### MS035: apns-topic header missing or bundleId misconfigured
+
+**severity:** error  •  **detection:** runtime (only at send/receive)  •  **tags:** push, config
+
+APNs requires an apns-topic header on every request; the SDK derives it from APNS_BUNDLE_ID and a missing or empty bundle id produces a malformed topic at send time.
+
+**Symptom.** APNs returns 400 MissingTopic. The bundle id was unset or an empty string, so the SDK emitted only the .push-type.liveactivity suffix (or nothing) as the topic header.
+
+**Fix.** Confirm APNS_BUNDLE_ID is set to the bare bundle identifier (e.g. com.example.app). Do not include the .push-type.liveactivity suffix; the SDK appends it internally. See MS018 for the inverse failure (suffix included by mistake).
 
 **See:** `docs/push.md#error-responses`
 

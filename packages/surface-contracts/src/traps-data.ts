@@ -175,7 +175,7 @@ export const traps: readonly TrapEntry[] = [
     ],
     "summary": "Per-activity Live Activity pushes are bounded at 4 KB; iOS 18 broadcast pushes at 5 KB.",
     "symptom": "APNs returns 413 PayloadTooLarge, or accepts the payload but iOS silently drops the update. Long localized strings or accumulated morePartsCount details are common offenders.",
-    "fix": "Trim the snapshot. Shorten secondaryText, lower morePartsCount, or split a state into two smaller pushes. Validate by sending the projection through toLiveActivityContentState and measuring.",
+    "fix": "Trim the payload. Per-activity payloads are bounded at 4 KB; broadcast payloads at 5 KB. Shorten secondaryText, lower morePartsCount, or split a state into two smaller pushes. Validate by sending the projection through toLiveActivityContentState and measuring.",
     "iosMin": "16.2",
     "appleDocs": [
       "https://developer.apple.com/documentation/usernotifications/sending-notification-requests-to-apns"
@@ -197,7 +197,7 @@ export const traps: readonly TrapEntry[] = [
       "ios-version",
       "config"
     ],
-    "summary": "Mobile Surfaces commits to push-to-start tokens (Activity<…>.pushToStartTokenUpdates) without if #available ceremony; deployment target below 17.2 breaks the live-activity adapter at compile time.",
+    "summary": "Mobile Surfaces commits to push-to-start tokens (Activity<...>.pushToStartTokenUpdates) without if #available ceremony; deployment target below 17.2 breaks the live-activity adapter at compile time.",
     "symptom": "Swift compile errors on pushToStartTokenUpdates references, or a build that succeeds on a lower target only because the symbol was guarded, and then push-to-start silently never works on iOS 16 devices.",
     "fix": "Set ios.deploymentTarget to '17.2' in apps/mobile/app.json (or via expo-build-properties) and rerun prebuild.",
     "iosMin": "17.2",
@@ -277,9 +277,9 @@ export const traps: readonly TrapEntry[] = [
       "tokens",
       "live-activity"
     ],
-    "summary": "iOS only delivers push-to-start tokens through Activity<…>.pushToStartTokenUpdates as an async sequence; getPushToStartToken() always resolves null.",
+    "summary": "iOS only delivers push-to-start tokens through Activity<...>.pushToStartTokenUpdates as an async sequence; getPushToStartToken() always resolves null.",
     "symptom": "Backend never receives a push-to-start token, or only receives one after a manual app re-launch. Remote Live Activity start never fires for users who have not opened the app since install.",
-    "fix": "Subscribe via liveActivityAdapter.addListener('onPushToStartToken', …) inside a mount-time effect. Re-store the token on every emission, since Apple may rotate at cold launch or system rotation.",
+    "fix": "Subscribe via liveActivityAdapter.addListener('onPushToStartToken', ...) inside a mount-time effect. Re-store the token on every emission, since Apple may rotate at cold launch or system rotation.",
     "iosMin": "17.2",
     "docs": [
       "docs/push.md#token-taxonomy"
@@ -520,6 +520,92 @@ export const traps: readonly TrapEntry[] = [
       "ExpiredProviderTokenError",
       "ForbiddenError",
       "InvalidProviderTokenError"
+    ]
+  },
+  {
+    "id": "MS031",
+    "title": "Channel management failures (missing, malformed, or unregistered channel id)",
+    "severity": "error",
+    "detection": "runtime",
+    "tags": [
+      "push",
+      "channels",
+      "ios18"
+    ],
+    "summary": "Broadcast and channel-admin calls reject when the channel id is missing from the request, malformed on the wire, or refers to a channel that was never created in the target environment.",
+    "symptom": "Broadcast or channel management fails with 400 (missing or bad channel id) or 410 (not registered). Common root causes: the channel was created against the opposite APNs environment, or the id was URL-decoded, truncated, or otherwise mutated before being sent back.",
+    "fix": "MissingChannelId: pass channelId to broadcast() or deleteChannel(). BadChannelId: use the id returned by createChannel() verbatim with no URL-decoding or truncation. ChannelNotRegistered: channels are environment-scoped, so re-create the channel in the target environment or call listChannels() to confirm the id exists there.",
+    "docs": [
+      "docs/push.md#error-responses"
+    ],
+    "since": "3.1.0",
+    "errorClasses": [
+      "BadChannelIdError",
+      "ChannelNotRegisteredError",
+      "MissingChannelIdError"
+    ]
+  },
+  {
+    "id": "MS032",
+    "title": "Activity timestamp fields must be valid unix-seconds integers",
+    "severity": "error",
+    "detection": "runtime",
+    "tags": [
+      "push",
+      "live-activity"
+    ],
+    "summary": "APNs rejects Live Activity pushes whose date fields (staleDateSeconds, dismissalDateSeconds, apns-expiration) are not positive unix-seconds integers, and rejects broadcast sends to a no-storage channel that carry a nonzero apns-expiration.",
+    "symptom": "APNs returns 400 BadDate or 400 BadExpirationDate. The push payload looked valid locally but a date field was a millisecond timestamp, a negative number, or a non-integer; or apns-expiration was set on a no-storage broadcast channel.",
+    "fix": "Confirm every date field is a positive unix-seconds integer (not milliseconds, not Date.now()). For broadcast on a no-storage channel, apns-expiration must be 0; the SDK's broadcast() already enforces this.",
+    "docs": [
+      "docs/push.md#error-responses"
+    ],
+    "since": "3.1.0",
+    "errorClasses": [
+      "BadDateError",
+      "BadExpirationDateError"
+    ]
+  },
+  {
+    "id": "MS034",
+    "title": "Broadcast capability must be enabled on the APNs auth key",
+    "severity": "error",
+    "detection": "runtime",
+    "tags": [
+      "push",
+      "channels",
+      "ios18",
+      "config"
+    ],
+    "summary": "iOS 18 broadcast pushes and channel-admin calls require the 'Broadcast to Live Activity' capability on the APNs auth key. The capability is per-key, not per-app, and is invisible until the first send fails.",
+    "symptom": "createChannel() or broadcast() fails with 403 FeatureNotEnabled. The auth key is otherwise valid and other push types succeed; only broadcast-related calls reject.",
+    "fix": "Enable broadcast in the Apple Developer portal under Certificates, Identifiers & Profiles > Keys > select the key > edit > tick 'Broadcast to Live Activity'. Save and retry; no client change is needed.",
+    "docs": [
+      "docs/push.md#error-responses"
+    ],
+    "since": "3.1.0",
+    "errorClasses": [
+      "FeatureNotEnabledError"
+    ]
+  },
+  {
+    "id": "MS035",
+    "title": "apns-topic header missing or bundleId misconfigured",
+    "severity": "error",
+    "detection": "runtime",
+    "tags": [
+      "push",
+      "config"
+    ],
+    "summary": "APNs requires an apns-topic header on every request; the SDK derives it from APNS_BUNDLE_ID and a missing or empty bundle id produces a malformed topic at send time.",
+    "symptom": "APNs returns 400 MissingTopic. The bundle id was unset or an empty string, so the SDK emitted only the .push-type.liveactivity suffix (or nothing) as the topic header.",
+    "fix": "Confirm APNS_BUNDLE_ID is set to the bare bundle identifier (e.g. com.example.app). Do not include the .push-type.liveactivity suffix; the SDK appends it internally. See MS018 for the inverse failure (suffix included by mistake).",
+    "docs": [
+      "docs/push.md#error-responses"
+    ],
+    "since": "3.1.0",
+    "errorClasses": [
+      "MissingTopicError"
     ]
   }
 ] as const satisfies readonly TrapEntry[];
