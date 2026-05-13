@@ -150,27 +150,22 @@ describe("rewriteAppsMobileWorkspaceDeps", () => {
           "@mobile-surfaces/live-activity": "file:../../packages/live-activity",
           expo: "~55.0.18",
         },
-        devDependencies: {
-          "@mobile-surfaces/design-tokens": "workspace:*",
-        },
       }),
     );
 
     const manifest = {
       addPackages: [
         { name: "@mobile-surfaces/surface-contracts", version: "^1.3.0" },
-        { name: "@mobile-surfaces/design-tokens", version: "^1.3.0" },
         { name: "@mobile-surfaces/live-activity", version: "^1.3.0" },
       ],
     };
     const result = rewriteAppsMobileWorkspaceDeps({ appsMobileRoot: tmp, manifest });
-    assert.equal(result.rewrote, 3);
+    assert.equal(result.rewrote, 2);
 
     const pkg = JSON.parse(fs.readFileSync(path.join(tmp, "package.json"), "utf8"));
     assert.equal(pkg.dependencies["@mobile-surfaces/surface-contracts"], "^1.3.0");
     assert.equal(pkg.dependencies["@mobile-surfaces/live-activity"], "^1.3.0");
     assert.equal(pkg.dependencies.expo, "~55.0.18", "non-mobile-surfaces deps untouched");
-    assert.equal(pkg.devDependencies["@mobile-surfaces/design-tokens"], "^1.3.0");
   });
 
   it("leaves a workspace ref unchanged when manifest has no version (still flagged as workspace)", () => {

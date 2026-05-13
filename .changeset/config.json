@@ -6,7 +6,6 @@
   "linked": [
     [
       "@mobile-surfaces/surface-contracts",
-      "@mobile-surfaces/design-tokens",
       "@mobile-surfaces/live-activity",
       "@mobile-surfaces/push",
       "@mobile-surfaces/validators",

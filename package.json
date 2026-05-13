@@ -29,7 +29,6 @@
   "mobileSurfaces": {
     "addPackages": [
       "@mobile-surfaces/surface-contracts",
-      "@mobile-surfaces/design-tokens",
       "@mobile-surfaces/live-activity",
       "@bacons/apple-targets",
       "expo-application",
@@ -51,7 +50,7 @@
     "minimumXcodeMajor": 26
   },
   "scripts": {
-    "build": "pnpm -r --filter \"./packages/{surface-contracts,design-tokens,live-activity,push}\" build",
+    "build": "pnpm -r --filter \"./packages/{surface-contracts,live-activity,push}\" build",
     "clean": "pnpm -r --filter \"./packages/*\" clean",
     "preinstall": "npx only-allow pnpm",
     "dev:doctor": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/doctor.mjs",

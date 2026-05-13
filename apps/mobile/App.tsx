@@ -1,7 +1,7 @@
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { SafeAreaView, StyleSheet } from "react-native";
-import { surfaceColors } from "@mobile-surfaces/design-tokens";
+import { surfaceColors } from "./src/theme";
 import { LiveActivityHarness } from "./src/screens/LiveActivityHarness";
 import { registerBackgroundNotificationTask } from "./src/notifications";
 

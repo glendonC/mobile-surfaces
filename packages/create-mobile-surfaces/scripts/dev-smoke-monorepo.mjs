@@ -131,7 +131,7 @@ assert.ok(bundleSwift.includes("Foo"), "swift bundle should contain new prefix")
 const mobilePkg = JSON.parse(
   fs.readFileSync(path.join(appsMobile, "package.json"), "utf8"),
 );
-for (const dep of ["@mobile-surfaces/surface-contracts", "@mobile-surfaces/live-activity", "@mobile-surfaces/design-tokens"]) {
+for (const dep of ["@mobile-surfaces/surface-contracts", "@mobile-surfaces/live-activity"]) {
   const v = mobilePkg.dependencies?.[dep] ?? mobilePkg.devDependencies?.[dep];
   assert.ok(v, `${dep} should still be in apps/mobile/package.json`);
   assert.ok(!v.startsWith("workspace:"), `${dep} should be rewritten from workspace:* (got ${v})`);

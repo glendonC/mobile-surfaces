@@ -15,6 +15,5 @@ export default defineConfig({
     "react",
     "react-native",
     "@mobile-surfaces/surface-contracts",
-    "@mobile-surfaces/design-tokens",
   ],
 });

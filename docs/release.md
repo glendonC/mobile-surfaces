@@ -16,7 +16,6 @@ Configure trusted publishing on npm for each published package:
 
 - `create-mobile-surfaces`
 - `@mobile-surfaces/surface-contracts`
-- `@mobile-surfaces/design-tokens`
 - `@mobile-surfaces/live-activity`
 - `@mobile-surfaces/push`
 - `@mobile-surfaces/validators`
@@ -74,7 +73,6 @@ After the workflow succeeds:
 ```bash
 npm view create-mobile-surfaces version
 npm view @mobile-surfaces/surface-contracts version
-npm view @mobile-surfaces/design-tokens version
 npm view @mobile-surfaces/live-activity version
 npm view @mobile-surfaces/push version
 npm view @mobile-surfaces/validators version

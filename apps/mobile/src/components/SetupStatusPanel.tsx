@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
-import { surfaceColors } from "@mobile-surfaces/design-tokens";
+import { surfaceColors } from "../theme";
 import type { DiagnosticCheck } from "@mobile-surfaces/surface-contracts";
 import { runSetupProbes } from "../diagnostics/checkSetup";
 import { SetupStatusRow } from "./SetupStatusRow";

@@ -1,4 +1,12 @@
-const { swiftAssetColorMap } = require("../../../../packages/design-tokens/tokens.json");
+// Widget asset-catalog colors. Inlined here (rather than imported from a
+// shared design-tokens package) because @bacons/apple-targets reads this
+// file at prebuild time and CJS interop with workspace TS sources is
+// fragile. Keep these two values in sync with apps/mobile/src/theme.ts
+// if the brand palette changes.
+const COLORS = {
+  AccentColor: "#7BA591",
+  WidgetBackground: "#F7F5F0",
+};
 
 /** @type {import('@bacons/apple-targets').ConfigFunction} */
 module.exports = (config) => ({
@@ -12,7 +20,7 @@ module.exports = (config) => ({
       config.ios?.entitlements?.["com.apple.security.application-groups"] ?? [],
   },
   colors: {
-    $accent: swiftAssetColorMap.AccentColor,
-    $widgetBackground: swiftAssetColorMap.WidgetBackground,
+    $accent: COLORS.AccentColor,
+    $widgetBackground: COLORS.WidgetBackground,
   },
 });

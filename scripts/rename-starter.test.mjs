@@ -108,7 +108,7 @@ test("isIdempotent returns false when at least one field would change", () => {
 // `Cannot find module '@mobile-surfaces/...'` after rename.
 const RESIDUE_FIXTURES = {
   "apps/mobile/src/components/SetupStatusRow.tsx":
-    `import { tokens } from "@mobile-surfaces/design-tokens";\nexport const x = tokens;\n`,
+    `import { liveActivityAdapter } from "@mobile-surfaces/live-activity";\nexport const a = liveActivityAdapter;\n`,
   "apps/mobile/src/diagnostics/checkSetup.ts":
     `import { traps } from "@mobile-surfaces/surface-contracts";\nexport const t = traps;\n`,
   "packages/push/package.json":

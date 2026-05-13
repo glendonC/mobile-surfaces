@@ -9,7 +9,7 @@
 
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { surfaceColors } from "@mobile-surfaces/design-tokens";
+import { surfaceColors } from "../theme";
 
 export interface DemoModeCardProps {
   /** Optional external dismiss handler. The card also self-dismisses for

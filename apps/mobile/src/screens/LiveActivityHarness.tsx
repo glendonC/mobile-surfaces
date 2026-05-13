@@ -7,7 +7,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { surfaceColors } from "@mobile-surfaces/design-tokens";
+import { surfaceColors } from "../theme";
 import { liveActivityAdapter as LiveActivity, LiveActivitySnapshot } from "../liveActivity";
 import { diagnoseSupport } from "../liveActivity/diagnoseSupport";
 import {

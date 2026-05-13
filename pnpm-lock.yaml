@@ -23,9 +23,6 @@ importers:
 
   apps/mobile:
     dependencies:
-      '@mobile-surfaces/design-tokens':
-        specifier: workspace:*
-        version: link:../../packages/design-tokens
       '@mobile-surfaces/live-activity':
         specifier: workspace:*
         version: link:../../packages/live-activity
@@ -125,8 +122,6 @@ importers:
       '@inquirer/testing':
         specifier: 3.3.6
         version: 3.3.6(@inquirer/checkbox@5.1.4(@types/node@25.6.0))(@inquirer/confirm@6.0.12(@types/node@25.6.0))(@inquirer/editor@5.1.1(@types/node@25.6.0))(@inquirer/expand@5.0.13(@types/node@25.6.0))(@inquirer/external-editor@3.0.0(@types/node@25.6.0))(@inquirer/input@5.0.12(@types/node@25.6.0))(@inquirer/number@4.0.12(@types/node@25.6.0))(@inquirer/password@5.0.12(@types/node@25.6.0))(@inquirer/prompts@8.4.2(@types/node@25.6.0))(@inquirer/rawlist@5.2.8(@types/node@25.6.0))(@inquirer/search@4.1.8(@types/node@25.6.0))(@inquirer/select@5.1.4(@types/node@25.6.0))(@types/node@25.6.0)
-
-  packages/design-tokens: {}
 
   packages/live-activity:
     dependencies:

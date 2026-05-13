@@ -5,7 +5,7 @@
 
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { surfaceColors } from "@mobile-surfaces/design-tokens";
+import { surfaceColors } from "../theme";
 import {
   findTrap,
   type DiagnosticCheck,

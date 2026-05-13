@@ -47,7 +47,7 @@ The notification content extension is intentionally not included in this slice; 
 - `PushClient` / `createPushClient(...)` with connection-pooled HTTP/2.
 - Typed error hierarchy (per APNs reason); ES256 JWT cache; HTTP/2 reconnect; exponential-backoff retry policy.
 - Mock-h2c test suite under `packages/push/test/`.
-- Linked release group includes it (`.changeset/config.json`) so it always co-versions with `@mobile-surfaces/surface-contracts`, `@mobile-surfaces/design-tokens`, `@mobile-surfaces/live-activity`, and `create-mobile-surfaces`.
+- Linked release group includes it (`.changeset/config.json`) so it always co-versions with `@mobile-surfaces/surface-contracts`, `@mobile-surfaces/live-activity`, and `create-mobile-surfaces`.
 
 `scripts/send-apns.mjs` is intentionally NOT refactored to import from the SDK; it stays as a self-contained protocol-reference script that can be read top-to-bottom without indirection.
 
