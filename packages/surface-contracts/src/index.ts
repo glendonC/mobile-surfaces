@@ -19,7 +19,6 @@ export {
   liveSurfaceStandbyPresentation,
   liveSurfaceStandbySlice,
   liveSurfaceActivityContentState,
-  liveSurfaceAlertPayload,
   liveSurfaceStates,
   liveSurfaceStages,
   liveSurfaceKinds,
@@ -49,7 +48,6 @@ export type {
   LiveSurfaceStandbyPresentation,
   LiveSurfaceStandbySlice,
   LiveSurfaceActivityContentState,
-  LiveSurfaceAlertPayload,
   MigrateV1ToV2Options,
   SafeParseAnyVersionResult,
   SafeParseAnyVersionSuccess,
@@ -69,7 +67,6 @@ import type {
   LiveSurfaceLockAccessoryFamily,
   LiveSurfaceStandbyPresentation,
   LiveSurfaceActivityContentState,
-  LiveSurfaceAlertPayload,
 } from "./schema.ts";
 
 export interface LiveSurfaceWidgetTimelineEntry {
@@ -169,29 +166,6 @@ export function toLiveActivityContentState(
     subhead: live.secondaryText,
     progress: live.progress,
     stage: live.liveActivity.stage,
-  };
-}
-
-export function toAlertPayload(snapshot: LiveSurfaceSnapshot): LiveSurfaceAlertPayload {
-  const live: LiveSurfaceSnapshotLiveActivity = assertSnapshotKind(
-    snapshot,
-    "liveActivity",
-  );
-  return {
-    aps: {
-      alert: {
-        title: live.primaryText,
-        body: live.secondaryText,
-      },
-      sound: "default",
-    },
-    liveSurface: {
-      kind: "surface_snapshot",
-      snapshotId: live.id,
-      surfaceId: live.surfaceId,
-      state: live.state,
-      deepLink: live.deepLink,
-    },
   };
 }
 

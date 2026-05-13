@@ -259,26 +259,6 @@ export type LiveSurfaceActivityContentState = z.infer<
   typeof liveSurfaceActivityContentState
 >;
 
-export const liveSurfaceAlertPayload = z
-  .object({
-    aps: z.object({
-      alert: z.object({
-        title: z.string(),
-        body: z.string(),
-      }),
-      sound: z.literal("default").optional(),
-    }),
-    liveSurface: z.object({
-      kind: z.literal("surface_snapshot"),
-      snapshotId: z.string(),
-      surfaceId: z.string(),
-      state: liveSurfaceState,
-      deepLink: z.string(),
-    }),
-  })
-  .strict();
-export type LiveSurfaceAlertPayload = z.infer<typeof liveSurfaceAlertPayload>;
-
 // Derived arrays preserve the older string-list export surface for consumers
 // who only need the union members. Tuple-narrow so downstream `as const`
 // patterns keep working.
