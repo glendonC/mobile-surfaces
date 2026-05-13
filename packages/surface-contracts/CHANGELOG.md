@@ -1,5 +1,25 @@
 # @mobile-surfaces/surface-contracts
 
+## 3.0.0
+
+### Major Changes
+
+- Reshape `LiveSurfaceSnapshot` to put liveActivity-only fields in their own slice. `stage`, `estimatedSeconds`, and `morePartsCount` moved out of the base shape and into a new `liveSurfaceLiveActivitySlice`. v1 carried these on every kind regardless of `kind`, forcing widget, control, notification, lockAccessory, and standby fixtures to pad them with fictional zeros and a meaningless `stage`. v2 puts the fields where they have semantics; the other five kinds stop carrying values they could not interpret.
+
+  This is a breaking change for v1 consumers. A v1 -> v2 migration codec ships alongside (`liveSurfaceSnapshotV1`, `migrateV1ToV2`) and `safeParseAnyVersion` is updated to chain v2 -> v1. The v1 codec lives for the entire 3.x release line and is removed in 4.0.0, so downstream installs pinning `^3.0.0` keep parsing v1 payloads through every 3.x minor without producer-side changes. See `docs/schema-migration.md` for the deprecation timeline and worked examples.
+
+- Promote `updatedAt` from optional to required. Out-of-order push discard on the client requires a wall-clock instant that ActivityKit and APNs do not order in-band; v1 left the field optional so consumers could not rely on it. v2 requires it on every snapshot. The format is RFC 3339 with optional offset (`z.string().datetime({ offset: true })`).
+
+  `migrateV1ToV2(v1)` leaves `updatedAt` undefined when the v1 input omitted it, which makes the result fail v2 parse with an explicit field-missing error. Callers who know it is safe to synthesize a value (a backfill job that owns the source-of-truth timestamp) can pass `migrateV1ToV2(v1, { updatedAtFallback: "..." })`. The default is loud failure rather than a quiet "now" lie that would silently break the ordering semantic.
+
+- Remove the missing-`kind` preprocess shim. v1 defaulted bare-snapshot inputs (no `kind` field) to `"liveActivity"`; the shim existed as forward-compat for a v0 that was never published. v2 requires `kind` to be set explicitly. The v1 -> v2 codec sets it during migration, so v1 payloads from the wild still parse cleanly through `safeParseAnyVersion`.
+
+- Move `liveSurfaceAlertPayload` and `toAlertPayload` out of this package and into `@mobile-surfaces/push`. They emit an APNs `aps` envelope, which is wire format and belongs next to the SDK that sends it. The new names are `liveActivityAlertPayload` and `liveActivityAlertPayloadFromSnapshot`; the inner discriminator `kind: "surface_snapshot"` is unchanged so consumer apps that already parse v1 alert payloads on-device keep working.
+
+- Remove the v0 codec. `liveSurfaceSnapshotV0`, `LiveSurfaceSnapshotV0`, and `migrateV0ToV1` are deleted along with the v0 branch in `safeParseAnyVersion`. The v0 schema was reconstructed from a single internal commit for forward-compat at the v1 release; it was never published or consumed externally, so the carry was always for an audience of zero. v0 support was carried through the 2.x line; consumers who somehow hold a v0 payload should pin `@mobile-surfaces/surface-contracts@2.x`, run the migration once, store the v1 result, then upgrade.
+
+- Bump JSON Schema `$id` to `https://unpkg.com/@mobile-surfaces/surface-contracts@3.0/schema.json`. The previous `@2.1/schema.json` URL stays resolvable on unpkg indefinitely; backends pinning the older URL will keep getting the v1 schema. Update the pin when migrating producers to v2.
+
 ## 2.1.1
 
 ### Patch Changes

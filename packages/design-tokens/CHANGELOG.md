@@ -1,5 +1,11 @@
 # @mobile-surfaces/design-tokens
 
+## 3.0.0
+
+### Major Changes
+
+- Linked-group bump for the v2 schema release in `@mobile-surfaces/surface-contracts`. No behavior change in this package; the design tokens themselves are unchanged.
+
 ## 2.1.1
 
 ### Patch Changes
