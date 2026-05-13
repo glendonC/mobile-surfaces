@@ -298,7 +298,7 @@ For the full set of flags, including `--event=start`, `--push-to-start-token`, `
 
 All string fields on `LiveSurfaceSnapshot` are pre-rendered for one locale per snapshot. The backend selects the locale (per-user preference, request `Accept-Language`, etc.) and emits the snapshot in that locale. If the locale changes, send a fresh snapshot. There is no in-place locale switch on the client.
 
-A future `LocalizedString` shape (e.g. `{ en: string; "es-MX"?: string }`) would arrive in a future major and bump `schemaVersion` again. v1 stays string-only on purpose; ActivityKit content states are size-bound (4 KB) and shipping every translation per push wastes that budget.
+A future `LocalizedString` shape (e.g. `{ en: string; "es-MX"?: string }`) would arrive in a future major and bump `schemaVersion` again. v2 stays string-only on purpose; ActivityKit content states are size-bound (4 KB) and shipping every translation per push wastes that budget.
 
 ## What Stays Stable
 

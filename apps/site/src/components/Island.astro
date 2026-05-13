@@ -3,7 +3,7 @@
 // each other on click:
 //   compact  — manager picker + install command + copy + expand chip
 //   expanded — DEFAULT. Adds title + tagline above the install row.
-//   full     — adds a 29-trap preview and doc list below the install row.
+//   full     — adds a trap-catalog preview and doc list below the install row.
 //
 // State lives in a [data-state] attribute on the root; CSS transitions
 // drive the size/radius and content layers cross-fade. Vanilla JS wires
@@ -35,8 +35,8 @@ const questions = [
     id: "bugs",
     icon: "trap" as const,
     label: "What if I hit a bug?",
-    title: "29 silent failures, mapped out.",
-    body: "Push tokens, payload limits, byte-identity, iOS version checks. We've cataloged 29 silent-failure modes that usually take a week to debug. Each one has a fix and an enforcement script in the repo.",
+    title: "Silent failures, mapped out.",
+    body: "Push tokens, payload limits, byte-identity, iOS version checks. The trap catalog documents every silent-failure mode we have found, with the symptom, the fix, and (for static rules) an enforcement script in the repo.",
     href: `${REPO}/blob/main/CLAUDE.md`,
     hrefLabel: "Read the catalog",
   },

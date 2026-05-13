@@ -173,7 +173,7 @@ const contentState = toLiveActivityContentState(snapshot);
 // { headline, subhead, progress, stage }, pass to your existing bridge.
 ```
 
-See [packages/surface-contracts/README.md](./packages/surface-contracts/README.md) for the bridge-agnostic walkthrough (`expo-live-activity`, hand-rolled, Standard Schema interop, JSON Schema, v0 to v1 migration).
+See [packages/surface-contracts/README.md](./packages/surface-contracts/README.md) for the bridge-agnostic walkthrough (`expo-live-activity`, hand-rolled, Standard Schema interop, JSON Schema, v1 to v2 migration).
 
 ### Contract plus push SDK
 
@@ -204,7 +204,7 @@ await client.update(activityToken, snapshot);
 ## What is actually in the box
 
 - A working Expo app with every surface already wired up: Lock Screen Live Activity, Dynamic Island, home-screen widget, iOS 18 control widget.
-- The shared `LiveSurfaceSnapshot` contract: one TypeScript type, one runtime-checked union where `kind` selects the valid branch, one published JSON Schema (`oneOf`-shaped per the discriminator), kind-gated projection helpers, and `safeParseAnyVersion` for schema v0 to v1 migration. Standard Schema is exposed via Zod 4's built-in `~standard` getter so consumers can drop the Zod runtime dependency.
+- The shared `LiveSurfaceSnapshot` contract: one TypeScript type, one runtime-checked union where `kind` selects the valid branch, one published JSON Schema (`oneOf`-shaped per the discriminator), kind-gated projection helpers, and `safeParseAnyVersion` for schema v1 to v2 migration. Standard Schema is exposed via Zod 4's built-in `~standard` getter so consumers can drop the Zod runtime dependency.
 - `@mobile-surfaces/push`. A Node SDK for APNs with zero npm runtime dependencies, supporting alerts, Live Activity start/update/end, **push-to-start (iOS 17.2+)** and **broadcast channels (iOS 18+)**, plus channel management.
 - A SwiftUI WidgetKit (Apple's framework for widgets and Live Activities) extension for Lock Screen, Dynamic Island, home-screen widget, and iOS 18 control layouts. You can restyle it. You do not have to write it from scratch.
 - APNs scripts with JWT signing, development and production environment routing, and translated error messages.
@@ -245,7 +245,7 @@ Start with the [docs hub](./docs/README.md) if you are not sure where to go next
 - [Push](./docs/push.md). Wire-layer reference, SDK, smoke script, token taxonomy, error reasons, channel push.
 - [Observability](./docs/observability.md). Which catalog-bound errors are worth alerting on, hook signatures, recommended log shape.
 - [Multi-surface](./docs/multi-surface.md). Every `kind` value, what ships today, when to emit each.
-- [Schema migration](./docs/schema-migration.md). v0 to v1 codec, Standard Schema interop, evolution policy.
+- [Schema migration](./docs/schema-migration.md). v1 to v2 codec, deprecation timeline, Standard Schema interop, evolution policy.
 - [Architecture](./docs/architecture.md). The contract, the surfaces, the adapter boundary.
 - [Troubleshooting](./docs/troubleshooting.md). The silent-failure cookbook.
 - [iOS environment](./docs/ios-environment.md). Simulator vs device, APNs setup.

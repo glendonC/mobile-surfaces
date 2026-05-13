@@ -16,6 +16,7 @@ import { liveActivityAlertPayloadFromSnapshot } from "./payloads.ts";
 
 import {
   ApnsError,
+  BadExpirationDateError,
   ClientClosedError,
   InvalidSnapshotError,
   MissingApnsConfigError,
@@ -67,6 +68,54 @@ function assertPayloadWithinLimit(
   }
 }
 
+const BROADCAST_DEFAULT_TTL_SECONDS = 3600;
+
+/**
+ * Resolve `apns-expiration` for a broadcast send. The two channel storage
+ * policies have opposite semantics — no-storage requires 0, most-recent-message
+ * requires nonzero — and Apple rejects the wrong combination with 400
+ * BadExpirationDate (MS032). We surface that as a client-side pre-flight
+ * the same way `assertPayloadWithinLimit` handles MS011: reuse the typed
+ * error class with `status: 400` so observability hooks bucket the
+ * client-caught and server-returned variants together.
+ *
+ * The matrix:
+ *
+ *   storagePolicy           expirationSeconds   resolved expiration
+ *   --------------------   ------------------   --------------------
+ *   "no-storage" (default)  unset or 0           0
+ *   "no-storage"            nonzero              throw (no-storage cannot defer)
+ *   "most-recent-message"   unset                now + 3600
+ *   "most-recent-message"   0                    throw (defeats the policy)
+ *   "most-recent-message"   nonzero              expirationSeconds
+ */
+function resolveBroadcastExpiration(options: BroadcastOptions): number {
+  const policy = options.storagePolicy ?? "no-storage";
+  const requested = options.expirationSeconds;
+  if (policy === "no-storage") {
+    if (requested !== undefined && requested !== 0) {
+      throw new BadExpirationDateError({
+        status: 400,
+        message:
+          `Client-side pre-flight: broadcast() with storagePolicy "no-storage" must send apns-expiration: 0 ` +
+          `(received expirationSeconds: ${requested}). No-storage channels cannot defer delivery; ` +
+          `if you need a TTL, create the channel with storagePolicy: "most-recent-message". See MS032.`,
+      });
+    }
+    return 0;
+  }
+  if (requested === 0) {
+    throw new BadExpirationDateError({
+      status: 400,
+      message:
+        `Client-side pre-flight: broadcast() with storagePolicy "most-recent-message" requires a nonzero apns-expiration ` +
+        `(received 0). A TTL of 0 defeats the channel's storage policy; pass expirationSeconds as a unix-seconds value ` +
+        `or omit it to default to now + ${BROADCAST_DEFAULT_TTL_SECONDS}s. See MS032.`,
+    });
+  }
+  return requested ?? Math.floor(Date.now() / 1000) + BROADCAST_DEFAULT_TTL_SECONDS;
+}
+
 export interface CreatePushClientOptions {
   /** 10-character APNs Auth Key ID from the Apple Developer portal. */
   keyId: string;
@@ -113,11 +162,6 @@ export interface CreatePushClientOptions {
    * secrets but they are the only credential needed to send to a device.
    */
   hooks?: PushHooks;
-  /**
-   * Internal: override the http2 connect factory and/or session options for
-   * tests. Production callers should not touch these; they're keyed on a
-   * `Symbol.for` so they don't show up in TypeScript's IntelliSense.
-   */
 }
 
 /**
@@ -186,7 +230,22 @@ export interface SendOptions {
 }
 
 export interface BroadcastOptions extends SendOptions {
-  // Reserved for future broadcast-only options (relevanceScore, etc.).
+  /**
+   * Storage policy of the channel being broadcast to. Defaults to
+   * "no-storage" — the default `createChannel()` policy and the safe choice
+   * for one-shot live updates. Set to "most-recent-message" when the channel
+   * was created with that policy so Apple stores the latest message for
+   * devices that are offline at send time. The two policies have opposite
+   * `apns-expiration` semantics: no-storage requires 0 (the message is
+   * either delivered immediately or dropped); most-recent-message requires
+   * a nonzero TTL because Apple needs to know how long to retain the
+   * stored value. The SDK enforces this distinction at construct time so
+   * callers cannot accidentally send a no-op TTL on a stored channel or
+   * pay storage cost they cannot use. Pass `channel.storagePolicy` from
+   * the `ChannelInfo` you got back from `createChannel()` / `listChannels()`
+   * — that is the canonical source.
+   */
+  storagePolicy?: "no-storage" | "most-recent-message";
 }
 
 export interface LiveActivityStartOptions extends SendOptions {
@@ -746,6 +805,7 @@ export class PushClient {
       this.#buildActivityPayload(live, "update", undefined, options),
     );
     assertPayloadWithinLimit(payload, "broadcast");
+    const expiration = resolveBroadcastExpiration(options);
     const apnsId = options.apnsId ?? genApnsId();
     const priority = options.priority ?? 5;
     const headers: Record<string, string> = {
@@ -756,7 +816,7 @@ export class PushClient {
       "apns-push-type": "liveactivity",
       "apns-priority": String(priority),
       "apns-id": apnsId,
-      "apns-expiration": "0",
+      "apns-expiration": String(expiration),
       "content-type": "application/json",
     };
     return this.#performWithRetry(this.#send, headers, payload, apnsId, {

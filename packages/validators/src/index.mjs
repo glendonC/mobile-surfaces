@@ -38,6 +38,11 @@ export function validateBundleId(s) {
   return undefined;
 }
 
+// Optional at scaffold-time: users can create the project before they have
+// an Apple Developer account and fill the Team ID in later via
+// `pnpm surface:setup-apns`. APNs send-time presence is enforced separately
+// (MS028: createPushClient throws if APNS_TEAM_ID is unset; scripts/setup-apns.mjs
+// has its own stricter validator that rejects empty).
 export function validateTeamId(s) {
   if (!s || s.length === 0) return undefined;
   if (!/^[A-Z0-9]{10}$/.test(s)) {

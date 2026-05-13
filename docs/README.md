@@ -37,7 +37,7 @@ Pick the persona that fits, read the three docs in order, then come back here fo
 - [`observability.md`](./observability.md): which catalog-bound errors are worth alerting on, hook signatures, recommended log shape, stuck Live Activity detection.
 - [`ios-environment.md`](./ios-environment.md): dev builds, App Groups, generated native folders, simulator/device loops.
 - [`compatibility.md`](./compatibility.md): pinned Expo SDK, React Native, iOS, Xcode, and `@bacons/apple-targets` row.
-- [`schema-migration.md`](./schema-migration.md): schema v0 to v1 promotion, missing-`kind` shim, JSON Schema `$id`, future evolution policy.
+- [`schema-migration.md`](./schema-migration.md): v1 to v2 codec, deprecation timeline, JSON Schema `$id`, future evolution policy.
 - [`troubleshooting.md`](./troubleshooting.md): symptom-to-fix recipes for silent iOS failures.
 - [`release.md`](./release.md): Changesets release PRs, npm trusted publishing, release verification.
 - [`roadmap.md`](./roadmap.md): shipped work, deferred work, and frontier items.

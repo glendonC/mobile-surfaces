@@ -272,7 +272,7 @@ export const traps: readonly TrapEntry[] = [
     "id": "MS016",
     "title": "Subscribe to onPushToStartToken at mount, not on demand",
     "severity": "error",
-    "detection": "static",
+    "detection": "runtime",
     "tags": [
       "tokens",
       "live-activity"
@@ -290,7 +290,7 @@ export const traps: readonly TrapEntry[] = [
     "id": "MS017",
     "title": "apps/mobile/ios/ is generated; do not edit",
     "severity": "error",
-    "detection": "static",
+    "detection": "advisory",
     "tags": [
       "cng",
       "config"
@@ -345,7 +345,7 @@ export const traps: readonly TrapEntry[] = [
     "id": "MS020",
     "title": "Per-activity and push-to-start tokens may rotate at any time",
     "severity": "error",
-    "detection": "static",
+    "detection": "runtime",
     "tags": [
       "tokens"
     ],
@@ -495,6 +495,9 @@ export const traps: readonly TrapEntry[] = [
     "summary": "CNG-managed directories must not be checked into version control; commits will fight prebuild forever.",
     "symptom": "Pull request diffs include hundreds of lines under apps/mobile/ios/ that nobody intended to change. Reviewers cannot tell what is real.",
     "fix": "Add apps/mobile/ios/ to .gitignore. If files are already tracked, untrack with git rm -r --cached apps/mobile/ios then commit the .gitignore update.",
+    "enforcement": {
+      "script": "scripts/check-ios-gitignore.mjs"
+    },
     "docs": [
       "docs/ios-environment.md"
     ],

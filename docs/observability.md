@@ -2,7 +2,7 @@
 
 The Mobile Surfaces pitch is that iOS Live Activities silently fail. The push returns HTTP 200, the app compiles, the Lock Screen stays on its old state, and nothing in your stack tells you why. This page documents the seams the SDK exposes so a backend running real traffic can detect those failures from logs and metrics instead of waiting for support tickets.
 
-Everything below is wire- and event-layer instrumentation. It does not replace device-side QA, and it does not paper over the trap catalog. It tells you which of the 28 catalog rules has fired in production so you can act before the user notices.
+Everything below is wire- and event-layer instrumentation. It does not replace device-side QA, and it does not paper over the trap catalog. It tells you which catalog rule has fired in production so you can act before the user notices.
 
 ## What the SDK exposes
 
@@ -26,8 +26,9 @@ const client = createPushClient({
       // isFinalAttempt: true means the caller will see this error.
       const trapId = err instanceof Error ? trapIdForErrorClass(err.constructor.name) : undefined;
       // trapId is non-undefined for the catalog-bound subset (MS011, MS014,
-      // MS015, MS018, MS020, MS028, MS030). Treat those as silent-failure
-      // signals; treat the rest as wire-layer noise.
+      // MS015, MS018, MS020, MS028, MS030, MS031, MS032, MS034, MS035).
+      // Treat those as silent-failure signals; treat the rest as wire-layer
+      // noise. The authoritative map lives in packages/push/src/trap-bindings.ts.
     },
   },
 });
@@ -50,19 +51,26 @@ There is intentionally no `onRetry`: the same `onError` fires with `isFinalAttem
 
 ### Error classes worth observing
 
-`@mobile-surfaces/push/trap-bindings` exports `trapIdForErrorClass(name)`. Today seven error classes are catalog-bound:
+`@mobile-surfaces/push/trap-bindings` exports `trapIdForErrorClass(name)`. The catalog-bound error classes are:
 
-| Error class                  | Trap id | What it means                                                        |
-| ---------------------------- | ------- | -------------------------------------------------------------------- |
-| `BadDeviceTokenError`        | MS014   | Token environment mismatches build environment (dev vs prod).        |
-| `ExpiredProviderTokenError`  | MS030   | JWT older than 60 minutes. SDK auto-refreshes at 50; if you see this, the process clock is skewed or the client has been held past its refresh budget. |
-| `ForbiddenError`             | MS030   | Auth key revoked in the Apple Developer portal.                      |
-| `InvalidProviderTokenError`  | MS030   | JWT signed with the wrong key id or team id.                         |
-| `MissingApnsConfigError`     | MS028   | A required env var was unset at `createPushClient` time.             |
-| `PayloadTooLargeError`       | MS011   | Snapshot serialized over 4 KB (per-activity) or 5 KB (broadcast).    |
-| `TooManyRequestsError`       | MS015   | iOS is throttling priority-10 Live Activity pushes.                  |
-| `TopicDisallowedError`       | MS018   | `APNS_BUNDLE_ID` includes the `.push-type.liveactivity` suffix (the SDK auto-appends it). |
-| `UnregisteredError`          | MS020   | Token is dead. Either user uninstalled or per-activity token rotated. |
+| Error class                   | Trap id | What it means                                                        |
+| ----------------------------- | ------- | -------------------------------------------------------------------- |
+| `BadChannelIdError`           | MS031   | Channel id is malformed on the wire (URL-decoded, truncated, or otherwise mutated). |
+| `BadDateError`                | MS032   | A Live Activity date field is not a positive unix-seconds integer.   |
+| `BadDeviceTokenError`         | MS014   | Token environment mismatches build environment (dev vs prod).        |
+| `BadExpirationDateError`      | MS032   | `apns-expiration` is invalid for the channel storage policy (broadcast on a no-storage channel must be 0). |
+| `ChannelNotRegisteredError`   | MS031   | Channel id refers to a channel that does not exist in this environment. |
+| `ExpiredProviderTokenError`   | MS030   | JWT older than 60 minutes. SDK auto-refreshes at 50; if you see this, the process clock is skewed or the client has been held past its refresh budget. |
+| `FeatureNotEnabledError`      | MS034   | The auth key lacks the 'Broadcast to Live Activity' capability.      |
+| `ForbiddenError`              | MS030   | Auth key revoked in the Apple Developer portal.                      |
+| `InvalidProviderTokenError`   | MS030   | JWT signed with the wrong key id or team id.                         |
+| `MissingApnsConfigError`      | MS028   | A required env var was unset at `createPushClient` time.             |
+| `MissingChannelIdError`       | MS031   | `broadcast()` or `deleteChannel()` was called without `channelId`.   |
+| `MissingTopicError`           | MS035   | `apns-topic` header is missing; `APNS_BUNDLE_ID` was unset or empty. |
+| `PayloadTooLargeError`        | MS011   | Snapshot serialized over 4 KB (per-activity) or 5 KB (broadcast).    |
+| `TooManyRequestsError`        | MS015   | iOS is throttling priority-10 Live Activity pushes.                  |
+| `TopicDisallowedError`        | MS018   | `APNS_BUNDLE_ID` includes the `.push-type.liveactivity` suffix (the SDK auto-appends it). |
+| `UnregisteredError`           | MS020   | Token is dead. Either user uninstalled or per-activity token rotated. |
 
 Errors without a trap id (`BadPriorityError`, `InternalServerError`, etc.) are wire-layer or SDK-self-correctness issues. Log them, but a non-zero rate is not by itself a catalog violation.
 

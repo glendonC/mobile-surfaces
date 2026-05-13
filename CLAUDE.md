@@ -29,10 +29,10 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 | [MS012](#ms012-ios-deployment-target-must-be-17-2-or-higher) | error | config | iOS deployment target must be 17.2 or higher |
 | [MS013](#ms013-app-group-entitlement-must-match-host-app-and-widget-extension) | error | static | App Group entitlement must match host app and widget extension |
 | [MS014](#ms014-apns-token-environment-must-match-the-build-environment) | error | runtime | APNs token environment must match the build environment |
-| [MS016](#ms016-subscribe-to-onpushtostarttoken-at-mount-not-on-demand) | error | static | Subscribe to onPushToStartToken at mount, not on demand |
-| [MS017](#ms017-apps-mobile-ios-is-generated-do-not-edit) | error | static | apps/mobile/ios/ is generated; do not edit |
+| [MS016](#ms016-subscribe-to-onpushtostarttoken-at-mount-not-on-demand) | error | runtime | Subscribe to onPushToStartToken at mount, not on demand |
+| [MS017](#ms017-apps-mobile-ios-is-generated-do-not-edit) | error | advisory | apps/mobile/ios/ is generated; do not edit |
 | [MS018](#ms018-apns-bundle-id-must-not-include-the-push-type-liveactivity-suffix) | error | runtime | APNS_BUNDLE_ID must not include the .push-type.liveactivity suffix |
-| [MS020](#ms020-per-activity-and-push-to-start-tokens-may-rotate-at-any-time) | error | static | Per-activity and push-to-start tokens may rotate at any time |
+| [MS020](#ms020-per-activity-and-push-to-start-tokens-may-rotate-at-any-time) | error | runtime | Per-activity and push-to-start tokens may rotate at any time |
 | [MS024](#ms024-project-must-depend-on-mobile-surfaces-surface-contracts-and-push-when-sending) | error | config | Project must depend on @mobile-surfaces/surface-contracts (and push, when sending) |
 | [MS025](#ms025-app-group-declared-in-app-json) | error | config | App Group declared in app.json |
 | [MS026](#ms026-widget-target-managed-by-bacons-apple-targets) | error | config | Widget target managed by @bacons/apple-targets |
@@ -212,7 +212,7 @@ Tokens minted by a development build cannot authenticate against the production 
 
 ### MS016: Subscribe to onPushToStartToken at mount, not on demand
 
-**severity:** error  •  **detection:** static (script-checkable)  •  **tags:** tokens, live-activity  •  **ios min:** 17.2
+**severity:** error  •  **detection:** runtime (only at send/receive)  •  **tags:** tokens, live-activity  •  **ios min:** 17.2
 
 iOS only delivers push-to-start tokens through Activity<...>.pushToStartTokenUpdates as an async sequence; getPushToStartToken() always resolves null.
 
@@ -224,7 +224,7 @@ iOS only delivers push-to-start tokens through Activity<...>.pushToStartTokenUpd
 
 ### MS017: apps/mobile/ios/ is generated; do not edit
 
-**severity:** error  •  **detection:** static (script-checkable)  •  **tags:** cng, config
+**severity:** error  •  **detection:** advisory (no programmatic check)  •  **tags:** cng, config
 
 Continuous Native Generation rebuilds apps/mobile/ios/ from app.json, packages/live-activity/, and apps/mobile/targets/widget/. Manual edits are wiped on the next prebuild.
 
@@ -248,7 +248,7 @@ The push SDK auto-appends .push-type.liveactivity to the apns-topic; passing it 
 
 ### MS020: Per-activity and push-to-start tokens may rotate at any time
 
-**severity:** error  •  **detection:** static (script-checkable)  •  **tags:** tokens
+**severity:** error  •  **detection:** runtime (only at send/receive)  •  **tags:** tokens
 
 Both pushTokenUpdates and pushToStartTokenUpdates may emit fresh values at any moment (cold launch, system rotation, foreground transition).
 
@@ -320,7 +320,7 @@ Both the SDK and scripts/send-apns.mjs require APNS_KEY_ID, APNS_TEAM_ID, APNS_K
 
 ### MS029: Generated apps/mobile/ios/ is gitignored
 
-**severity:** error  •  **detection:** config (declarative file)  •  **tags:** cng, config
+**severity:** error  •  **detection:** config (declarative file)  •  **tags:** cng, config  •  **enforced by:** `scripts/check-ios-gitignore.mjs`
 
 CNG-managed directories must not be checked into version control; commits will fight prebuild forever.
 

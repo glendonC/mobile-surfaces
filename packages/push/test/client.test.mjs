@@ -8,6 +8,7 @@ const {
   createPushClient,
   TEST_TRANSPORT_OVERRIDE,
   BadDeviceTokenError,
+  BadExpirationDateError,
   TooManyRequestsError,
   InvalidSnapshotError,
   ClientClosedError,
@@ -1098,6 +1099,126 @@ test("broadcast() rejects oversized payload before any network call", async (t) 
       assert.equal(err.trapId, "MS011");
       assert.match(err.message, /5120/);
       assert.match(err.message, /broadcast/);
+      return true;
+    },
+  );
+  assert.equal(mock.requests.length, 0);
+});
+
+// --- broadcast expiration: storagePolicy validation (MS032) ---------------
+
+test("broadcast() defaults to no-storage and emits apns-expiration: 0", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await client.broadcast("ChannelId123", SNAPSHOT);
+  assert.equal(mock.requests[0].headers["apns-expiration"], "0");
+});
+
+test("broadcast() with storagePolicy: 'no-storage' and expirationSeconds: 0 still emits 0", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await client.broadcast("ChannelId123", SNAPSHOT, {
+    storagePolicy: "no-storage",
+    expirationSeconds: 0,
+  });
+  assert.equal(mock.requests[0].headers["apns-expiration"], "0");
+});
+
+test("broadcast() rejects nonzero expirationSeconds on a no-storage channel before any network call", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () =>
+      client.broadcast("ChannelId123", SNAPSHOT, {
+        storagePolicy: "no-storage",
+        expirationSeconds: 1234567890,
+      }),
+    (err) => {
+      assert.ok(err instanceof BadExpirationDateError);
+      assert.equal(err.trapId, "MS032");
+      assert.match(err.message, /no-storage/);
+      assert.match(err.message, /1234567890/);
+      return true;
+    },
+  );
+  assert.equal(mock.requests.length, 0);
+});
+
+test("broadcast() rejects nonzero expirationSeconds when storagePolicy is omitted (defaults to no-storage)", async (t) => {
+  // Before this change, expirationSeconds on broadcast() was silently
+  // ignored (hardcoded to 0). Surfacing it as an error is the honest
+  // transition: callers who set it were getting nothing useful and the
+  // error message points them at storagePolicy.
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () =>
+      client.broadcast("ChannelId123", SNAPSHOT, {
+        expirationSeconds: 99,
+      }),
+    (err) => {
+      assert.ok(err instanceof BadExpirationDateError);
+      assert.match(err.message, /storagePolicy/);
+      return true;
+    },
+  );
+  assert.equal(mock.requests.length, 0);
+});
+
+test("broadcast() with storagePolicy: 'most-recent-message' and explicit expirationSeconds emits that value", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await client.broadcast("ChannelId123", SNAPSHOT, {
+    storagePolicy: "most-recent-message",
+    expirationSeconds: 1893456000,
+  });
+  assert.equal(mock.requests[0].headers["apns-expiration"], "1893456000");
+});
+
+test("broadcast() with storagePolicy: 'most-recent-message' defaults expirationSeconds to ~now+3600 when omitted", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const before = Math.floor(Date.now() / 1000);
+  await client.broadcast("ChannelId123", SNAPSHOT, {
+    storagePolicy: "most-recent-message",
+  });
+  const after = Math.floor(Date.now() / 1000);
+
+  const sent = Number(mock.requests[0].headers["apns-expiration"]);
+  assert.ok(
+    sent >= before + 3600 && sent <= after + 3600,
+    `expected expiration in [${before + 3600}, ${after + 3600}], got ${sent}`,
+  );
+});
+
+test("broadcast() rejects expirationSeconds: 0 on a most-recent-message channel", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () =>
+      client.broadcast("ChannelId123", SNAPSHOT, {
+        storagePolicy: "most-recent-message",
+        expirationSeconds: 0,
+      }),
+    (err) => {
+      assert.ok(err instanceof BadExpirationDateError);
+      assert.equal(err.trapId, "MS032");
+      assert.match(err.message, /most-recent-message/);
+      assert.match(err.message, /defeats/);
       return true;
     },
   );

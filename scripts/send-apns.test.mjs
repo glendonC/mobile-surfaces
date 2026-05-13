@@ -270,3 +270,86 @@ test("APNS_REASON_GUIDE preserves pre-existing entries", () => {
     assert.ok(APNS_REASON_GUIDE[key], `APNS_REASON_GUIDE missing pre-existing ${key}`);
   }
 });
+
+test("broadcast defaults to no-storage with no expiration flag", () => {
+  const config = parseAndValidateArgs([
+    "--channel-id=AAAA==",
+    "--type=liveactivity",
+    "--event=update",
+  ]);
+  assert.equal(config.mode, "broadcast");
+  assert.equal(config.storagePolicy, "no-storage");
+  assert.equal(config.expirationSeconds, undefined);
+});
+
+test("broadcast with --storage-policy=most-recent-message and --expiration sets both", () => {
+  const config = parseAndValidateArgs([
+    "--channel-id=AAAA==",
+    "--type=liveactivity",
+    "--event=update",
+    "--storage-policy=most-recent-message",
+    "--expiration=1893456000",
+  ]);
+  assert.equal(config.storagePolicy, "most-recent-message");
+  assert.equal(config.expirationSeconds, 1893456000);
+});
+
+test("broadcast rejects nonzero --expiration on a no-storage channel", () => {
+  expectError(
+    [
+      "--channel-id=AAAA==",
+      "--type=liveactivity",
+      "--event=update",
+      "--expiration=123",
+    ],
+    (err) => {
+      assert.match(err.message, /no-storage/);
+      assert.match(err.message, /MS032/);
+    },
+  );
+});
+
+test("broadcast rejects --expiration=0 on a most-recent-message channel", () => {
+  expectError(
+    [
+      "--channel-id=AAAA==",
+      "--type=liveactivity",
+      "--event=update",
+      "--storage-policy=most-recent-message",
+      "--expiration=0",
+    ],
+    (err) => {
+      assert.match(err.message, /most-recent-message/);
+      assert.match(err.message, /defeats/);
+    },
+  );
+});
+
+test("broadcast rejects invalid --expiration values", () => {
+  expectError(
+    [
+      "--channel-id=AAAA==",
+      "--type=liveactivity",
+      "--event=update",
+      "--expiration=not-a-number",
+    ],
+    (err) => {
+      assert.match(err.message, /non-negative integer/);
+    },
+  );
+});
+
+test("broadcast rejects bogus --storage-policy", () => {
+  expectError(
+    [
+      "--channel-id=AAAA==",
+      "--type=liveactivity",
+      "--event=update",
+      "--storage-policy=funky",
+    ],
+    (err) => {
+      assert.match(err.message, /storage-policy/);
+    },
+  );
+});
+

@@ -48,6 +48,14 @@
 // No apns-topic header is sent — broadcast routing uses the bundle-id in the
 // path. apns-channel-id is required.
 //
+// `--storage-policy` and `--expiration` control the apns-expiration header
+// for broadcasts. Defaults to --storage-policy=no-storage (apns-expiration:
+// 0). Pass --storage-policy=most-recent-message to broadcast to a channel
+// that defers delivery; --expiration=<unix-seconds> sets the TTL (defaults
+// to now+3600 when omitted on a most-recent-message channel). No-storage
+// channels cannot carry nonzero expirations; the script rejects the
+// combination before any network call. See MS032.
+//
 // Channel management usage (api-manage-broadcast{,.sandbox}.push.apple.com:
 // port 2195 sandbox, 2196 production — verified against Apple's "Sending
 // channel management requests to APNs" doc, Sept-2024 revision):
@@ -243,6 +251,7 @@ const PARSE_OPTIONS = {
   "channel-id": { type: "string" },
   "channel-action": { type: "string" },
   "storage-policy": { type: "string", default: "no-storage" },
+  expiration: { type: "string" },
   type: { type: "string", default: "alert" },
   env: { type: "string", default: "development" },
   event: { type: "string", default: "update" },
@@ -402,6 +411,43 @@ function validateBroadcast(values, modeFlags) {
     );
   }
 
+  if (!["no-storage", "most-recent-message"].includes(values["storage-policy"])) {
+    throw new ConfigError(
+      `--storage-policy must be one of: no-storage, most-recent-message (got ${JSON.stringify(values["storage-policy"])})`,
+    );
+  }
+
+  const storagePolicy = values["storage-policy"];
+  // --expiration is unix seconds. Allow 0 explicitly (the no-storage value);
+  // the parseUnixSeconds helper rejects 0, so we hand-validate here.
+  let expirationSeconds;
+  if (values.expiration !== undefined) {
+    const n = Number(values.expiration);
+    if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) {
+      throw new ConfigError(
+        `--expiration must be a non-negative integer unix-seconds value (got ${JSON.stringify(values.expiration)})`,
+      );
+    }
+    expirationSeconds = n;
+  }
+
+  // Same matrix as packages/push/src/client.ts resolveBroadcastExpiration:
+  // no-storage requires 0; most-recent-message requires nonzero; the SDK
+  // mirrors this so the script and the package agree at every byte.
+  if (storagePolicy === "no-storage") {
+    if (expirationSeconds !== undefined && expirationSeconds !== 0) {
+      throw new ConfigError(
+        `--storage-policy=no-storage requires --expiration=0 (received ${expirationSeconds}). No-storage channels cannot defer delivery; create the channel with --storage-policy=most-recent-message if you need a TTL. See MS032.`,
+      );
+    }
+  } else {
+    if (expirationSeconds === 0) {
+      throw new ConfigError(
+        `--storage-policy=most-recent-message requires a nonzero --expiration (received 0). A TTL of 0 defeats the channel's storage policy. See MS032.`,
+      );
+    }
+  }
+
   return {
     mode: "broadcast",
     env: values.env,
@@ -410,6 +456,8 @@ function validateBroadcast(values, modeFlags) {
     stateFile: values["state-file"],
     staleDate: parseUnixSeconds(values["stale-date"], "--stale-date"),
     priority: values.priority,
+    storagePolicy,
+    expirationSeconds,
     print: values.print,
     describe: values.describe,
     json: values.json,
@@ -682,12 +730,31 @@ function buildHeadersForDescribe(config, bundleId) {
   return buildDeviceHeaders(config, "<not-minted>", bundleId);
 }
 
+const BROADCAST_DEFAULT_TTL_SECONDS = 3600;
+
+// Resolve the broadcast apns-expiration value from a validated broadcast
+// config. The CLI flag combinations are already validated by
+// validateBroadcast; this helper only translates the resolved policy to a
+// concrete unix-seconds integer (or 0). Mirrors
+// packages/push/src/client.ts resolveBroadcastExpiration so the script and
+// the SDK produce identical headers byte-for-byte.
+function resolveBroadcastExpiration(config) {
+  const policy = config.storagePolicy ?? "no-storage";
+  if (policy === "no-storage") return 0;
+  return config.expirationSeconds ?? Math.floor(Date.now() / 1000) + BROADCAST_DEFAULT_TTL_SECONDS;
+}
+
 function buildBroadcastHeaders(config, jwt, bundleId) {
   // Apple "Sending broadcast push notification requests to APNs" doc:
   // path is /4/broadcasts/apps/<bundle ID>, no apns-topic, channel id in
   // apns-channel-id header, push-type liveactivity. apns-expiration is
-  // required; the script sets 0 for No-Storage compatibility.
+  // required; the value depends on the channel's storage policy:
+  //   - no-storage channels: must be 0 (immediate delivery only).
+  //   - most-recent-message channels: nonzero TTL; defaults to now+3600
+  //     when --expiration is omitted, matching the @mobile-surfaces/push
+  //     SDK so the script and the package agree byte-for-byte.
   const priority = config.priority ?? "5";
+  const expiration = resolveBroadcastExpiration(config);
   return {
     ":method": "POST",
     ":path": `/4/broadcasts/apps/${bundleId}`,
@@ -695,7 +762,7 @@ function buildBroadcastHeaders(config, jwt, bundleId) {
     "apns-channel-id": config.channelId,
     "apns-push-type": "liveactivity",
     "apns-priority": priority,
-    "apns-expiration": "0",
+    "apns-expiration": String(expiration),
     "content-type": "application/json",
   };
 }
