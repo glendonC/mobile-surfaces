@@ -55,10 +55,18 @@ export {
 } from "./errors.ts";
 
 export {
+  TRAP_BINDINGS,
   TRAP_ID_BY_ERROR_CLASS,
+  docsUrlForErrorClass,
+  findTrap,
+  findTrapByErrorClass,
   trapIdForErrorClass,
 } from "./trap-bindings.ts";
-export type { TrapBoundErrorClassName } from "./trap-bindings.ts";
+export type {
+  BoundTrapId,
+  TrapBinding,
+  TrapBoundErrorClassName,
+} from "./trap-bindings.ts";
 
 export {
   liveActivityAlertPayload,
