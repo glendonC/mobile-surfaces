@@ -69,8 +69,11 @@ function renderEntry(entry) {
   lines.push(`**Fix.** ${entry.fix}`);
   if (entry.docs && entry.docs.length > 0) {
     lines.push("");
+    // data/traps.json `docs` entries are full URLs (the long-form pages
+    // live at https://mobile-surfaces.com/docs). Emit each as a clickable
+    // markdown link with the URL as both label and target.
     lines.push(
-      `**See:** ${entry.docs.map((d) => `\`${d}\``).join(", ")}`,
+      `**See:** ${entry.docs.map((d) => `[${d}](${d})`).join(", ")}`,
     );
   }
   if (entry.appleDocs && entry.appleDocs.length > 0) {
@@ -142,7 +145,7 @@ const body = [
   "- **When generating or editing code in a Mobile Surfaces project**, treat every `error` rule as a hard invariant. Do not bypass it; if your change requires breaking the invariant, surface that to the user and stop.",
   "- **When auditing an existing project**, walk the index from top to bottom. Static rules can be checked by reading files; config rules by reading `app.json`, `package.json`, and `expo-target.config.js`; runtime rules by inspecting recent APNs response codes; advisory rules by reading the symptom and confirming the user has runbook coverage.",
   "- **When suggesting fixes**, cite the rule id (e.g. `MS013`) so the user can trace the recommendation. The catalog id is stable across releases.",
-  "- **Source of truth.** This file is generated from `data/traps.json`. Local docs in `docs/` carry the long-form story; this catalog carries the action-oriented summary.",
+  "- **Source of truth.** This file is generated from `data/traps.json`. The long-form docs live on the live site at https://mobile-surfaces.com/docs; this catalog carries the action-oriented summary.",
   "",
   "## Rules",
   "",
@@ -150,13 +153,13 @@ const body = [
   "",
   "## Related local documentation",
   "",
-  "- [`docs/architecture.md`](docs/architecture.md): the contract, the surfaces, the adapter boundary.",
-  "- [`docs/multi-surface.md`](docs/multi-surface.md): every `kind` value and the projection it drives.",
-  "- [`docs/backend-integration.md`](docs/backend-integration.md): domain event to snapshot to APNs walkthrough.",
-  "- [`docs/push.md`](docs/push.md): wire-layer reference, SDK, smoke script, token taxonomy, error reasons.",
-  "- [`docs/observability.md`](docs/observability.md): which catalog-bound errors are worth alerting on, what a stuck Live Activity looks like on the wire, recommended log shape.",
-  "- [`docs/troubleshooting.md`](docs/troubleshooting.md): symptom-to-fix recipes for failures not in this catalog.",
-  "- [`docs/traps.md`](docs/traps.md): schema and workflow for editing this catalog.",
+  "- [Architecture](https://mobile-surfaces.com/docs/architecture): the contract, the surfaces, the adapter boundary.",
+  "- [Multi-surface](https://mobile-surfaces.com/docs/multi-surface): every `kind` value and the projection it drives.",
+  "- [Backend integration](https://mobile-surfaces.com/docs/backend-integration): domain event to snapshot to APNs walkthrough.",
+  "- [Push](https://mobile-surfaces.com/docs/push): wire-layer reference, SDK, smoke script, token taxonomy, error reasons.",
+  "- [Observability](https://mobile-surfaces.com/docs/observability): which catalog-bound errors are worth alerting on, what a stuck Live Activity looks like on the wire, recommended log shape.",
+  "- [Troubleshooting](https://mobile-surfaces.com/docs/troubleshooting): symptom-to-fix recipes for failures not in this catalog.",
+  "- [Trap catalog maintenance](https://mobile-surfaces.com/docs/traps): schema and workflow for editing this catalog.",
   "",
 ];
 

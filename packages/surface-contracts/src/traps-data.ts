@@ -23,7 +23,7 @@ export const traps: readonly TrapEntry[] = [
       "script": "scripts/check-adapter-boundary.mjs"
     },
     "docs": [
-      "docs/architecture.md#adapter-contract"
+      "https://mobile-surfaces.com/docs/architecture#adapter-contract"
     ],
     "since": "1.0.0"
   },
@@ -43,7 +43,7 @@ export const traps: readonly TrapEntry[] = [
       "script": "scripts/check-activity-attributes.mjs"
     },
     "docs": [
-      "docs/architecture.md#native-constraints"
+      "https://mobile-surfaces.com/docs/architecture#native-constraints"
     ],
     "since": "1.0.0"
   },
@@ -181,7 +181,7 @@ export const traps: readonly TrapEntry[] = [
       "https://developer.apple.com/documentation/usernotifications/sending-notification-requests-to-apns"
     ],
     "docs": [
-      "docs/push.md#error-responses"
+      "https://mobile-surfaces.com/docs/push#error-responses"
     ],
     "since": "1.0.0",
     "errorClasses": [
@@ -202,7 +202,7 @@ export const traps: readonly TrapEntry[] = [
     "fix": "Set ios.deploymentTarget to '17.2' in apps/mobile/app.json (or via expo-build-properties) and rerun prebuild.",
     "iosMin": "17.2",
     "docs": [
-      "docs/compatibility.md"
+      "https://mobile-surfaces.com/docs/compatibility"
     ],
     "since": "1.0.0"
   },
@@ -224,7 +224,7 @@ export const traps: readonly TrapEntry[] = [
       "script": "scripts/check-app-group-identity.mjs"
     },
     "docs": [
-      "docs/ios-environment.md"
+      "https://mobile-surfaces.com/docs/ios-environment"
     ],
     "since": "1.0.0"
   },
@@ -241,7 +241,7 @@ export const traps: readonly TrapEntry[] = [
     "symptom": "APNs responds 400 BadDeviceToken. The token is valid; it just belongs to the other environment.",
     "fix": "Use environment: 'development' for dev-client and expo run:ios builds, environment: 'production' only for TestFlight and App Store builds. Track which environment minted each token.",
     "docs": [
-      "docs/push.md#error-responses"
+      "https://mobile-surfaces.com/docs/push#error-responses"
     ],
     "since": "1.0.0",
     "errorClasses": [
@@ -261,7 +261,7 @@ export const traps: readonly TrapEntry[] = [
     "symptom": "Updates land for the first few pushes then mysteriously stop arriving on the device. APNs returns 200; iOS still drops them. Logs show TooManyRequests bursts.",
     "fix": "Default to priority 5 for Live Activity content-state updates. Reserve priority 10 for state transitions the user must see immediately (queued→active, completed).",
     "docs": [
-      "docs/push.md#error-responses"
+      "https://mobile-surfaces.com/docs/push#error-responses"
     ],
     "since": "1.0.0",
     "errorClasses": [
@@ -282,7 +282,7 @@ export const traps: readonly TrapEntry[] = [
     "fix": "Subscribe via liveActivityAdapter.addListener('onPushToStartToken', ...) inside a mount-time effect. Re-store the token on every emission, since Apple may rotate at cold launch or system rotation.",
     "iosMin": "17.2",
     "docs": [
-      "docs/push.md#token-taxonomy"
+      "https://mobile-surfaces.com/docs/push#token-taxonomy"
     ],
     "since": "1.0.0"
   },
@@ -299,7 +299,7 @@ export const traps: readonly TrapEntry[] = [
     "symptom": "An Xcode change you made to fix a build issue disappears after pnpm mobile:prebuild:ios and the original problem returns. Or the change persists locally but breaks every other contributor.",
     "fix": "Edit the source files instead: app.json for plist/entitlements, packages/live-activity/ios/ for native module Swift, apps/mobile/targets/widget/ for the WidgetKit target. Then rerun prebuild.",
     "docs": [
-      "docs/ios-environment.md"
+      "https://mobile-surfaces.com/docs/ios-environment"
     ],
     "since": "1.0.0"
   },
@@ -316,7 +316,7 @@ export const traps: readonly TrapEntry[] = [
     "symptom": "APNs responds 400 TopicDisallowed even though your auth key is correctly enabled for the app. The topic header has the suffix doubled or in the wrong position.",
     "fix": "Set APNS_BUNDLE_ID to the bare bundle id (e.g. com.example.mobilesurfaces). The SDK and scripts/send-apns.mjs both handle the suffix internally.",
     "docs": [
-      "docs/push.md#error-responses"
+      "https://mobile-surfaces.com/docs/push#error-responses"
     ],
     "since": "1.0.0",
     "errorClasses": [
@@ -337,7 +337,7 @@ export const traps: readonly TrapEntry[] = [
     "fix": "No client workaround. Document in customer-support runbooks: 'If the Lock Screen activity does not appear after a remote-start push, ask the user to open the app once.'",
     "iosMin": "17.2",
     "docs": [
-      "docs/push.md#fb21158660-push-to-start-after-force-quit"
+      "https://mobile-surfaces.com/docs/push#fb21158660-push-to-start-after-force-quit"
     ],
     "since": "1.0.0"
   },
@@ -353,7 +353,7 @@ export const traps: readonly TrapEntry[] = [
     "symptom": "Backend send to a stored token returns 410 Unregistered or 400 BadDeviceToken on a previously-working device. The user did nothing wrong; the OS rotated the token.",
     "fix": "Treat the latest event as authoritative. Re-store on every emission keyed by user/device id, and update the active record rather than appending.",
     "docs": [
-      "docs/push.md#token-taxonomy"
+      "https://mobile-surfaces.com/docs/push#token-taxonomy"
     ],
     "since": "1.0.0",
     "errorClasses": [
@@ -373,7 +373,7 @@ export const traps: readonly TrapEntry[] = [
     "symptom": "Backend keeps spending sends on a token that produces no user-visible effect. No error, just silent drops.",
     "fix": "Wire onActivityStateChange to your token store; mark tokens for the activity as terminal and stop selecting them for sends.",
     "docs": [
-      "docs/push.md#token-taxonomy"
+      "https://mobile-surfaces.com/docs/push#token-taxonomy"
     ],
     "since": "1.0.0"
   },
@@ -389,7 +389,7 @@ export const traps: readonly TrapEntry[] = [
     "symptom": "Update lands at APNs (200) but appears not to do anything. Reading the harness shows a different per-activity token than what your backend stored.",
     "fix": "Re-store on every onPushToken emission; treat tokens as activity-scoped, not user-scoped.",
     "docs": [
-      "docs/push.md#token-taxonomy"
+      "https://mobile-surfaces.com/docs/push#token-taxonomy"
     ],
     "since": "1.0.0"
   },
@@ -406,7 +406,7 @@ export const traps: readonly TrapEntry[] = [
     "symptom": "Type errors on snapshot helpers, or hand-rolled APNs code that diverges from the validated contract. The failure mode is wire-level drift between client and server.",
     "fix": "Add @mobile-surfaces/surface-contracts on every layer that emits or consumes a snapshot. Add @mobile-surfaces/push on the backend. Both packages release together (linked group).",
     "docs": [
-      "docs/backend-integration.md"
+      "https://mobile-surfaces.com/docs/backend-integration"
     ],
     "since": "1.0.0"
   },
@@ -423,7 +423,7 @@ export const traps: readonly TrapEntry[] = [
     "symptom": "Widget extension reads its placeholder snapshot, never the live one. Control toggle does nothing visible. No log message; the App Group is just absent.",
     "fix": "Add the entitlement to apps/mobile/app.json under expo.ios.entitlements. Match it on the widget target's expo-target.config.js.",
     "docs": [
-      "docs/ios-environment.md"
+      "https://mobile-surfaces.com/docs/ios-environment"
     ],
     "since": "1.0.0"
   },
@@ -441,7 +441,7 @@ export const traps: readonly TrapEntry[] = [
     "symptom": "Hand-managed Xcode target gets wiped on the next prebuild, or the widget extension never appears in the built app.",
     "fix": "Keep the target source under apps/mobile/targets/widget/ with an expo-target.config.js. Pin @bacons/apple-targets at the supported exact version.",
     "docs": [
-      "docs/architecture.md"
+      "https://mobile-surfaces.com/docs/architecture"
     ],
     "since": "1.0.0"
   },
@@ -459,7 +459,7 @@ export const traps: readonly TrapEntry[] = [
     "fix": "Set ios.deploymentTarget to '17.2' (or higher) in app.json or via expo-build-properties.",
     "iosMin": "17.2",
     "docs": [
-      "docs/compatibility.md"
+      "https://mobile-surfaces.com/docs/compatibility"
     ],
     "since": "1.0.0"
   },
@@ -476,7 +476,7 @@ export const traps: readonly TrapEntry[] = [
     "symptom": "Throw at construction time (createPushClient) or at the first send. Often hidden inside a deployment whose env vars never made it into the runtime.",
     "fix": "Verify each env var on startup. The SDK's createPushClient validates presence; reject fast if any are missing.",
     "docs": [
-      "docs/push.md#sdk-reference"
+      "https://mobile-surfaces.com/docs/push#sdk-reference"
     ],
     "since": "1.0.0",
     "errorClasses": [
@@ -499,7 +499,7 @@ export const traps: readonly TrapEntry[] = [
       "script": "scripts/check-ios-gitignore.mjs"
     },
     "docs": [
-      "docs/ios-environment.md"
+      "https://mobile-surfaces.com/docs/ios-environment"
     ],
     "since": "1.0.0"
   },
@@ -516,7 +516,7 @@ export const traps: readonly TrapEntry[] = [
     "symptom": "All sends fail with 403. ForbiddenError means the auth key was revoked in the Apple Developer portal. InvalidProviderTokenError means the JWT is malformed or signed with the wrong key id / team id. ExpiredProviderTokenError means the JWT is older than 60 minutes (typically clock skew, since the SDK refreshes at 50 minutes).",
     "fix": "ForbiddenError: mint a new auth key in the Apple Developer portal and update APNS_KEY_ID / APNS_KEY_PATH. InvalidProviderTokenError: verify APNS_KEY_ID matches the key file and APNS_TEAM_ID matches the developer account. ExpiredProviderTokenError: check system clock alignment against NTP; if the SDK is long-lived, confirm createPushClient is not being held past process restarts without re-minting.",
     "docs": [
-      "docs/push.md#error-responses"
+      "https://mobile-surfaces.com/docs/push#error-responses"
     ],
     "since": "2.1.0",
     "errorClasses": [
@@ -539,7 +539,7 @@ export const traps: readonly TrapEntry[] = [
     "symptom": "Broadcast or channel management fails with 400 (missing or bad channel id) or 410 (not registered). Common root causes: the channel was created against the opposite APNs environment, or the id was URL-decoded, truncated, or otherwise mutated before being sent back.",
     "fix": "MissingChannelId: pass channelId to broadcast() or deleteChannel(). BadChannelId: use the id returned by createChannel() verbatim with no URL-decoding or truncation. ChannelNotRegistered: channels are environment-scoped, so re-create the channel in the target environment or call listChannels() to confirm the id exists there.",
     "docs": [
-      "docs/push.md#error-responses"
+      "https://mobile-surfaces.com/docs/push#error-responses"
     ],
     "since": "3.1.0",
     "errorClasses": [
@@ -561,7 +561,7 @@ export const traps: readonly TrapEntry[] = [
     "symptom": "APNs returns 400 BadDate or 400 BadExpirationDate. The push payload looked valid locally but a date field was a millisecond timestamp, a negative number, or a non-integer; or apns-expiration was set on a no-storage broadcast channel.",
     "fix": "Confirm every date field is a positive unix-seconds integer (not milliseconds, not Date.now()). For broadcast on a no-storage channel, apns-expiration must be 0; the SDK's broadcast() already enforces this.",
     "docs": [
-      "docs/push.md#error-responses"
+      "https://mobile-surfaces.com/docs/push#error-responses"
     ],
     "since": "3.1.0",
     "errorClasses": [
@@ -584,7 +584,7 @@ export const traps: readonly TrapEntry[] = [
     "symptom": "createChannel() or broadcast() fails with 403 FeatureNotEnabled. The auth key is otherwise valid and other push types succeed; only broadcast-related calls reject.",
     "fix": "Enable broadcast in the Apple Developer portal under Certificates, Identifiers & Profiles > Keys > select the key > edit > tick 'Broadcast to Live Activity'. Save and retry; no client change is needed.",
     "docs": [
-      "docs/push.md#error-responses"
+      "https://mobile-surfaces.com/docs/push#error-responses"
     ],
     "since": "3.1.0",
     "errorClasses": [
@@ -604,7 +604,7 @@ export const traps: readonly TrapEntry[] = [
     "symptom": "APNs returns 400 MissingTopic. The bundle id was unset or an empty string, so the SDK emitted only the .push-type.liveactivity suffix (or nothing) as the topic header.",
     "fix": "Confirm APNS_BUNDLE_ID is set to the bare bundle identifier (e.g. com.example.app). Do not include the .push-type.liveactivity suffix; the SDK appends it internally. See MS018 for the inverse failure (suffix included by mistake).",
     "docs": [
-      "docs/push.md#error-responses"
+      "https://mobile-surfaces.com/docs/push#error-responses"
     ],
     "since": "3.1.0",
     "errorClasses": [

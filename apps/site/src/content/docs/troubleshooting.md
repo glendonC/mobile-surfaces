@@ -1,8 +1,13 @@
+---
+title: "Troubleshooting"
+description: "Symptom-to-fix recipes for silent iOS failures."
+order: 90
+---
 # Troubleshooting
 
 Symptoms and fixes for the most common Mobile Surfaces dev-loop snags. Run `pnpm dev:doctor` first; it covers Node, pnpm, Xcode, the default simulator, and the Apple Team ID placeholder.
 
-For production-traffic failure modes (which catalog-bound errors are worth alerting on, what a stuck Live Activity looks like on the wire, recommended hook log shape), see [`docs/observability.md`](./observability.md).
+For production-traffic failure modes (which catalog-bound errors are worth alerting on, what a stuck Live Activity looks like on the wire, recommended hook log shape), see [`docs/observability.md`](/docs/observability).
 
 ## "Activities supported: no" in the harness
 

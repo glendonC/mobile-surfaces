@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Enforces the Live Activity adapter boundary documented in
-// docs/architecture.md: only apps/mobile/src/liveActivity/index.ts may import
+// https://mobile-surfaces.com/docs/architecture: only apps/mobile/src/liveActivity/index.ts may import
 // from @mobile-surfaces/live-activity. Every other call site under
 // apps/mobile/src/ must go through the adapter re-export so a future bridge
 // swap (expo-live-activity, expo-widgets, etc.) stays a one-file edit.

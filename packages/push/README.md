@@ -60,7 +60,7 @@ await client.deleteChannel(channel.channelId);
 await client.close();
 ```
 
-Tokens in this example come from different places: `deviceToken` from normal APNs notification registration, `activityToken` from an active Live Activity, and `pushToStartToken` from ActivityKit's push-to-start token stream. See [`docs/push.md`](../../docs/push.md#token-taxonomy) for the full token lifecycle and [`docs/ios-environment.md`](../../docs/ios-environment.md#apns-environment) for matching `environment` to development vs production builds.
+Tokens in this example come from different places: `deviceToken` from normal APNs notification registration, `activityToken` from an active Live Activity, and `pushToStartToken` from ActivityKit's push-to-start token stream. See [`https://mobile-surfaces.com/docs/push`](../.https://mobile-surfaces.com/docs/push#token-taxonomy) for the full token lifecycle and [`https://mobile-surfaces.com/docs/ios-environment`](../.https://mobile-surfaces.com/docs/ios-environment#apns-environment) for matching `environment` to development vs production builds.
 
 ## Environment routing
 
@@ -123,6 +123,6 @@ A single long-lived HTTP/2 session per (origin) is multiplexed across concurrent
 
 ## Next steps
 
-- Read [`docs/backend-integration.md`](../../docs/backend-integration.md) for the full domain event to snapshot to APNs flow.
-- Read [`docs/push.md`](../../docs/push.md) for retry policy, APNs hosts, token taxonomy, and smoke-script flags.
-- Read [`docs/troubleshooting.md`](../../docs/troubleshooting.md) when APNs returns 200 but nothing appears on the Lock Screen.
+- Read [`https://mobile-surfaces.com/docs/backend-integration`](../.https://mobile-surfaces.com/docs/backend-integration) for the full domain event to snapshot to APNs flow.
+- Read [`https://mobile-surfaces.com/docs/push`](../.https://mobile-surfaces.com/docs/push) for retry policy, APNs hosts, token taxonomy, and smoke-script flags.
+- Read [`https://mobile-surfaces.com/docs/troubleshooting`](../.https://mobile-surfaces.com/docs/troubleshooting) when APNs returns 200 but nothing appears on the Lock Screen.

@@ -1,0 +1,228 @@
+---
+import DocsLayout from "../layouts/DocsLayout.astro";
+
+// The traps catalog renders directly from data/traps.json so the page count,
+// the severity rollup, and every entry stay in lockstep with CLAUDE.md and
+// the runtime trap-bindings table. Vite handles the import statically — no
+// fs read at request time, no drift between site and source.
+import trapCatalog from "../../../../data/traps.json";
+
+interface TrapEntry {
+  id: string;
+  title: string;
+  severity: "error" | "warning" | "info";
+  detection: "static" | "config" | "runtime" | "advisory";
+  tags: string[];
+  summary: string;
+  symptom: string;
+  fix: string;
+  iosMin?: string;
+  enforcement?: { script: string };
+  appleDocs?: string[];
+  docs?: string[];
+  since: string;
+  deprecated?: boolean;
+  errorClasses?: string[];
+}
+
+const entries = (trapCatalog.entries as TrapEntry[]).filter((t) => !t.deprecated);
+
+const SEVERITY_ORDER: Record<TrapEntry["severity"], number> = {
+  error: 0,
+  warning: 1,
+  info: 2,
+};
+
+const sorted = [...entries].sort(
+  (a, b) =>
+    SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] ||
+    a.id.localeCompare(b.id),
+);
+
+const severityCounts = sorted.reduce(
+  (acc, e) => {
+    acc[e.severity] += 1;
+    return acc;
+  },
+  { error: 0, warning: 0, info: 0 } as Record<TrapEntry["severity"], number>,
+);
+
+const DETECTION_LABEL: Record<TrapEntry["detection"], string> = {
+  static: "static",
+  config: "config",
+  runtime: "runtime",
+  advisory: "advisory",
+};
+
+// Mirror the CLAUDE.md slug algorithm from scripts/generate-trap-bindings.mjs
+// so anchors on this page match the rendered catalog one-for-one and links
+// like /traps#ms015-... resolve.
+function anchorFor(entry: TrapEntry) {
+  const heading = `${entry.id}: ${entry.title}`;
+  return heading
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+// data/traps.json `docs` entries are full URLs into the live site (the
+// long-form pages live at https://mobile-surfaces.com/docs). Pass them
+// through verbatim — Astro will turn them into <a href> targets directly.
+---
+
+<DocsLayout
+  title="Trap Catalog | Mobile Surfaces"
+  description="Every iOS Live Activity silent-failure mode Mobile Surfaces documents: symptom, fix, and (for static rules) the enforcement script."
+>
+  <article class="docs-prose traps-page">
+    <h1>Trap Catalog</h1>
+    <p>
+      This is the load-bearing summary of every silent-failure trap, contract
+      invariant, and platform constraint that Mobile Surfaces tracks. The same
+      catalog is rendered into <a href="https://github.com/glendonC/mobile-surfaces/blob/main/CLAUDE.md">CLAUDE.md</a>
+      and <a href="https://github.com/glendonC/mobile-surfaces/blob/main/AGENTS.md">AGENTS.md</a>
+      for AI coding assistants. Source of truth lives in
+      <code>data/traps.json</code>.
+    </p>
+
+    <p>
+      <strong>{sorted.length} rules total</strong>: {severityCounts.error} error,{" "}
+      {severityCounts.warning} warning, {severityCounts.info} info.
+    </p>
+
+    <h2>How to use this catalog</h2>
+    <ul>
+      <li>
+        <strong>When generating or editing code in a Mobile Surfaces project</strong>,
+        treat every <code>error</code> rule as a hard invariant. If your
+        change requires breaking the invariant, surface that and stop.
+      </li>
+      <li>
+        <strong>When auditing an existing project</strong>, walk the index
+        from top to bottom. <code>static</code> rules can be checked by
+        reading files; <code>config</code> rules by reading <code>app.json</code>,
+        <code>package.json</code>, and <code>expo-target.config.js</code>;
+        <code>runtime</code> rules by inspecting recent APNs response codes;
+        <code>advisory</code> rules by reading the symptom and confirming
+        runbook coverage.
+      </li>
+      <li>
+        <strong>When suggesting fixes</strong>, cite the rule id (e.g.{" "}
+        <code>MS013</code>) so it can be traced back here.
+      </li>
+    </ul>
+
+    <h2>Index</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Severity</th>
+          <th>Detection</th>
+          <th>Title</th>
+        </tr>
+      </thead>
+      <tbody>
+        {
+          sorted.map((entry) => (
+            <tr>
+              <td><a href={`#${anchorFor(entry)}`}>{entry.id}</a></td>
+              <td>{entry.severity}</td>
+              <td>{DETECTION_LABEL[entry.detection]}</td>
+              <td>{entry.title}</td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+
+    <h2>Rules</h2>
+    {
+      sorted.map((entry) => (
+        <section class="trap-entry" id={anchorFor(entry)}>
+          <h3>
+            {entry.id}: {entry.title}
+          </h3>
+          <p class="trap-meta">
+            <strong>severity:</strong> {entry.severity} ·{" "}
+            <strong>detection:</strong> {DETECTION_LABEL[entry.detection]} ·{" "}
+            <strong>tags:</strong> {entry.tags.join(", ")}
+            {entry.iosMin && <> · <strong>ios min:</strong> {entry.iosMin}</>}
+            {entry.enforcement?.script && (
+              <>
+                {" "}· <strong>enforced by:</strong>{" "}
+                <a
+                  href={`https://github.com/glendonC/mobile-surfaces/blob/main/${entry.enforcement.script}`}
+                >
+                  <code>{entry.enforcement.script}</code>
+                </a>
+              </>
+            )}
+          </p>
+          <p>{entry.summary}</p>
+          <p>
+            <strong>Symptom.</strong> {entry.symptom}
+          </p>
+          <p>
+            <strong>Fix.</strong> {entry.fix}
+          </p>
+          {entry.docs?.length ? (
+            <p>
+              <strong>See:</strong>{" "}
+              {entry.docs.map((d, i) => (
+                <>
+                  {i > 0 && ", "}
+                  <a href={d}>{d}</a>
+                </>
+              ))}
+            </p>
+          ) : null}
+          {entry.appleDocs?.length ? (
+            <p>
+              <strong>Apple docs:</strong>{" "}
+              {entry.appleDocs.map((url, i) => (
+                <>
+                  {i > 0 && ", "}
+                  <a href={url} target="_blank" rel="noopener">ref {i + 1}</a>
+                </>
+              ))}
+            </p>
+          ) : null}
+          {entry.errorClasses?.length ? (
+            <p>
+              <strong>Error classes:</strong>{" "}
+              {entry.errorClasses.map((cls, i) => (
+                <>
+                  {i > 0 && ", "}
+                  <code>{cls}</code>
+                </>
+              ))}
+            </p>
+          ) : null}
+        </section>
+      ))
+    }
+  </article>
+</DocsLayout>
+
+<style>
+  .trap-entry {
+    margin: 32px 0;
+    padding: 20px 24px;
+    background-color: rgba(10, 10, 10, 0.025);
+    border-radius: 16px;
+    border: 1px solid rgba(10, 10, 10, 0.06);
+  }
+  .trap-entry h3 {
+    margin-top: 0;
+    scroll-margin-top: 80px;
+  }
+  .trap-meta {
+    font-size: 0.85rem;
+    color: rgba(10, 10, 10, 0.65);
+    margin: -4px 0 12px;
+  }
+  .traps-page table {
+    font-size: 0.85rem;
+  }
+</style>

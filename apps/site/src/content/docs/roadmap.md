@@ -1,3 +1,8 @@
+---
+title: "Roadmap"
+description: "Shipped work, deferred work, and frontier items."
+order: 120
+---
 # Roadmap
 
 Mobile Surfaces is an Expo iOS reference architecture for ActivityKit, WidgetKit, and APNs. The current effort is the 2026-04 architectural refactor; see `notes/refactor-2026-04.md` for the working ledger. This page summarizes what has shipped, what is in flight, what is deferred (and why), and the iOS 26 frontier.
@@ -13,14 +18,14 @@ Pinned row, verified end-to-end:
 - Xcode 26 (`scripts/doctor.mjs` enforces the major). Swift 6.2 in toolchain.
 - `@bacons/apple-targets` exact-pinned at `4.0.6`.
 
-See [`compatibility.md`](./compatibility.md) for the canonical pinned row.
+See [`compatibility.md`](/docs/compatibility) for the canonical pinned row.
 
 ### Phase 2: Multi-projection contract
 
 `LiveSurfaceSnapshot` is a true `z.discriminatedUnion("kind", […])` with six members: `liveActivity`, `widget`, `control`, `lockAccessory`, `standby`, `notification`. Per-kind slices (`liveActivity`, `widget`, `control`, `notification`, `lockAccessory`, `standby`) are strict objects attached to their respective branches.
 
 - The published JSON Schema is `oneOf` with `const`-discriminated branches, proper kind ↔ slice enforcement, not a loose union.
-- Migration codec ships in `packages/surface-contracts`. Through 2.x: `liveSurfaceSnapshotV0`, `migrateV0ToV1`, `safeParseAnyVersion` plus a missing-`kind` preprocess shim. From 3.0 forward: `liveSurfaceSnapshotV1`, `migrateV1ToV2`, `safeParseAnyVersion` chained v2 -> v1; the v0 codec and the missing-`kind` preprocess were removed. See [`schema-migration.md`](./schema-migration.md).
+- Migration codec ships in `packages/surface-contracts`. Through 2.x: `liveSurfaceSnapshotV0`, `migrateV0ToV1`, `safeParseAnyVersion` plus a missing-`kind` preprocess shim. From 3.0 forward: `liveSurfaceSnapshotV1`, `migrateV1ToV2`, `safeParseAnyVersion` chained v2 -> v1; the v0 codec and the missing-`kind` preprocess were removed. See [`schema-migration.md`](/docs/schema-migration).
 - `$id` pins to `https://unpkg.com/@mobile-surfaces/surface-contracts@<major.minor>/schema.json` so a future minor that adds a discriminated-union variant can publish a new URL without yanking what consumers reference. The current URL is `@3.0/schema.json`; `@2.1`, `@2.0` etc. stay resolvable on unpkg.
 - Standard Schema interop is live: Zod 4.x implements `~standard` (`{ vendor: "zod", version: 1, validate, jsonSchema }`) on every exported schema. A fixture-validation test pins this so it cannot regress.
 
@@ -31,7 +36,7 @@ See [`compatibility.md`](./compatibility.md) for the canonical pinned row.
 - Harness wires "Refresh widget" and "Toggle control state" actions; fixtures for `kind: "widget"` and `kind: "control"` ship under `data/surface-fixtures/`.
 - `_shared` AppIntent files give intents both app and extension target membership via `@bacons/apple-targets`.
 
-The notification content extension is intentionally not included in this slice; it is listed under Deferred below. Lock-screen accessory and StandBy variants landed alongside the home and control widgets — see the per-`kind` status sections in [`docs/multi-surface.md`](./multi-surface.md).
+The notification content extension is intentionally not included in this slice; it is listed under Deferred below. Lock-screen accessory and StandBy variants landed alongside the home and control widgets — see the per-`kind` status sections in [`docs/multi-surface.md`](/docs/multi-surface).
 
 ### Phase 4: Modern APNs
 
@@ -60,7 +65,7 @@ Reshape that addressed the four audit findings v1 could not patch:
 - `liveSurfaceAlertPayload` and `toAlertPayload` moved to `@mobile-surfaces/push` and renamed `liveActivityAlertPayload` / `liveActivityAlertPayloadFromSnapshot`. The `aps` envelope is APNs wire format and belongs next to the SDK that sends it.
 - v0 codec dropped (it was reconstructed from an internal commit and never consumed externally). The missing-`kind` preprocess removed alongside it; v2 producers must set `kind` explicitly.
 
-The v1->v2 migration codec lives for the entire 3.x release line and is removed in 4.0.0. See [`schema-migration.md`](./schema-migration.md) for the deprecation timeline and worked examples.
+The v1->v2 migration codec lives for the entire 3.x release line and is removed in 4.0.0. See [`schema-migration.md`](/docs/schema-migration) for the deprecation timeline and worked examples.
 
 ### CLI
 
@@ -95,7 +100,7 @@ Revisit when Expo SDK 56 ships. Until then, the duplication and the byte-identit
 
 The contract accommodates `kind: "notification"` and the `toNotificationContentPayload` projection helper is shipped, but the starter does not register a `UNNotificationContentExtension` target yet. Backends can already emit notification snapshots; they will render as standard alert payloads until the content extension lands.
 
-Lock-screen accessory and StandBy were originally deferred alongside this work but have since shipped: `kind: "lockAccessory"` projects via `toLockAccessoryEntry` and renders through `MobileSurfacesLockAccessoryWidget`; `kind: "standby"` projects via `toStandbyEntry` and renders through `MobileSurfacesStandbyWidget`. See the per-`kind` status sections in [`docs/multi-surface.md`](./multi-surface.md).
+Lock-screen accessory and StandBy were originally deferred alongside this work but have since shipped: `kind: "lockAccessory"` projects via `toLockAccessoryEntry` and renders through `MobileSurfacesLockAccessoryWidget`; `kind: "standby"` projects via `toStandbyEntry` and renders through `MobileSurfacesStandbyWidget`. See the per-`kind` status sections in [`docs/multi-surface.md`](/docs/multi-surface).
 
 ## Frontier: iOS 26 (Phase 8)
 

@@ -1,3 +1,8 @@
+---
+title: "Trap Catalog Maintenance"
+description: "Schema and workflow for editing the trap catalog that generates AGENTS.md and CLAUDE.md."
+order: 100
+---
 # Trap Catalog
 
 `data/traps.json` is the load-bearing artifact for Mobile Surfaces' agentic-development surface. It enumerates every silent-failure trap, contract invariant, and platform constraint that downstream consumers (the AI assistant guides, future audit CLI, future MCP server, the long-form troubleshooting recipes) read from. Edit the catalog; everything else regenerates.
@@ -89,6 +94,6 @@ A structured catalog gives every fact one home. When iOS 27 lands and the deploy
 
 ## See also
 
-- [`AGENTS.md`](../AGENTS.md) and [`CLAUDE.md`](../CLAUDE.md): generated guides for AI coding assistants.
-- [`docs/architecture.md`](./architecture.md): the contract, the surfaces, the adapter boundary.
-- [`docs/troubleshooting.md`](./troubleshooting.md): long-form symptom-to-fix recipes; the catalog summarizes what `troubleshooting.md` walks through.
+- [`AGENTS.md`](/traps) and [`CLAUDE.md`](/traps): generated guides for AI coding assistants.
+- [`docs/architecture.md`](/docs/architecture): the contract, the surfaces, the adapter boundary.
+- [`docs/troubleshooting.md`](/docs/troubleshooting): long-form symptom-to-fix recipes; the catalog summarizes what `troubleshooting.md` walks through.

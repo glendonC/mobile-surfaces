@@ -1,3 +1,8 @@
+---
+title: "Schema Migration"
+description: "v1 to v2 codec, deprecation timeline, JSON Schema $id, future evolution policy."
+order: 80
+---
 # Schema Migration
 
 `LiveSurfaceSnapshot` is at `schemaVersion: "2"`. Version `2` moved liveActivity-only timing and stage hints out of the base shape, promoted `updatedAt` to required, and tightened the discriminated union to require an explicit `kind`. This page covers what changed, how to migrate stored payloads from v1, how to handle in-flight payloads at the edge, and the policy for future evolution.

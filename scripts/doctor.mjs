@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Toolchain + project preflight. Catches the setup mistakes that produce the
 // most confusing downstream errors: wrong Node major, missing pnpm, Xcode
-// older than the row in docs/compatibility.md, missing simulator, and
+// older than the row in https://mobile-surfaces.com/docs/compatibility, missing simulator, and
 // app.json placeholders that block device builds. Direct port of the prior
 // scripts/doctor.sh; emits a DiagnosticReport so the surface:diagnose
 // bundle and any AI tooling can consume the results structurally.

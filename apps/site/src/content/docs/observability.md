@@ -1,3 +1,8 @@
+---
+title: "Observability"
+description: "Which catalog-bound errors are worth alerting on, hook signatures, recommended log shape."
+order: 50
+---
 # Observability
 
 The Mobile Surfaces pitch is that iOS Live Activities silently fail. The push returns HTTP 200, the app compiles, the Lock Screen stays on its old state, and nothing in your stack tells you why. This page documents the seams the SDK exposes so a backend running real traffic can detect those failures from logs and metrics instead of waiting for support tickets.
@@ -121,7 +126,7 @@ Alert on any sustained non-zero rate per `trap` label. The catalog-bound subset 
 stale_token_rate = (count(BadDeviceToken) + count(Unregistered)) / count(send_attempts)
 ```
 
-A healthy production token store stays below roughly 5% sustained. Above that, your backend is holding tokens past their lifetime: app uninstalls, environment mismatches between dev-client and TestFlight installs, or per-activity tokens that were never evicted when the activity ended. Wire token eviction to `UnregisteredError` and to the device-side `onActivityStateChange` terminal states (`ended` / `dismissed`); see [`docs/push.md#token-taxonomy`](./push.md#token-taxonomy).
+A healthy production token store stays below roughly 5% sustained. Above that, your backend is holding tokens past their lifetime: app uninstalls, environment mismatches between dev-client and TestFlight installs, or per-activity tokens that were never evicted when the activity ended. Wire token eviction to `UnregisteredError` and to the device-side `onActivityStateChange` terminal states (`ended` / `dismissed`); see [`docs/push.md#token-taxonomy`](/docs/push#token-taxonomy).
 
 ### `TooManyRequests` bursts
 
@@ -203,6 +208,6 @@ Path values referencing `$HOME` should be rewritten to `~/...` before any line l
 
 ## Cross-references
 
-- [`docs/push.md`](./push.md): the wire-layer reference, SDK API, error class hierarchy, retry policy.
-- [`docs/troubleshooting.md`](./troubleshooting.md): symptom-to-fix recipes for the runtime failures observable from these hooks.
-- [`CLAUDE.md`](../CLAUDE.md) / [`AGENTS.md`](../AGENTS.md): the trap catalog, generated from `data/traps.json`. Each catalog-bound error class above carries a `trapId` that links back to a rule with `summary` / `symptom` / `fix`.
+- [`docs/push.md`](/docs/push): the wire-layer reference, SDK API, error class hierarchy, retry policy.
+- [`docs/troubleshooting.md`](/docs/troubleshooting): symptom-to-fix recipes for the runtime failures observable from these hooks.
+- [`CLAUDE.md`](/traps) / [`AGENTS.md`](/traps): the trap catalog, generated from `data/traps.json`. Each catalog-bound error class above carries a `trapId` that links back to a rule with `summary` / `symptom` / `fix`.

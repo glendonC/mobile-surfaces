@@ -1,0 +1,94 @@
+---
+import { getCollection } from "astro:content";
+import DocsLayout from "../../layouts/DocsLayout.astro";
+
+const allDocs = await getCollection("docs");
+const docs = allDocs
+  .map((doc) => ({
+    slug: doc.id,
+    title: doc.data.title,
+    description: doc.data.description,
+    order: doc.data.order,
+  }))
+  .sort((a, b) => a.order - b.order);
+
+const personas = [
+  {
+    label: "Backend integrator",
+    intro: "A service that emits snapshots and sends APNs pushes from Node, no mobile work.",
+    path: ["backend-integration", "push", "troubleshooting"],
+  },
+  {
+    label: "Mobile app developer",
+    intro: "An iPhone app on the starter, every surface wired up locally.",
+    path: ["ios-environment", "multi-surface", "troubleshooting"],
+  },
+  {
+    label: "Foreign Expo integrator",
+    intro: "An existing Expo app that adopts Mobile Surfaces without forking the starter.",
+    path: ["compatibility", "architecture", "schema-migration"],
+  },
+  {
+    label: "Triaging a silent failure",
+    intro: "A live bug where the Lock Screen is empty or APNs returns 200 with no effect.",
+    path: ["troubleshooting", "push", "observability"],
+  },
+];
+
+function titleFor(slug: string) {
+  return docs.find((d) => d.slug === slug)?.title ?? slug;
+}
+---
+
+<DocsLayout
+  title="Documentation | Mobile Surfaces"
+  description="Mobile Surfaces documentation hub: architecture, push, multi-surface, troubleshooting."
+>
+  <article class="docs-prose">
+    <h1>Documentation</h1>
+    <p>
+      Mobile Surfaces is a starter and reference architecture for iOS Live
+      Activities, Dynamic Island, home-screen widgets, and iOS 18 control
+      widgets in Expo apps. Pick the path that fits your role, or jump
+      straight into the full reference.
+    </p>
+
+    <h2>Reading paths</h2>
+    <ul>
+      {
+        personas.map((p) => (
+          <li>
+            <strong>{p.label}.</strong> {p.intro}
+            {" "}
+            {p.path.map((slug, i) => (
+              <>
+                {i > 0 && " → "}
+                <a href={`/docs/${slug}`}>{titleFor(slug)}</a>
+              </>
+            ))}
+          </li>
+        ))
+      }
+    </ul>
+
+    <h2>Full reference</h2>
+    <ul>
+      {
+        docs.map((d) => (
+          <li>
+            <a href={`/docs/${d.slug}`}>{d.title}</a>
+            {d.description && <> — {d.description}</>}
+          </li>
+        ))
+      }
+    </ul>
+
+    <h2>Trap catalog</h2>
+    <p>
+      Every iOS Live Activity silent-failure mode this project documents
+      lives in <a href="/traps">the trap catalog</a>, rendered from
+      <code>data/traps.json</code>. Each entry has a symptom, a fix, and
+      (for static rules) an enforcement script in the repo.
+    </p>
+  </article>
+</DocsLayout>

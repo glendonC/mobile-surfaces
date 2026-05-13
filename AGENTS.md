@@ -72,7 +72,7 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 - **When generating or editing code in a Mobile Surfaces project**, treat every `error` rule as a hard invariant. Do not bypass it; if your change requires breaking the invariant, surface that to the user and stop.
 - **When auditing an existing project**, walk the index from top to bottom. Static rules can be checked by reading files; config rules by reading `app.json`, `package.json`, and `expo-target.config.js`; runtime rules by inspecting recent APNs response codes; advisory rules by reading the symptom and confirming the user has runbook coverage.
 - **When suggesting fixes**, cite the rule id (e.g. `MS013`) so the user can trace the recommendation. The catalog id is stable across releases.
-- **Source of truth.** This file is generated from `data/traps.json`. Local docs in `docs/` carry the long-form story; this catalog carries the action-oriented summary.
+- **Source of truth.** This file is generated from `data/traps.json`. The long-form docs live on the live site at https://mobile-surfaces.com/docs; this catalog carries the action-oriented summary.
 
 ## Rules
 
@@ -86,7 +86,7 @@ Application code under apps/*/src/ must import the live-activity adapter through
 
 **Fix.** Import from apps/mobile/src/liveActivity (the boundary re-export) instead of @mobile-surfaces/live-activity directly. Add new methods to the adapter contract first, not at the call site.
 
-**See:** `docs/architecture.md#adapter-contract`
+**See:** [https://mobile-surfaces.com/docs/architecture#adapter-contract](https://mobile-surfaces.com/docs/architecture#adapter-contract)
 
 ### MS002: ActivityKit attribute file byte-identity
 
@@ -98,7 +98,7 @@ MobileSurfacesActivityAttributes.swift in packages/live-activity/ios/ and apps/m
 
 **Fix.** Edit one file and copy verbatim into the other; pnpm surface:check verifies byte-identity. Phase 5 will replace this duplication with a local Swift Package once @bacons/apple-targets and React Native lift the upstream blocks.
 
-**See:** `docs/architecture.md#native-constraints`
+**See:** [https://mobile-surfaces.com/docs/architecture#native-constraints](https://mobile-surfaces.com/docs/architecture#native-constraints)
 
 ### MS003: Swift ContentState fields and JSON keys match Zod liveSurfaceActivityContentState
 
@@ -170,7 +170,7 @@ Per-activity Live Activity pushes are bounded at 4 KB; iOS 18 broadcast pushes a
 
 **Fix.** Trim the payload. Per-activity payloads are bounded at 4 KB; broadcast payloads at 5 KB. Shorten secondaryText, lower morePartsCount, or split a state into two smaller pushes. Validate by sending the projection through toLiveActivityContentState and measuring.
 
-**See:** `docs/push.md#error-responses`
+**See:** [https://mobile-surfaces.com/docs/push#error-responses](https://mobile-surfaces.com/docs/push#error-responses)
 
 **Apple docs:** [ref 1](https://developer.apple.com/documentation/usernotifications/sending-notification-requests-to-apns)
 
@@ -184,7 +184,7 @@ Mobile Surfaces commits to push-to-start tokens (Activity<...>.pushToStartTokenU
 
 **Fix.** Set ios.deploymentTarget to '17.2' in apps/mobile/app.json (or via expo-build-properties) and rerun prebuild.
 
-**See:** `docs/compatibility.md`
+**See:** [https://mobile-surfaces.com/docs/compatibility](https://mobile-surfaces.com/docs/compatibility)
 
 ### MS013: App Group entitlement must match host app and widget extension
 
@@ -196,7 +196,7 @@ apps/mobile/app.json, apps/mobile/targets/widget/generated.entitlements, MobileS
 
 **Fix.** Set the same group identifier on every side (default 'group.com.example.mobilesurfaces'; rename via pnpm surface:rename) and rerun prebuild. check-app-group-identity verifies parity across all five declaration sites.
 
-**See:** `docs/ios-environment.md`
+**See:** [https://mobile-surfaces.com/docs/ios-environment](https://mobile-surfaces.com/docs/ios-environment)
 
 ### MS014: APNs token environment must match the build environment
 
@@ -208,7 +208,7 @@ Tokens minted by a development build cannot authenticate against the production 
 
 **Fix.** Use environment: 'development' for dev-client and expo run:ios builds, environment: 'production' only for TestFlight and App Store builds. Track which environment minted each token.
 
-**See:** `docs/push.md#error-responses`
+**See:** [https://mobile-surfaces.com/docs/push#error-responses](https://mobile-surfaces.com/docs/push#error-responses)
 
 ### MS016: Subscribe to onPushToStartToken at mount, not on demand
 
@@ -220,7 +220,7 @@ iOS only delivers push-to-start tokens through Activity<...>.pushToStartTokenUpd
 
 **Fix.** Subscribe via liveActivityAdapter.addListener('onPushToStartToken', ...) inside a mount-time effect. Re-store the token on every emission, since Apple may rotate at cold launch or system rotation.
 
-**See:** `docs/push.md#token-taxonomy`
+**See:** [https://mobile-surfaces.com/docs/push#token-taxonomy](https://mobile-surfaces.com/docs/push#token-taxonomy)
 
 ### MS017: apps/mobile/ios/ is generated; do not edit
 
@@ -232,7 +232,7 @@ Continuous Native Generation rebuilds apps/mobile/ios/ from app.json, packages/l
 
 **Fix.** Edit the source files instead: app.json for plist/entitlements, packages/live-activity/ios/ for native module Swift, apps/mobile/targets/widget/ for the WidgetKit target. Then rerun prebuild.
 
-**See:** `docs/ios-environment.md`
+**See:** [https://mobile-surfaces.com/docs/ios-environment](https://mobile-surfaces.com/docs/ios-environment)
 
 ### MS018: APNS_BUNDLE_ID must not include the .push-type.liveactivity suffix
 
@@ -244,7 +244,7 @@ The push SDK auto-appends .push-type.liveactivity to the apns-topic; passing it 
 
 **Fix.** Set APNS_BUNDLE_ID to the bare bundle id (e.g. com.example.mobilesurfaces). The SDK and scripts/send-apns.mjs both handle the suffix internally.
 
-**See:** `docs/push.md#error-responses`
+**See:** [https://mobile-surfaces.com/docs/push#error-responses](https://mobile-surfaces.com/docs/push#error-responses)
 
 ### MS020: Per-activity and push-to-start tokens may rotate at any time
 
@@ -256,7 +256,7 @@ Both pushTokenUpdates and pushToStartTokenUpdates may emit fresh values at any m
 
 **Fix.** Treat the latest event as authoritative. Re-store on every emission keyed by user/device id, and update the active record rather than appending.
 
-**See:** `docs/push.md#token-taxonomy`
+**See:** [https://mobile-surfaces.com/docs/push#token-taxonomy](https://mobile-surfaces.com/docs/push#token-taxonomy)
 
 ### MS024: Project must depend on @mobile-surfaces/surface-contracts (and push, when sending)
 
@@ -268,7 +268,7 @@ Foreign Expo projects auditing as Mobile Surfaces consumers must list the contra
 
 **Fix.** Add @mobile-surfaces/surface-contracts on every layer that emits or consumes a snapshot. Add @mobile-surfaces/push on the backend. Both packages release together (linked group).
 
-**See:** `docs/backend-integration.md`
+**See:** [https://mobile-surfaces.com/docs/backend-integration](https://mobile-surfaces.com/docs/backend-integration)
 
 ### MS025: App Group declared in app.json
 
@@ -280,7 +280,7 @@ app.json must declare a com.apple.security.application-groups entry for widgets 
 
 **Fix.** Add the entitlement to apps/mobile/app.json under expo.ios.entitlements. Match it on the widget target's expo-target.config.js.
 
-**See:** `docs/ios-environment.md`
+**See:** [https://mobile-surfaces.com/docs/ios-environment](https://mobile-surfaces.com/docs/ios-environment)
 
 ### MS026: Widget target managed by @bacons/apple-targets
 
@@ -292,7 +292,7 @@ The Mobile Surfaces widget target lives outside the generated ios/ directory and
 
 **Fix.** Keep the target source under apps/mobile/targets/widget/ with an expo-target.config.js. Pin @bacons/apple-targets at the supported exact version.
 
-**See:** `docs/architecture.md`
+**See:** [https://mobile-surfaces.com/docs/architecture](https://mobile-surfaces.com/docs/architecture)
 
 ### MS027: Foreign Expo project must target iOS 17.2 or higher
 
@@ -304,7 +304,7 @@ Same constraint as MS012, applied during an audit of an arbitrary Expo project t
 
 **Fix.** Set ios.deploymentTarget to '17.2' (or higher) in app.json or via expo-build-properties.
 
-**See:** `docs/compatibility.md`
+**See:** [https://mobile-surfaces.com/docs/compatibility](https://mobile-surfaces.com/docs/compatibility)
 
 ### MS028: APNs auth key environment variables must be set before sending
 
@@ -316,7 +316,7 @@ Both the SDK and scripts/send-apns.mjs require APNS_KEY_ID, APNS_TEAM_ID, APNS_K
 
 **Fix.** Verify each env var on startup. The SDK's createPushClient validates presence; reject fast if any are missing.
 
-**See:** `docs/push.md#sdk-reference`
+**See:** [https://mobile-surfaces.com/docs/push#sdk-reference](https://mobile-surfaces.com/docs/push#sdk-reference)
 
 ### MS029: Generated apps/mobile/ios/ is gitignored
 
@@ -328,7 +328,7 @@ CNG-managed directories must not be checked into version control; commits will f
 
 **Fix.** Add apps/mobile/ios/ to .gitignore. If files are already tracked, untrack with git rm -r --cached apps/mobile/ios then commit the .gitignore update.
 
-**See:** `docs/ios-environment.md`
+**See:** [https://mobile-surfaces.com/docs/ios-environment](https://mobile-surfaces.com/docs/ios-environment)
 
 ### MS030: APNs provider token must be valid and current
 
@@ -340,7 +340,7 @@ APNs returns 403 with reason Forbidden, InvalidProviderToken, or ExpiredProvider
 
 **Fix.** ForbiddenError: mint a new auth key in the Apple Developer portal and update APNS_KEY_ID / APNS_KEY_PATH. InvalidProviderTokenError: verify APNS_KEY_ID matches the key file and APNS_TEAM_ID matches the developer account. ExpiredProviderTokenError: check system clock alignment against NTP; if the SDK is long-lived, confirm createPushClient is not being held past process restarts without re-minting.
 
-**See:** `docs/push.md#error-responses`
+**See:** [https://mobile-surfaces.com/docs/push#error-responses](https://mobile-surfaces.com/docs/push#error-responses)
 
 ### MS031: Channel management failures (missing, malformed, or unregistered channel id)
 
@@ -352,7 +352,7 @@ Broadcast and channel-admin calls reject when the channel id is missing from the
 
 **Fix.** MissingChannelId: pass channelId to broadcast() or deleteChannel(). BadChannelId: use the id returned by createChannel() verbatim with no URL-decoding or truncation. ChannelNotRegistered: channels are environment-scoped, so re-create the channel in the target environment or call listChannels() to confirm the id exists there.
 
-**See:** `docs/push.md#error-responses`
+**See:** [https://mobile-surfaces.com/docs/push#error-responses](https://mobile-surfaces.com/docs/push#error-responses)
 
 ### MS032: Activity timestamp fields must be valid unix-seconds integers
 
@@ -364,7 +364,7 @@ APNs rejects Live Activity pushes whose date fields (staleDateSeconds, dismissal
 
 **Fix.** Confirm every date field is a positive unix-seconds integer (not milliseconds, not Date.now()). For broadcast on a no-storage channel, apns-expiration must be 0; the SDK's broadcast() already enforces this.
 
-**See:** `docs/push.md#error-responses`
+**See:** [https://mobile-surfaces.com/docs/push#error-responses](https://mobile-surfaces.com/docs/push#error-responses)
 
 ### MS034: Broadcast capability must be enabled on the APNs auth key
 
@@ -376,7 +376,7 @@ iOS 18 broadcast pushes and channel-admin calls require the 'Broadcast to Live A
 
 **Fix.** Enable broadcast in the Apple Developer portal under Certificates, Identifiers & Profiles > Keys > select the key > edit > tick 'Broadcast to Live Activity'. Save and retry; no client change is needed.
 
-**See:** `docs/push.md#error-responses`
+**See:** [https://mobile-surfaces.com/docs/push#error-responses](https://mobile-surfaces.com/docs/push#error-responses)
 
 ### MS035: apns-topic header missing or bundleId misconfigured
 
@@ -388,7 +388,7 @@ APNs requires an apns-topic header on every request; the SDK derives it from APN
 
 **Fix.** Confirm APNS_BUNDLE_ID is set to the bare bundle identifier (e.g. com.example.app). Do not include the .push-type.liveactivity suffix; the SDK appends it internally. See MS018 for the inverse failure (suffix included by mistake).
 
-**See:** `docs/push.md#error-responses`
+**See:** [https://mobile-surfaces.com/docs/push#error-responses](https://mobile-surfaces.com/docs/push#error-responses)
 
 ### MS010: Toolchain preflight (Node 24, pnpm, Xcode 26+)
 
@@ -410,7 +410,7 @@ Live Activity priority 10 is for immediate user-visible updates and is heavily b
 
 **Fix.** Default to priority 5 for Live Activity content-state updates. Reserve priority 10 for state transitions the user must see immediately (queued→active, completed).
 
-**See:** `docs/push.md#error-responses`
+**See:** [https://mobile-surfaces.com/docs/push#error-responses](https://mobile-surfaces.com/docs/push#error-responses)
 
 ### MS021: Discard per-activity tokens when the activity ends
 
@@ -422,7 +422,7 @@ Once onActivityStateChange reports 'ended' or 'dismissed', the per-activity push
 
 **Fix.** Wire onActivityStateChange to your token store; mark tokens for the activity as terminal and stop selecting them for sends.
 
-**See:** `docs/push.md#token-taxonomy`
+**See:** [https://mobile-surfaces.com/docs/push#token-taxonomy](https://mobile-surfaces.com/docs/push#token-taxonomy)
 
 ### MS023: Per-activity tokens are bound to a single Activity instance
 
@@ -434,7 +434,7 @@ A new Activity.request mints a fresh per-activity token; tokens from a previous 
 
 **Fix.** Re-store on every onPushToken emission; treat tokens as activity-scoped, not user-scoped.
 
-**See:** `docs/push.md#token-taxonomy`
+**See:** [https://mobile-surfaces.com/docs/push#token-taxonomy](https://mobile-surfaces.com/docs/push#token-taxonomy)
 
 ### MS019: FB21158660: push-to-start tokens silent after force-quit
 
@@ -446,15 +446,15 @@ Apple-reported bug. After the user force-quits the app, pushToStartTokenUpdates 
 
 **Fix.** No client workaround. Document in customer-support runbooks: 'If the Lock Screen activity does not appear after a remote-start push, ask the user to open the app once.'
 
-**See:** `docs/push.md#fb21158660-push-to-start-after-force-quit`
+**See:** [https://mobile-surfaces.com/docs/push#fb21158660-push-to-start-after-force-quit](https://mobile-surfaces.com/docs/push#fb21158660-push-to-start-after-force-quit)
 
 ## Related local documentation
 
-- [`docs/architecture.md`](docs/architecture.md): the contract, the surfaces, the adapter boundary.
-- [`docs/multi-surface.md`](docs/multi-surface.md): every `kind` value and the projection it drives.
-- [`docs/backend-integration.md`](docs/backend-integration.md): domain event to snapshot to APNs walkthrough.
-- [`docs/push.md`](docs/push.md): wire-layer reference, SDK, smoke script, token taxonomy, error reasons.
-- [`docs/observability.md`](docs/observability.md): which catalog-bound errors are worth alerting on, what a stuck Live Activity looks like on the wire, recommended log shape.
-- [`docs/troubleshooting.md`](docs/troubleshooting.md): symptom-to-fix recipes for failures not in this catalog.
-- [`docs/traps.md`](docs/traps.md): schema and workflow for editing this catalog.
+- [Architecture](https://mobile-surfaces.com/docs/architecture): the contract, the surfaces, the adapter boundary.
+- [Multi-surface](https://mobile-surfaces.com/docs/multi-surface): every `kind` value and the projection it drives.
+- [Backend integration](https://mobile-surfaces.com/docs/backend-integration): domain event to snapshot to APNs walkthrough.
+- [Push](https://mobile-surfaces.com/docs/push): wire-layer reference, SDK, smoke script, token taxonomy, error reasons.
+- [Observability](https://mobile-surfaces.com/docs/observability): which catalog-bound errors are worth alerting on, what a stuck Live Activity looks like on the wire, recommended log shape.
+- [Troubleshooting](https://mobile-surfaces.com/docs/troubleshooting): symptom-to-fix recipes for failures not in this catalog.
+- [Trap catalog maintenance](https://mobile-surfaces.com/docs/traps): schema and workflow for editing this catalog.
 

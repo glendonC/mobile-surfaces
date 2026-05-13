@@ -199,7 +199,7 @@ const snapshot = assertSnapshot(snapshotFromJob(job));
 await client.update(activityToken, snapshot);
 ```
 
-`@mobile-surfaces/push` has zero npm runtime dependencies. It only uses `node:http2`, `node:crypto`, and the workspace contract package. See [packages/push/README.md](./packages/push/README.md) and [docs/push.md](./docs/push.md) for the deep reference (token taxonomy, error classes, channel management, retry policy).
+`@mobile-surfaces/push` has zero npm runtime dependencies. It only uses `node:http2`, `node:crypto`, and the workspace contract package. See [packages/push/README.md](./packages/push/README.md) and [https://mobile-surfaces.com/docs/push](https://mobile-surfaces.com/docs/push) for the deep reference (token taxonomy, error classes, channel management, retry policy).
 
 ## What is actually in the box
 
@@ -229,7 +229,7 @@ The CLI checks all of this for you. For reference:
 
 You also need an Apple Developer account (but only when you are ready to test on a real device) and Node 24.
 
-The iOS 17.2 floor is deliberate so push-to-start tokens (`Activity<…>.pushToStartTokenUpdates`) are available without conditional version checks. Dynamic Island additionally requires iPhone 14 Pro or newer. See [docs/compatibility.md](./docs/compatibility.md) for the full toolchain row and upgrade ritual.
+The iOS 17.2 floor is deliberate so push-to-start tokens (`Activity<…>.pushToStartTokenUpdates`) are available without conditional version checks. Dynamic Island additionally requires iPhone 14 Pro or newer. See [https://mobile-surfaces.com/docs/compatibility](https://mobile-surfaces.com/docs/compatibility) for the full toolchain row and upgrade ritual.
 
 ## What this is not
 
@@ -239,19 +239,19 @@ The iOS 17.2 floor is deliberate so push-to-start tokens (`Activity<…>.pushToS
 
 ## Docs
 
-Start with the [docs hub](./docs/README.md) if you are not sure where to go next. It has reading paths for trying the starter, adding to an existing Expo app, writing a backend, debugging silent failures, and maintaining releases.
+Start with the [docs hub](https://mobile-surfaces.com/docs) if you are not sure where to go next. It has reading paths for trying the starter, adding to an existing Expo app, writing a backend, debugging silent failures, and maintaining releases.
 
-- [Backend integration](./docs/backend-integration.md). Domain event to snapshot to APNs.
-- [Push](./docs/push.md). Wire-layer reference, SDK, smoke script, token taxonomy, error reasons, channel push.
-- [Observability](./docs/observability.md). Which catalog-bound errors are worth alerting on, hook signatures, recommended log shape.
-- [Multi-surface](./docs/multi-surface.md). Every `kind` value, what ships today, when to emit each.
-- [Schema migration](./docs/schema-migration.md). v1 to v2 codec, deprecation timeline, Standard Schema interop, evolution policy.
-- [Architecture](./docs/architecture.md). The contract, the surfaces, the adapter boundary.
-- [Troubleshooting](./docs/troubleshooting.md). The silent-failure cookbook.
-- [iOS environment](./docs/ios-environment.md). Simulator vs device, APNs setup.
-- [Compatibility](./docs/compatibility.md). Pinned toolchain row.
-- [Release](./docs/release.md). Changesets release PRs and npm trusted publishing.
-- [Roadmap](./docs/roadmap.md). What is next, what is intentionally out of scope.
+- [Backend integration](https://mobile-surfaces.com/docs/backend-integration). Domain event to snapshot to APNs.
+- [Push](https://mobile-surfaces.com/docs/push). Wire-layer reference, SDK, smoke script, token taxonomy, error reasons, channel push.
+- [Observability](https://mobile-surfaces.com/docs/observability). Which catalog-bound errors are worth alerting on, hook signatures, recommended log shape.
+- [Multi-surface](https://mobile-surfaces.com/docs/multi-surface). Every `kind` value, what ships today, when to emit each.
+- [Schema migration](https://mobile-surfaces.com/docs/schema-migration). v1 to v2 codec, deprecation timeline, Standard Schema interop, evolution policy.
+- [Architecture](https://mobile-surfaces.com/docs/architecture). The contract, the surfaces, the adapter boundary.
+- [Troubleshooting](https://mobile-surfaces.com/docs/troubleshooting). The silent-failure cookbook.
+- [iOS environment](https://mobile-surfaces.com/docs/ios-environment). Simulator vs device, APNs setup.
+- [Compatibility](https://mobile-surfaces.com/docs/compatibility). Pinned toolchain row.
+- [Release](https://mobile-surfaces.com/docs/release). Changesets release PRs and npm trusted publishing.
+- [Roadmap](https://mobile-surfaces.com/docs/roadmap). What is next, what is intentionally out of scope.
 
 For AI coding assistants working in this repo, see [`AGENTS.md`](./AGENTS.md) (or [`CLAUDE.md`](./CLAUDE.md) for Claude Code).
 

@@ -1,10 +1,15 @@
+---
+title: "Push"
+description: "Wire-layer reference, SDK, smoke script, token taxonomy, error reasons, channel push."
+order: 40
+---
 # Push
 
 In plain English: this page explains how bytes travel from your backend to Apple's push servers, which token to use for each kind of push, and what to do when APNs rejects or accepts a request.
 
 Deep reference for the wire layer: what `@mobile-surfaces/push` does, what tokens flow through it, where the APNs requests actually go, how to drive the iOS 18 broadcast/channel surface, and what every error reason means. The SDK is the recommended entry point; `scripts/send-apns.mjs` is the protocol-reference script kept self-contained so you can read the exact same wire shape top-to-bottom in a single file. Both target the same APNs endpoints and produce byte-equivalent payloads.
 
-For the high-level "domain event → snapshot → APNs" tour, see [`docs/backend-integration.md`](./backend-integration.md). For the multi-kind contract and projection helpers, see [`docs/multi-surface.md`](./multi-surface.md).
+For the high-level "domain event → snapshot → APNs" tour, see [`docs/backend-integration.md`](/docs/backend-integration). For the multi-kind contract and projection helpers, see [`docs/multi-surface.md`](/docs/multi-surface).
 
 ## Token taxonomy
 
@@ -19,7 +24,7 @@ ActivityKit and APNs use three distinct token kinds. They are not interchangeabl
 ### Where each token comes from in the harness
 
 - **Device APNs token**: registered by the Expo runtime once notifications are granted. The harness shows it in the bottom row labeled "Device APNs token".
-- **Push-to-start token**: the live-activity adapter (`apps/mobile/src/liveActivity/index.ts`) subscribes to `onPushToStartToken` at mount time and logs every value through. The contract for this event is documented in [`docs/architecture.md#adapter-contract`](./architecture.md#adapter-contract). Apple does not expose a synchronous query, so `getPushToStartToken()` always resolves `null`; production code subscribes to the event stream.
+- **Push-to-start token**: the live-activity adapter (`apps/mobile/src/liveActivity/index.ts`) subscribes to `onPushToStartToken` at mount time and logs every value through. The contract for this event is documented in [`docs/architecture.md#adapter-contract`](/docs/architecture#adapter-contract). Apple does not expose a synchronous query, so `getPushToStartToken()` always resolves `null`; production code subscribes to the event stream.
 - **Per-activity push token**: emitted on `onPushToken` for each active `Activity` instance. The harness "All active activities" panel renders the token as it streams in.
 
 ### How a backend stores them
@@ -242,7 +247,7 @@ For incidents, set the env var `MOBILE_SURFACES_PUSH_DISABLE_RETRY=1` (or any no
 
 ### Priority-aware retry stretch
 
-Per [MS015](../CLAUDE.md#ms015-push-priority-5-vs-10-budget-rules), priority 10 Live Activity sends are heavily budgeted by iOS. Sustained retries against an already-throttled token only deepen the throttle. The SDK applies a `effectiveRetryPolicy` stretch transparently for any send issued at priority 10:
+Per [MS015](/traps#ms015-push-priority-5-vs-10-budget-rules), priority 10 Live Activity sends are heavily budgeted by iOS. Sustained retries against an already-throttled token only deepen the throttle. The SDK applies a `effectiveRetryPolicy` stretch transparently for any send issued at priority 10:
 
 | Field         | Priority 5 (Live Activity content updates) | Priority 10 (alerts, state transitions) |
 | ------------- | ------------------------------------------ | --------------------------------------- |
@@ -320,7 +325,7 @@ Channels are environment-scoped: a channel created with `--env=development` cann
 
 ## Error responses
 
-The full mapping mirrors `packages/push/src/reasons.ts` and `scripts/send-apns.mjs`'s `APNS_REASON_GUIDE`. The SDK exports a typed subclass per reason (see [Error class hierarchy](#error-class-hierarchy)) so callers can `instanceof`-narrow without parsing strings. Seven of the subclasses are catalog-bound via `trapIdForErrorClass` and are the ones worth alerting on in production; see [`docs/observability.md`](./observability.md) for the recommended log shape and signal-by-signal alerting playbook.
+The full mapping mirrors `packages/push/src/reasons.ts` and `scripts/send-apns.mjs`'s `APNS_REASON_GUIDE`. The SDK exports a typed subclass per reason (see [Error class hierarchy](#error-class-hierarchy)) so callers can `instanceof`-narrow without parsing strings. Seven of the subclasses are catalog-bound via `trapIdForErrorClass` and are the ones worth alerting on in production; see [`docs/observability.md`](/docs/observability) for the recommended log shape and signal-by-signal alerting playbook.
 
 | Reason | Cause | Fix |
 | --- | --- | --- |
@@ -403,6 +408,6 @@ The script prints the HTTP status, request topic, push-type, payload, and any AP
 
 ## Anti-goals
 
-- **No production-shaped backend example.** That belongs in [`packages/push/README.md`](../packages/push/README.md). This page is the reference for what the SDK and the script *do*; wiring the SDK into a queue, retry queue, or CDC pipeline is application-specific.
+- **No production-shaped backend example.** That belongs in [`packages/push/README.md`](https://github.com/glendonC/mobile-surfaces/blob/main/packages/push/README.md). This page is the reference for what the SDK and the script *do*; wiring the SDK into a queue, retry queue, or CDC pipeline is application-specific.
 - **No restating ActivityKit concepts the SDK already abstracts.** The SDK builds correct `aps` blocks, picks topics and priorities, sets `apns-expiration`, and chooses dismissal defaults; the doc does not relitigate those.
 - **No paraphrasing of Apple's docs.** Every reason string and endpoint here is verified against current Apple documentation; the reason text is consistent with `packages/push/src/reasons.ts` (the canonical local copy).

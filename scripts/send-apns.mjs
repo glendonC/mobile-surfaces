@@ -101,7 +101,7 @@ import { liveActivityAlertPayloadFromSnapshot } from "../packages/push/src/paylo
 loadEnvFile(".env");
 
 // Apple's APNs returns a JSON body with a `reason` enum on every non-2xx.
-// docs/troubleshooting.md (#31-44) maps these to causes; mirror the table here
+// https://mobile-surfaces.com/docs/troubleshooting (#31-44) maps these to causes; mirror the table here
 // so the script can print a fix below the raw Body line without making the
 // user switch tabs. Keep the raw Body intact for transcript fidelity.
 //

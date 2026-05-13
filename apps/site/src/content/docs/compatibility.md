@@ -1,3 +1,8 @@
+---
+title: "Compatibility"
+description: "Pinned Expo SDK, React Native, iOS, Xcode, and @bacons/apple-targets row."
+order: 70
+---
 # Compatibility
 
 Mobile Surfaces pins to a single tested toolchain row. Treat any cell change as an upgrade ritual: bump deliberately, run `pnpm surface:check && pnpm typecheck && pnpm dev:doctor && pnpm mobile:prebuild:ios` on a fresh clone, and update this row in the same PR.

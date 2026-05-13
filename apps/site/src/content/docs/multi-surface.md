@@ -1,8 +1,13 @@
+---
+title: "Multi-Surface"
+description: "Every kind value, what ships today, when to emit each."
+order: 20
+---
 # Multi-Surface
 
 `LiveSurfaceSnapshot` is one shape with a `kind` discriminator. Every iOS surface (Lock Screen Live Activity, Dynamic Island, home-screen widget, iOS 18 control widget, notification, lock-screen accessory, StandBy) derives its render input from the same snapshot through a `kind`-gated projection helper. This page walks every `kind` value, what it represents on iOS, what ships today, and how a backend would emit it.
 
-For the high-level integration tour, see [`docs/backend-integration.md`](./backend-integration.md). For the wire layer (SDK + smoke script + APNs reference), see [`docs/push.md`](./push.md). For the schema-evolution policy, see [`docs/schema-migration.md`](./schema-migration.md).
+For the high-level integration tour, see [`docs/backend-integration.md`](/docs/backend-integration). For the wire layer (SDK + smoke script + APNs reference), see [`docs/push.md`](/docs/push). For the schema-evolution policy, see [`docs/schema-migration.md`](/docs/schema-migration).
 
 ## The contract is one shape
 
@@ -18,7 +23,7 @@ import {
 } from "@mobile-surfaces/surface-contracts";
 ```
 
-`liveSurfaceSnapshot` is a true `z.discriminatedUnion("kind", […])` over six branches at `schemaVersion: "2"`. The base fields shared across every branch are `id`, `surfaceId`, `updatedAt`, `state`, `modeLabel`, `contextLabel`, `statusLine`, `primaryText`, `secondaryText`, `actionLabel?`, `progress`, `deepLink`. Each branch carries its own slice: `liveActivity` adds `{ stage, estimatedSeconds, morePartsCount }`; `widget`, `control`, `notification`, `lockAccessory`, and `standby` add the surface-specific shapes documented per-kind below. The `liveActivity` slice fields used to live in the base in v1 and were moved in 3.0 so non-liveActivity kinds stop carrying meaningless values; see [`schema-migration.md`](./schema-migration.md).
+`liveSurfaceSnapshot` is a true `z.discriminatedUnion("kind", […])` over six branches at `schemaVersion: "2"`. The base fields shared across every branch are `id`, `surfaceId`, `updatedAt`, `state`, `modeLabel`, `contextLabel`, `statusLine`, `primaryText`, `secondaryText`, `actionLabel?`, `progress`, `deepLink`. Each branch carries its own slice: `liveActivity` adds `{ stage, estimatedSeconds, morePartsCount }`; `widget`, `control`, `notification`, `lockAccessory`, and `standby` add the surface-specific shapes documented per-kind below. The `liveActivity` slice fields used to live in the base in v1 and were moved in 3.0 so non-liveActivity kinds stop carrying meaningless values; see [`schema-migration.md`](/docs/schema-migration).
 
 ```mermaid
 flowchart LR
@@ -55,7 +60,7 @@ The default. Renders as a Lock Screen Live Activity and Dynamic Island compact /
 
 Projection helpers: `toLiveActivityContentState` (in `@mobile-surfaces/surface-contracts`; returns `{ headline, subhead, progress, stage }`) and `liveActivityAlertPayloadFromSnapshot` (in `@mobile-surfaces/push`; returns the APNs alert + `liveSurface` sidecar). The alert helper moved out of the contract package in 3.0 because its `aps` envelope is APNs wire format, not a contract concern.
 
-Native: `apps/mobile/targets/widget/MobileSurfacesLiveActivity.swift` declares the `ActivityConfiguration(for: MobileSurfacesActivityAttributes.self)`. `MobileSurfacesActivityAttributes.swift` is duplicated byte-for-byte across the Expo module (`packages/live-activity/ios/`) and the widget target; `scripts/check-activity-attributes.mjs` enforces the byte-identity until SPM-shared Swift lands (Phase 5, deferred upstream-blocked; see [`docs/roadmap.md`](./roadmap.md)).
+Native: `apps/mobile/targets/widget/MobileSurfacesLiveActivity.swift` declares the `ActivityConfiguration(for: MobileSurfacesActivityAttributes.self)`. `MobileSurfacesActivityAttributes.swift` is duplicated byte-for-byte across the Expo module (`packages/live-activity/ios/`) and the widget target; `scripts/check-activity-attributes.mjs` enforces the byte-identity until SPM-shared Swift lands (Phase 5, deferred upstream-blocked; see [`docs/roadmap.md`](/docs/roadmap)).
 
 ### When to emit
 
@@ -203,7 +208,7 @@ Control surfaces, like widgets, do not flow through APNs directly. The host app 
 
 A notification content payload. Drives the standard alert UI on the Lock Screen / Notification Center, with optional `category` and `threadId` slots.
 
-**Status: contract shipped, fixture and native renderer not yet shipping.** No fixture under `data/surface-fixtures/` today. Projection helper: `toNotificationContentPayload` (returns `{ aps: { alert, sound, category?, "thread-id"? }, liveSurface: { kind, snapshotId, surfaceId, state, deepLink } }`). The starter does not register a notification content extension; a future Phase 4 follow-up adds one. See [`docs/roadmap.md`](./roadmap.md) ("Lock-screen accessory, notification content extension, StandBy", deferred until Phase 3 has soak time).
+**Status: contract shipped, fixture and native renderer not yet shipping.** No fixture under `data/surface-fixtures/` today. Projection helper: `toNotificationContentPayload` (returns `{ aps: { alert, sound, category?, "thread-id"? }, liveSurface: { kind, snapshotId, surfaceId, state, deepLink } }`). The starter does not register a notification content extension; a future Phase 4 follow-up adds one. See [`docs/roadmap.md`](/docs/roadmap) ("Lock-screen accessory, notification content extension, StandBy", deferred until Phase 3 has soak time).
 
 ### When to emit
 

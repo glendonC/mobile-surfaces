@@ -83,8 +83,8 @@ export const existingSuccessSections = ({ projectName, packageManager }) => ({
     `pnpm mobile:push:device:liveactivity       push a real Live Activity update`,
   ],
   learnMore: [
-    "docs/architecture.md     the data shape behind everything",
-    "docs/troubleshooting.md  when something breaks",
+    "https://mobile-surfaces.com/docs/architecture     the data shape behind everything",
+    "https://mobile-surfaces.com/docs/troubleshooting  when something breaks",
     "README.md                quick start",
   ],
 });
@@ -130,8 +130,8 @@ export const successSections = (projectName, { installNow = true } = {}) => ({
   ],
   learnMore: [
     "README.md                quick start",
-    "docs/architecture.md     the data shape behind everything",
-    "docs/troubleshooting.md  when something breaks",
+    "https://mobile-surfaces.com/docs/architecture     the data shape behind everything",
+    "https://mobile-surfaces.com/docs/troubleshooting  when something breaks",
   ],
 });
 
@@ -143,7 +143,7 @@ export const errors = {
   dirNotEmpty: (dir) =>
     `./${dir} already exists and isn't empty.\nChoose a different name, or remove it and run again.`,
   installFailed: (dir) =>
-    `pnpm install failed.\n\nThe scaffold was rolled back — no files were left at ./${dir}.\nFix the underlying issue and re-run:\n  npm create mobile-surfaces@latest ${dir}\n\nSee docs/troubleshooting.md if it keeps failing.`,
+    `pnpm install failed.\n\nThe scaffold was rolled back — no files were left at ./${dir}.\nFix the underlying issue and re-run:\n  npm create mobile-surfaces@latest ${dir}\n\nSee https://mobile-surfaces.com/docs/troubleshooting if it keeps failing.`,
   pnpmMissing: (dir) =>
     `pnpm isn't on your PATH, but the Mobile Surfaces template ships a\npnpm-lock.yaml. The scaffold was rolled back — nothing landed at\n./${dir}. Enable pnpm and re-run:\n  corepack enable pnpm\n  npm create mobile-surfaces@latest ${dir}`,
   cocoapodsMissing: (dir) =>

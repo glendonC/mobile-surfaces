@@ -2,7 +2,7 @@
 // can surface a specific next step instead of a single generic hint.
 //
 // Live Activities can be unsupported for four reasons (also documented in
-// docs/troubleshooting.md):
+// https://mobile-surfaces.com/docs/troubleshooting):
 //
 //   1. iOS deployment target dropped below 17.2 (the project floor).
 //   2. Running in Expo Go (Live Activities require a development build).

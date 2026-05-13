@@ -41,3 +41,220 @@ html {
 body {
   margin: 0;
 }
+
+/* Docs subsite. The landing page uses a fixed-viewport grid (Layout.astro);
+ * the docs subsite scrolls normally and has a header + sidebar + main pane.
+ * Kept hand-rolled rather than pulling in @tailwindcss/typography because
+ * the doc surface is small enough that ~80 lines of CSS reads cleaner than
+ * a dependency.
+ */
+
+.docs-body {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  min-height: 100vh;
+  margin: 0;
+  font-family: var(--font-sans);
+  line-height: 1.6;
+}
+
+.docs-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 28px;
+  background-color: rgba(250, 250, 247, 0.9);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(10, 10, 10, 0.08);
+}
+
+.docs-brand {
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--color-ink);
+  text-decoration: none;
+  letter-spacing: -0.01em;
+}
+
+.docs-topnav {
+  display: flex;
+  gap: 24px;
+  font-size: 0.9rem;
+}
+
+.docs-topnav a {
+  color: rgba(10, 10, 10, 0.65);
+  text-decoration: none;
+}
+
+.docs-topnav a:hover {
+  color: var(--color-ink);
+}
+
+.docs-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 28px;
+  gap: 48px;
+}
+
+@media (max-width: 768px) {
+  .docs-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.docs-sidebar {
+  position: sticky;
+  top: 80px;
+  align-self: start;
+  height: max-content;
+}
+
+.docs-sidebar ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.docs-sidebar a {
+  display: block;
+  padding: 6px 10px;
+  border-radius: 8px;
+  color: rgba(10, 10, 10, 0.7);
+  text-decoration: none;
+  font-size: 0.9rem;
+  transition: background-color 100ms ease, color 100ms ease;
+}
+
+.docs-sidebar a:hover {
+  background-color: rgba(10, 10, 10, 0.04);
+  color: var(--color-ink);
+}
+
+.docs-sidebar a.is-active {
+  background-color: var(--color-cream);
+  color: var(--color-ink);
+  font-weight: 500;
+}
+
+.docs-main {
+  max-width: 760px;
+  min-width: 0;
+}
+
+.docs-prose h1 {
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0 0 24px;
+  line-height: 1.2;
+}
+
+.docs-prose h2 {
+  font-size: 1.4rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 48px 0 16px;
+  scroll-margin-top: 80px;
+}
+
+.docs-prose h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 32px 0 12px;
+  scroll-margin-top: 80px;
+}
+
+.docs-prose p,
+.docs-prose ul,
+.docs-prose ol,
+.docs-prose blockquote {
+  margin: 16px 0;
+}
+
+.docs-prose code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background-color: rgba(10, 10, 10, 0.05);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.docs-prose pre {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  background-color: var(--color-ink);
+  color: #f5f3ee;
+  padding: 16px 20px;
+  border-radius: 12px;
+  overflow-x: auto;
+  margin: 16px 0;
+  line-height: 1.55;
+}
+
+.docs-prose pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+.docs-prose a {
+  color: var(--color-ink);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.docs-prose a:hover {
+  text-decoration-thickness: 2px;
+}
+
+.docs-prose blockquote {
+  border-left: 3px solid rgba(10, 10, 10, 0.15);
+  padding-left: 16px;
+  color: rgba(10, 10, 10, 0.7);
+}
+
+.docs-prose table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 20px 0;
+  font-size: 0.9rem;
+}
+
+.docs-prose th,
+.docs-prose td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(10, 10, 10, 0.08);
+  vertical-align: top;
+}
+
+.docs-prose th {
+  font-weight: 600;
+  background-color: rgba(10, 10, 10, 0.03);
+}
+
+.docs-prose hr {
+  border: none;
+  border-top: 1px solid rgba(10, 10, 10, 0.08);
+  margin: 32px 0;
+}
+
+.docs-prose ul,
+.docs-prose ol {
+  padding-left: 24px;
+}
+
+.docs-prose li {
+  margin: 6px 0;
+}

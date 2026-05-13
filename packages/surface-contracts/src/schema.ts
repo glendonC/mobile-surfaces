@@ -500,7 +500,7 @@ export function migrateV1ToV2(
  *
  * On v1->v2 migration, the result carries a `deprecationWarning` so
  * telemetry can surface producers still on the old shape; see
- * docs/observability.md for the recommended log.
+ * https://mobile-surfaces.com/docs/observability for the recommended log.
  */
 export function safeParseAnyVersion(value: unknown): SafeParseAnyVersionResult {
   const v2 = liveSurfaceSnapshot.safeParse(value);

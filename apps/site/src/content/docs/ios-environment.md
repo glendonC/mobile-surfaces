@@ -1,8 +1,13 @@
+---
+title: "iOS Environment"
+description: "Dev builds, App Groups, generated native folders, simulator/device loops."
+order: 60
+---
 # iOS Environment
 
 Mobile Surfaces is an Expo iOS dev-client starter for ActivityKit-backed Live Activity, Dynamic Island, home-screen widget, and iOS 18 control widget workflows.
 
-In plain English: Expo Go is not enough because these surfaces need real native iOS code. Use a development build while building locally, then TestFlight or App Store builds for production-style testing. The current pinned toolchain row (Expo SDK 55, RN 0.83.6, iOS 17.2, Xcode 26) lives in [`docs/compatibility.md`](./compatibility.md).
+In plain English: Expo Go is not enough because these surfaces need real native iOS code. Use a development build while building locally, then TestFlight or App Store builds for production-style testing. The current pinned toolchain row (Expo SDK 55, RN 0.83.6, iOS 17.2, Xcode 26) lives in [`docs/compatibility.md`](/docs/compatibility).
 
 ## Native Pieces
 

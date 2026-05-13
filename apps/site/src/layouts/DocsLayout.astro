@@ -1,0 +1,92 @@
+---
+import "../styles/global.css";
+import geistLatin from "@fontsource-variable/geist/files/geist-latin-wght-normal.woff2?url";
+import geistMonoLatin from "@fontsource-variable/geist-mono/files/geist-mono-latin-wght-normal.woff2?url";
+import { getCollection } from "astro:content";
+
+interface Props {
+  title: string;
+  description?: string;
+  /** Slug of the current entry, used to highlight the sidebar item. */
+  currentSlug?: string;
+}
+
+const {
+  title,
+  description = "Mobile Surfaces documentation.",
+  currentSlug,
+} = Astro.props;
+
+const allDocs = await getCollection("docs");
+const docsNav = allDocs
+  .map((doc) => ({
+    slug: doc.id,
+    title: doc.data.title,
+    order: doc.data.order,
+  }))
+  .sort((a, b) => a.order - b.order);
+
+const canonicalUrl = Astro.site
+  ? new URL(Astro.url.pathname, Astro.site).href
+  : undefined;
+const ogImageUrl = Astro.site
+  ? new URL("/og.png", Astro.site).href
+  : "/og.png";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="preload" href={geistLatin} as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href={geistMonoLatin} as="font" type="font/woff2" crossorigin />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="Mobile Surfaces" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    {canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
+    <meta property="og:image" content={ogImageUrl} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImageUrl} />
+  </head>
+  <body class="docs-body">
+    <header class="docs-header">
+      <a href="/" class="docs-brand">Mobile Surfaces</a>
+      <nav class="docs-topnav" aria-label="Primary">
+        <a href="/docs">Docs</a>
+        <a href="/traps">Traps</a>
+        <a href="https://github.com/glendonC/mobile-surfaces" target="_blank" rel="noopener">GitHub</a>
+      </nav>
+    </header>
+    <div class="docs-layout">
+      <aside class="docs-sidebar" aria-label="Documentation">
+        <ol>
+          {
+            docsNav.map((doc) => (
+              <li>
+                <a
+                  href={`/docs/${doc.slug}`}
+                  aria-current={doc.slug === currentSlug ? "page" : undefined}
+                  class={doc.slug === currentSlug ? "is-active" : undefined}
+                >
+                  {doc.title}
+                </a>
+              </li>
+            ))
+          }
+        </ol>
+      </aside>
+      <main class="docs-main">
+        <slot />
+      </main>
+    </div>
+  </body>
+</html>

@@ -98,7 +98,7 @@ if (snapshot.kind === "widget") {
 }
 ```
 
-Projection helpers exported today: `toLiveActivityContentState`, `toWidgetTimelineEntry`, `toControlValueProvider`, `toNotificationContentPayload`, `toLockAccessoryEntry`, `toStandbyEntry`. The APNs alert-payload helper `liveActivityAlertPayloadFromSnapshot` lives in [`@mobile-surfaces/push`](https://www.npmjs.com/package/@mobile-surfaces/push) since 3.0 (the `aps` envelope is wire format, not a contract concern). See [`docs/multi-surface.md`](../../docs/multi-surface.md) for what each helper returns and when to emit each `kind`.
+Projection helpers exported today: `toLiveActivityContentState`, `toWidgetTimelineEntry`, `toControlValueProvider`, `toNotificationContentPayload`, `toLockAccessoryEntry`, `toStandbyEntry`. The APNs alert-payload helper `liveActivityAlertPayloadFromSnapshot` lives in [`@mobile-surfaces/push`](https://www.npmjs.com/package/@mobile-surfaces/push) since 3.0 (the `aps` envelope is wire format, not a contract concern). See [`https://mobile-surfaces.com/docs/multi-surface`](../.https://mobile-surfaces.com/docs/multi-surface) for what each helper returns and when to emit each `kind`.
 
 ## Standard Schema interop
 
@@ -167,7 +167,7 @@ if (result.deprecationWarning) {
 handle(result.data); // always v2
 ```
 
-For stored payloads, `migrateV1ToV2` is a pure transform that pulls the three liveActivity-only fields under the `liveActivity` slice and bumps `schemaVersion` to `"2"`. v1's `updatedAt` was optional; v2 requires it. The codec leaves missing `updatedAt` undefined by default so the result fails v2 parse loudly; callers who know it is safe can pass `migrateV1ToV2(v1, { updatedAtFallback: "..." })`. The codec lives for the entire 3.x release line and is removed in 4.0.0. Full migration policy and a worked example live in [`docs/schema-migration.md`](../../docs/schema-migration.md).
+For stored payloads, `migrateV1ToV2` is a pure transform that pulls the three liveActivity-only fields under the `liveActivity` slice and bumps `schemaVersion` to `"2"`. v1's `updatedAt` was optional; v2 requires it. The codec leaves missing `updatedAt` undefined by default so the result fails v2 parse loudly; callers who know it is safe can pass `migrateV1ToV2(v1, { updatedAtFallback: "..." })`. The codec lives for the entire 3.x release line and is removed in 4.0.0. Full migration policy and a worked example live in [`https://mobile-surfaces.com/docs/schema-migration`](../.https://mobile-surfaces.com/docs/schema-migration).
 
 ## Pairing options
 
