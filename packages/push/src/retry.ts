@@ -26,6 +26,34 @@ export const DEFAULT_RETRY_POLICY: RetryPolicy = {
 };
 
 /**
+ * Stretch a base retry policy for an APNs priority-10 send. Per MS015,
+ * priority 10 is for user-visible state transitions and is heavily budgeted
+ * by iOS — sustained retries amplify the throttling that already triggered
+ * the original failure. The priority-10 stretch:
+ *
+ * - clamps `maxRetries` to at most 2 (so failures surface to the caller
+ *   sooner instead of burning through the iOS budget)
+ * - doubles `baseDelayMs` and `maxDelayMs` (so retries are spaced further
+ *   apart, giving the throttle window time to clear)
+ *
+ * Priority 5 (Live Activity content-state updates) keeps the base policy
+ * unchanged. The function never widens limits — `maxRetries` is the floor
+ * of the user-configured value, never above 2.
+ */
+export function effectiveRetryPolicy(
+  base: RetryPolicy,
+  priority: 5 | 10,
+): RetryPolicy {
+  if (priority !== 10) return base;
+  return {
+    ...base,
+    maxRetries: Math.min(base.maxRetries, 2),
+    baseDelayMs: base.baseDelayMs * 2,
+    maxDelayMs: base.maxDelayMs * 2,
+  };
+}
+
+/**
  * Compute the next backoff window for `attempt` (0-indexed; first retry is
  * attempt 0). Returns `retryAfterMs` if provided (caller already converted
  * Retry-After seconds to ms). Otherwise: min(base * 2^attempt + jitter, max),

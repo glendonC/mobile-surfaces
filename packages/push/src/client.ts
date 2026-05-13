@@ -26,7 +26,12 @@ import {
 import type { Http2ConnectFactory } from "./http.ts";
 import { Http2Client } from "./http.ts";
 import { JwtCache, resolveKeyPem } from "./jwt.ts";
-import { DEFAULT_RETRY_POLICY, computeBackoffMs, sleep } from "./retry.ts";
+import {
+  DEFAULT_RETRY_POLICY,
+  computeBackoffMs,
+  effectiveRetryPolicy,
+  sleep,
+} from "./retry.ts";
 import type { RetryPolicy } from "./retry.ts";
 import { RETRYABLE_TRANSPORT_CODES, TERMINAL_REASONS } from "./reasons.ts";
 import {
@@ -662,14 +667,14 @@ export class PushClient {
     );
     assertPayloadWithinLimit(payload, "broadcast");
     const apnsId = options.apnsId ?? genApnsId();
-    const priority = String(options.priority ?? 5);
+    const priority = options.priority ?? 5;
     const headers: Record<string, string> = {
       ":method": "POST",
       ":path": `/4/broadcasts/apps/${this.#options.bundleId}`,
       authorization: `bearer ${this.#jwt.get()}`,
       "apns-channel-id": channelId,
       "apns-push-type": "liveactivity",
-      "apns-priority": priority,
+      "apns-priority": String(priority),
       "apns-id": apnsId,
       "apns-expiration": "0",
       "content-type": "application/json",
@@ -678,6 +683,7 @@ export class PushClient {
       operation: "broadcast",
       snapshotId: live.id,
       token: channelId,
+      priority,
     });
   }
 
@@ -993,10 +999,10 @@ export class PushClient {
     defaultPriority: 5 | 10;
     apnsTopic: string;
     options: SendOptions;
-  }): Promise<SendResponse> {
+  }): Promise<PushResult> {
     assertPayloadWithinLimit(args.payload, args.operation as PayloadKind);
     const apnsId = args.options.apnsId ?? genApnsId();
-    const priority = String(args.options.priority ?? args.defaultPriority);
+    const priority = args.options.priority ?? args.defaultPriority;
     const expiration = String(args.options.expirationSeconds ?? nowSec() + 3600);
     const headers: Record<string, string> = {
       ":method": "POST",
@@ -1004,7 +1010,7 @@ export class PushClient {
       authorization: `bearer ${this.#jwt.get()}`,
       "apns-topic": args.apnsTopic,
       "apns-push-type": args.pushType,
-      "apns-priority": priority,
+      "apns-priority": String(priority),
       "apns-id": apnsId,
       "apns-expiration": expiration,
       "content-type": "application/json",
@@ -1013,6 +1019,7 @@ export class PushClient {
       operation: args.operation,
       snapshotId: args.snapshotId,
       token: args.token,
+      priority,
     });
   }
 
@@ -1033,6 +1040,12 @@ export class PushClient {
       token?: string;
       /** apns-id known up-front (device sends generate it client-side). */
       apnsId?: string;
+      /**
+       * Priority of this send. Drives the priority-aware retry stretch in
+       * effectiveRetryPolicy(). Channel-management ops omit this and default
+       * to 5, which leaves the base policy unmodified.
+       */
+      priority?: 5 | 10;
     },
     mapSuccess: (
       res: {
@@ -1045,6 +1058,7 @@ export class PushClient {
   ): Promise<TSuccess> {
     const overallStart = Date.now();
     const retried: RetryAttempt[] = [];
+    const policy = effectiveRetryPolicy(this.#retryPolicy, hookMeta.priority ?? 5);
     let attempt = 0;
     while (true) {
       this.#assertOpen();
@@ -1077,8 +1091,8 @@ export class PushClient {
         }
         const apnsError = this.#errorFromResponse(res);
         const willRetry =
-          this.#shouldRetry(apnsError, attempt) &&
-          attempt < this.#retryPolicy.maxRetries;
+          this.#shouldRetry(apnsError, policy) &&
+          attempt < policy.maxRetries;
         this.#fireErrorHook(apnsError, {
           ...hookMeta,
           attempt,
@@ -1088,7 +1102,7 @@ export class PushClient {
           durationMs,
         });
         if (willRetry) {
-          const backoffMs = this.#computeRetryBackoffMs(apnsError, attempt);
+          const backoffMs = computeRetryBackoffMs(apnsError, attempt, policy);
           retried.push({
             reason: apnsError.reason,
             trapId: apnsError.trapId,
@@ -1107,7 +1121,7 @@ export class PushClient {
           throw err;
         }
         const willRetry =
-          isTransportError(err) && attempt < this.#retryPolicy.maxRetries;
+          isTransportError(err) && attempt < policy.maxRetries;
         this.#fireErrorHook(err, {
           ...hookMeta,
           attempt,
@@ -1116,7 +1130,7 @@ export class PushClient {
           durationMs: Date.now() - startedAt,
         });
         if (willRetry) {
-          const backoffMs = computeBackoffMs(attempt, this.#retryPolicy);
+          const backoffMs = computeBackoffMs(attempt, policy);
           retried.push({
             reason: transportErrorReason(err),
             backoffMs,
@@ -1155,6 +1169,7 @@ export class PushClient {
       operation: PushHookOperation;
       snapshotId?: string;
       token?: string;
+      priority?: 5 | 10;
     },
   ): Promise<PushResult> {
     return this.#executeWithRetry(
@@ -1195,22 +1210,26 @@ export class PushClient {
     });
   }
 
-  #shouldRetry(err: ApnsError, _attempt: number): boolean {
+  #shouldRetry(err: ApnsError, policy: RetryPolicy): boolean {
     // Terminal reasons are denied first so a caller-customized
     // retryableReasons set cannot accidentally re-enable retries for
     // permanently-broken tokens (BadDeviceToken, Unregistered, etc.).
     if (TERMINAL_REASONS.has(err.reason)) return false;
     if (err instanceof TooManyRequestsError) return true;
-    return this.#retryPolicy.retryableReasons.has(err.reason);
+    return policy.retryableReasons.has(err.reason);
   }
+}
 
-  #computeRetryBackoffMs(err: ApnsError, attempt: number): number {
-    let retryAfterMs: number | undefined;
-    if (err instanceof TooManyRequestsError && err.retryAfterSeconds !== undefined) {
-      retryAfterMs = err.retryAfterSeconds * 1000;
-    }
-    return computeBackoffMs(attempt, this.#retryPolicy, retryAfterMs);
+function computeRetryBackoffMs(
+  err: ApnsError,
+  attempt: number,
+  policy: RetryPolicy,
+): number {
+  let retryAfterMs: number | undefined;
+  if (err instanceof TooManyRequestsError && err.retryAfterSeconds !== undefined) {
+    retryAfterMs = err.retryAfterSeconds * 1000;
   }
+  return computeBackoffMs(attempt, policy, retryAfterMs);
 }
 
 // Distill the retry-attempts log into the set of distinct trap ids that

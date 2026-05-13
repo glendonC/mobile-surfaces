@@ -358,6 +358,50 @@ test("retries are capped by maxRetries and final ApnsError is surfaced", async (
   assert.equal(calls, 3);
 });
 
+test("priority 10 sends clamp maxRetries to 2 even when user policy allows more", async (t) => {
+  // alert() defaults to priority 10. The user-configured retry policy
+  // permits 5 retries, but the priority-aware stretch clamps to at most 2
+  // (so the iOS budget is not torched on a single failure cascade).
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    return { status: 503, body: { reason: "ServiceUnavailable" } };
+  });
+  const client = makeClient({
+    sendOrigin: mock.origin,
+    retryPolicy: { maxRetries: 5, baseDelayMs: 1, maxDelayMs: 5, jitter: false },
+  });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.alert("p10".repeat(20) + "a", SNAPSHOT),
+    (err) => err.reason === "ServiceUnavailable",
+  );
+  // 1 initial + 2 retries (clamped) = 3 calls, not 6.
+  assert.equal(calls, 3);
+});
+
+test("priority 5 sends keep the configured maxRetries", async (t) => {
+  // update() defaults to priority 5; the priority-10 stretch should not
+  // apply. User-configured maxRetries=4 ⇒ 5 total calls.
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    return { status: 503, body: { reason: "ServiceUnavailable" } };
+  });
+  const client = makeClient({
+    sendOrigin: mock.origin,
+    retryPolicy: { maxRetries: 4, baseDelayMs: 1, maxDelayMs: 5, jitter: false },
+  });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.update("p5x".repeat(20) + "a", SNAPSHOT),
+    (err) => err.reason === "ServiceUnavailable",
+  );
+  assert.equal(calls, 5);
+});
+
 test("update() rejects non-liveActivity-kind snapshots before any network call", async (t) => {
   const mock = await startMockApns(() => ({ status: 200 }));
   const client = makeClient({ sendOrigin: mock.origin });
