@@ -121,7 +121,7 @@ A healthy production token store stays below roughly 5% sustained. Above that, y
 
 ### `PayloadTooLarge`
 
-`PayloadTooLargeError` (MS011) is checked client-side before the dial, so the SDK throws synchronously. It means a snapshot serialized over the 4 KB (per-activity) or 5 KB (broadcast) ceiling. The fix is on the producer, not the network: trim `secondaryText`, lower `morePartsCount`, or split a state into two smaller pushes. Alert on any non-zero rate; this is a producer bug, not a degradation.
+`PayloadTooLargeError` (MS011) is checked client-side before the dial, so the SDK throws synchronously. It means a snapshot serialized over the 4 KB (per-activity) or 5 KB (broadcast) ceiling. The fix is on the producer, not the network: trim `secondaryText`, lower `liveActivity.morePartsCount`, or split a state into two smaller pushes. Alert on any non-zero rate; this is a producer bug, not a degradation.
 
 ### `Expired` / `Invalid` / `Forbidden` provider token
 

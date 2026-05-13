@@ -110,21 +110,24 @@ You write one function:
 ```ts
 function snapshotFromJob(job: Job): LiveSurfaceSnapshot {
   return {
-    schemaVersion: "1",
+    schemaVersion: "2",
     kind: "liveActivity",            // discriminator that picks the projection
     id: `${job.id}@${job.revision}`,
     surfaceId: `job-${job.id}`,
+    updatedAt: new Date().toISOString(),
     state: job.status,               // "queued" | "active" | "completed" ...
     modeLabel: "active",
     contextLabel: job.queueName,
     statusLine: `${job.queueName} · ${Math.round(job.progress * 100)}%`,
     primaryText: job.title,          // headline shown on the Lock Screen
     secondaryText: job.subtitle,     // subhead
-    estimatedSeconds: job.etaSeconds ?? 0,
-    morePartsCount: 0,
     progress: job.progress,          // 0 to 1
-    stage: job.status === "done" ? "completing" : "inProgress",
     deepLink: `myapp://surface/job-${job.id}`,
+    liveActivity: {
+      stage: job.status === "done" ? "completing" : "inProgress",
+      estimatedSeconds: job.etaSeconds ?? 0,
+      morePartsCount: 0,
+    },
   };
 }
 ```

@@ -25,21 +25,24 @@ import {
 
 function snapshotFromJob(job: Job): LiveSurfaceSnapshot {
   return {
-    schemaVersion: "1",
+    schemaVersion: "2",
     kind: "liveActivity",
     id: `${job.id}@${job.revision}`,
     surfaceId: `job-${job.id}`,
+    updatedAt: new Date().toISOString(),
     state: job.status === "done" ? "completed" : "active",
     modeLabel: "active",
     contextLabel: job.queueName,
     statusLine: `${job.queueName} · ${Math.round(job.progress * 100)}%`,
     primaryText: job.title,
     secondaryText: job.subtitle ?? "",
-    estimatedSeconds: job.etaSeconds ?? 0,
-    morePartsCount: 0,
     progress: job.progress,
-    stage: job.status === "done" ? "completing" : "inProgress",
     deepLink: `myapp://surface/job-${job.id}`,
+    liveActivity: {
+      stage: job.status === "done" ? "completing" : "inProgress",
+      estimatedSeconds: job.etaSeconds ?? 0,
+      morePartsCount: 0,
+    },
   };
 }
 
@@ -64,18 +67,18 @@ The validator runs once at the boundary; everything downstream consumes a typed 
 
 ## The discriminated union
 
-`liveSurfaceSnapshot` is a discriminated union: `kind` picks which branch is valid, and the validator rejects fields that belong to the wrong branch. It covers six branches at `schemaVersion: "1"`:
+`liveSurfaceSnapshot` is a discriminated union: `kind` picks which branch is valid, and the validator rejects fields that belong to the wrong branch. It covers six branches at `schemaVersion: "2"`:
 
 | `kind` | Renders as | Slice |
 | --- | --- | --- |
-| `liveActivity` | Lock Screen Live Activity, Dynamic Island | (none, base shape) |
+| `liveActivity` | Lock Screen Live Activity, Dynamic Island | `liveActivity: { stage, estimatedSeconds, morePartsCount }` |
 | `widget` | Home-screen widget | `widget: { family?, reloadPolicy? }` |
 | `control` | iOS 18 control widget | `control: { kind, state?, intent? }` |
 | `notification` | Notification content | `notification: { category?, threadId? }` |
-| `lockAccessory` | Lock Screen complication (forward-compat) | (none) |
-| `standby` | StandBy mode hint (forward-compat) | (none) |
+| `lockAccessory` | Lock Screen complication | `lockAccessory: { family, gaugeValue?, shortText? }` |
+| `standby` | StandBy mode widget | `standby: { presentation, tint? }` |
 
-The base fields (`id`, `surfaceId`, `state`, `modeLabel`, `contextLabel`, `statusLine`, `primaryText`, `secondaryText`, `actionLabel?`, `estimatedSeconds`, `morePartsCount`, `progress`, `stage`, `deepLink`) are shared across every branch.
+The base fields (`id`, `surfaceId`, `updatedAt`, `state`, `modeLabel`, `contextLabel`, `statusLine`, `primaryText`, `secondaryText`, `actionLabel?`, `progress`, `deepLink`) are shared across every branch. `liveActivity`-only timing and stage hints (the three fields in the `liveActivity` slice) moved out of the base in v2; v1 carried them on every kind.
 
 `kind`-aware narrowing is enforced both at parse time (a `kind: "control"` snapshot without a `control` slice fails `safeParse`) and at projection time (`toLiveActivityContentState` rejects a non-`liveActivity` snapshot at runtime):
 
@@ -95,7 +98,7 @@ if (snapshot.kind === "widget") {
 }
 ```
 
-Projection helpers exported today: `toLiveActivityContentState`, `toAlertPayload`, `toWidgetTimelineEntry`, `toControlValueProvider`, `toNotificationContentPayload`. See [`docs/multi-surface.md`](../../docs/multi-surface.md) for what each one returns and when to emit each `kind`.
+Projection helpers exported today: `toLiveActivityContentState`, `toWidgetTimelineEntry`, `toControlValueProvider`, `toNotificationContentPayload`, `toLockAccessoryEntry`, `toStandbyEntry`. The APNs alert-payload helper `liveActivityAlertPayloadFromSnapshot` lives in [`@mobile-surfaces/push`](https://www.npmjs.com/package/@mobile-surfaces/push) since 3.0 (the `aps` envelope is wire format, not a contract concern). See [`docs/multi-surface.md`](../../docs/multi-surface.md) for what each helper returns and when to emit each `kind`.
 
 ## Standard Schema interop
 
@@ -120,7 +123,7 @@ Backends that aren't on TypeScript can validate against the published JSON Schem
 The canonical URL is pinned to **major.minor** so a future minor that adds a `kind` branch publishes at a new URL without invalidating existing references:
 
 ```text
-https://unpkg.com/@mobile-surfaces/surface-contracts@2.0/schema.json
+https://unpkg.com/@mobile-surfaces/surface-contracts@3.0/schema.json
 ```
 
 Ajv 2020 example:
@@ -130,7 +133,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 
 const ajv = new Ajv2020();
 const schema = await fetch(
-  "https://unpkg.com/@mobile-surfaces/surface-contracts@2.0/schema.json",
+  "https://unpkg.com/@mobile-surfaces/surface-contracts@3.0/schema.json",
 ).then((r) => r.json());
 
 const validate = ajv.compile(schema);
@@ -145,9 +148,9 @@ The schema is also exported via the package's `./schema` subpath if you want to 
 import schema from "@mobile-surfaces/surface-contracts/schema";
 ```
 
-## v0 → v1 migration
+## v1 -> v2 migration
 
-`schemaVersion: "0"` was the pre-multi-projection shape (single Live-Activity-shaped object, no `kind`). v1 added the discriminator and per-kind slices. This schema version is separate from npm package versions like `1.2.0`. Use `safeParseAnyVersion` at wire edges that may see either schema shape:
+`schemaVersion: "2"` reshapes the v1 base to move `stage`/`estimatedSeconds`/`morePartsCount` into the `liveActivity` slice, promotes `updatedAt` to required, and removes the v1 missing-`kind` preprocess. Use `safeParseAnyVersion` at wire edges that may see either schema shape:
 
 ```ts
 import { safeParseAnyVersion } from "@mobile-surfaces/surface-contracts";
@@ -161,10 +164,10 @@ if (result.deprecationWarning) {
   log.warn(result.deprecationWarning, { snapshotId: result.data.id });
 }
 
-handle(result.data); // always v1
+handle(result.data); // always v2
 ```
 
-For stored payloads, `migrateV0ToV1` is a pure transform that promotes a parsed v0 value to a v1 `kind: "liveActivity"` snapshot. Full migration policy and a worked example live in [`docs/schema-migration.md`](../../docs/schema-migration.md).
+For stored payloads, `migrateV1ToV2` is a pure transform that pulls the three liveActivity-only fields under the `liveActivity` slice and bumps `schemaVersion` to `"2"`. v1's `updatedAt` was optional; v2 requires it. The codec leaves missing `updatedAt` undefined by default so the result fails v2 parse loudly; callers who know it is safe can pass `migrateV1ToV2(v1, { updatedAtFallback: "..." })`. The codec lives for the entire 3.x release line and is removed in 4.0.0. Full migration policy and a worked example live in [`docs/schema-migration.md`](../../docs/schema-migration.md).
 
 ## Pairing options
 

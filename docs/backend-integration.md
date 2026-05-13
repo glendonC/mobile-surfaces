@@ -14,7 +14,7 @@ The contract is one type with kind-gated derived shapes.
 flowchart LR
   Event["Domain event<br/>(yours)"] --> Snapshot["LiveSurfaceSnapshot<br/>(@mobile-surfaces/surface-contracts)"]
   Snapshot --> Content["ActivityKit ContentState<br/>toLiveActivityContentState()"]
-  Snapshot --> Alert["Alert payload<br/>toAlertPayload()"]
+  Snapshot --> Alert["Alert payload<br/>liveActivityAlertPayloadFromSnapshot()<br/>(@mobile-surfaces/push)"]
   Snapshot --> Widget["Widget timeline entry<br/>toWidgetTimelineEntry()"]
   Snapshot --> Control["Control value<br/>toControlValueProvider()"]
   Snapshot --> Notification["Notification content<br/>toNotificationContentPayload()"]
@@ -30,10 +30,11 @@ flowchart LR
 
 ```ts
 interface LiveSurfaceSnapshotBase {
-  schemaVersion: "1";         // discriminator; bumped only on breaking changes
+  schemaVersion: "2";         // discriminator; bumped only on breaking changes
   kind: "liveActivity" | "widget" | "control" | "lockAccessory" | "standby" | "notification";
   id: string;                 // unique per snapshot revision (event-scoped)
   surfaceId: string;          // stable across snapshots for the same surface
+  updatedAt: string;          // RFC 3339 datetime; required for out-of-order discard
   state: "queued" | "active" | "paused" | "attention" | "bad_timing" | "completed";
   modeLabel: string;          // human label, e.g. "queued", "active"
   contextLabel: string;       // optional sub-label, e.g. "starter"
@@ -41,21 +42,22 @@ interface LiveSurfaceSnapshotBase {
   primaryText: string;        // headline / alert title
   secondaryText: string;      // subhead / alert body
   actionLabel?: string;       // CTA label, e.g. "Open surface"
-  estimatedSeconds: number;   // remaining work, 0 when unknown
-  morePartsCount: number;     // count of extra rows the surface might display
   progress: number;           // 0..1
-  stage: "prompted" | "inProgress" | "completing";
   deepLink: string;           // <scheme>://surface/<surfaceId>
 }
 
 // Plus per-kind slices on the matching branch:
-//   kind: "widget"  → widget:  { family?: "systemSmall" | "systemMedium" | "systemLarge"; reloadPolicy?: "manual" | "afterDate" }
-//   kind: "control" → control: { kind: "toggle" | "button" | "deepLink"; state?: boolean; intent?: string }
-//   kind: "notification" → notification: { category?: string; threadId?: string }
-//   kind: "liveActivity" | "lockAccessory" | "standby" → no extra slice
+//   kind: "liveActivity"  -> liveActivity:  { stage: "prompted" | "inProgress" | "completing"; estimatedSeconds: number; morePartsCount: number }
+//   kind: "widget"        -> widget:        { family?: "systemSmall" | "systemMedium" | "systemLarge"; reloadPolicy?: "manual" | "afterDate" }
+//   kind: "control"       -> control:       { kind: "toggle" | "button" | "deepLink"; state?: boolean; intent?: string }
+//   kind: "notification"  -> notification:  { category?: string; threadId?: string }
+//   kind: "lockAccessory" -> lockAccessory: { family: "accessoryCircular" | "accessoryRectangular" | "accessoryInline"; gaugeValue?: number; shortText?: string }
+//   kind: "standby"       -> standby:       { presentation: "card" | "night"; tint?: "default" | "monochrome" }
 ```
 
-`kind` selects the projection path (the schema is a true `z.discriminatedUnion("kind", …)`, invalid kind/slice combinations fail at parse time). `state` is the canonical state machine: drive the lifecycle from the backend; `stage` is a UI-facing axis (whether the surface is being prompted, actively running, or wrapping up). `progress` is independent of either.
+`kind` selects the projection path (the schema is a true `z.discriminatedUnion("kind", …)`, invalid kind/slice combinations fail at parse time). `state` is the canonical state machine: drive the lifecycle from the backend. `liveActivity.stage` is a UI-facing axis (whether the surface is being prompted, actively running, or wrapping up); it only applies to liveActivity-kind snapshots. `progress` is independent of either.
+
+`updatedAt` is the new required field in v2. Set it to the wall-clock instant the snapshot was authored, ideally UTC for trivial lexicographic comparison. Consumers use it to discard out-of-order pushes that ActivityKit and APNs do not order in-band; see [`schema-migration.md`](./schema-migration.md) for the migration policy.
 
 For a tour of every `kind` value and the projection it drives, see [`docs/multi-surface.md`](./multi-surface.md). Look at `data/surface-fixtures/*.json` for committed examples of every state and kind.
 
@@ -80,10 +82,11 @@ function snapshotFromJob(job: Job): LiveSurfaceSnapshot {
     : "attention";
 
   return {
-    schemaVersion: "1",
+    schemaVersion: "2",
     kind: "liveActivity",
     id: `${job.id}@${job.revision}`,
     surfaceId: `job-${job.id}`,
+    updatedAt: new Date().toISOString(),
     state,
     modeLabel: state,
     contextLabel: job.queueName,
@@ -91,11 +94,13 @@ function snapshotFromJob(job: Job): LiveSurfaceSnapshot {
     primaryText: job.title,
     secondaryText: job.subtitle ?? "",
     actionLabel: "Open job",
-    estimatedSeconds: job.etaSeconds ?? 0,
-    morePartsCount: job.extraItems ?? 0,
     progress: clamp01(job.progress ?? 0),
-    stage: state === "completed" ? "completing" : state === "queued" ? "prompted" : "inProgress",
     deepLink: `mobilesurfaces://surface/job-${job.id}`,
+    liveActivity: {
+      stage: state === "completed" ? "completing" : state === "queued" ? "prompted" : "inProgress",
+      estimatedSeconds: job.etaSeconds ?? 0,
+      morePartsCount: job.extraItems ?? 0,
+    },
   };
 }
 ```
@@ -120,9 +125,11 @@ const snapshot = assertSnapshot(snapshotFromJob(job));
 // Strict v1 safe-parse. Returns { success, data | error }.
 const result = safeParseSnapshot(input);
 
-// Wire-edge tolerant. Tries v1 first; falls back to v0 with auto-migration
+// Wire-edge tolerant. Tries v2 first; falls back to v1 with auto-migration
 // and emits a deprecationWarning on success. Use this on inbound code paths
-// (HTTP handlers, queue consumers) where producers may not have updated yet.
+// (HTTP handlers, queue consumers) where producers may not have migrated to
+// v2 yet. The v1 codec lives for the entire 3.x release line; see
+// docs/schema-migration.md for the deprecation timeline.
 const versioned = safeParseAnyVersion(input);
 if (versioned.success) {
   if (versioned.deprecationWarning) {
@@ -134,7 +141,7 @@ if (versioned.success) {
 
 `safeParseAnyVersion` is the migration path documented in [`docs/schema-migration.md`](./schema-migration.md). Use it whenever you read snapshots from a store that may still hold v0 payloads.
 
-The published JSON Schema at [`unpkg.com/@mobile-surfaces/surface-contracts@2.0/schema.json`](https://unpkg.com/@mobile-surfaces/surface-contracts@2.0/schema.json) is generated from the same Zod source and pinned to `major.minor`. Use it for IDE tooling, OpenAPI components, or non-TypeScript validators (Ajv, jsonschema, etc.). Standard Schema interop is automatic, every exported Zod schema implements the `~standard` getter (`{ vendor: "zod", version: 1, validate, jsonSchema }`), so the contract drops directly into Standard-Schema-aware libraries (Valibot runners, ArkType, `@standard-schema/spec`) without depending on Zod at runtime.
+The published JSON Schema at [`unpkg.com/@mobile-surfaces/surface-contracts@3.0/schema.json`](https://unpkg.com/@mobile-surfaces/surface-contracts@3.0/schema.json) is generated from the same Zod source and pinned to `major.minor`. Use it for IDE tooling, OpenAPI components, or non-TypeScript validators (Ajv, jsonschema, etc.). Standard Schema interop is automatic, every exported Zod schema implements the `~standard` getter (`{ vendor: "zod", version: 1, validate, jsonSchema }`), so the contract drops directly into Standard-Schema-aware libraries (Valibot runners, ArkType, `@standard-schema/spec`) without depending on Zod at runtime.
 
 ### 3. Send the APNs request
 
@@ -142,10 +149,7 @@ Use the Node SDK. One client per `(auth-key, environment, bundleId)` tuple, mult
 
 ```ts
 import { createPushClient } from "@mobile-surfaces/push";
-import {
-  toLiveActivityContentState,
-  toAlertPayload,
-} from "@mobile-surfaces/surface-contracts";
+import { toLiveActivityContentState } from "@mobile-surfaces/surface-contracts";
 
 const push = createPushClient({
   keyId: process.env.APNS_KEY_ID!,
@@ -167,8 +171,8 @@ await push.start(pushToStartToken, snapshot, {
 // End the activity. dismissalDateSeconds defaults to now.
 await push.end(activityToken, snapshot);
 
-// Alert push (uses toAlertPayload internally; works as a fallback for users
-// who have Live Activities turned off).
+// Alert push (uses liveActivityAlertPayloadFromSnapshot internally; works
+// as a fallback for users who have Live Activities turned off).
 await push.alert(deviceToken, snapshot);
 
 await push.close(); // tear down the HTTP/2 sessions when shutting down
@@ -222,7 +226,7 @@ Live Activity end:
 { "aps": { "timestamp": 1700000000, "event": "end", "content-state": { ... }, "dismissal-date": 1700000060 } }
 ```
 
-Alert push (the `toAlertPayload` shape):
+Alert push (the `liveActivityAlertPayloadFromSnapshot` shape):
 
 ```
 apns-topic: <bundle-id>           # no push-type suffix
@@ -299,7 +303,7 @@ A future `LocalizedString` shape (e.g. `{ en: string; "es-MX"?: string }`) would
 ## What Stays Stable
 
 - `LiveSurfaceSnapshot` and its TypeScript schema.
-- The projection helpers (`toLiveActivityContentState`, `toAlertPayload`, `toWidgetTimelineEntry`, `toControlValueProvider`, `toNotificationContentPayload`) and their kind gates.
+- The projection helpers (`toLiveActivityContentState`, `toWidgetTimelineEntry`, `toControlValueProvider`, `toNotificationContentPayload`) and their kind gates, plus `liveActivityAlertPayloadFromSnapshot` in `@mobile-surfaces/push`.
 - The `@mobile-surfaces/push` SDK public surface (the exports listed in `packages/push/src/index.ts`). Implementation detail (HTTP/2 transport, JWT cache internals) may change without a version bump.
 - The APNs topic / push-type / priority defaults emitted by the SDK and the script.
 
