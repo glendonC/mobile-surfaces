@@ -236,6 +236,20 @@ const client = createPushClient({
 
 `computeBackoffMs` lives in `packages/push/src/retry.ts` if you want to reuse the same backoff math elsewhere; the default formula is `min(base * 2^attempt, max) + random(0, base)` with jitter.
 
+### Priority-aware retry stretch
+
+Per [MS015](../CLAUDE.md#ms015-push-priority-5-vs-10-budget-rules), priority 10 Live Activity sends are heavily budgeted by iOS. Sustained retries against an already-throttled token only deepen the throttle. The SDK applies a `effectiveRetryPolicy` stretch transparently for any send issued at priority 10:
+
+| Field         | Priority 5 (Live Activity content updates) | Priority 10 (alerts, state transitions) |
+| ------------- | ------------------------------------------ | --------------------------------------- |
+| `maxRetries`  | configured value (default 3)               | `min(configured, 2)` — hard ceiling 2   |
+| `baseDelayMs` | configured value (default 100)             | `configured * 2`                        |
+| `maxDelayMs`  | configured value (default 5000)            | `configured * 2`                        |
+
+The stretch is one-way: it can only narrow `maxRetries` and widen the delay windows. If you set `maxRetries: 1`, priority 10 still honors `1` rather than expanding to `2`. The function is exported as `effectiveRetryPolicy(base, priority)` so callers can audit what the SDK will actually do.
+
+Channel-management ops (`createChannel`, `listChannels`, `deleteChannel`) and any send not explicitly carrying `priority: 10` use the base policy unmodified.
+
 ## Channel push (iOS 18+)
 
 iOS 18 introduced **broadcast channels**: a single channel can fan out one Live Activity update to every device that opted in, instead of paying per-device send costs. There are three pieces.
