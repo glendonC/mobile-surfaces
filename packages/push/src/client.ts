@@ -235,6 +235,76 @@ interface RetryMeta {
   trapHits: readonly string[];
 }
 
+/**
+ * Discriminated input for `client.describeSend()`. Mirrors the public send-
+ * method signatures one-to-one so a caller can preflight the exact bytes
+ * any subsequent send would issue.
+ */
+export type DescribeSendInput =
+  | {
+      operation: "alert";
+      deviceToken: string;
+      snapshot: LiveSurfaceSnapshot;
+      options?: SendOptions;
+    }
+  | {
+      operation: "update";
+      activityToken: string;
+      snapshot: LiveSurfaceSnapshot;
+      options?: SendOptions;
+    }
+  | {
+      operation: "start";
+      pushToStartToken: string;
+      snapshot: LiveSurfaceSnapshot;
+      attributes: Record<string, unknown>;
+      options?: LiveActivityStartOptions;
+    }
+  | {
+      operation: "end";
+      activityToken: string;
+      snapshot: LiveSurfaceSnapshot;
+      options?: SendOptions;
+    }
+  | {
+      operation: "broadcast";
+      channelId: string;
+      snapshot: LiveSurfaceSnapshot;
+      options?: BroadcastOptions;
+    };
+
+/**
+ * Side-effect-free description of the request `send()` would issue. No JWT
+ * is minted; no socket is opened. `withinLimit` and `payloadLimitBytes`
+ * encode the MS011 check the SDK applies on real sends — callers can use
+ * them to fail-fast at compose-time instead of waiting for the throw.
+ */
+export interface SendDescription {
+  operation: "alert" | "update" | "start" | "end" | "broadcast";
+  method: "POST";
+  path: string;
+  pushType: "alert" | "liveactivity";
+  /** `apns-topic` header value, or null for broadcast (which omits the header). */
+  topic: string | null;
+  priority: 5 | 10;
+  apnsId: string;
+  expirationSeconds: number;
+  staleDateSeconds?: number;
+  dismissalDateSeconds?: number;
+  attributesType?: string;
+  channelId?: string;
+  /** Token (device, activity, push-to-start) or channel id; mirrors the send-method arg. */
+  target: string;
+  snapshotId: string;
+  snapshotKind: "liveActivity";
+  payload: Record<string, unknown>;
+  payloadJson: string;
+  payloadBytes: number;
+  /** MS011 ceiling that applies to this operation: 5120 for broadcast, 4096 otherwise. */
+  payloadLimitBytes: number;
+  withinLimit: boolean;
+}
+
 interface ChannelManageResponse {
   status: number;
   headers: Record<string, string | string[] | undefined>;
@@ -680,6 +750,142 @@ export class PushClient {
   }
 
   /**
+   * Side-effect-free preflight: returns the request the matching `send()`
+   * call would issue (method, path, headers, payload, byte size) without
+   * contacting APNs or minting a JWT. Useful for:
+   * - `send-apns.mjs --describe` plumbing
+   * - MS011 ceiling enforcement before a costly attempt
+   * - diff'ing two payload constructions during refactors
+   *
+   * Validates the snapshot and the operation-vs-kind constraint just like a
+   * real send; throws `InvalidSnapshotError` on either failure so callers
+   * cannot ship a payload through CI that the runtime would reject. Does
+   * NOT throw on payload-over-limit — that surfaces as `withinLimit: false`
+   * so describers can summarize the failure without losing the byte count.
+   */
+  describeSend(input: DescribeSendInput): SendDescription {
+    this.#assertOpen();
+    const validated = validateSnapshot(input.snapshot);
+    const live = snapshotMustBeLiveActivity(validated, "describeSend()");
+    const apnsId = input.options?.apnsId ?? genApnsId();
+    const expirationSeconds =
+      input.options?.expirationSeconds ?? nowSec() + 3600;
+    const bundleId = this.#options.bundleId;
+    switch (input.operation) {
+      case "alert": {
+        const payload = liveActivityAlertPayloadFromSnapshot(live);
+        return this.#finishDescription({
+          operation: "alert",
+          path: `/3/device/${input.deviceToken}`,
+          pushType: "alert",
+          topic: bundleId,
+          priority: input.options?.priority ?? 10,
+          apnsId,
+          expirationSeconds,
+          target: input.deviceToken,
+          snapshotId: live.id,
+          payload,
+          limitKind: "alert",
+        });
+      }
+      case "update": {
+        const payload = this.#buildActivityPayload(
+          live,
+          "update",
+          undefined,
+          input.options ?? {},
+        );
+        return this.#finishDescription({
+          operation: "update",
+          path: `/3/device/${input.activityToken}`,
+          pushType: "liveactivity",
+          topic: `${bundleId}.push-type.liveactivity`,
+          priority: input.options?.priority ?? 5,
+          apnsId,
+          expirationSeconds,
+          target: input.activityToken,
+          snapshotId: live.id,
+          staleDateSeconds: input.options?.staleDateSeconds,
+          payload,
+          limitKind: "update",
+        });
+      }
+      case "start": {
+        const attributesType =
+          input.options?.attributesType ?? "MobileSurfacesActivityAttributes";
+        const payload = this.#buildActivityPayload(
+          live,
+          "start",
+          { attributesType, attributes: input.attributes },
+          input.options ?? {},
+        );
+        return this.#finishDescription({
+          operation: "start",
+          path: `/3/device/${input.pushToStartToken}`,
+          pushType: "liveactivity",
+          topic: `${bundleId}.push-type.liveactivity`,
+          priority: input.options?.priority ?? 5,
+          apnsId,
+          expirationSeconds,
+          attributesType,
+          target: input.pushToStartToken,
+          snapshotId: live.id,
+          staleDateSeconds: input.options?.staleDateSeconds,
+          payload,
+          limitKind: "start",
+        });
+      }
+      case "end": {
+        const dismissalDateSeconds =
+          input.options?.dismissalDateSeconds ?? nowSec();
+        const payload = this.#buildActivityPayload(
+          live,
+          "end",
+          undefined,
+          { ...(input.options ?? {}), dismissalDateSeconds },
+        );
+        return this.#finishDescription({
+          operation: "end",
+          path: `/3/device/${input.activityToken}`,
+          pushType: "liveactivity",
+          topic: `${bundleId}.push-type.liveactivity`,
+          priority: input.options?.priority ?? 5,
+          apnsId,
+          expirationSeconds,
+          target: input.activityToken,
+          snapshotId: live.id,
+          staleDateSeconds: input.options?.staleDateSeconds,
+          dismissalDateSeconds,
+          payload,
+          limitKind: "end",
+        });
+      }
+      case "broadcast": {
+        const payload = this.#buildActivityPayload(
+          live,
+          "update",
+          undefined,
+          input.options ?? {},
+        );
+        return this.#finishDescription({
+          operation: "broadcast",
+          path: `/4/broadcasts/apps/${bundleId}`,
+          pushType: "liveactivity",
+          topic: null,
+          priority: input.options?.priority ?? 5,
+          apnsId,
+          expirationSeconds: 0,
+          channelId: input.channelId,
+          target: input.channelId,
+          snapshotId: live.id,
+          payload,
+          limitKind: "broadcast",
+        });
+      }
+    }
+  }
+
+  /**
    * Close the underlying HTTP/2 sessions. After this resolves, every method
    * on this client throws `ClientClosedError`.
    */
@@ -696,6 +902,59 @@ export class PushClient {
     if (this.#closed) {
       throw new ClientClosedError();
     }
+  }
+
+  #finishDescription(args: {
+    operation: SendDescription["operation"];
+    path: string;
+    pushType: "alert" | "liveactivity";
+    topic: string | null;
+    priority: 5 | 10;
+    apnsId: string;
+    expirationSeconds: number;
+    staleDateSeconds?: number;
+    dismissalDateSeconds?: number;
+    attributesType?: string;
+    channelId?: string;
+    target: string;
+    snapshotId: string;
+    payload: Record<string, unknown>;
+    limitKind: PayloadKind;
+  }): SendDescription {
+    const payloadJson = JSON.stringify(args.payload);
+    const payloadBytes = Buffer.byteLength(payloadJson, "utf8");
+    const payloadLimitBytes =
+      args.limitKind === "broadcast"
+        ? MAX_PAYLOAD_BYTES_BROADCAST
+        : MAX_PAYLOAD_BYTES_DEFAULT;
+    return {
+      operation: args.operation,
+      method: "POST",
+      path: args.path,
+      pushType: args.pushType,
+      topic: args.topic,
+      priority: args.priority,
+      apnsId: args.apnsId,
+      expirationSeconds: args.expirationSeconds,
+      ...(args.staleDateSeconds !== undefined
+        ? { staleDateSeconds: args.staleDateSeconds }
+        : {}),
+      ...(args.dismissalDateSeconds !== undefined
+        ? { dismissalDateSeconds: args.dismissalDateSeconds }
+        : {}),
+      ...(args.attributesType !== undefined
+        ? { attributesType: args.attributesType }
+        : {}),
+      ...(args.channelId !== undefined ? { channelId: args.channelId } : {}),
+      target: args.target,
+      snapshotId: args.snapshotId,
+      snapshotKind: "liveActivity",
+      payload: args.payload,
+      payloadJson,
+      payloadBytes,
+      payloadLimitBytes,
+      withinLimit: payloadBytes <= payloadLimitBytes,
+    };
   }
 
   #buildActivityPayload(
