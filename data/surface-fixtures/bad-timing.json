@@ -1,5 +1,5 @@
 {
-  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@3.1/schema.json",
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@3.2/schema.json",
   "schemaVersion": "2",
   "kind": "liveActivity",
   "id": "fixture-bad-timing",
