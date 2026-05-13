@@ -1,9 +1,10 @@
 {
-  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@2.1/schema.json",
-  "schemaVersion": "1",
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@3.0/schema.json",
+  "schemaVersion": "2",
   "kind": "liveActivity",
   "id": "fixture-attention",
   "surfaceId": "surface-attention",
+  "updatedAt": "2026-05-12T18:30:30.000Z",
   "state": "attention",
   "modeLabel": "attention",
   "contextLabel": "urgent",
@@ -11,9 +12,11 @@
   "primaryText": "Attention needed",
   "secondaryText": "Use this state for alert-worthy pushes or prominent ActivityKit updates.",
   "actionLabel": "Review",
-  "estimatedSeconds": 120,
-  "morePartsCount": 1,
   "progress": 0.15,
-  "stage": "prompted",
-  "deepLink": "mobilesurfaces://surface/surface-attention"
+  "deepLink": "mobilesurfaces://surface/surface-attention",
+  "liveActivity": {
+    "stage": "prompted",
+    "estimatedSeconds": 120,
+    "morePartsCount": 1
+  }
 }

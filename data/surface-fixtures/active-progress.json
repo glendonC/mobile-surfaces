@@ -1,10 +1,10 @@
 {
-  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@2.1/schema.json",
-  "schemaVersion": "1",
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@3.0/schema.json",
+  "schemaVersion": "2",
   "kind": "liveActivity",
   "id": "fixture-active-progress",
   "surfaceId": "surface-active-progress",
-  "updatedAt": "2026-05-12T18:32:11.482Z",
+  "updatedAt": "2026-05-12T18:31:00.000Z",
   "state": "active",
   "modeLabel": "active",
   "contextLabel": "progress",
@@ -12,9 +12,11 @@
   "primaryText": "Surface in progress",
   "secondaryText": "The same snapshot feeds the app view and ActivityKit content state.",
   "actionLabel": "View progress",
-  "estimatedSeconds": 360,
-  "morePartsCount": 0,
   "progress": 0.5,
-  "stage": "inProgress",
-  "deepLink": "mobilesurfaces://surface/surface-active-progress"
+  "deepLink": "mobilesurfaces://surface/surface-active-progress",
+  "liveActivity": {
+    "stage": "inProgress",
+    "estimatedSeconds": 360,
+    "morePartsCount": 0
+  }
 }

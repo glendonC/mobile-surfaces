@@ -1,9 +1,10 @@
 {
-  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@2.1/schema.json",
-  "schemaVersion": "1",
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@3.0/schema.json",
+  "schemaVersion": "2",
   "kind": "liveActivity",
   "id": "fixture-bad-timing",
   "surfaceId": "surface-none-bad-timing",
+  "updatedAt": "2026-05-12T18:32:30.000Z",
   "state": "bad_timing",
   "modeLabel": "bad timing",
   "contextLabel": "suppressed",
@@ -11,9 +12,11 @@
   "primaryText": "Surface suppressed",
   "secondaryText": "Use this state when the app decides not to interrupt the user.",
   "actionLabel": "Snooze",
-  "estimatedSeconds": 0,
-  "morePartsCount": 0,
   "progress": 0,
-  "stage": "completing",
-  "deepLink": "mobilesurfaces://today"
+  "deepLink": "mobilesurfaces://today",
+  "liveActivity": {
+    "stage": "completing",
+    "estimatedSeconds": 0,
+    "morePartsCount": 0
+  }
 }

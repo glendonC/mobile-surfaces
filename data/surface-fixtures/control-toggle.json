@@ -1,9 +1,10 @@
 {
-  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@2.1/schema.json",
-  "schemaVersion": "1",
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@3.0/schema.json",
+  "schemaVersion": "2",
   "kind": "control",
   "id": "fixture-control-toggle",
   "surfaceId": "surface-control-toggle",
+  "updatedAt": "2026-05-12T18:34:30.000Z",
   "state": "active",
   "modeLabel": "control",
   "contextLabel": "toggle",
@@ -11,10 +12,7 @@
   "primaryText": "Control surface",
   "secondaryText": "This snapshot backs the iOS 18 control widget toggle.",
   "actionLabel": "Surface toggle",
-  "estimatedSeconds": 0,
-  "morePartsCount": 0,
   "progress": 1,
-  "stage": "inProgress",
   "deepLink": "mobilesurfaces://surface/surface-control-toggle",
   "control": {
     "kind": "toggle",

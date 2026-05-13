@@ -6,7 +6,9 @@ import {
   liveSurfaceAlertPayload,
   liveSurfaceSnapshot,
   liveSurfaceSnapshotV0,
+  liveSurfaceSnapshotV1,
   migrateV0ToV1,
+  migrateV1ToV2,
   safeParseAnyVersion,
   safeParseSnapshot,
   surfaceFixtureSnapshots,
@@ -21,19 +23,27 @@ import {
 
 const queued = surfaceFixtureSnapshots.queued;
 
+// `queued` is a liveActivity-kind snapshot. Tests that build a different
+// kind by spreading queued need to strip the liveActivity slice first; v2's
+// strict per-kind objects reject unknown sibling slices.
+function withoutLiveActivity(snapshot) {
+  const { liveActivity: _drop, ...rest } = snapshot;
+  return rest;
+}
+
 test("live activity fixtures project to ActivityKit content state", () => {
   assert.equal(queued.kind, "liveActivity");
   assert.deepEqual(toLiveActivityContentState(queued), {
     headline: queued.primaryText,
     subhead: queued.secondaryText,
     progress: queued.progress,
-    stage: queued.stage,
+    stage: queued.liveActivity.stage,
   });
 });
 
 test("live activity projections reject non-live snapshots", () => {
   const widget = assertSnapshot({
-    ...queued,
+    ...withoutLiveActivity(queued),
     id: "fixture-widget",
     kind: "widget",
     widget: { family: "systemSmall" },
@@ -54,7 +64,7 @@ test("toAlertPayload output parses as liveSurfaceAlertPayload", () => {
 
 test("widget projection accepts widget snapshots and rejects mismatches", () => {
   const widget = assertSnapshot({
-    ...queued,
+    ...withoutLiveActivity(queued),
     id: "fixture-widget",
     surfaceId: "surface-widget",
     kind: "widget",
@@ -78,7 +88,7 @@ test("widget projection accepts widget snapshots and rejects mismatches", () => 
 
 test("control projection accepts control snapshots and rejects mismatches", () => {
   const control = assertSnapshot({
-    ...queued,
+    ...withoutLiveActivity(queued),
     id: "fixture-control",
     surfaceId: "surface-control",
     kind: "control",
@@ -100,7 +110,7 @@ test("control projection accepts control snapshots and rejects mismatches", () =
 
 test("notification projection accepts notification snapshots and rejects mismatches", () => {
   const notification = assertSnapshot({
-    ...queued,
+    ...withoutLiveActivity(queued),
     id: "fixture-notification",
     surfaceId: "surface-notification",
     kind: "notification",
@@ -134,7 +144,7 @@ test("notification projection accepts notification snapshots and rejects mismatc
 
 test("kind/slice mismatch is rejected: control kind without control slice fails safeParse", () => {
   const result = liveSurfaceSnapshot.safeParse({
-    ...queued,
+    ...withoutLiveActivity(queued),
     id: "fixture-control-missing-slice",
     kind: "control",
   });
@@ -143,7 +153,7 @@ test("kind/slice mismatch is rejected: control kind without control slice fails 
 
 test("kind/slice mismatch is rejected: widget kind without widget slice fails safeParse", () => {
   const result = liveSurfaceSnapshot.safeParse({
-    ...queued,
+    ...withoutLiveActivity(queued),
     id: "fixture-widget-missing-slice",
     kind: "widget",
   });
@@ -152,7 +162,7 @@ test("kind/slice mismatch is rejected: widget kind without widget slice fails sa
 
 test("kind/slice mismatch is rejected: notification kind without notification slice fails safeParse", () => {
   const result = liveSurfaceSnapshot.safeParse({
-    ...queued,
+    ...withoutLiveActivity(queued),
     id: "fixture-notification-missing-slice",
     kind: "notification",
   });
@@ -169,18 +179,27 @@ test("kind/slice mismatch is rejected: liveActivity kind with widget slice attac
   assert.equal(result.success, false);
 });
 
-test("missing kind defaults to liveActivity (preprocess preserves v1 forward-compat)", () => {
+test("kind/slice mismatch is rejected: liveActivity kind without liveActivity slice fails safeParse", () => {
+  const result = liveSurfaceSnapshot.safeParse({
+    ...withoutLiveActivity(queued),
+    id: "fixture-live-missing-slice",
+    kind: "liveActivity",
+  });
+  assert.equal(result.success, false);
+});
+
+test("v2 requires kind: payload without kind fails safeParse (no preprocess fallback)", () => {
   const { kind: _omit, ...withoutKind } = queued;
   const result = safeParseSnapshot(withoutKind);
-  assert.equal(result.success, true);
-  if (result.success) {
-    assert.equal(result.data.kind, "liveActivity");
-  }
+  // v2 dropped the v1 missing-kind preprocess. Producers must set kind
+  // explicitly; the v1->v2 codec sets it during migration. Bare snapshots
+  // without kind are no longer valid.
+  assert.equal(result.success, false);
 });
 
 test("kind/slice mismatch is rejected: lockAccessory kind without lockAccessory slice fails safeParse", () => {
   const result = liveSurfaceSnapshot.safeParse({
-    ...queued,
+    ...withoutLiveActivity(queued),
     id: "fixture-lock-missing-slice",
     kind: "lockAccessory",
   });
@@ -189,7 +208,7 @@ test("kind/slice mismatch is rejected: lockAccessory kind without lockAccessory 
 
 test("kind/slice mismatch is rejected: standby kind without standby slice fails safeParse", () => {
   const result = liveSurfaceSnapshot.safeParse({
-    ...queued,
+    ...withoutLiveActivity(queued),
     id: "fixture-standby-missing-slice",
     kind: "standby",
   });
@@ -198,7 +217,7 @@ test("kind/slice mismatch is rejected: standby kind without standby slice fails 
 
 test("lockAccessory projection accepts lockAccessory snapshots and rejects mismatches", () => {
   const accessory = assertSnapshot({
-    ...queued,
+    ...withoutLiveActivity(queued),
     id: "fixture-lock-accessory",
     surfaceId: "surface-lock-accessory",
     kind: "lockAccessory",
@@ -226,7 +245,7 @@ test("lockAccessory projection accepts lockAccessory snapshots and rejects misma
 
 test("toLockAccessoryEntry falls back to progress when gaugeValue is absent", () => {
   const accessory = assertSnapshot({
-    ...queued,
+    ...withoutLiveActivity(queued),
     id: "fixture-lock-fallback",
     kind: "lockAccessory",
     progress: 0.33,
@@ -238,13 +257,13 @@ test("toLockAccessoryEntry falls back to progress when gaugeValue is absent", ()
 
 test("toLockAccessoryEntry falls back to primaryText when shortText is empty or absent", () => {
   const empty = assertSnapshot({
-    ...queued,
+    ...withoutLiveActivity(queued),
     id: "fixture-lock-empty",
     kind: "lockAccessory",
     lockAccessory: { family: "accessoryInline", shortText: "" },
   });
   const absent = assertSnapshot({
-    ...queued,
+    ...withoutLiveActivity(queued),
     id: "fixture-lock-absent",
     kind: "lockAccessory",
     lockAccessory: { family: "accessoryInline" },
@@ -255,7 +274,7 @@ test("toLockAccessoryEntry falls back to primaryText when shortText is empty or 
 
 test("standby projection accepts standby snapshots and rejects mismatches", () => {
   const standby = assertSnapshot({
-    ...queued,
+    ...withoutLiveActivity(queued),
     id: "fixture-standby",
     surfaceId: "surface-standby",
     kind: "standby",
@@ -279,7 +298,7 @@ test("standby projection accepts standby snapshots and rejects mismatches", () =
 
 test("toStandbyEntry applies presentation default and null tint when absent", () => {
   const standby = assertSnapshot({
-    ...queued,
+    ...withoutLiveActivity(queued),
     id: "fixture-standby-default",
     kind: "standby",
     standby: {},
@@ -290,7 +309,7 @@ test("toStandbyEntry applies presentation default and null tint when absent", ()
 });
 
 // ---------------------------------------------------------------------------
-// v0 → v1 migration codec (Round 1A)
+// v0 -> v1 migration codec (legacy; removed in 4.0)
 // ---------------------------------------------------------------------------
 
 const v0Sample = {
@@ -326,26 +345,150 @@ test("migrateV0ToV1 promotes a v0 payload to a v1 liveActivity snapshot", () => 
   assert.equal(v1.state, v0Sample.state);
   assert.equal(v1.deepLink, v0Sample.deepLink);
 
-  // Round-trip through the strict v1 parser to prove the migrated value is
-  // a valid v1 snapshot.
-  const reparsed = liveSurfaceSnapshot.parse(v1);
-  assert.deepEqual(reparsed, v1);
+  // Round-trip through the frozen v1 parser to prove the migrated value
+  // is a valid v1 snapshot. (Cannot round-trip through liveSurfaceSnapshot
+  // here because that is now v2; the chained codec inside
+  // safeParseAnyVersion handles v0 -> v1 -> v2.)
+  const reparsed = liveSurfaceSnapshotV1.parse(v1);
+  assert.equal(reparsed.schemaVersion, "1");
 });
 
-test("safeParseAnyVersion accepts a v1 payload with no deprecation warning", () => {
+// ---------------------------------------------------------------------------
+// v1 -> v2 migration codec
+// ---------------------------------------------------------------------------
+
+const v1LiveActivitySample = {
+  schemaVersion: "1",
+  kind: "liveActivity",
+  id: "fixture-v1-live",
+  surfaceId: "surface-v1-live",
+  state: "active",
+  modeLabel: "active",
+  contextLabel: "progress",
+  statusLine: "active",
+  primaryText: "Surface",
+  secondaryText: "v1 sample",
+  actionLabel: "Open",
+  estimatedSeconds: 120,
+  morePartsCount: 1,
+  progress: 0.4,
+  stage: "inProgress",
+  deepLink: "mobilesurfaces://surface/surface-v1-live",
+  updatedAt: "2026-05-12T18:00:00.000Z",
+};
+
+const v1WidgetSample = {
+  schemaVersion: "1",
+  kind: "widget",
+  id: "fixture-v1-widget",
+  surfaceId: "surface-v1-widget",
+  state: "active",
+  modeLabel: "widget",
+  contextLabel: "home",
+  statusLine: "widget",
+  primaryText: "Widget",
+  secondaryText: "v1 sample",
+  estimatedSeconds: 60,
+  morePartsCount: 0,
+  progress: 0.5,
+  stage: "inProgress",
+  deepLink: "mobilesurfaces://surface/surface-v1-widget",
+  updatedAt: "2026-05-12T18:00:00.000Z",
+  widget: { family: "systemMedium" },
+};
+
+test("migrateV1ToV2 packs liveActivity-only fields into the new slice", () => {
+  const v1 = liveSurfaceSnapshotV1.parse(v1LiveActivitySample);
+  const v2 = migrateV1ToV2(v1);
+  assert.equal(v2.schemaVersion, "2");
+  assert.equal(v2.kind, "liveActivity");
+  assert.ok("liveActivity" in v2);
+  if (v2.kind === "liveActivity") {
+    assert.equal(v2.liveActivity.stage, "inProgress");
+    assert.equal(v2.liveActivity.estimatedSeconds, 120);
+    assert.equal(v2.liveActivity.morePartsCount, 1);
+  }
+  // The three liveActivity-only fields are not on the base anymore.
+  assert.equal("stage" in v2, false);
+  assert.equal("estimatedSeconds" in v2, false);
+  assert.equal("morePartsCount" in v2, false);
+  // Round-trip through v2 parse to prove the migration result is valid.
+  const reparsed = liveSurfaceSnapshot.parse(v2);
+  assert.equal(reparsed.schemaVersion, "2");
+});
+
+test("migrateV1ToV2 drops liveActivity-only fields for non-liveActivity kinds", () => {
+  const v1 = liveSurfaceSnapshotV1.parse(v1WidgetSample);
+  const v2 = migrateV1ToV2(v1);
+  assert.equal(v2.schemaVersion, "2");
+  assert.equal(v2.kind, "widget");
+  assert.equal("stage" in v2, false);
+  assert.equal("estimatedSeconds" in v2, false);
+  assert.equal("morePartsCount" in v2, false);
+  assert.equal("liveActivity" in v2, false);
+  // widget slice survives the migration.
+  if (v2.kind === "widget") {
+    assert.equal(v2.widget.family, "systemMedium");
+  }
+});
+
+test("migrateV1ToV2 leaves updatedAt undefined when v1 omitted it (default-fail behavior)", () => {
+  const { updatedAt: _omit, ...withoutUpdatedAt } = v1LiveActivitySample;
+  const v1 = liveSurfaceSnapshotV1.parse(withoutUpdatedAt);
+  const v2Like = migrateV1ToV2(v1);
+  // The migrate result is not yet a valid v2 snapshot — v2 requires
+  // updatedAt. Default behavior leaves it undefined so v2 parse fails
+  // loudly rather than synthesizing a "now" lie.
+  assert.equal(v2Like.schemaVersion, "2");
+  assert.equal(v2Like.updatedAt, undefined);
+  const result = liveSurfaceSnapshot.safeParse(v2Like);
+  assert.equal(result.success, false);
+});
+
+test("migrateV1ToV2 honors updatedAtFallback when v1 omitted updatedAt", () => {
+  const { updatedAt: _omit, ...withoutUpdatedAt } = v1LiveActivitySample;
+  const v1 = liveSurfaceSnapshotV1.parse(withoutUpdatedAt);
+  const v2 = migrateV1ToV2(v1, {
+    updatedAtFallback: "2026-05-12T18:30:00.000Z",
+  });
+  assert.equal(v2.updatedAt, "2026-05-12T18:30:00.000Z");
+  // With the fallback in place, the result parses as a valid v2 snapshot.
+  const reparsed = liveSurfaceSnapshot.parse(v2);
+  assert.equal(reparsed.updatedAt, "2026-05-12T18:30:00.000Z");
+});
+
+// ---------------------------------------------------------------------------
+// safeParseAnyVersion: v2 (strict) -> v1 (codec) -> v0 (legacy, removed in 4.0)
+// ---------------------------------------------------------------------------
+
+test("safeParseAnyVersion accepts a v2 payload with no deprecation warning", () => {
   const result = safeParseAnyVersion(queued);
   assert.equal(result.success, true);
   if (result.success) {
     assert.equal(result.data.kind, "liveActivity");
+    assert.equal(result.data.schemaVersion, "2");
     assert.equal(result.deprecationWarning, undefined);
   }
 });
 
-test("safeParseAnyVersion accepts a v0 payload and surfaces a deprecation warning", () => {
+test("safeParseAnyVersion accepts a v1 payload and surfaces a v1 deprecation warning", () => {
+  const result = safeParseAnyVersion(v1LiveActivitySample);
+  assert.equal(result.success, true);
+  if (result.success) {
+    assert.equal(result.data.schemaVersion, "2");
+    assert.equal(result.data.kind, "liveActivity");
+    assert.match(
+      result.deprecationWarning ?? "",
+      /v1 is deprecated/i,
+    );
+  }
+});
+
+test("safeParseAnyVersion accepts a v0 payload and surfaces a v0 deprecation warning", () => {
   const result = safeParseAnyVersion(v0Sample);
   assert.equal(result.success, true);
   if (result.success) {
-    assert.equal(result.data.schemaVersion, "1");
+    assert.equal(result.data.schemaVersion, "2");
     assert.equal(result.data.kind, "liveActivity");
     assert.match(
       result.deprecationWarning ?? "",
@@ -354,7 +497,7 @@ test("safeParseAnyVersion accepts a v0 payload and surfaces a deprecation warnin
   }
 });
 
-test("safeParseAnyVersion fails with v1 error when neither version parses", () => {
+test("safeParseAnyVersion fails with v2 error when no version parses", () => {
   const result = safeParseAnyVersion({ schemaVersion: "999", nonsense: true });
   assert.equal(result.success, false);
   if (!result.success) {
@@ -362,8 +505,9 @@ test("safeParseAnyVersion fails with v1 error when neither version parses", () =
   }
 });
 
-test("strict assertSnapshot does NOT auto-migrate v0 payloads", () => {
+test("strict assertSnapshot does NOT auto-migrate v0 or v1 payloads", () => {
   assert.throws(() => assertSnapshot(v0Sample));
+  assert.throws(() => assertSnapshot(v1LiveActivitySample));
 });
 
 // ---------------------------------------------------------------------------
@@ -401,52 +545,63 @@ for (const link of deepLinkNegativeCases) {
 }
 
 // ---------------------------------------------------------------------------
-// morePartsCount boundaries (schema declares z.int().min(0))
+// liveActivity.morePartsCount boundaries (z.int().min(0) inside the slice)
 // ---------------------------------------------------------------------------
 
+function withLiveActivity(overrides) {
+  return {
+    ...queued,
+    liveActivity: { ...queued.liveActivity, ...overrides },
+  };
+}
+
 test("morePartsCount accepts 0", () => {
-  const result = safeParseSnapshot({ ...queued, morePartsCount: 0 });
+  const result = safeParseSnapshot(withLiveActivity({ morePartsCount: 0 }));
   assert.equal(result.success, true);
 });
 
 test("morePartsCount accepts 1", () => {
-  const result = safeParseSnapshot({ ...queued, morePartsCount: 1 });
+  const result = safeParseSnapshot(withLiveActivity({ morePartsCount: 1 }));
   assert.equal(result.success, true);
 });
 
 test("morePartsCount accepts large integers", () => {
-  const result = safeParseSnapshot({ ...queued, morePartsCount: 1_000_000 });
+  const result = safeParseSnapshot(
+    withLiveActivity({ morePartsCount: 1_000_000 }),
+  );
   assert.equal(result.success, true);
 });
 
 test("morePartsCount rejects negative integers", () => {
-  const result = safeParseSnapshot({ ...queued, morePartsCount: -1 });
+  const result = safeParseSnapshot(withLiveActivity({ morePartsCount: -1 }));
   assert.equal(result.success, false);
 });
 
 test("morePartsCount rejects non-integer numbers", () => {
-  const result = safeParseSnapshot({ ...queued, morePartsCount: 1.5 });
+  const result = safeParseSnapshot(withLiveActivity({ morePartsCount: 1.5 }));
   assert.equal(result.success, false);
 });
 
 test("morePartsCount rejects NaN", () => {
-  const result = safeParseSnapshot({ ...queued, morePartsCount: Number.NaN });
+  const result = safeParseSnapshot(
+    withLiveActivity({ morePartsCount: Number.NaN }),
+  );
   assert.equal(result.success, false);
 });
 
 test("morePartsCount rejects string-encoded integers", () => {
-  const result = safeParseSnapshot({ ...queued, morePartsCount: "3" });
+  const result = safeParseSnapshot(withLiveActivity({ morePartsCount: "3" }));
   assert.equal(result.success, false);
 });
 
 // ---------------------------------------------------------------------------
-// updatedAt (optional v1, required in v2)
+// updatedAt (required in v2)
 // ---------------------------------------------------------------------------
 
-test("updatedAt is optional in v1 — snapshots without it still parse", () => {
+test("updatedAt is required in v2: payloads without it fail safeParse", () => {
   const { updatedAt: _omit, ...withoutUpdatedAt } = queued;
   const result = safeParseSnapshot(withoutUpdatedAt);
-  assert.equal(result.success, true);
+  assert.equal(result.success, false);
 });
 
 test("updatedAt accepts an RFC 3339 / ISO 8601 datetime string", () => {
@@ -486,7 +641,7 @@ test("updatedAt rejects a non-string value", () => {
 
 test("toControlValueProvider falls back to primaryText when actionLabel is absent", () => {
   const control = assertSnapshot({
-    ...queued,
+    ...withoutLiveActivity(queued),
     id: "fixture-control-no-action-label",
     surfaceId: "surface-control",
     actionLabel: undefined,
@@ -499,7 +654,7 @@ test("toControlValueProvider falls back to primaryText when actionLabel is absen
 
 test("toControlValueProvider falls back to primaryText when actionLabel is empty string", () => {
   const control = assertSnapshot({
-    ...queued,
+    ...withoutLiveActivity(queued),
     id: "fixture-control-empty-action-label",
     surfaceId: "surface-control",
     actionLabel: "",
@@ -526,7 +681,7 @@ test("IncompleteProjectionError class is exported and named correctly", () => {
 
 test("toControlValueProvider preserves null when control.state and control.intent are absent", () => {
   const control = assertSnapshot({
-    ...queued,
+    ...withoutLiveActivity(queued),
     id: "fixture-control-bare",
     surfaceId: "surface-control",
     kind: "control",
@@ -543,7 +698,7 @@ test("toControlValueProvider preserves null when control.state and control.inten
 
 test("toWidgetTimelineEntry passes through undefined family and reloadPolicy", () => {
   const widget = assertSnapshot({
-    ...queued,
+    ...withoutLiveActivity(queued),
     id: "fixture-widget-bare",
     surfaceId: "surface-widget",
     kind: "widget",
@@ -557,7 +712,7 @@ test("toWidgetTimelineEntry passes through undefined family and reloadPolicy", (
 
 test("toNotificationContentPayload omits category and threadId when absent", () => {
   const note = assertSnapshot({
-    ...queued,
+    ...withoutLiveActivity(queued),
     id: "fixture-notification-bare",
     surfaceId: "surface-notification",
     kind: "notification",
@@ -572,7 +727,7 @@ test("toNotificationContentPayload omits category and threadId when absent", () 
 
 test("toNotificationContentPayload drops empty-string category and threadId", () => {
   const note = assertSnapshot({
-    ...queued,
+    ...withoutLiveActivity(queued),
     id: "fixture-notification-empty-meta",
     surfaceId: "surface-notification",
     kind: "notification",

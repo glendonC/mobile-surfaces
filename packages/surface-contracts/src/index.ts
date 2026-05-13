@@ -7,6 +7,8 @@ export {
   liveSurfaceSnapshotLockAccessory,
   liveSurfaceSnapshotStandby,
   liveSurfaceSnapshotV0,
+  liveSurfaceSnapshotV1,
+  liveSurfaceLiveActivitySlice,
   liveSurfaceState,
   liveSurfaceStage,
   liveSurfaceKind,
@@ -25,6 +27,7 @@ export {
   assertSnapshot,
   safeParseSnapshot,
   migrateV0ToV1,
+  migrateV1ToV2,
   safeParseAnyVersion,
 } from "./schema.ts";
 export type {
@@ -36,6 +39,8 @@ export type {
   LiveSurfaceSnapshotLockAccessory,
   LiveSurfaceSnapshotStandby,
   LiveSurfaceSnapshotV0,
+  LiveSurfaceSnapshotV1,
+  LiveSurfaceLiveActivitySlice,
   LiveSurfaceState,
   LiveSurfaceStage,
   LiveSurfaceKind,
@@ -48,6 +53,7 @@ export type {
   LiveSurfaceStandbySlice,
   LiveSurfaceActivityContentState,
   LiveSurfaceAlertPayload,
+  MigrateV1ToV2Options,
   SafeParseAnyVersionResult,
   SafeParseAnyVersionSuccess,
   SafeParseAnyVersionFailure,
@@ -165,7 +171,7 @@ export function toLiveActivityContentState(
     headline: live.primaryText,
     subhead: live.secondaryText,
     progress: live.progress,
-    stage: live.stage,
+    stage: live.liveActivity.stage,
   };
 }
 

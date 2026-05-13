@@ -1,4 +1,10 @@
 import { z } from "zod";
+import {
+  liveSurfaceSnapshotV1,
+  type LiveSurfaceSnapshotV1,
+} from "./schema-v1.ts";
+
+export { liveSurfaceSnapshotV1, type LiveSurfaceSnapshotV1 };
 
 export const liveSurfaceState = z.enum([
   "queued",
@@ -87,13 +93,34 @@ export const liveSurfaceStandbySlice = z
   .strict();
 export type LiveSurfaceStandbySlice = z.infer<typeof liveSurfaceStandbySlice>;
 
+// liveActivity-only timing and stage hints. v1 carried these on every
+// snapshot regardless of kind; v2 moves them into a per-kind slice so a
+// widget or control snapshot no longer pretends to have a stage or an
+// estimatedSeconds.
+//
+// `stage` is what toLiveActivityContentState projects into the
+// ActivityKit ContentState; `estimatedSeconds` is a Lock-Screen duration
+// hint; `morePartsCount` lets a producer indicate queued follow-up parts
+// without inflating the payload. None of these have meaning outside the
+// Lock Screen surface.
+export const liveSurfaceLiveActivitySlice = z
+  .object({
+    stage: liveSurfaceStage,
+    estimatedSeconds: z.int().min(0),
+    morePartsCount: z.int().min(0),
+  })
+  .strict();
+export type LiveSurfaceLiveActivitySlice = z.infer<
+  typeof liveSurfaceLiveActivitySlice
+>;
+
 // Base fields shared by every snapshot variant. We spread this into each
 // per-kind z.object below so types stay inferred from Zod (no hand-written
 // interfaces) while the discriminated union narrows on `kind`. Keeping the
 // raw shape (instead of a built schema) lets each variant call `.strict()`
 // after attaching its kind-specific slice.
 const liveSurfaceSnapshotBaseShape = {
-  schemaVersion: z.literal("1").default("1"),
+  schemaVersion: z.literal("2").default("2"),
   id: z.string().min(1),
   surfaceId: z.string().min(1),
   // Wall-clock instant the snapshot was authored, as an RFC 3339 datetime
@@ -103,16 +130,16 @@ const liveSurfaceSnapshotBaseShape = {
   // updatedAt against the snapshot already applied is the only correct
   // discard test on the client.
   //
-  // UTC (Z-suffixed) is recommended for trivial lexicographic comparison —
-  // "2026-05-12T18:32:11.482Z" — but offsets are also accepted so producers
-  // emitting OffsetDateTime / time.Time / Instant don't have to normalize
+  // UTC (Z-suffixed) is recommended for trivial lexicographic comparison
+  // ("2026-05-12T18:32:11.482Z") but offsets are also accepted so producers
+  // emitting OffsetDateTime / time.Time / Instant do not have to normalize
   // before serialization. When mixing producers, normalize to UTC before
   // comparing.
   //
-  // Optional in v1 for backwards compatibility with payloads authored
-  // before this field was added; v2 will make it required. New code on the
-  // producer side should populate it on every snapshot.
-  updatedAt: z.string().datetime({ offset: true }).optional(),
+  // Required in v2. Optional in v1; the v1->v2 migration codec exposes an
+  // `updatedAtFallback` opt-in for callers who know it is safe to
+  // synthesize a value at migration time.
+  updatedAt: z.string().datetime({ offset: true }),
   state: liveSurfaceState,
   modeLabel: z.string().min(1),
   contextLabel: z.string(),
@@ -120,10 +147,7 @@ const liveSurfaceSnapshotBaseShape = {
   primaryText: z.string().min(1),
   secondaryText: z.string(),
   actionLabel: z.string().optional(),
-  estimatedSeconds: z.int().min(0),
-  morePartsCount: z.int().min(0),
   progress: z.number().min(0).max(1),
-  stage: liveSurfaceStage,
   deepLink: z.string().regex(/^[a-z][a-z0-9+\-.]*:\/\//),
 } as const;
 
@@ -131,6 +155,7 @@ export const liveSurfaceSnapshotLiveActivity = z
   .object({
     kind: z.literal("liveActivity"),
     ...liveSurfaceSnapshotBaseShape,
+    liveActivity: liveSurfaceLiveActivitySlice,
   })
   .strict();
 export type LiveSurfaceSnapshotLiveActivity = z.infer<
@@ -192,50 +217,34 @@ export type LiveSurfaceSnapshotStandby = z.infer<
   typeof liveSurfaceSnapshotStandby
 >;
 
-// Discriminated union over `kind`. The .preprocess wrapper preserves the
-// historical "missing kind defaults to liveActivity" behavior so v1 payloads
-// stored before the discriminator was enforced still parse. Authored payloads
-// in this repo always set `kind` explicitly; this is a safety net for any
-// externally-stored snapshot.
+// Discriminated union over `kind`. v2 requires `kind` to be set explicitly;
+// the v1 missing-kind preprocess shim was removed because every authored
+// fixture in this repo (and every payload the v1->v2 codec emits) sets it.
 //
-// Wrapped in z.lazy() so the preprocess + discriminated-union construction
-// (building the kind -> variant Map across 6 variants) is deferred to the
-// first parse/safeParse call instead of running at module import. Backends
-// that import this package but only validate occasionally, and short-lived
-// serverless invocations that rarely hit the codepath, no longer pay the
+// Wrapped in z.lazy() so the discriminated-union construction (building the
+// kind -> variant Map across 6 variants) is deferred to the first
+// parse/safeParse call instead of running at module import. Backends that
+// import this package but only validate occasionally, and short-lived
+// serverless invocations that rarely hit the codepath, do not pay the
 // construction cost on cold start. The variants themselves stay eagerly
 // built (they are independently exported) and .parse / .safeParse still
 // pass through transparently.
 //
 // Standard Schema (https://standardschema.dev) interop is provided automatically
-// by Zod 4 via the `~standard` property — `liveSurfaceSnapshot["~standard"]`
+// by Zod 4 via the `~standard` property: `liveSurfaceSnapshot["~standard"]`
 // returns `{ vendor: "zod", version: 1, validate, jsonSchema }`. Consumers can
 // pass this contract to any Standard-Schema-aware library (Valibot, ArkType,
 // `@standard-schema/spec` runners) without depending on Zod at runtime. The
 // fixture-validation tests pin this; do not remove the assertion.
 export const liveSurfaceSnapshot = z.lazy(() =>
-  z.preprocess(
-    (value) => {
-      if (
-        value !== null &&
-        typeof value === "object" &&
-        !Array.isArray(value) &&
-        !("kind" in (value as Record<string, unknown>))
-      ) {
-        return { ...(value as Record<string, unknown>), kind: "liveActivity" };
-      }
-      return value;
-    },
-    z.discriminatedUnion("kind", [
-      liveSurfaceSnapshotLiveActivity,
-      liveSurfaceSnapshotWidget,
-      liveSurfaceSnapshotControl,
-      liveSurfaceSnapshotNotification,
-      liveSurfaceSnapshotLockAccessory,
-      liveSurfaceSnapshotStandby,
-    ]),
-  ),
-);
+  z.discriminatedUnion("kind", [
+    liveSurfaceSnapshotLiveActivity,
+    liveSurfaceSnapshotWidget,
+    liveSurfaceSnapshotControl,
+    liveSurfaceSnapshotNotification,
+    liveSurfaceSnapshotLockAccessory,
+    liveSurfaceSnapshotStandby,
+  ]));
 export type LiveSurfaceSnapshot = z.infer<typeof liveSurfaceSnapshot>;
 
 export const liveSurfaceActivityContentState = z
@@ -344,18 +353,23 @@ export const liveSurfaceSnapshotV0 = z
 export type LiveSurfaceSnapshotV0 = z.infer<typeof liveSurfaceSnapshotV0>;
 
 /**
- * Pure v0→v1 transform. Promotes a parsed v0 payload to a v1
+ * Pure v0->v1 transform. Promotes a parsed v0 payload to a v1
  * liveActivity-kind snapshot. v0 had no projection slices, so the result
  * always has `kind: "liveActivity"` with no `widget` / `control` /
  * `notification` slice.
+ *
+ * Returns LiveSurfaceSnapshotV1 (not the live v2 type) so the function
+ * keeps a sensible signature alongside migrateV1ToV2 in the chained
+ * codec path inside safeParseAnyVersion. Both helpers are removed in
+ * 4.0.0 when v0 and v1 fall out of the support window.
  */
-export function migrateV0ToV1(v0: LiveSurfaceSnapshotV0): LiveSurfaceSnapshot {
+export function migrateV0ToV1(v0: LiveSurfaceSnapshotV0): LiveSurfaceSnapshotV1 {
   const { schemaVersion: _v0Version, ...rest } = v0;
   return {
     ...rest,
     schemaVersion: "1",
     kind: "liveActivity",
-  } satisfies LiveSurfaceSnapshot;
+  } as LiveSurfaceSnapshotV1;
 }
 
 export type SafeParseAnyVersionSuccess = {
@@ -374,24 +388,127 @@ export type SafeParseAnyVersionResult =
   | SafeParseAnyVersionSuccess
   | SafeParseAnyVersionFailure;
 
+export type MigrateV1ToV2Options = {
+  /**
+   * Synthesizes a value for `updatedAt` when the v1 payload omits it.
+   * v2 requires `updatedAt`; the codec's default is to leave it undefined
+   * so the resulting v2 snapshot fails parse with an explicit
+   * "Required" error, which is louder than a synthesized "now" lie that
+   * silently breaks ordering. Pass this only when the caller can vouch
+   * for the substituted timestamp's correctness.
+   */
+  updatedAtFallback?: string;
+};
+
 /**
- * Multi-version safe-parse. Tries the strict v1 discriminated union first; on
- * failure, tries v0 and migrates the result. Returns the v1 Zod error only
- * when both attempts fail (so callers can surface the more relevant message).
+ * Pure v1->v2 transform. Always succeeds for a parsed v1 payload; the
+ * result still needs to pass v2 parse if the v1 payload lacked
+ * `updatedAt` and the caller did not provide an `updatedAtFallback`.
+ *
+ * Mapping:
+ * - `kind: "liveActivity"` -> the three v1 base fields (stage,
+ *   estimatedSeconds, morePartsCount) move under the new
+ *   `liveActivity` slice. Everything else carries over unchanged.
+ * - `kind: "widget" | "control" | "notification" | "lockAccessory" |
+ *   "standby"` -> v1's stage, estimatedSeconds, and morePartsCount are
+ *   dropped (they had no meaning on these kinds).
+ * - `schemaVersion: "1"` -> `"2"`
+ * - `updatedAt`: pass-through; or the provided fallback; or undefined.
+ */
+export function migrateV1ToV2(
+  v1: LiveSurfaceSnapshotV1,
+  opts: MigrateV1ToV2Options = {},
+): LiveSurfaceSnapshot {
+  const {
+    schemaVersion: _v1Version,
+    stage,
+    estimatedSeconds,
+    morePartsCount,
+    updatedAt,
+    ...rest
+  } = v1;
+  const effectiveUpdatedAt =
+    updatedAt ?? opts.updatedAtFallback;
+  const base = {
+    ...rest,
+    schemaVersion: "2" as const,
+    ...(effectiveUpdatedAt !== undefined
+      ? { updatedAt: effectiveUpdatedAt }
+      : {}),
+  };
+  if (v1.kind === "liveActivity") {
+    return {
+      ...base,
+      kind: "liveActivity",
+      liveActivity: { stage, estimatedSeconds, morePartsCount },
+    } as LiveSurfaceSnapshot;
+  }
+  // Every non-liveActivity kind drops the three liveActivity-only fields
+  // and carries through its own existing slice unchanged. The cast keeps
+  // TS from re-narrowing across each branch; the runtime data is correct
+  // by construction since we only stripped fields v2 does not accept.
+  return base as unknown as LiveSurfaceSnapshot;
+}
+
+/**
+ * Multi-version safe-parse. Tries v2 (strict) first; falls back to v1
+ * (frozen, with the v1 missing-kind preprocess) and migrates the result;
+ * falls back further to v0 (legacy, removed in the next commit) and
+ * promotes through v1 to v2. Returns the v2 ZodError when every attempt
+ * fails so callers see the most relevant message.
+ *
+ * On v1->v2 migration, the result carries a `deprecationWarning` so
+ * telemetry can surface producers still on the old shape; see
+ * docs/observability.md for the recommended log.
  */
 export function safeParseAnyVersion(value: unknown): SafeParseAnyVersionResult {
-  const v1 = liveSurfaceSnapshot.safeParse(value);
+  const v2 = liveSurfaceSnapshot.safeParse(value);
+  if (v2.success) {
+    return { success: true, data: v2.data };
+  }
+  const v1 = liveSurfaceSnapshotV1.safeParse(value);
   if (v1.success) {
-    return { success: true, data: v1.data };
+    const migrated = migrateV1ToV2(v1.data);
+    const v2Recheck = liveSurfaceSnapshot.safeParse(migrated);
+    if (v2Recheck.success) {
+      return {
+        success: true,
+        data: v2Recheck.data,
+        deprecationWarning:
+          'liveSurfaceSnapshot v1 is deprecated and will be removed in @mobile-surfaces/surface-contracts@4.0. Migrate producers to schemaVersion "2" and explicit liveActivity-slice fields.',
+      };
+    }
+    // The v1 payload parsed v1 but failed v2 parse after migration. The
+    // most common case is a v1 payload with no updatedAt: v2 requires it
+    // and migrateV1ToV2 deliberately does not synthesize one. Surface the
+    // v2 ZodError so callers see the missing-field path explicitly.
+    return { success: false, error: v2Recheck.error };
   }
   const v0 = liveSurfaceSnapshotV0.safeParse(value);
   if (v0.success) {
-    return {
-      success: true,
-      data: migrateV0ToV1(v0.data),
-      deprecationWarning:
-        'liveSurfaceSnapshot v0 is deprecated. Migrate producers to schemaVersion "1" with an explicit `kind`.',
-    };
+    const viaV1 = migrateV0ToV1(v0.data);
+    const v1Reparsed = liveSurfaceSnapshotV1.safeParse(viaV1);
+    if (v1Reparsed.success) {
+      // v0 never carried an updatedAt field (it predates the addition in
+      // 2.1). There is no v0 producer to ask to populate it, so synthesize
+      // a wall-clock "now" during the v0 -> v2 migration. This is the only
+      // codepath that auto-synthesizes; explicit migrateV1ToV2 calls keep
+      // the default-fail behavior so a v1 producer cannot mistakenly rely
+      // on it.
+      const migrated = migrateV1ToV2(v1Reparsed.data, {
+        updatedAtFallback: new Date().toISOString(),
+      });
+      const v2Recheck = liveSurfaceSnapshot.safeParse(migrated);
+      if (v2Recheck.success) {
+        return {
+          success: true,
+          data: v2Recheck.data,
+          deprecationWarning:
+            'liveSurfaceSnapshot v0 is deprecated and will be removed in @mobile-surfaces/surface-contracts@4.0. Migrate producers to schemaVersion "2".',
+        };
+      }
+      return { success: false, error: v2Recheck.error };
+    }
   }
-  return { success: false, error: v1.error };
+  return { success: false, error: v2.error };
 }

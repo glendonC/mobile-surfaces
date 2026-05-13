@@ -100,7 +100,7 @@ test("update() targets liveactivity push-type with priority 5 and projected cont
     headline: SNAPSHOT.primaryText,
     subhead: SNAPSHOT.secondaryText,
     progress: SNAPSHOT.progress,
-    stage: SNAPSHOT.stage,
+    stage: SNAPSHOT.liveActivity.stage,
   });
 });
 

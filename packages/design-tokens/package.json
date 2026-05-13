@@ -1,6 +1,6 @@
 {
   "name": "@mobile-surfaces/design-tokens",
-  "version": "2.1.1",
+  "version": "3.0.0",
   "description": "Shared design tokens for the Mobile Surfaces React Native app and SwiftUI widget target.",
   "publishConfig": {
     "access": "public",
