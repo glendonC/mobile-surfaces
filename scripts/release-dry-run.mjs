@@ -22,8 +22,23 @@
 // against committed hashes in test/snapshots/. If template files changed
 // without a SNAPSHOT_UPDATE=1 regen, this fails here. Run `pnpm release:fix`
 // to regenerate every derived file in one shot.
+//
+// `--fix` flag: on a clean tree, auto-regenerates scaffold snapshots if they
+// drifted, amends the diff into the current HEAD commit, and aborts so the
+// developer re-runs `git push` once (the push picks up the amended ref).
+// Without --fix the script just fails on drift (matches CI behavior). The
+// pre-push hook passes --fix so the common case (developer edited a file
+// that ends up in scaffold) becomes edit -> commit -> push -> hook amends ->
+// push again, instead of the longer manual fix/amend/push cycle.
 
-import { spawn, execSync } from "node:child_process";
+import { spawn, execSync, execFileSync } from "node:child_process";
+import { parseArgs } from "node:util";
+
+const { values: cliFlags } = parseArgs({
+  options: {
+    fix: { type: "boolean", default: false },
+  },
+});
 
 // pack-and-install smoke calls build-template, which refuses dirty trees.
 // Mark it `requiresCleanTree` so dry-run can run on a work-in-progress
@@ -85,6 +100,63 @@ if (treeClean) {
   } catch {
     console.error("✗ build:template failed; cli:test would run against a stale tarball.");
     process.exit(1);
+  }
+
+  // --fix: proactively regenerate scaffold snapshots from the refreshed
+  // tarball. If the regen produces a diff, the developer's last commit
+  // didn't include up-to-date snapshots — amend them in and abort the
+  // push so the next `git push` carries the amended ref. If the regen
+  // produces no diff, snapshots were already correct and we continue.
+  //
+  // Why amend instead of "make a new commit": every PR I open spawning a
+  // separate snapshot-regen commit pollutes the log with one-liner
+  // bookkeeping. Amending keeps history matching the conceptual unit of
+  // work the developer was on.
+  if (cliFlags.fix) {
+    console.log(`\n${STAR}\n[setup] auto-fix: regenerate scaffold snapshots\n${STAR}`);
+    try {
+      await new Promise((resolve, reject) => {
+        const child = spawn("pnpm", ["cli:test"], {
+          stdio: "inherit",
+          env: { ...process.env, SNAPSHOT_UPDATE: "1" },
+        });
+        child.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`exit ${code}`))));
+        child.on("error", reject);
+      });
+    } catch {
+      console.error("✗ SNAPSHOT_UPDATE=1 cli:test failed; cannot auto-fix.");
+      process.exit(1);
+    }
+
+    const dirtyAfterRegen = execSync("git status --porcelain", { encoding: "utf8" }).trim();
+    if (dirtyAfterRegen.length > 0) {
+      console.log(`\n${STAR}\n[setup] auto-fix: snapshots drifted; amending into HEAD\n${STAR}`);
+      execFileSync("git", ["add", "packages/create-mobile-surfaces/test/snapshots/"], { stdio: "inherit" });
+      // After staging, any files reported by `git status --porcelain` with a
+      // non-space char in column 2 (the worktree status) are *unstaged*
+      // changes — i.e. files touched by the regen that live outside the
+      // snapshots dir we just staged. Bail rather than amend a diff we
+      // didn't sanity-check.
+      const porcelain = execSync("git status --porcelain", { encoding: "utf8" });
+      const unstaged = porcelain
+        .split("\n")
+        .filter((line) => line.length >= 2 && line[1] !== " ");
+      if (unstaged.length > 0) {
+        console.error("✗ auto-fix would touch files outside scaffold snapshots; refusing to amend.");
+        console.error("  Unstaged changes after regen:");
+        console.error(unstaged.join("\n"));
+        console.error("  Run `pnpm release:fix --snapshots` manually and inspect the diff.");
+        process.exit(1);
+      }
+      execFileSync("git", ["commit", "--amend", "--no-edit"], { stdio: "inherit" });
+      console.log("");
+      console.log("✓ snapshots regenerated and amended into HEAD.");
+      console.log("  Re-run `git push` to push the amended ref.");
+      // Exit non-zero so the pre-push hook aborts this push attempt; the
+      // ref the push would have transmitted is the pre-amend SHA. The
+      // next `git push` picks up the amended SHA cleanly.
+      process.exit(1);
+    }
   }
 }
 
