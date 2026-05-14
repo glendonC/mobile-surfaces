@@ -28,6 +28,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm surface:check
       - run: pnpm typecheck
+      - run: pnpm site:build
       - run: pnpm test:push
       - run: pnpm test:scripts
       - run: pnpm cli:test

@@ -9,6 +9,7 @@ const {
   TEST_TRANSPORT_OVERRIDE,
   BadDeviceTokenError,
   BadExpirationDateError,
+  BadDateError,
   TooManyRequestsError,
   InvalidSnapshotError,
   ClientClosedError,
@@ -573,7 +574,98 @@ test("describeSend(broadcast) uses the channel path with null topic and broadcas
   assert.equal(description.topic, null);
   assert.equal(description.channelId, "ChanXYZ");
   assert.equal(description.payloadLimitBytes, 5120);
+  // Default storagePolicy is no-storage, which resolves apns-expiration to 0.
   assert.equal(description.expirationSeconds, 0);
+});
+
+test("describeSend(broadcast) matches a real broadcast() send for storagePolicy: 'no-storage'", async (t) => {
+  // describeSend is documented as a side-effect-free preview of the exact
+  // bytes a real send would issue. For a no-storage channel both paths must
+  // resolve apns-expiration to 0.
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const description = client.describeSend({
+    operation: "broadcast",
+    channelId: "ChanXYZ",
+    snapshot: SNAPSHOT,
+    options: { storagePolicy: "no-storage" },
+  });
+  await client.broadcast("ChanXYZ", SNAPSHOT, { storagePolicy: "no-storage" });
+
+  const sent = Number(mock.requests[0].headers["apns-expiration"]);
+  assert.equal(description.expirationSeconds, 0);
+  assert.equal(
+    description.expirationSeconds,
+    sent,
+    "describeSend expiration must equal what broadcast() actually sent",
+  );
+});
+
+test("describeSend(broadcast) matches a real broadcast() send for storagePolicy: 'most-recent-message'", async (t) => {
+  // For a most-recent-message channel resolveBroadcastExpiration returns a
+  // nonzero TTL (now + 3600 when expirationSeconds is omitted). The earlier
+  // bug hard-coded describeSend's broadcast preview to 0, so it disagreed with
+  // the real send. Both paths now share resolveBroadcastExpiration; the only
+  // gap is the wall-clock second each was evaluated in, so assert the preview
+  // lands in the same now+3600 window the send used.
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const before = Math.floor(Date.now() / 1000);
+  const description = client.describeSend({
+    operation: "broadcast",
+    channelId: "ChanXYZ",
+    snapshot: SNAPSHOT,
+    options: { storagePolicy: "most-recent-message" },
+  });
+  await client.broadcast("ChanXYZ", SNAPSHOT, {
+    storagePolicy: "most-recent-message",
+  });
+  const after = Math.floor(Date.now() / 1000);
+
+  const sent = Number(mock.requests[0].headers["apns-expiration"]);
+  assert.ok(
+    description.expirationSeconds >= before + 3600 &&
+      description.expirationSeconds <= after + 3600,
+    `describeSend expiration ${description.expirationSeconds} should sit in [${before + 3600}, ${after + 3600}]`,
+  );
+  assert.ok(
+    sent >= before + 3600 && sent <= after + 3600,
+    `broadcast() expiration ${sent} should sit in [${before + 3600}, ${after + 3600}]`,
+  );
+  // Both derive from now + 3600; allow a 1s wall-clock slack between the two
+  // evaluations rather than asserting byte-equality on a time-dependent value.
+  assert.ok(
+    Math.abs(description.expirationSeconds - sent) <= 1,
+    `describeSend (${description.expirationSeconds}) and broadcast() (${sent}) should agree within 1s`,
+  );
+});
+
+test("describeSend(broadcast) matches a real broadcast() send for an explicit expirationSeconds", async (t) => {
+  // With an explicit expirationSeconds on a most-recent-message channel both
+  // paths must echo the exact value byte-for-byte.
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const options = {
+    storagePolicy: "most-recent-message",
+    expirationSeconds: 1893456000,
+  };
+  const description = client.describeSend({
+    operation: "broadcast",
+    channelId: "ChanXYZ",
+    snapshot: SNAPSHOT,
+    options,
+  });
+  await client.broadcast("ChanXYZ", SNAPSHOT, options);
+
+  const sent = Number(mock.requests[0].headers["apns-expiration"]);
+  assert.equal(description.expirationSeconds, 1893456000);
+  assert.equal(description.expirationSeconds, sent);
 });
 
 test("describeSend validates the snapshot before describing", async (t) => {
@@ -1223,6 +1315,313 @@ test("broadcast() rejects expirationSeconds: 0 on a most-recent-message channel"
     },
   );
   assert.equal(mock.requests.length, 0);
+});
+
+// --- Live Activity timestamp validation (MS032) --------------------------
+//
+// staleDateSeconds / dismissalDateSeconds / expirationSeconds must be
+// positive unix-seconds integers. The SDK rejects malformed values before
+// any network call, mirroring scripts/send-apns.mjs's parseUnixSeconds and
+// the MS032 catalog claim that "the SDK already enforces this". stale and
+// dismissal map to BadDateError; expiration maps to BadExpirationDateError.
+// Both classes carry trapId "MS032".
+
+test("update() rejects a non-integer staleDateSeconds before any network call", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.update("a".repeat(64), SNAPSHOT, { staleDateSeconds: 1700000000.5 }),
+    (err) => {
+      assert.ok(err instanceof BadDateError);
+      assert.equal(err.status, 400);
+      assert.equal(err.trapId, "MS032");
+      assert.match(err.message, /staleDateSeconds/);
+      assert.match(err.message, /integer/);
+      assert.match(err.message, /MS032/);
+      return true;
+    },
+  );
+  assert.equal(mock.requests.length, 0);
+});
+
+test("update() rejects a negative dismissalDateSeconds before any network call", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.update("a".repeat(64), SNAPSHOT, { dismissalDateSeconds: -5 }),
+    (err) => {
+      assert.ok(err instanceof BadDateError);
+      assert.equal(err.trapId, "MS032");
+      assert.match(err.message, /dismissalDateSeconds/);
+      return true;
+    },
+  );
+  assert.equal(mock.requests.length, 0);
+});
+
+test("update() rejects a zero staleDateSeconds before any network call", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.update("a".repeat(64), SNAPSHOT, { staleDateSeconds: 0 }),
+    (err) => {
+      assert.ok(err instanceof BadDateError);
+      assert.equal(err.trapId, "MS032");
+      assert.match(err.message, /staleDateSeconds/);
+      return true;
+    },
+  );
+  assert.equal(mock.requests.length, 0);
+});
+
+test("update() rejects a NaN staleDateSeconds before any network call", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.update("a".repeat(64), SNAPSHOT, { staleDateSeconds: Number.NaN }),
+    (err) => {
+      assert.ok(err instanceof BadDateError);
+      assert.equal(err.trapId, "MS032");
+      assert.match(err.message, /finite/);
+      return true;
+    },
+  );
+  assert.equal(mock.requests.length, 0);
+});
+
+test("update() rejects a millisecond-magnitude staleDateSeconds before any network call", async (t) => {
+  // Date.now() returns ~1.7e12; passing it where unix seconds are expected is
+  // the single most common MS032 offender. parseUnixSeconds in send-apns.mjs
+  // would accept it (still a positive integer) but APNs would not, so the SDK
+  // is intentionally stricter here.
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.update("a".repeat(64), SNAPSHOT, { staleDateSeconds: Date.now() }),
+    (err) => {
+      assert.ok(err instanceof BadDateError);
+      assert.equal(err.trapId, "MS032");
+      assert.match(err.message, /millisecond/);
+      return true;
+    },
+  );
+  assert.equal(mock.requests.length, 0);
+});
+
+test("alert() rejects a millisecond-magnitude expirationSeconds with BadExpirationDateError", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.alert("a".repeat(64), SNAPSHOT, { expirationSeconds: Date.now() }),
+    (err) => {
+      assert.ok(err instanceof BadExpirationDateError);
+      assert.equal(err.status, 400);
+      assert.equal(err.trapId, "MS032");
+      assert.match(err.message, /expirationSeconds/);
+      assert.match(err.message, /millisecond/);
+      return true;
+    },
+  );
+  assert.equal(mock.requests.length, 0);
+});
+
+test("update() rejects a non-integer expirationSeconds with BadExpirationDateError", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.update("a".repeat(64), SNAPSHOT, { expirationSeconds: 1700000000.25 }),
+    (err) => {
+      assert.ok(err instanceof BadExpirationDateError);
+      assert.equal(err.trapId, "MS032");
+      assert.match(err.message, /expirationSeconds/);
+      return true;
+    },
+  );
+  assert.equal(mock.requests.length, 0);
+});
+
+test("start() rejects a negative staleDateSeconds before any network call", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () =>
+      client.start("c".repeat(64), SNAPSHOT, { surfaceId: SNAPSHOT.surfaceId }, {
+        staleDateSeconds: -1,
+      }),
+    (err) => {
+      assert.ok(err instanceof BadDateError);
+      assert.equal(err.trapId, "MS032");
+      return true;
+    },
+  );
+  assert.equal(mock.requests.length, 0);
+});
+
+test("end() rejects a millisecond-magnitude dismissalDateSeconds before any network call", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.end("b".repeat(64), SNAPSHOT, { dismissalDateSeconds: Date.now() }),
+    (err) => {
+      assert.ok(err instanceof BadDateError);
+      assert.equal(err.trapId, "MS032");
+      assert.match(err.message, /dismissalDateSeconds/);
+      return true;
+    },
+  );
+  assert.equal(mock.requests.length, 0);
+});
+
+test("broadcast() rejects a non-integer staleDateSeconds before any network call", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.broadcast("ChannelId123", SNAPSHOT, { staleDateSeconds: 1700000000.5 }),
+    (err) => {
+      assert.ok(err instanceof BadDateError);
+      assert.equal(err.trapId, "MS032");
+      assert.match(err.message, /staleDateSeconds/);
+      return true;
+    },
+  );
+  assert.equal(mock.requests.length, 0);
+});
+
+test("broadcast() rejects a millisecond-magnitude expirationSeconds before any network call", async (t) => {
+  // A nonzero expirationSeconds on a broadcast is still subject to MS032
+  // integer/magnitude validation; the zero-vs-storagePolicy decision is
+  // resolveBroadcastExpiration's job and is exercised separately above.
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () =>
+      client.broadcast("ChannelId123", SNAPSHOT, {
+        storagePolicy: "most-recent-message",
+        expirationSeconds: Date.now(),
+      }),
+    (err) => {
+      assert.ok(err instanceof BadExpirationDateError);
+      assert.equal(err.trapId, "MS032");
+      assert.match(err.message, /expirationSeconds/);
+      assert.match(err.message, /millisecond/);
+      return true;
+    },
+  );
+  assert.equal(mock.requests.length, 0);
+});
+
+test("update() accepts expirationSeconds: 0 and emits apns-expiration: 0", async (t) => {
+  // expirationSeconds: 0 is a documented, valid apns-expiration value
+  // ("attempt delivery once, do not store") and worked before the MS032
+  // pre-flight landed. assertActivityTimestampOptions must let a zero through
+  // on device sends, exactly as broadcast() already does.
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await client.update("b".repeat(64), SNAPSHOT, { expirationSeconds: 0 });
+  assert.equal(mock.requests[0].headers["apns-expiration"], "0");
+});
+
+test("alert() accepts expirationSeconds: 0 and emits apns-expiration: 0", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await client.alert("a".repeat(64), SNAPSHOT, { expirationSeconds: 0 });
+  assert.equal(mock.requests[0].headers["apns-expiration"], "0");
+});
+
+test("describeSend rejects a malformed timestamp the same as the real send (MS032)", async (t) => {
+  // describeSend must reject exactly the timestamp inputs #sendDevice and
+  // broadcast() reject, or the preview greenlights a payload the runtime
+  // would refuse. Covers both the device branch and the broadcast branch.
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  assert.throws(
+    () =>
+      client.describeSend({
+        operation: "update",
+        activityToken: "b".repeat(64),
+        snapshot: SNAPSHOT,
+        options: { staleDateSeconds: 1700000000.5 },
+      }),
+    (err) => err instanceof BadDateError && err.trapId === "MS032",
+  );
+
+  assert.throws(
+    () =>
+      client.describeSend({
+        operation: "broadcast",
+        channelId: "ChannelId123",
+        snapshot: SNAPSHOT,
+        options: {
+          storagePolicy: "most-recent-message",
+          expirationSeconds: Date.now(),
+        },
+      }),
+    (err) => err instanceof BadExpirationDateError && err.trapId === "MS032",
+  );
+
+  assert.equal(mock.requests.length, 0);
+});
+
+test("describeSend accepts expirationSeconds: 0 like the real send", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const description = client.describeSend({
+    operation: "update",
+    activityToken: "b".repeat(64),
+    snapshot: SNAPSHOT,
+    options: { expirationSeconds: 0 },
+  });
+  assert.equal(description.expirationSeconds, 0);
+});
+
+test("valid unix-seconds timestamp fields pass through to the wire untouched", async (t) => {
+  // The valid-passthrough case: integer, positive, second-magnitude values
+  // for every timestamp field reach APNs unchanged.
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const stale = 1893456000;
+  const expiration = 1893456600;
+  await client.update("a".repeat(64), SNAPSHOT, {
+    staleDateSeconds: stale,
+    expirationSeconds: expiration,
+  });
+
+  const req = mock.requests[0];
+  assert.equal(req.headers["apns-expiration"], String(expiration));
+  const payload = JSON.parse(req.body);
+  assert.equal(payload.aps["stale-date"], stale);
 });
 
 test("broadcast() accepts a payload that fits the 5120-byte broadcast ceiling but would fail the 4096 default", async (t) => {

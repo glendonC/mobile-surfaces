@@ -62,8 +62,9 @@ export const trapEntry = z
     // version-independent.
     iosMin: z.string().optional(),
     // Path (relative to repo root) of the script that enforces this rule, if
-    // any. Present on `static` and `config` rules that already have CI
-    // coverage. Absent on `advisory` and `runtime` rules.
+    // any. Required on every `static` rule (enforced by the superRefine
+    // below). Present on `config` rules that already have CI coverage; absent
+    // on `advisory` and `runtime` rules.
     enforcement: z
       .object({
         script: z.string().min(1),
@@ -112,6 +113,18 @@ export const trapCatalog = z
         });
       }
       seen.add(entry.id);
+      // `static` rules are script-checkable by definition, so every one must
+      // cite the script that enforces it. Without this, a static rule could
+      // ship with no CI coverage and silently rot. `config` rules are also
+      // often enforced but not always (some are declarative-only audits), so
+      // they are left optional.
+      if (entry.detection === "static" && !entry.enforcement) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["entries", index, "enforcement"],
+          message: `Rule ${entry.id} has detection "static" but no enforcement.script; static rules must cite an enforcer.`,
+        });
+      }
       if (entry.errorClasses) {
         entry.errorClasses.forEach((className, classIndex) => {
           const existing = errorClassToTrap.get(className);

@@ -252,5 +252,25 @@ export const surfaceFixtureSnapshots = {
       "presentation": "card",
       "tint": "default"
     }
+  },
+  "notificationAlert": {
+    "schemaVersion": "2",
+    "kind": "notification",
+    "id": "fixture-notification-alert",
+    "surfaceId": "surface-notification-alert",
+    "updatedAt": "2026-05-12T18:36:00.000Z",
+    "state": "attention",
+    "modeLabel": "notification",
+    "contextLabel": "alert",
+    "statusLine": "notification · needs attention",
+    "primaryText": "Surface needs attention",
+    "secondaryText": "This snapshot projects to an APNs alert payload through toNotificationContentPayload.",
+    "actionLabel": "Open surface",
+    "progress": 0.5,
+    "deepLink": "mobilesurfaces://surface/surface-notification-alert",
+    "notification": {
+      "category": "surface-update",
+      "threadId": "surface-notification-alert"
+    }
   }
 } as const satisfies Record<string, LiveSurfaceSnapshot>;

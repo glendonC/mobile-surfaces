@@ -405,7 +405,7 @@ test("migrateV1ToV2 honors updatedAtFallback when v1 omitted updatedAt", () => {
 });
 
 // ---------------------------------------------------------------------------
-// safeParseAnyVersion: v2 (strict) -> v1 (codec) -> v0 (legacy, removed in 4.0)
+// safeParseAnyVersion: v2 (strict) -> v1 (codec, deprecated, removed in 4.0)
 // ---------------------------------------------------------------------------
 
 test("safeParseAnyVersion accepts a v2 payload with no deprecation warning", () => {
@@ -742,9 +742,9 @@ test("output schemas reject helper drift: widget entry without snapshotId", () =
   // started omitting a required field. Constructed by hand rather than
   // patching the helper — patching the helper would also break the positive
   // test above and leave us with two failing tests for one issue.
-  const widget = surfaceFixtureSnapshots["widget-large-onsite"] ??
-    surfaceFixtureSnapshots["widget-small"] ??
+  const widget = surfaceFixtureSnapshots.widgetDashboard ??
     Object.values(surfaceFixtureSnapshots).find((s) => s.kind === "widget");
+  assert.ok(widget, "expected at least one widget fixture");
   const projected = toWidgetTimelineEntry(widget);
   const { snapshotId: _drop, ...drifted } = projected;
   const result = liveSurfaceWidgetTimelineEntry.safeParse(drifted);

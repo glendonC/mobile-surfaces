@@ -472,6 +472,7 @@ describe("applyStripGreenfield — integration against real source files", () =>
       "./control-toggle.json",
       "./lock-accessory-circular.json",
       "./standby-card.json",
+      "./notification-alert.json",
     ]);
   });
 

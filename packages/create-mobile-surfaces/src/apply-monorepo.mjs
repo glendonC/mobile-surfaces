@@ -11,10 +11,14 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import * as logger from "./logger.mjs";
-import { prepareSourceTree, runInstall } from "./scaffold.mjs";
+import {
+  prepareSourceTree as defaultPrepareSourceTree,
+  runInstall,
+} from "./scaffold.mjs";
 import { applyStripWidgetDir, stripMarkersInTree } from "./strip.mjs";
 import { toSwiftPrefix } from "./validators.mjs";
 import { makeTextFileFilter, walkFiles } from "./fs-walk.mjs";
+import { BackupSession } from "./backup.mjs";
 
 // Concurrency cap for the identity-rewrite pass. 8 keeps a 100+ file tree
 // off the event loop's blocking I/O path without flooring the FD table on
@@ -355,11 +359,25 @@ export function appendPnpmGlobs(yaml, globsToAdd) {
 // Top-level orchestration. Mirrors apply-existing.mjs's applyToExisting in
 // shape: produces a summary object the success renderer consumes; followups
 // accumulate as we go.
+//
+// Rollback: this flow runs six mutating steps against the host workspace.
+// Steps 1-5 all write inside the freshly-created apps/mobile/ subtree;
+// step 6 edits one host file outside it (pnpm-workspace.yaml or the root
+// package.json). A BackupSession snapshots every mutation target BEFORE it
+// is touched, so any thrown error (template missing apps/mobile/, a disk
+// error mid-rewrite, a malformed host workspace file) restores the host
+// to its pre-apply state instead of leaving it half-modified. On success
+// the backup is committed (deleted). Same record-before-mutate / rollback-
+// on-throw / commit-on-success contract as apply-existing.mjs.
 export async function applyMonorepo({
   evidence,
   config,
   manifest,
   packageManager,
+  // Injection seam for tests so the rollback path can be exercised without
+  // materializing the real template tarball. Production callers omit
+  // `runners`; the default is the real scaffold.mjs impl.
+  runners = {},
 }) {
   const followups = [];
   const summary = {
@@ -374,27 +392,68 @@ export async function applyMonorepo({
     surfacesStripped: false,
     installed: false,
     prebuilt: false,
+    rolledBack: false, // set true when an apply error triggered a rollback
     followups,
   };
 
-  await stageAndCopyAppsMobile({ summary });
-  stripSurfacesAndMarkers({ config, summary });
-  await rewriteIdentityInTree({ config, summary });
-  patchAppJsonStep({ config, summary });
-  rewriteWorkspaceDeps({ manifest, summary });
-  mergeHostWorkspace({ evidence, summary });
+  const prepareSourceTree = runners.prepareSourceTree ?? defaultPrepareSourceTree;
 
-  followups.push(
-    "We didn't touch your root package.json, tsconfig.json, eslint, or prettier configs. Adjust those if you want apps/mobile/ to share them.",
-  );
+  // Snapshot every mutation target before the apply runs. recordDir on the
+  // not-yet-existing apps/mobile/ covers steps 1-5 wholesale (rollback
+  // removes the dir). recordFile on the host workspace declaration covers
+  // step 6. Mode detection guarantees apps/mobile/ does not exist yet for
+  // EXISTING_MONOREPO_NO_EXPO, so recordDir never hits its non-empty guard.
+  const session = new BackupSession({ root: evidence.cwd });
 
-  return summary;
+  try {
+    session.recordDir(summary.appsMobileRoot);
+    recordHostWorkspaceFile({ evidence, session });
+
+    await stageAndCopyAppsMobile({ summary, prepareSourceTree });
+    stripSurfacesAndMarkers({ config, summary });
+    await rewriteIdentityInTree({ config, summary });
+    patchAppJsonStep({ config, summary });
+    rewriteWorkspaceDeps({ manifest, summary });
+    mergeHostWorkspace({ evidence, summary });
+
+    followups.push(
+      "We didn't touch your root package.json, tsconfig.json, eslint, or prettier configs. Adjust those if you want apps/mobile/ to share them.",
+    );
+
+    await session.commit();
+    return summary;
+  } catch (err) {
+    summary.rolledBack = true;
+    try {
+      await session.rollback();
+    } catch (rollbackErr) {
+      // Attach rollback errors to the original failure rather than masking
+      // it. The apply failure is the primary cause; the rollback issues
+      // matter for ops follow-up. Mirrors applyToExisting.
+      err.rollbackError = rollbackErr;
+    }
+    throw err;
+  }
+}
+
+// Record the host file step 6 (mergeHostWorkspace) will edit, before any
+// mutation runs. mergeWorkspaceGlobs may no-op when apps/* is already
+// declared, but recordFile is idempotent and cheap, and recording the
+// not-yet-written file is harmless (rollback restores or removes it). The
+// pnpm-workspace case edits the YAML file; the package.json case edits the
+// root package.json.
+function recordHostWorkspaceFile({ evidence, session }) {
+  if (evidence.workspaceKind === "pnpm-workspace" && evidence.workspacePath) {
+    session.recordFile(evidence.workspacePath);
+    return;
+  }
+  session.recordFile(path.join(evidence.cwd, "package.json"));
 }
 
 // Step 1: stage the template, copy apps/mobile/ into the host. Deliberately
 // skips packages/* and root files — the user already has a workspace and we
 // don't want to clobber their lint/tsconfig/pnpm-workspace surface.
-async function stageAndCopyAppsMobile({ summary }) {
+async function stageAndCopyAppsMobile({ summary, prepareSourceTree }) {
   const source = await prepareSourceTree();
   try {
     const sourceAppsMobile = path.join(source.rootDir, "apps", "mobile");

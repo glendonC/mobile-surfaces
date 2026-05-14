@@ -21,6 +21,26 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SNAPSHOT_DIR = path.join(__dirname, "snapshots");
 const SHOULD_UPDATE = process.env.SNAPSHOT_UPDATE === "1";
 
+// Pin the CLI to live (monorepo-source) mode for the whole test. Without
+// this pin, template-manifest.mjs's resolveCliMode() probes for the
+// gitignored template/manifest.json + template.tgz build outputs and runs
+// in "bundled" mode if they happen to exist on disk. Whether they exist is
+// pure local history: a fresh CI checkout has none (so it ran live), but a
+// developer who ever ran `build:template` has stale ones (so they ran
+// bundled, against a frozen snapshot). That made this exact test pass in
+// CI and fail locally (or vice versa) for reasons unrelated to the
+// template. Forcing "live" makes the mode deterministic everywhere.
+//
+// Live mode is also the correct mode for this test: its job is to catch
+// drift between the committed monorepo source and the committed snapshot
+// hashes. The bundled tarball is a publish artifact with its own coverage
+// (the `Pack-and-install smoke` CI step / scripts/smoke-pack-and-install.sh).
+// resolveCliMode() is lazy: it runs on the first copyTemplate() call, not
+// at import, so setting the env var in the module body here lands before
+// any runTasks() call below. Set unconditionally so SNAPSHOT_UPDATE and
+// verification runs share the same mode.
+process.env.MOBILE_SURFACES_CLI_MODE = "live";
+
 // When regenerating, capture the working tree (committed + uncommitted +
 // untracked-but-not-gitignored) rather than the default `git archive HEAD`.
 // Without this, editing a template file and running SNAPSHOT_UPDATE=1

@@ -17,22 +17,39 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, "..");
 const SCRIPT = join(REPO_ROOT, "scripts", "check-adapter-boundary.mjs");
 
-function withWorkspace(files) {
+// Build a throwaway workspace. `files` maps a path under apps/mobile/src to
+// its contents (the common single-app case). `opts.apps` adds extra apps:
+// each key is an app directory name under apps/, and the value is either a
+// map of files under that app's src/ (a minimal adapter re-export is shipped
+// automatically), or null to create the app directory with NO src/ folder.
+function withWorkspace(files, opts = {}) {
   const dir = mkdtempSync(join(tmpdir(), "ms-check-bound-"));
-  const srcRoot = join(dir, "apps", "mobile", "src");
-  const adapterDir = join(srcRoot, "liveActivity");
-  mkdirSync(adapterDir, { recursive: true });
 
-  // Ship a minimal adapter re-export so the legitimate path exists.
-  writeFileSync(
-    join(adapterDir, "index.ts"),
-    'export { liveActivityAdapter } from "@mobile-surfaces/live-activity";\n',
-  );
+  function seedApp(appName, appFiles) {
+    const srcRoot = join(dir, "apps", appName, "src");
+    const adapterDir = join(srcRoot, "liveActivity");
+    mkdirSync(adapterDir, { recursive: true });
+    // Ship a minimal adapter re-export so the legitimate path exists.
+    writeFileSync(
+      join(adapterDir, "index.ts"),
+      'export { liveActivityAdapter } from "@mobile-surfaces/live-activity";\n',
+    );
+    for (const [relPath, contents] of Object.entries(appFiles)) {
+      const full = join(srcRoot, relPath);
+      mkdirSync(dirname(full), { recursive: true });
+      writeFileSync(full, contents);
+    }
+  }
 
-  for (const [relPath, contents] of Object.entries(files)) {
-    const full = join(srcRoot, relPath);
-    mkdirSync(dirname(full), { recursive: true });
-    writeFileSync(full, contents);
+  seedApp("mobile", files);
+
+  for (const [appName, appFiles] of Object.entries(opts.apps ?? {})) {
+    if (appFiles === null) {
+      // App directory with no src/ folder - the script must skip it cleanly.
+      mkdirSync(join(dir, "apps", appName), { recursive: true });
+    } else {
+      seedApp(appName, appFiles);
+    }
   }
 
   return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
@@ -160,6 +177,72 @@ test("known weak spot: variable-indirected dynamic import slips through (documen
   try {
     const r = runCheck(ws.dir);
     assert.equal(r.status, 0, "variable-indirected dynamic import is a known gap");
+  } finally {
+    ws.cleanup();
+  }
+});
+
+// MS001's catalog text scopes the boundary to apps/*/src/, not just
+// apps/mobile/src/. The script scans every app generically, so these tests
+// pin the multi-app behavior.
+
+test("scans every apps/*/src: a violation in a second app is flagged", () => {
+  const ws = withWorkspace(
+    { "screens/Live.tsx": 'import { liveActivityAdapter } from "../liveActivity";\n' },
+    {
+      apps: {
+        tablet: {
+          "screens/Bad.tsx":
+            'import { x } from "@mobile-surfaces/live-activity";\n',
+        },
+      },
+    },
+  );
+  try {
+    const r = runCheck(ws.dir);
+    assert.notEqual(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout + r.stderr, /Bad\.tsx/);
+    // The clean app must not produce a false positive.
+    assert.doesNotMatch(r.stdout + r.stderr, /Live\.tsx/);
+  } finally {
+    ws.cleanup();
+  }
+});
+
+test("scans every apps/*/src: each app's own liveActivity/index.ts is allowed", () => {
+  // Both apps ship the adapter re-export that imports the target package
+  // directly. Neither should be flagged - the re-export is the one allowed
+  // importer per app.
+  const ws = withWorkspace(
+    { "screens/Live.tsx": 'import { liveActivityAdapter } from "../liveActivity";\n' },
+    {
+      apps: {
+        tablet: {
+          "screens/Live.tsx":
+            'import { liveActivityAdapter } from "../liveActivity";\n',
+        },
+      },
+    },
+  );
+  try {
+    const r = runCheck(ws.dir);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /across 2 app\(s\)/);
+  } finally {
+    ws.cleanup();
+  }
+});
+
+test("an app directory with no src/ folder is skipped cleanly (no crash)", () => {
+  const ws = withWorkspace(
+    { "screens/Live.tsx": 'import { liveActivityAdapter } from "../liveActivity";\n' },
+    { apps: { docs: null } },
+  );
+  try {
+    const r = runCheck(ws.dir);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    // Only apps/mobile has a src/, so exactly one app is scanned.
+    assert.match(r.stdout, /across 1 app\(s\)/);
   } finally {
     ws.cleanup();
   }
