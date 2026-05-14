@@ -57,11 +57,14 @@ while read local_ref local_sha remote_ref remote_sha; do
   fi
 done
 
-# Rule 3: run the dry-run gate. This catches every class of generated-file
-# drift and the full test suite. Skip it for branch deletes (remote_sha
-# would be all zeros).
-echo "→ pre-push: running pnpm release:dry-run..."
-pnpm release:dry-run
+# Rule 3: run the dry-run gate with --fix so scaffold snapshot drift gets
+# auto-regenerated and amended into HEAD instead of failing the push and
+# making you run a manual fix-and-amend cycle. When --fix triggers an
+# amend it exits non-zero so this push attempt aborts; re-run \`git push\`
+# once and the amended ref goes through cleanly. Skip for branch deletes
+# (remote_sha would be all zeros).
+echo "→ pre-push: running pnpm release:dry-run --fix..."
+pnpm release:dry-run --fix
 `;
 
 if (!fs.existsSync(path.resolve(".git"))) {
@@ -92,6 +95,6 @@ try {
 }
 
 console.log(`✓ installed ${HOOK_PATH}`);
-console.log(`  enforces: no-direct-to-main, fast-forward only, pnpm release:dry-run`);
+console.log(`  enforces: no-direct-to-main, fast-forward only, pnpm release:dry-run --fix`);
 console.log(`  pnpm: ${pnpmVersion}`);
 console.log(`  bypass: \`git push --no-verify\` (use sparingly)`);
