@@ -24,12 +24,13 @@ If this PR adds a new abstraction (helper, type, contract field, adapter slot, c
 
 ## Local checks
 
-Run on a clean working tree against your default simulator. Paste the trailing line of each command's output, or check the box if you ran it and it passed.
+`pnpm release:dry-run` runs every gate CI would run (surface:check, typecheck, push tests, scripts tests, cli tests, scaffold snapshot, site build, pack-and-install smoke) in one shot. On a clean tree it also refreshes the bundled template tarball so the scaffold snapshot test matches what CI sees. First-time on a clone: run `pnpm setup:hooks` once to install the pre-push hook that runs this automatically.
 
-- [ ] `pnpm surface:check`
-- [ ] `pnpm typecheck`
+- [ ] `pnpm release:dry-run` passes 7/7 gates
 - [ ] `pnpm dev:doctor` (only if scripts/ or toolchain assumptions changed)
 - [ ] `pnpm mobile:prebuild:ios` (only if native target / module behavior changed)
+
+If dry-run fails on a generated-file gate (CLAUDE.md, AGENTS.md, trap-bindings, traps-data, surface fixtures, scaffold snapshots), run `pnpm release:fix` to regenerate everything in the right order, then re-run dry-run. The full workflow lives in [`CONTRIBUTING.md`](../CONTRIBUTING.md#branch-and-release-workflow).
 
 ## Manual verification
 
