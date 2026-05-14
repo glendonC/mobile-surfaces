@@ -16,6 +16,7 @@ import { liveActivityAlertPayloadFromSnapshot } from "./payloads.ts";
 
 import {
   ApnsError,
+  BadDateError,
   BadExpirationDateError,
   ClientClosedError,
   InvalidSnapshotError,
@@ -65,6 +66,101 @@ function assertPayloadWithinLimit(
       status: 413,
       message: `Client-side pre-flight: payload size ${size} bytes exceeds limit ${limit} for ${kind}; rejected before APNs round-trip. See MS011.`,
     });
+  }
+}
+
+/**
+ * Lower bound below which a value is treated as a millisecond-magnitude
+ * timestamp rather than unix seconds. Unix-seconds values for any realistic
+ * date stay well under 1e11 (year 2286 is ~9.9e9 seconds); a millisecond
+ * timestamp for any date past 1973 is already above it. Date.now() returns
+ * ~1.7e12, the single most common MS032 offender, so any field at or above
+ * this boundary is rejected as a millisecond value passed where seconds were
+ * expected.
+ */
+const MILLISECOND_MAGNITUDE_FLOOR = 1e11;
+
+/**
+ * Client-side pre-flight for MS032: every Live Activity timestamp field
+ * (`staleDateSeconds`, `dismissalDateSeconds`, and the `expirationSeconds`
+ * that derives `apns-expiration`) must be a positive unix-seconds integer.
+ * APNs rejects non-integer, negative, zero, NaN, and millisecond-magnitude
+ * values with 400 BadDate / 400 BadExpirationDate; we surface that before the
+ * round-trip the same way `assertPayloadWithinLimit` handles MS011 — reusing
+ * the typed error class with `status: 400` so observability hooks bucket the
+ * client-caught and server-returned variants together.
+ *
+ * Rules match scripts/send-apns.mjs's `parseUnixSeconds` (not finite, not an
+ * integer, or <= 0 is rejected) and additionally reject millisecond-magnitude
+ * values, which `parseUnixSeconds` would accept but APNs would not.
+ *
+ * `undefined` passes through untouched: the field is optional and the caller
+ * (or a downstream default) supplies it later. `errorClass` selects BadDate
+ * for stale/dismissal fields and BadExpirationDate for the expiration field,
+ * matching the reason APNs returns for each; both classes carry trapId
+ * "MS032" through the generated trap-bindings table.
+ */
+function assertValidActivityTimestamp(
+  value: number | undefined,
+  field: "staleDateSeconds" | "dismissalDateSeconds" | "expirationSeconds",
+  errorClass: typeof BadDateError | typeof BadExpirationDateError,
+): void {
+  if (value === undefined) return;
+  let problem: string | undefined;
+  if (!Number.isFinite(value)) {
+    problem = "must be a finite number";
+  } else if (!Number.isInteger(value)) {
+    problem = "must be an integer (no fractional seconds)";
+  } else if (value <= 0) {
+    problem = "must be a positive unix-seconds value (got zero or negative)";
+  } else if (value >= MILLISECOND_MAGNITUDE_FLOOR) {
+    problem =
+      "looks like a millisecond timestamp; pass unix seconds " +
+      "(divide a Date.now() value by 1000)";
+  }
+  if (problem === undefined) return;
+  throw new errorClass({
+    status: 400,
+    message:
+      `Client-side pre-flight: ${field} ${problem} (received ${JSON.stringify(value)}); ` +
+      `rejected before APNs round-trip. See MS032.`,
+  });
+}
+
+/**
+ * MS032 pre-flight for the timestamp options shared by device sends and
+ * broadcasts. `staleDateSeconds` and `dismissalDateSeconds` are absolute
+ * unix-seconds dates with no special-case values. `expirationSeconds` is
+ * different: 0 is a documented, valid `apns-expiration` value ("attempt
+ * delivery once, do not store") and is policy-required for a no-storage
+ * broadcast channel, so a zero passes through untouched here; only a defined,
+ * nonzero value is checked for malformed magnitude. #sendDevice, broadcast(),
+ * and describeSend() all route through this so the three paths cannot drift.
+ */
+function assertActivityTimestampOptions(options: {
+  staleDateSeconds?: number;
+  dismissalDateSeconds?: number;
+  expirationSeconds?: number;
+}): void {
+  assertValidActivityTimestamp(
+    options.staleDateSeconds,
+    "staleDateSeconds",
+    BadDateError,
+  );
+  assertValidActivityTimestamp(
+    options.dismissalDateSeconds,
+    "dismissalDateSeconds",
+    BadDateError,
+  );
+  if (
+    options.expirationSeconds !== undefined &&
+    options.expirationSeconds !== 0
+  ) {
+    assertValidActivityTimestamp(
+      options.expirationSeconds,
+      "expirationSeconds",
+      BadExpirationDateError,
+    );
   }
 }
 
@@ -801,6 +897,10 @@ export class PushClient {
     this.#assertOpen();
     const validated = validateSnapshot(snapshot);
     const live = snapshotMustBeLiveActivity(validated, "broadcast()");
+    // MS032 pre-flight for the timestamp fields broadcast() carries into the
+    // ActivityKit payload. expirationSeconds: 0 passes through here because
+    // resolveBroadcastExpiration owns the zero-vs-storagePolicy decision below.
+    assertActivityTimestampOptions(options);
     const payload = JSON.stringify(
       this.#buildActivityPayload(live, "update", undefined, options),
     );
@@ -917,6 +1017,9 @@ export class PushClient {
     const expirationSeconds =
       input.options?.expirationSeconds ?? nowSec() + 3600;
     const bundleId = this.#options.bundleId;
+    // MS032 pre-flight, same as the real send paths: the preview must reject
+    // exactly the timestamp inputs #sendDevice and broadcast() would reject.
+    assertActivityTimestampOptions(input.options ?? {});
     switch (input.operation) {
       case "alert": {
         const payload = liveActivityAlertPayloadFromSnapshot(live);
@@ -1013,6 +1116,17 @@ export class PushClient {
           undefined,
           input.options ?? {},
         );
+        // Mirror broadcast() exactly: the real send resolves apns-expiration
+        // through resolveBroadcastExpiration (nonzero TTL for a
+        // most-recent-message channel, 0 only for no-storage), so the
+        // side-effect-free preview runs the same logic rather than hard-coding
+        // a value. Timestamp magnitude validation already ran above via
+        // assertActivityTimestampOptions; resolveBroadcastExpiration adds the
+        // zero-vs-storagePolicy BadExpirationDateError (MS032) that broadcast()
+        // also surfaces.
+        const expirationSeconds = resolveBroadcastExpiration(
+          input.options ?? {},
+        );
         return this.#finishDescription({
           operation: "broadcast",
           path: `/4/broadcasts/apps/${bundleId}`,
@@ -1020,7 +1134,7 @@ export class PushClient {
           topic: null,
           priority: input.options?.priority ?? 5,
           apnsId,
-          expirationSeconds: 0,
+          expirationSeconds,
           channelId: input.channelId,
           target: input.channelId,
           snapshotId: live.id,
@@ -1141,6 +1255,11 @@ export class PushClient {
     options: SendOptions;
   }): Promise<PushResult> {
     assertPayloadWithinLimit(args.payload, args.operation as PayloadKind);
+    // MS032 pre-flight: reject malformed timestamp fields before the round-
+    // trip. stale/dismissal map to BadDate; a nonzero expiration maps to
+    // BadExpirationDate. expirationSeconds: 0 is a valid apns-expiration value
+    // ("deliver once, do not store") and passes through unchanged.
+    assertActivityTimestampOptions(args.options);
     const apnsId = args.options.apnsId ?? genApnsId();
     const priority = args.options.priority ?? args.defaultPriority;
     const expiration = String(args.options.expirationSeconds ?? nowSec() + 3600);

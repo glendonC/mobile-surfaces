@@ -228,40 +228,29 @@ describe("applyToExisting rollback", () => {
     assert.deepEqual(backups, []);
   });
 
-  it("removes a freshly-created widget directory when a later step throws", async () => {
+  it("removes a freshly-created widget directory when the rename step throws", async () => {
     const { pkgPath, lockPath, appJsonPath } = stageProject();
     const widgetDest = path.join(tmp, "targets/widget");
-    // Make applyWidgetRename throw by simulating a Swift prefix that
-    // collides with a read-only file at the dest. Easier: stub the rename
-    // by replacing the strip-step file with one whose path is reserved.
-    // Simpler path: replace applyStripWidgetDir's effect by injecting a
-    // throwing prepareSourceTree that succeeds for the copy step but
-    // arranges for a follow-up write to fail. Concretely: the source has
-    // a file whose name contains a path traversal that fs.writeFile rejects.
-    //
-    // Even simpler: use a real source that copies fine, then mutate the
-    // dest dir to make the rename step throw by removing a file it needs.
-    // We use a poisoned source where the widget contains a file whose
-    // name forces fs.renameSync to fail on the rewrite pass.
+    // Drive applyWidgetRename to a deterministic throw. evidence.packageName
+    // is "host-app", so deriveSwiftPrefixFromEvidence yields "HostApp" and
+    // MobileSurfacesWidgetBundle.swift is slated to rename to
+    // HostAppWidgetBundle.swift. We plant HostAppWidgetBundle.swift as a
+    // *non-empty directory* in the source widget dir: it copies through to
+    // the dest untouched (walkFiles only collects files, never the dir
+    // itself), then fs.renameSync of the real .swift file onto that
+    // directory path throws EISDIR. The rename happens AFTER copyWidgetTarget
+    // created and recorded the dest widget dir, so this exercises the
+    // "later step throws -> freshly-created dir is removed" rollback path.
     const sourceTree = async () => {
       const r = await fakePrepareSourceTree()();
-      // Replace the widget contents with something the rewrite pass will
-      // attempt to rename. The rename pass throws when it tries to rename
-      // a file whose target name already exists - we'll plant a collision
-      // by creating a pre-existing file at the rename target inside the
-      // copied dir. We can do that by adding two same-base-after-rename
-      // files; rewrite uses fs.renameSync which fails on cross-collision.
       const widgetSrc = path.join(r.rootDir, "apps/mobile/targets/widget");
-      // Force two files that rename to the same target name. Both start
-      // with "MobileSurfaces"; after prefix rewrite they would both
-      // become "host-app...". To trigger the throw, drop a directory
-      // where the rewrite expects to write a file.
-      fs.mkdirSync(path.join(widgetSrc, "MobileSurfacesWidgetBundle.swift.locked"));
+      const collisionDir = path.join(widgetSrc, "HostAppWidgetBundle.swift");
+      fs.mkdirSync(collisionDir);
+      fs.writeFileSync(path.join(collisionDir, "keep"), "non-empty\n");
       return r;
     };
-    let threw = false;
-    try {
-      await applyToExisting({
+    await assert.rejects(
+      applyToExisting({
         evidence: evidenceFor(appJsonPath),
         plan: PLAN,
         packageManager: "pnpm",
@@ -270,21 +259,17 @@ describe("applyToExisting rollback", () => {
           runAddPackages: fakeRunAddPackages(),
           prepareSourceTree: sourceTree,
         },
-      });
-    } catch {
-      threw = true;
-    }
-    // The apply path may or may not throw on this particular collision
-    // depending on Node version; we accept either outcome but require
-    // that IF it threw, rollback ran and the dir is gone, and IF it
-    // didn't throw, the success path committed.
-    if (threw) {
-      assert.equal(fs.readFileSync(pkgPath, "utf8"), PACKAGE_JSON_ORIGINAL);
-      assert.equal(fs.readFileSync(lockPath, "utf8"), PNPM_LOCK_ORIGINAL);
-      assert.equal(fs.readFileSync(appJsonPath, "utf8"), APP_JSON_ORIGINAL);
-      assert.equal(fs.existsSync(widgetDest), false);
-    }
-    // In either case the backup dir is cleaned up.
+      }),
+      /EISDIR|illegal operation on a directory/,
+    );
+    // package.json, lockfile, and app.json are all restored to originals.
+    assert.equal(fs.readFileSync(pkgPath, "utf8"), PACKAGE_JSON_ORIGINAL);
+    assert.equal(fs.readFileSync(lockPath, "utf8"), PNPM_LOCK_ORIGINAL);
+    assert.equal(fs.readFileSync(appJsonPath, "utf8"), APP_JSON_ORIGINAL);
+    // The widget dir was created by copyWidgetTarget and recorded as a
+    // freshly-created dir; rollback removes it entirely.
+    assert.equal(fs.existsSync(widgetDest), false);
+    // Backup dir cleaned up.
     const backups = fs
       .readdirSync(tmp)
       .filter((n) => n.startsWith(".create-mobile-surfaces-backup-"));

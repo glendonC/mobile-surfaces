@@ -97,7 +97,7 @@ assert.ok(
 
 if (summary.packagesSkipped.length > 0) {
   assert.ok(
-    summary.followups.some((f) => f.includes("aren't on npm yet")),
+    summary.followups.some((f) => f.includes("Skipped local-only refs")),
     "expected a followup mentioning the workspace packages were skipped",
   );
 }

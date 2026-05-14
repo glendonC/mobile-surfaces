@@ -12,10 +12,15 @@
 //   1. Refuse pushes to `main` from local branch `main`. The workflow lives
 //      on feature branches; direct-to-main pushes race the Changesets
 //      release bot and produce diverged-history bugs.
-//   2. Refuse non-fast-forward pushes (i.e. force-pushes that would
-//      rewrite remote history). Force-pushes to a personal feature branch
-//      are still possible via --force-with-lease, which the hook does not
-//      block — that's a deliberate "you meant it" signal.
+//   2. Refuse non-fast-forward pushes (i.e. force-pushes that would rewrite
+//      remote history). The check is exact: the push is blocked only when
+//      the remote ref already exists and its tip is not an ancestor of the
+//      local tip. A normal feature-branch push, a brand-new branch, and a
+//      branch delete all fast-forward (or have no remote history to
+//      rewrite) and pass untouched. A pre-push hook cannot tell `--force`
+//      from `--force-with-lease`; an intentional force-push of a personal
+//      feature branch goes through with `git push --no-verify`, the same
+//      "you meant it" escape valve Rule 1 uses.
 //   3. Run `pnpm release:dry-run` before completing the push. Catches every
 //      class of generated-file drift and test failure CI would otherwise
 //      catch.
@@ -38,10 +43,13 @@ set -e
 remote="$1"
 url="$2"
 
+# A sha of all zeros means the ref is being created or deleted.
+zero_sha="0000000000000000000000000000000000000000"
+
 # Read each ref being pushed from stdin. Each line is:
 #   <local ref> <local sha> <remote ref> <remote sha>
 # We need to inspect the local branch name and the remote ref to enforce
-# the no-direct-to-main rule.
+# the no-direct-to-main rule, and the two shas to detect a non-fast-forward.
 while read local_ref local_sha remote_ref remote_sha; do
   # local_ref is "refs/heads/<branch>" or empty when deleting a ref.
   local_branch="\${local_ref#refs/heads/}"
@@ -55,14 +63,30 @@ while read local_ref local_sha remote_ref remote_sha; do
     echo "      git push --no-verify"
     exit 1
   fi
+
+  # Rule 2: refuse non-fast-forward pushes. Skip ref deletes (local_sha is
+  # zeros) and brand-new remote branches (remote_sha is zeros) - neither
+  # rewrites existing remote history. Otherwise the push fast-forwards only
+  # when the remote tip is an ancestor of the local tip; if it is not, the
+  # push would rewrite history the remote already has.
+  if [ "$local_sha" != "$zero_sha" ] && [ "$remote_sha" != "$zero_sha" ]; then
+    if ! git merge-base --is-ancestor "$remote_sha" "$local_sha"; then
+      echo "✗ pre-push: non-fast-forward push to \${remote_ref:-the remote} is disabled."
+      echo "  The remote tip is not in your local history, so this push would"
+      echo "  rewrite commits the remote already has. Rebase onto the remote"
+      echo "  first, or if the force-push is intentional:"
+      echo "      git push --no-verify"
+      exit 1
+    fi
+  fi
 done
 
 # Rule 3: run the dry-run gate with --fix so scaffold snapshot drift gets
 # auto-regenerated and amended into HEAD instead of failing the push and
 # making you run a manual fix-and-amend cycle. When --fix triggers an
 # amend it exits non-zero so this push attempt aborts; re-run \`git push\`
-# once and the amended ref goes through cleanly. Skip for branch deletes
-# (remote_sha would be all zeros).
+# once and the amended ref goes through cleanly. This runs once per push
+# regardless of how many refs are in flight.
 echo "→ pre-push: running pnpm release:dry-run --fix..."
 pnpm release:dry-run --fix
 `;

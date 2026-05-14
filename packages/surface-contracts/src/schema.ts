@@ -417,7 +417,7 @@ export function safeParseSnapshot(value: unknown) {
 export type SafeParseAnyVersionSuccess = {
   success: true;
   data: LiveSurfaceSnapshot;
-  /** Set when the input parsed as v0 and was migrated to v1. */
+  /** Set when the input parsed as v1 and was migrated to v2. */
   deprecationWarning?: string;
 };
 
@@ -494,8 +494,8 @@ export function migrateV1ToV2(
 
 /**
  * Multi-version safe-parse. Tries v2 (strict) first; on failure, tries v1
- * (frozen, with the v1 missing-kind preprocess) and migrates the result.
- * Returns the v2 ZodError when both attempts fail so callers see the most
+ * (frozen, with the v1 missing-kind preprocess) and migrates the result to
+ * v2. Returns the v2 ZodError when both attempts fail so callers see the most
  * relevant message.
  *
  * On v1->v2 migration, the result carries a `deprecationWarning` so

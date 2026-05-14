@@ -123,11 +123,11 @@ import {
   safeParseAnyVersion,
 } from "@mobile-surfaces/surface-contracts";
 
-// Strict v1 only. Throws ZodError on anything that isn't a current-version
+// Strict v2 only. Throws ZodError on anything that isn't a current-version
 // snapshot. Use this on outbound code paths where you control the producer.
 const snapshot = assertSnapshot(snapshotFromJob(job));
 
-// Strict v1 safe-parse. Returns { success, data | error }.
+// Strict v2 safe-parse. Returns { success, data | error }.
 const result = safeParseSnapshot(input);
 
 // Wire-edge tolerant. Tries v2 first; falls back to v1 with auto-migration
@@ -140,11 +140,11 @@ if (versioned.success) {
   if (versioned.deprecationWarning) {
     log.warn(versioned.deprecationWarning, { snapshotId: versioned.data.id });
   }
-  // versioned.data is a LiveSurfaceSnapshot in v1 shape.
+  // versioned.data is a LiveSurfaceSnapshot in v2 shape.
 }
 ```
 
-`safeParseAnyVersion` is the migration path documented in [`docs/schema-migration.md`](/docs/schema-migration). Use it whenever you read snapshots from a store that may still hold v0 payloads.
+`safeParseAnyVersion` is the migration path documented in [`docs/schema-migration.md`](/docs/schema-migration). Use it whenever you read snapshots from a store that may still hold v1 payloads. (The v0 codec was removed in 3.0.0; `safeParseAnyVersion` chains v2 -> v1 only.)
 
 The published JSON Schema at [`unpkg.com/@mobile-surfaces/surface-contracts@3.0/schema.json`](https://unpkg.com/@mobile-surfaces/surface-contracts@3.0/schema.json) is generated from the same Zod source and pinned to `major.minor`. Use it for IDE tooling, OpenAPI components, or non-TypeScript validators (Ajv, jsonschema, etc.). Standard Schema interop is automatic, every exported Zod schema implements the `~standard` getter (`{ vendor: "zod", version: 1, validate, jsonSchema }`), so the contract drops directly into Standard-Schema-aware libraries (Valibot runners, ArkType, `@standard-schema/spec`) without depending on Zod at runtime.
 

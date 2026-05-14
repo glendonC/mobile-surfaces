@@ -108,7 +108,7 @@ export const traps: readonly TrapEntry[] = [
     "tags": [
       "contract"
     ],
-    "summary": "Every JSON file under data/surface-fixtures/ must parse via the v1 discriminated union (after $schema is stripped).",
+    "summary": "Every JSON file under data/surface-fixtures/ must parse via the v2 discriminated union (after $schema is stripped).",
     "symptom": "Tests that exercise fixtures pass locally but fail in CI on a fixture nobody noticed was malformed; or fixture-driven previews silently render placeholder data.",
     "fix": "Run pnpm surface:check and address any reported issues. Update data/surface-fixtures/index.json if the fixture was newly added.",
     "enforcement": {
@@ -610,6 +610,25 @@ export const traps: readonly TrapEntry[] = [
     "errorClasses": [
       "MissingTopicError"
     ]
+  },
+  {
+    "id": "MS036",
+    "title": "Surface snapshot Swift structs match their Zod projection-output schemas",
+    "severity": "error",
+    "detection": "static",
+    "tags": [
+      "widget",
+      "control",
+      "swift",
+      "contract"
+    ],
+    "summary": "The four hand-maintained Codable structs in apps/mobile/targets/widget/_shared/MobileSurfacesSharedState.swift (MobileSurfacesWidgetSnapshot, MobileSurfacesControlSnapshot, MobileSurfacesLockAccessorySnapshot, MobileSurfacesStandbySnapshot) must declare the same fields, types, JSON keys, and optionality as their Zod projection-output schemas in packages/surface-contracts/src/schema.ts (liveSurfaceWidgetTimelineEntry, liveSurfaceControlValueProvider, liveSurfaceLockAccessoryEntry, liveSurfaceStandbyEntry). This extends the MS003 guarantee from the Lock Screen to the other four surfaces.",
+    "symptom": "The widget, control, lock-accessory, or StandBy surface renders placeholder data forever. The host writes a snapshot into the App Group container, but JSONDecoder in the widget extension silently fails on a renamed key, a type mismatch, or an optionality mismatch and returns nil. No log, no error.",
+    "fix": "Update the Zod projection-output schema first (and the projection helper that feeds it), then mirror the field, type, JSON key, and optionality change into the matching struct in MobileSurfacesSharedState.swift. Run pnpm surface:check; check-surface-snapshots.mjs verifies all four structs against their schemas.",
+    "enforcement": {
+      "script": "scripts/check-surface-snapshots.mjs"
+    },
+    "since": "3.3.0"
   }
 ] as const satisfies readonly TrapEntry[];
 

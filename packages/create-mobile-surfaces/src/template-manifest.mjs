@@ -21,17 +21,56 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // scaffold.mjs's resolveTemplateSource() both ask the same question — is
 // this a published tarball or a live monorepo — so cache the answer in a
 // shape that carries every path either caller needs.
+//
+// The default probe prefers the bundled template/manifest.json when it
+// exists on disk, else falls back to the live monorepo. Those bundled
+// files are gitignored build outputs (scripts/build-template.mjs writes
+// them), so whether they exist is purely a function of local history: a
+// fresh CI checkout has none, a developer who ever ran build:template has
+// stale ones. Anything that probes the mode therefore gets a different
+// answer in CI vs. locally: silent and environment-dependent.
+//
+// MOBILE_SURFACES_CLI_MODE pins the answer explicitly, bypassing the disk
+// probe entirely. The scaffold snapshot test sets it to "live" so it
+// always runs from the monorepo source regardless of whether stale
+// bundled artifacts happen to be on disk. Valid values: "live", "bundled".
 let _cliMode;
 function resolveCliMode() {
   if (_cliMode) return _cliMode;
   const templateDir = path.resolve(__dirname, "..", "template");
   const manifestPath = path.join(templateDir, "manifest.json");
   const tarballPath = path.join(templateDir, "template.tgz");
+  const repoRoot = path.resolve(__dirname, "..", "..", "..");
+
+  const forced = process.env.MOBILE_SURFACES_CLI_MODE;
+  if (forced === "live") {
+    if (!fs.existsSync(path.join(repoRoot, "pnpm-workspace.yaml"))) {
+      throw new Error(
+        `MOBILE_SURFACES_CLI_MODE=live but no monorepo found at ${repoRoot}.`,
+      );
+    }
+    _cliMode = { kind: "live", repoRoot };
+    return _cliMode;
+  }
+  if (forced === "bundled") {
+    if (!fs.existsSync(manifestPath)) {
+      throw new Error(
+        `MOBILE_SURFACES_CLI_MODE=bundled but no bundled template at ${manifestPath}. Run build:template first.`,
+      );
+    }
+    _cliMode = { kind: "bundled", manifestPath, tarballPath };
+    return _cliMode;
+  }
+  if (forced !== undefined && forced !== "") {
+    throw new Error(
+      `MOBILE_SURFACES_CLI_MODE must be "live" or "bundled", got "${forced}".`,
+    );
+  }
+
   if (fs.existsSync(manifestPath)) {
     _cliMode = { kind: "bundled", manifestPath, tarballPath };
     return _cliMode;
   }
-  const repoRoot = path.resolve(__dirname, "..", "..", "..");
   if (fs.existsSync(path.join(repoRoot, "pnpm-workspace.yaml"))) {
     _cliMode = { kind: "live", repoRoot };
     return _cliMode;

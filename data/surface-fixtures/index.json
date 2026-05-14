@@ -10,5 +10,6 @@
   "./widget-dashboard.json",
   "./control-toggle.json",
   "./lock-accessory-circular.json",
-  "./standby-card.json"
+  "./standby-card.json",
+  "./notification-alert.json"
 ]

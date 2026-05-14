@@ -13,7 +13,7 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 
 ## Index
 
-32 rules total: 27 error, 4 warning, 1 info.
+33 rules total: 28 error, 4 warning, 1 info.
 
 | ID | Severity | Detection | Title |
 | --- | --- | --- | --- |
@@ -44,6 +44,7 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 | [MS032](#ms032-activity-timestamp-fields-must-be-valid-unix-seconds-integers) | error | runtime | Activity timestamp fields must be valid unix-seconds integers |
 | [MS034](#ms034-broadcast-capability-must-be-enabled-on-the-apns-auth-key) | error | runtime | Broadcast capability must be enabled on the APNs auth key |
 | [MS035](#ms035-apns-topic-header-missing-or-bundleid-misconfigured) | error | runtime | apns-topic header missing or bundleId misconfigured |
+| [MS036](#ms036-surface-snapshot-swift-structs-match-their-zod-projection-output-schemas) | error | static | Surface snapshot Swift structs match their Zod projection-output schemas |
 | [MS010](#ms010-toolchain-preflight-node-24-pnpm-xcode-26) | warning | config | Toolchain preflight (Node 24, pnpm, Xcode 26+) |
 | [MS015](#ms015-push-priority-5-vs-10-budget-rules) | warning | runtime | Push priority 5 vs 10 budget rules |
 | [MS021](#ms021-discard-per-activity-tokens-when-the-activity-ends) | warning | runtime | Discard per-activity tokens when the activity ends |
@@ -56,16 +57,16 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 - `channels`: MS031, MS034
 - `cng`: MS017, MS029
 - `config`: MS012, MS013, MS017, MS018, MS025, MS027, MS029, MS034, MS035
-- `contract`: MS001, MS003, MS004, MS006, MS007, MS008, MS009, MS024
-- `control`: MS013, MS026
+- `contract`: MS001, MS003, MS004, MS006, MS007, MS008, MS009, MS024, MS036
+- `control`: MS013, MS026, MS036
 - `ios-version`: MS012, MS027
 - `ios18`: MS031, MS034
 - `live-activity`: MS001, MS002, MS003, MS004, MS011, MS015, MS016, MS019, MS021, MS032
 - `push`: MS006, MS011, MS014, MS015, MS018, MS024, MS028, MS030, MS031, MS032, MS034, MS035
-- `swift`: MS002, MS003, MS004
+- `swift`: MS002, MS003, MS004, MS036
 - `tokens`: MS014, MS016, MS019, MS020, MS021, MS023, MS028, MS030
 - `toolchain`: MS010, MS026
-- `widget`: MS013, MS026
+- `widget`: MS013, MS026, MS036
 
 ## How to use this document
 
@@ -134,7 +135,7 @@ packages/surface-contracts/schema.json must be regenerated whenever the Zod sour
 
 **severity:** error  •  **detection:** static (script-checkable)  •  **tags:** contract  •  **enforced by:** `scripts/validate-surface-fixtures.mjs`
 
-Every JSON file under data/surface-fixtures/ must parse via the v1 discriminated union (after $schema is stripped).
+Every JSON file under data/surface-fixtures/ must parse via the v2 discriminated union (after $schema is stripped).
 
 **Symptom.** Tests that exercise fixtures pass locally but fail in CI on a fixture nobody noticed was malformed; or fixture-driven previews silently render placeholder data.
 
@@ -389,6 +390,16 @@ APNs requires an apns-topic header on every request; the SDK derives it from APN
 **Fix.** Confirm APNS_BUNDLE_ID is set to the bare bundle identifier (e.g. com.example.app). Do not include the .push-type.liveactivity suffix; the SDK appends it internally. See MS018 for the inverse failure (suffix included by mistake).
 
 **See:** [https://mobile-surfaces.com/docs/push#error-responses](https://mobile-surfaces.com/docs/push#error-responses)
+
+### MS036: Surface snapshot Swift structs match their Zod projection-output schemas
+
+**severity:** error  •  **detection:** static (script-checkable)  •  **tags:** widget, control, swift, contract  •  **enforced by:** `scripts/check-surface-snapshots.mjs`
+
+The four hand-maintained Codable structs in apps/mobile/targets/widget/_shared/MobileSurfacesSharedState.swift (MobileSurfacesWidgetSnapshot, MobileSurfacesControlSnapshot, MobileSurfacesLockAccessorySnapshot, MobileSurfacesStandbySnapshot) must declare the same fields, types, JSON keys, and optionality as their Zod projection-output schemas in packages/surface-contracts/src/schema.ts (liveSurfaceWidgetTimelineEntry, liveSurfaceControlValueProvider, liveSurfaceLockAccessoryEntry, liveSurfaceStandbyEntry). This extends the MS003 guarantee from the Lock Screen to the other four surfaces.
+
+**Symptom.** The widget, control, lock-accessory, or StandBy surface renders placeholder data forever. The host writes a snapshot into the App Group container, but JSONDecoder in the widget extension silently fails on a renamed key, a type mismatch, or an optionality mismatch and returns nil. No log, no error.
+
+**Fix.** Update the Zod projection-output schema first (and the projection helper that feeds it), then mirror the field, type, JSON key, and optionality change into the matching struct in MobileSurfacesSharedState.swift. Run pnpm surface:check; check-surface-snapshots.mjs verifies all four structs against their schemas.
 
 ### MS010: Toolchain preflight (Node 24, pnpm, Xcode 26+)
 

@@ -82,13 +82,13 @@
 //               record on stdout instead of the human-readable footer. Pairs
 //               with --print / --describe for CI consumption.
 
-import crypto from "node:crypto";
 import fs from "node:fs";
 import http2 from "node:http2";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { loadEnvFile } from "./lib/load-env.mjs";
+import { mintApnsJwt } from "./lib/jwt.mjs";
 import {
   assertSnapshot,
   toLiveActivityContentState,
@@ -105,6 +105,14 @@ loadEnvFile(".env");
 // so the script can print a fix below the raw Body line without making the
 // user switch tabs. Keep the raw Body intact for transcript fidelity.
 //
+// This table is a deliberate sibling of packages/push/src/reasons.ts: the
+// copy here is written for CLI users (--env, --priority, --channel-action
+// flag names), the SDK's copy for API consumers (environment, priority,
+// createChannel()). The wording diverges on purpose, but the set of reason
+// keys must not — a reason added to one and not the other is a silent gap.
+// scripts/send-apns-reason-parity.test.mjs asserts the key sets stay equal so
+// CI catches that drift.
+//
 // Channel/broadcast reason strings (BadChannelId, ChannelNotRegistered,
 // MissingChannelId, CannotCreateChannelConfig, InvalidPushType) verified
 // against Apple's "Handling error responses from APNs" doc:
@@ -117,6 +125,10 @@ export const APNS_REASON_GUIDE = {
   BadDeviceToken: {
     cause: "Token / environment mismatch.",
     fix: "Use --env=development for dev-client / expo run:ios builds, --env=production only for TestFlight / App Store builds. Tokens from one environment do not authenticate against the other.",
+  },
+  Unregistered: {
+    cause: "The token's Live Activity ended, the user uninstalled the app, or the OS rotated the token.",
+    fix: "Stop sending to this token. Per MS020, treat the latest pushTokenUpdates / pushToStartTokenUpdates emission as authoritative and re-store on every rotation.",
   },
   InvalidProviderToken: {
     cause: "JWT was rejected by APNs.",
@@ -187,6 +199,14 @@ export const APNS_REASON_GUIDE = {
   MissingPushType: {
     cause: "The apns-push-type header is missing.",
     fix: "The script sets this automatically; if you see this from a custom payload, restore --type=liveactivity.",
+  },
+  InternalServerError: {
+    cause: "An internal server error occurred at APNs.",
+    fix: "Transient on Apple's side. Wait a moment and re-run the same command.",
+  },
+  ServiceUnavailable: {
+    cause: "The APNs service is temporarily unavailable.",
+    fix: "Transient on Apple's side. Wait a moment and re-run the same command.",
   },
 };
 
@@ -578,21 +598,11 @@ function manageHost(env) {
     : { host: "api-manage-broadcast.sandbox.push.apple.com", port: 2195 };
 }
 
-function base64Url(buf) {
-  return Buffer.from(buf).toString("base64").replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
-}
-
+// JWT minting is shared with scripts/setup-apns.mjs via scripts/lib/jwt.mjs
+// (mintApnsJwt). The script-side lib has no build dependency and mirrors the
+// @mobile-surfaces/push SDK's mintJwt; see the header of scripts/lib/jwt.mjs.
 function makeJwt(keyPem, keyId, teamId) {
-  const header = base64Url(JSON.stringify({ alg: "ES256", kid: keyId, typ: "JWT" }));
-  const payload = base64Url(
-    JSON.stringify({ iss: teamId, iat: Math.floor(Date.now() / 1000) }),
-  );
-  const signingInput = `${header}.${payload}`;
-  const sig = crypto
-    .createSign("SHA256")
-    .update(signingInput)
-    .sign({ key: keyPem, dsaEncoding: "ieee-p1363" });
-  return `${signingInput}.${base64Url(sig)}`;
+  return mintApnsJwt({ keyPem, keyId, teamId });
 }
 
 function readSnapshotFile(filePath) {
