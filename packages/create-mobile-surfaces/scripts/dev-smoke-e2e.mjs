@@ -87,22 +87,45 @@ function run(cmd, args, label) {
   }
 }
 
+// A fresh scaffold isn't a git repo by default; `check-ios-gitignore.mjs`
+// shells out to `git check-ignore` and bails without one. Real forks
+// `git init` early; mirror that here so surface:check can run.
+run("git", ["init", "-q", "."], "git init");
+run("git", ["add", "-A"], "git add -A");
+run("git", ["-c", "user.email=ci@local", "-c", "user.name=ci", "commit", "-qm", "initial scaffold"], "git commit");
+
 run("pnpm", ["install", "--frozen-lockfile=false"], "pnpm install");
+
+// Forks rename @mobile-surfaces/* to @<project>/*, which drops the upstream
+// unpkg $id from packages/surface-contracts/schema.json (forks aren't
+// published to unpkg). Regenerate before surface:check so the scaffolded
+// tree is self-consistent with what build-schema.mjs would emit for a fork.
+// The rename pass already does this via dropSchemaId; the explicit regen
+// here is defense-in-depth in case the scaffold + rename path ever skips
+// that step.
+run(
+  "node",
+  [
+    "--experimental-strip-types",
+    "--no-warnings=ExperimentalWarning",
+    "scripts/build-schema.mjs",
+  ],
+  "regen schema.json (fork $id)",
+);
+run(
+  "node",
+  [
+    "--experimental-strip-types",
+    "--no-warnings=ExperimentalWarning",
+    "scripts/generate-surface-fixtures.mjs",
+  ],
+  "regen fixtures.ts",
+);
+
+run("pnpm", ["surface:check"], "pnpm surface:check");
 run("pnpm", ["typecheck"], "pnpm typecheck");
 
-// Note on `pnpm surface:check`. We don't run it in this smoke because the
-// rename pass currently rewrites the substring `mobile-surfaces` inside
-// drift-guard scripts (e.g. scripts/check-validator-sync.mjs) without
-// also renaming the `packages/create-mobile-surfaces/` directory the
-// scripts reference. That mismatch is a real bug in the rename, but it
-// is out of scope for the smoke; the smoke's job is to catch
-// dep-resolution and TS regression at the contract boundary, which
-// `pnpm install` + `pnpm typecheck` cover. When the rename's
-// directory/content consistency is fixed (probably by renaming the dir
-// or by adding scripts/ to the rename's skip set), add surface:check
-// back here.
-
-console.log(`\n[e2e] ✓ scaffold + install + typecheck`);
+console.log(`\n[e2e] ✓ scaffold + install + surface:check + typecheck`);
 
 if (keep) {
   console.log(`[e2e] artifact preserved at ${tmpRoot} (MS_SMOKE_KEEP=1)`);
