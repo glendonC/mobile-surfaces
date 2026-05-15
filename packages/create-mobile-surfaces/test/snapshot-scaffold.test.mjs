@@ -109,8 +109,11 @@ function normalizeForHash(rel, raw) {
 // that's tangential to the snapshot's intent (catching drift in user-facing
 // scaffold output) AND would otherwise create false positives whenever
 // release/test infra files come and go:
-//   - packages/create-mobile-surfaces/test/: bootstrap loop — adding a test
-//     file here changes the snapshot the test asserts against
+//   - packages/create-*/test/: bootstrap loop — adding a test file here
+//     changes the snapshot the test asserts against. Matched as a regex
+//     because the rename pass moves the CLI dir from
+//     packages/create-mobile-surfaces/ to packages/create-<slug>/, and a
+//     literal prefix would only catch one of those.
 //   - .changeset/: changeset files are added per-PR and consumed by
 //     `pnpm changeset version` on release. Without this exclusion, every
 //     release PR breaks CI on its own changeset file, and the bot's
@@ -124,8 +127,8 @@ function normalizeForHash(rel, raw) {
 //     Drift between Zod source and generated schema is already gated by
 //     MS006 (build-schema --check); the scaffold snapshot doesn't need to
 //     duplicate that signal
+const CLI_TEST_DIR_RE = /^packages\/create-[^/]+\/test\//;
 const SCAFFOLD_PATH_EXCLUDES = [
-  "packages/create-mobile-surfaces/test/",
   ".changeset/",
   "packages/surface-contracts/schema.json",
 ];
@@ -133,6 +136,7 @@ const SCAFFOLD_PATH_EXCLUDES = [
 function isExcluded(rel) {
   if (rel.endsWith(".DS_Store")) return true;
   if (rel === "CHANGELOG.md" || rel.endsWith("/CHANGELOG.md")) return true;
+  if (CLI_TEST_DIR_RE.test(rel)) return true;
   for (const prefix of SCAFFOLD_PATH_EXCLUDES) {
     if (rel === prefix.replace(/\/$/, "")) return true;
     if (rel.startsWith(prefix)) return true;
