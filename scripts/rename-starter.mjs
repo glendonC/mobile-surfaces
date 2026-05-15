@@ -207,6 +207,30 @@ export function dropSchemaId(rootDir) {
   return true;
 }
 
+// Rename the CLI package directory from `packages/create-<fromSlug>/` to
+// `packages/create-<toSlug>/`. The text-rewrite pass already updated every
+// path literal that contained the old slug (including inside drift-guard
+// scripts like check-validator-sync.mjs), but the on-disk directory keeps
+// its name unless we move it. Without this step the renamed content points
+// at a path that no longer exists, and surface:check fails on first run in
+// a fork. No-op when the slugs match or the source directory is absent.
+// Returns true when a rename actually happened.
+export function renameCliPackageDir(rootDir, { fromSlug, toSlug }) {
+  if (fromSlug === toSlug) return false;
+  const from = path.join(rootDir, "packages", `create-${fromSlug}`);
+  const to = path.join(rootDir, "packages", `create-${toSlug}`);
+  if (!fs.existsSync(from)) return false;
+  if (fs.existsSync(to)) {
+    // Defensive: refuse to clobber a pre-existing target. Indicates the rename
+    // already ran (manifest got lost?) or the caller picked a colliding slug.
+    throw new Error(
+      `Refusing to rename ${from} -> ${to}: target already exists.`,
+    );
+  }
+  fs.renameSync(from, to);
+  return true;
+}
+
 // Apply substitutions to every text file under rootDir. Returns the number of
 // files actually rewritten. dryRun=true skips the write but still reports via
 // the log callback. Pure I/O — no git, no validators.
@@ -342,6 +366,27 @@ function main() {
     } else {
       fs.renameSync(rel, dest);
       console.log(`renamed ${rel} -> ${dest}`);
+    }
+  }
+
+  // Rename the CLI package directory to match the renamed package name and the
+  // (already-substituted) path literals inside drift-guard scripts. Has to run
+  // after applyTextRewrites because the rewrites are keyed on the old slug;
+  // doing it before would leave the new dir's content with mixed slugs.
+  if (dryRun) {
+    const from = `packages/create-${currentIdentity.slug}`;
+    const to = `packages/create-${newIdentity.slug}`;
+    if (
+      currentIdentity.slug !== newIdentity.slug &&
+      fs.existsSync(from)
+    ) {
+      console.log(`[dry-run] would rename ${from} -> ${to}`);
+    }
+  } else {
+    if (renameCliPackageDir(repoRoot, { fromSlug: currentIdentity.slug, toSlug: newIdentity.slug })) {
+      console.log(
+        `renamed packages/create-${currentIdentity.slug} -> packages/create-${newIdentity.slug}`,
+      );
     }
   }
 

@@ -13,6 +13,7 @@ import {
   applyTextRewrites,
   resetAppsMobileChangelog,
   dropSchemaId,
+  renameCliPackageDir,
   TEXT_EXTENSIONS,
   SKIP_DIRS,
 } from "./rename-starter.mjs";
@@ -304,6 +305,61 @@ test('dropSchemaId is a no-op when $id is not present', () => {
     fs.writeFileSync(target, JSON.stringify({ title: 'Foo' }, null, 2) + "\n");
     const dropped = dropSchemaId(dir);
     assert.equal(dropped, false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('renameCliPackageDir moves the CLI dir to match the new slug', () => {
+  const dir = makeTempRepo();
+  try {
+    const from = path.join(dir, 'packages', 'create-mobile-surfaces');
+    fs.mkdirSync(from, { recursive: true });
+    fs.writeFileSync(path.join(from, 'package.json'), '{}');
+    const moved = renameCliPackageDir(dir, { fromSlug: 'mobile-surfaces', toSlug: 'foo-bar' });
+    assert.equal(moved, true);
+    assert.ok(!fs.existsSync(from), 'source dir should be gone');
+    assert.ok(
+      fs.existsSync(path.join(dir, 'packages', 'create-foo-bar', 'package.json')),
+      'target dir should hold the moved file',
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('renameCliPackageDir is a no-op when slugs match', () => {
+  const dir = makeTempRepo();
+  try {
+    const from = path.join(dir, 'packages', 'create-mobile-surfaces');
+    fs.mkdirSync(from, { recursive: true });
+    const moved = renameCliPackageDir(dir, { fromSlug: 'mobile-surfaces', toSlug: 'mobile-surfaces' });
+    assert.equal(moved, false);
+    assert.ok(fs.existsSync(from), 'source dir should remain');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('renameCliPackageDir is a no-op when source dir is absent', () => {
+  const dir = makeTempRepo();
+  try {
+    const moved = renameCliPackageDir(dir, { fromSlug: 'mobile-surfaces', toSlug: 'foo-bar' });
+    assert.equal(moved, false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('renameCliPackageDir refuses to clobber an existing target', () => {
+  const dir = makeTempRepo();
+  try {
+    fs.mkdirSync(path.join(dir, 'packages', 'create-mobile-surfaces'), { recursive: true });
+    fs.mkdirSync(path.join(dir, 'packages', 'create-foo-bar'), { recursive: true });
+    assert.throws(
+      () => renameCliPackageDir(dir, { fromSlug: 'mobile-surfaces', toSlug: 'foo-bar' }),
+      /Refusing to rename/,
+    );
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
