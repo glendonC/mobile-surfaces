@@ -9,9 +9,9 @@
           "const": "liveActivity"
         },
         "schemaVersion": {
-          "default": "2",
+          "default": "3",
           "type": "string",
-          "const": "2"
+          "const": "3"
         },
         "id": {
           "type": "string",
@@ -122,9 +122,9 @@
           "const": "widget"
         },
         "schemaVersion": {
-          "default": "2",
+          "default": "3",
           "type": "string",
-          "const": "2"
+          "const": "3"
         },
         "id": {
           "type": "string",
@@ -227,9 +227,9 @@
           "const": "control"
         },
         "schemaVersion": {
-          "default": "2",
+          "default": "3",
           "type": "string",
-          "const": "2"
+          "const": "3"
         },
         "id": {
           "type": "string",
@@ -287,7 +287,7 @@
         "control": {
           "type": "object",
           "properties": {
-            "kind": {
+            "controlKind": {
               "type": "string",
               "enum": [
                 "toggle",
@@ -303,7 +303,7 @@
             }
           },
           "required": [
-            "kind"
+            "controlKind"
           ],
           "additionalProperties": false
         }
@@ -334,9 +334,9 @@
           "const": "notification"
         },
         "schemaVersion": {
-          "default": "2",
+          "default": "3",
           "type": "string",
-          "const": "2"
+          "const": "3"
         },
         "id": {
           "type": "string",
@@ -430,9 +430,9 @@
           "const": "lockAccessory"
         },
         "schemaVersion": {
-          "default": "2",
+          "default": "3",
           "type": "string",
-          "const": "2"
+          "const": "3"
         },
         "id": {
           "type": "string",
@@ -540,9 +540,9 @@
           "const": "standby"
         },
         "schemaVersion": {
-          "default": "2",
+          "default": "3",
           "type": "string",
-          "const": "2"
+          "const": "3"
         },
         "id": {
           "type": "string",
@@ -641,6 +641,6 @@
       "additionalProperties": false
     }
   ],
-  "$id": "https://unpkg.com/@mobile-surfaces/surface-contracts@3.2/schema.json",
+  "$id": "https://unpkg.com/@mobile-surfaces/surface-contracts@4.0/schema.json",
   "title": "LiveSurfaceSnapshot"
 }

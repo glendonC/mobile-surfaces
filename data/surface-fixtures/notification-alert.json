@@ -1,6 +1,6 @@
 {
-  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@3.2/schema.json",
-  "schemaVersion": "2",
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@4.0/schema.json",
+  "schemaVersion": "3",
   "kind": "notification",
   "id": "fixture-notification-alert",
   "surfaceId": "surface-notification-alert",

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "2",
+  "schemaVersion": "3",
   "kind": "widget",
   "id": "fixture-widget",
   "surfaceId": "surface-widget",
@@ -12,5 +12,8 @@
   "secondaryText": "Widget subhead",
   "progress": 0.5,
   "deepLink": "mobilesurfaces://surface/surface-widget",
-  "widget": { "family": "systemMedium", "reloadPolicy": "afterDate" }
+  "widget": {
+    "family": "systemMedium",
+    "reloadPolicy": "afterDate"
+  }
 }
