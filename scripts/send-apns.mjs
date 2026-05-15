@@ -93,7 +93,7 @@ import {
   assertSnapshot,
   toLiveActivityContentState,
 } from "../packages/surface-contracts/src/index.ts";
-import { liveActivityAlertPayloadFromSnapshot } from "../packages/push/src/payloads.ts";
+import { toApnsAlertPayload } from "../packages/push/src/payloads.ts";
 
 // Pick up APNs creds written by `pnpm surface:setup-apns`. Existing shell
 // exports still win — loadEnvFile only fills unset keys. Silent no-op when
@@ -619,7 +619,7 @@ function buildAlertPayload(config) {
         `--type=alert requires a liveActivity-kind snapshot; got kind="${snapshot.kind}".`,
       );
     }
-    return liveActivityAlertPayloadFromSnapshot(snapshot);
+    return toApnsAlertPayload(snapshot);
   }
   return {
     aps: {

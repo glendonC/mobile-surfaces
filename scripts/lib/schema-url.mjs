@@ -11,6 +11,12 @@ import { resolve } from "node:path";
 
 export const UPSTREAM_PACKAGE_NAME = "@mobile-surfaces/surface-contracts";
 
+// Single source of truth for the wire-format generation literal that
+// appears in `schemaVersion: "<n>"` across fixtures, docs, README snippets,
+// and the CLI template tarball. Bumped together with the package major when
+// the schema's discriminator literal changes.
+export const CANONICAL_SCHEMA_VERSION = "4";
+
 export function readSurfaceContractsPackageJson() {
   return JSON.parse(
     readFileSync(resolve("packages/surface-contracts/package.json"), "utf8"),

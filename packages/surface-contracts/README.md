@@ -25,20 +25,20 @@ import {
 
 function snapshotFromJob(job: Job): LiveSurfaceSnapshot {
   return {
-    schemaVersion: "3",
+    schemaVersion: "4",
     kind: "liveActivity",
     id: `${job.id}@${job.revision}`,
     surfaceId: `job-${job.id}`,
     updatedAt: new Date().toISOString(),
     state: job.status === "done" ? "completed" : "active",
-    modeLabel: "active",
-    contextLabel: job.queueName,
-    statusLine: `${job.queueName} · ${Math.round(job.progress * 100)}%`,
-    primaryText: job.title,
-    secondaryText: job.subtitle ?? "",
-    progress: job.progress,
-    deepLink: `myapp://surface/job-${job.id}`,
     liveActivity: {
+      title: job.title,
+      body: job.subtitle ?? "",
+      progress: job.progress,
+      deepLink: `myapp://surface/job-${job.id}`,
+      modeLabel: "active",
+      contextLabel: job.queueName,
+      statusLine: `${job.queueName} · ${Math.round(job.progress * 100)}%`,
       stage: job.status === "done" ? "completing" : "inProgress",
       estimatedSeconds: job.etaSeconds ?? 0,
       morePartsCount: 0,
@@ -67,20 +67,20 @@ The validator runs once at the boundary; everything downstream consumes a typed 
 
 ## The discriminated union
 
-`liveSurfaceSnapshot` is a discriminated union: `kind` picks which branch is valid, and the validator rejects fields that belong to the wrong branch. It covers six branches at `schemaVersion: "3"`:
+`liveSurfaceSnapshot` is a discriminated union: `kind` picks which branch is valid, and the validator rejects fields that belong to the wrong branch. It covers six branches at `schemaVersion: "4"`:
 
-| `kind` | Renders as | Slice |
+| `kind` | Renders as | Slice (required fields in **bold**) |
 | --- | --- | --- |
-| `liveActivity` | Lock Screen Live Activity, Dynamic Island | `liveActivity: { stage, estimatedSeconds, morePartsCount }` |
-| `widget` | Home-screen widget | `widget: { family?, reloadPolicy? }` |
-| `control` | iOS 18 control widget | `control: { controlKind, state?, intent? }` |
-| `notification` | Notification content | `notification: { category?, threadId? }` |
-| `lockAccessory` | Lock Screen complication | `lockAccessory: { family, gaugeValue?, shortText? }` |
-| `standby` | StandBy mode widget | `standby: { presentation, tint? }` |
+| `liveActivity` | Lock Screen Live Activity, Dynamic Island | `liveActivity: { `**`title, body, progress, deepLink, modeLabel, contextLabel, statusLine, stage, estimatedSeconds, morePartsCount`**`, actionLabel? }` |
+| `widget` | Home-screen widget | `widget: { `**`title, body, progress, deepLink`**`, family?, reloadPolicy? }` |
+| `control` | iOS 18 control widget | `control: { `**`label, deepLink, controlKind`**`, state?, intent? }` |
+| `notification` | Notification content | `notification: { `**`title, body, deepLink`**`, category?, threadId? }` |
+| `lockAccessory` | Lock Screen complication | `lockAccessory: { `**`title, deepLink, family`**`, gaugeValue?, shortText? }` |
+| `standby` | StandBy mode widget | `standby: { `**`title, body, progress, deepLink, presentation`**`, tint? }` |
 
-The base fields (`id`, `surfaceId`, `updatedAt`, `state`, `modeLabel`, `contextLabel`, `statusLine`, `primaryText`, `secondaryText`, `actionLabel?`, `progress`, `deepLink`) are shared across every branch. The `liveActivity` slice carries the liveActivity-only timing and stage hints. v3 renamed the control slice's inner field from `kind` to `controlKind` to stop shadowing the outer discriminator; every other field is unchanged from v2.
+The base shape is identification + state only: `schemaVersion`, `id`, `surfaceId`, `kind`, `updatedAt`, `state`. Every rendering field lives inside its per-kind slice so a widget snapshot no longer pretends to have a Lock-Screen `modeLabel`, a control snapshot no longer carries a fictional `progress`, and the `notification` slice's `title`/`body` map directly to `aps.alert.title`/`aps.alert.body` (renamed from v3's `primaryText`/`secondaryText`).
 
-`kind`-aware narrowing is enforced both at parse time (a `kind: "control"` snapshot without a `control` slice fails `safeParse`) and at projection time (`toLiveActivityContentState` rejects a non-`liveActivity` snapshot at runtime):
+`kind`-aware narrowing is enforced at parse time (a `kind: "control"` snapshot without a `control` slice fails `safeParse`) and at the type system (projection helpers take narrowed snapshot types, not the union):
 
 ```ts
 import {
@@ -92,13 +92,14 @@ import {
 const snapshot = assertSnapshot(input);
 
 if (snapshot.kind === "widget") {
-  // TS narrows: `snapshot.widget` is now LiveSurfaceWidgetSlice.
+  // TS narrows: snapshot is LiveSurfaceSnapshotWidget; toWidgetTimelineEntry
+  // accepts only that narrowed type, so there is no runtime check.
   const entry = toWidgetTimelineEntry(snapshot);
   writeAppGroupEntry(entry);
 }
 ```
 
-Projection helpers exported today: `toLiveActivityContentState`, `toWidgetTimelineEntry`, `toControlValueProvider`, `toNotificationContentPayload`, `toLockAccessoryEntry`, `toStandbyEntry`. The APNs alert-payload helper `liveActivityAlertPayloadFromSnapshot` lives in [`@mobile-surfaces/push`](https://www.npmjs.com/package/@mobile-surfaces/push) since 3.0 (the `aps` envelope is wire format, not a contract concern). See [`https://mobile-surfaces.com/docs/multi-surface`](https://mobile-surfaces.com/docs/multi-surface) for what each helper returns and when to emit each `kind`.
+Projection helpers exported today: `toLiveActivityContentState`, `toWidgetTimelineEntry`, `toControlValueProvider`, `toNotificationContentPayload`, `toLockAccessoryEntry`, `toStandbyEntry`. The APNs alert-payload helper lives in [`@mobile-surfaces/push`](https://www.npmjs.com/package/@mobile-surfaces/push) (`toApnsAlertPayload` in 5.0+; the `aps` envelope is wire format, not a contract concern). See [`https://mobile-surfaces.com/docs/multi-surface`](https://mobile-surfaces.com/docs/multi-surface) for what each helper returns and when to emit each `kind`.
 
 ## Standard Schema interop
 
@@ -118,12 +119,12 @@ The same `~standard` surface is consumable from Valibot, ArkType, `@standard-sch
 
 ## JSON Schema
 
-Backends that aren't on TypeScript can validate against the published JSON Schema, which is generated by `z.toJSONSchema` and is `oneOf`-shaped per the discriminator. Non-TS validators get the same kind ↔ slice enforcement TypeScript consumers do.
+Backends that aren't on TypeScript can validate against the published JSON Schema, which is generated by `z.toJSONSchema` and is `oneOf`-shaped per the discriminator. Non-TS validators get the same kind ↔ slice enforcement TypeScript consumers do. Every field carries a `description` keyword so the schema is also usable as an LLM tool-use document.
 
 The canonical URL is pinned to **major.minor** so a future minor that adds a `kind` branch publishes at a new URL without invalidating existing references:
 
 ```text
-https://unpkg.com/@mobile-surfaces/surface-contracts@4.0/schema.json
+https://unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json
 ```
 
 Ajv 2020 example:
@@ -133,7 +134,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 
 const ajv = new Ajv2020();
 const schema = await fetch(
-  "https://unpkg.com/@mobile-surfaces/surface-contracts@4.0/schema.json",
+  "https://unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json",
 ).then((r) => r.json());
 
 const validate = ajv.compile(schema);
@@ -148,9 +149,11 @@ The schema is also exported via the package's `./schema` subpath if you want to 
 import schema from "@mobile-surfaces/surface-contracts/schema";
 ```
 
-## v2 -> v3 migration
+## v3 -> v4 migration
 
-`schemaVersion: "3"` renames the control slice's inner `kind` field to `controlKind` to stop shadowing the outer discriminator. Every other kind is pass-through from v2. Use `safeParseAnyVersion` at wire edges that may see either schema shape:
+`schemaVersion: "4"` rebases the snapshot shape: the v3 base lost its kind-specific rendering fields and every per-kind slice carries its own rendering set. The notification slice renames `primaryText`/`secondaryText` to `title`/`body` so they line up with `aps.alert.title`/`aps.alert.body` on the wire. The control slice gains a required `label`. v3's `progress: 1` on control (fictional) and v3's `progress` on lockAccessory (which was only a projection-fallback source) are dropped from the wire shape.
+
+Use `safeParseAnyVersion` at wire edges that may see either schema shape:
 
 ```ts
 import { safeParseAnyVersion } from "@mobile-surfaces/surface-contracts";
@@ -164,10 +167,10 @@ if (result.deprecationWarning) {
   log.warn(result.deprecationWarning, { snapshotId: result.data.id });
 }
 
-handle(result.data); // always v3
+handle(result.data); // always v4
 ```
 
-For stored payloads, `migrateV2ToV3` is a pure transform that renames `control.kind` to `control.controlKind` and bumps `schemaVersion` to `"3"`; every non-control kind is pass-through. The v2 codec lives for the entire 4.x release line and is removed in 5.0.0. The v1 codec was sunset at 4.0 per the v2 RFC commitment; v1 producers must run their payloads through `@mobile-surfaces/surface-contracts@3` to reach v2 first. Full migration policy and a worked example live in [`https://mobile-surfaces.com/docs/schema-migration`](https://mobile-surfaces.com/docs/schema-migration).
+For stored payloads, `migrateV3ToV4` is a pure transform that lifts the v3 base's rendering fields into the per-kind slice and bumps `schemaVersion` to `"4"`. The v3 codec lives for the entire 5.x release line and is removed in 6.0.0. The v2 codec was sunset at 5.0 per the v3 RFC commitment; v2 producers must run their payloads through `@mobile-surfaces/surface-contracts@4` to reach v3 first. Full migration policy and a worked example live in [`https://mobile-surfaces.com/docs/schema-migration`](https://mobile-surfaces.com/docs/schema-migration).
 
 ## Pairing options
 

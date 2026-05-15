@@ -130,6 +130,13 @@ export const SKIP_PATH_PREFIXES = [
   // runs (the on-disk manifest filename would no longer match the constant).
   "scripts/rename-starter.mjs",
   "scripts/rename-starter.test.mjs",
+  // Generated App Group constants. Rewriting these directly would conflict
+  // with the codegen pass that runs after the substitution loop; the
+  // codegen reads from apps/mobile/app.json (which IS substituted) and
+  // regenerates the constants from there. Skipping the generated files
+  // keeps codegen the only writer.
+  "apps/mobile/src/generated",
+  "apps/mobile/targets/widget/_shared/MobileSurfacesAppGroup.swift",
 ];
 
 // Generated/lock files that pnpm or another tool will regenerate post-rename.
@@ -412,6 +419,17 @@ function main() {
   // package imports — so it runs cleanly even before `pnpm install`.
   console.log("regenerating fixtures.ts ...");
   execSync("node scripts/generate-surface-fixtures.mjs", { stdio: "inherit" });
+
+  // Regenerate the App Group Swift/TS constants from the substituted
+  // app.json. The substitution pass rewrites app.json's App Group entry
+  // (group.com.example.<slug>) but skips the generated constant files;
+  // codegen is the only writer for those, so we run it here to keep all
+  // four App-Group declaration sites aligned.
+  console.log("regenerating App Group constants ...");
+  execSync(
+    "node --experimental-strip-types scripts/generate-app-group-constants.mjs",
+    { stdio: "inherit" },
+  );
 
   // The verify pass imports from packages/surface-contracts, which depends on
   // zod. In a freshly-scaffolded project (where rename runs before install),

@@ -1,20 +1,16 @@
 {
-  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@4.0/schema.json",
-  "schemaVersion": "3",
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json",
+  "schemaVersion": "4",
   "kind": "widget",
   "id": "fixture-widget-dashboard",
   "surfaceId": "surface-widget-dashboard",
   "updatedAt": "2026-05-12T18:34:00.000Z",
   "state": "active",
-  "modeLabel": "widget",
-  "contextLabel": "home",
-  "statusLine": "widget · shared state",
-  "primaryText": "Widget surface synced",
-  "secondaryText": "This snapshot is written through the App Group and rendered by the home-screen widget.",
-  "actionLabel": "Open surface",
-  "progress": 0.62,
-  "deepLink": "mobilesurfaces://surface/surface-widget-dashboard",
   "widget": {
+    "title": "Widget surface synced",
+    "body": "This snapshot is written through the App Group and rendered by the home-screen widget.",
+    "progress": 0.62,
+    "deepLink": "mobilesurfaces://surface/surface-widget-dashboard",
     "family": "systemMedium",
     "reloadPolicy": "manual"
   }

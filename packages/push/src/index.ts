@@ -24,7 +24,11 @@ export type {
 } from "./client.ts";
 
 export type { RetryPolicy } from "./retry.ts";
-export { DEFAULT_RETRY_POLICY, effectiveRetryPolicy } from "./retry.ts";
+export {
+  DEFAULT_RETRY_POLICY,
+  effectiveRetryPolicy,
+  computeBackoffMs,
+} from "./retry.ts";
 
 export { APNS_REASON_GUIDE } from "./reasons.ts";
 export type { ApnsReasonGuideEntry } from "./reasons.ts";
@@ -56,6 +60,8 @@ export {
   InvalidSnapshotError,
   ClientClosedError,
   MissingApnsConfigError,
+  CreateChannelResponseError,
+  AbortError,
 } from "./errors.ts";
 
 export {
@@ -74,6 +80,6 @@ export type {
 
 export {
   liveActivityAlertPayload,
-  liveActivityAlertPayloadFromSnapshot,
+  toApnsAlertPayload,
 } from "./payloads.ts";
 export type { LiveActivityAlertPayload } from "./payloads.ts";

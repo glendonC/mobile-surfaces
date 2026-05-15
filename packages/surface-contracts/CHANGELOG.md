@@ -1,5 +1,34 @@
 # @mobile-surfaces/surface-contracts
 
+## 5.0.0
+
+### Major Changes
+
+- v4 schema: rendering moves into per-kind slices; sunset the v2 codec; require `schemaVersion` explicitly.
+
+  v3's base shape carried every kind-specific rendering field (`primaryText`, `secondaryText`, `modeLabel`, `contextLabel`, `statusLine`, `actionLabel`, `progress`, `deepLink`) on every snapshot regardless of kind. Widget, control, and standby payloads padded those fields with values that had no meaning on their surface; `control` fixtures shipped a fictional `progress: 1` because the base required it. v4 collapses the base to identity (`schemaVersion`, `id`, `surfaceId`, `kind`, `updatedAt`, `state`) and moves every rendering field into its per-kind slice. The notification slice renames `primaryText`/`secondaryText` to `title`/`body` so they line up with `aps.alert.title`/`aps.alert.body` on the wire. The control slice gains a required `label`. The lockAccessory wire shape drops the projection-only `progress` fallback (the gauge is sourced solely from `lockAccessory.gaugeValue` now).
+
+  `schemaVersion` is required without a default. A payload missing the field fails v4 parse; `safeParseAnyVersion` then tries the frozen v3 schema (which keeps v3's `.default("3")` for historical producers).
+
+  Migration:
+
+  - Producers: bump `schemaVersion` to `"4"`, lift base rendering fields into the matching per-kind slice, rename notification `primaryText`/`secondaryText` to `title`/`body`, give every `control` snapshot a `control.label`.
+  - Consumers using `safeParseAnyVersion`: v3 payloads keep working through the new v3 -> v4 codec; the result surfaces a `deprecationWarning` so telemetry can flag stragglers.
+  - Consumers using strict `assertSnapshot`/`safeParseSnapshot`: v3 payloads fail. Migrate producers, or wrap with `safeParseAnyVersion`.
+  - The v2 codec was sunset at 5.0 per the v3 RFC commitment. v2 producers must run through `@mobile-surfaces/surface-contracts@4` to migrate to v3 first.
+
+  Schema URL bumps to `https://unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json`.
+
+- Every Zod field carries a `.describe()` so the published JSON Schema becomes an LLM tool-use document.
+
+  `z.toJSONSchema` propagates `description` keywords into the generated schema. Producers emitting structured output against the schema (and humans reading the unpkg URL) now see the semantic intent of every field, not just its type. Descriptions explain what consumer reads the field, what constraint a producer must honor, and how the field interacts with the projection helpers.
+
+- Projection helpers take narrowed snapshot types; `IncompleteProjectionError` and the hand-written shadow TS interfaces are removed.
+
+  v4's per-kind slices make every required field present once a snapshot parses, so the runtime "incomplete projection" check has no remaining failure mode. `toLiveActivityContentState`, `toWidgetTimelineEntry`, `toControlValueProvider`, `toLockAccessoryEntry`, `toStandbyEntry`, and `toNotificationContentPayload` now accept their narrowed variant types (`LiveSurfaceSnapshotLiveActivity`, etc.) rather than the discriminated union. Callers holding the union narrow with `snapshot.kind === "<kind>"` before calling, or use `assertSnapshotKind` to turn a runtime check into a typed projection.
+
+  `IncompleteProjectionError` is deleted. The hand-written `LiveSurfaceWidgetTimelineEntry`, `LiveSurfaceControlValueProvider`, `LiveSurfaceLockAccessoryEntry`, `LiveSurfaceStandbyEntry`, `LiveSurfaceNotificationContentPayload` TS interfaces are deleted; the public types are now inferred from the Zod output schemas in `schema.ts`. The public type names are unchanged; the duplicated definitions are gone.
+
 ## 4.0.0
 
 ### Major Changes

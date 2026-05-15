@@ -4,27 +4,30 @@
     {
       "type": "object",
       "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "const": "4",
+          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV3ToV4 + safeParseAnyVersion before parsing."
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable, idempotent snapshot identifier. The same logical state produced twice MUST yield the same id (e.g. \"<surfaceId>@<revision>\"). Consumers use it to deduplicate re-deliveries from APNs and ActivityKit."
+        },
+        "surfaceId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier for the surface this snapshot updates. One surfaceId is rendered by at most one Live Activity / widget timeline / control / lock-accessory / standby slot at a time. Maps to the App Group key `surface.snapshot.<surfaceId>` and to the per-kind currentSurfaceId pointer."
+        },
         "kind": {
           "type": "string",
           "const": "liveActivity"
         },
-        "schemaVersion": {
-          "default": "3",
-          "type": "string",
-          "const": "3"
-        },
-        "id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "surfaceId": {
-          "type": "string",
-          "minLength": 1
-        },
         "updatedAt": {
           "type": "string",
           "format": "date-time",
-          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+          "description": "RFC 3339 instant the snapshot was authored. Consumers compare against the previously-applied snapshot's updatedAt to drop out-of-order deliveries. UTC (Z-suffixed) recommended for lexicographic comparison; offsets accepted for producers emitting OffsetDateTime / time.Time / Instant."
         },
         "state": {
           "type": "string",
@@ -35,60 +38,80 @@
             "attention",
             "bad_timing",
             "completed"
-          ]
-        },
-        "modeLabel": {
-          "type": "string",
-          "minLength": 1
-        },
-        "contextLabel": {
-          "type": "string"
-        },
-        "statusLine": {
-          "type": "string"
-        },
-        "primaryText": {
-          "type": "string",
-          "minLength": 1
-        },
-        "secondaryText": {
-          "type": "string"
-        },
-        "actionLabel": {
-          "type": "string"
-        },
-        "progress": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "deepLink": {
-          "type": "string",
-          "pattern": "^[a-z][a-z0-9+\\-.]*:\\/\\/"
+          ],
+          "description": "Lifecycle states. queued/active/paused = in-flight; attention = needs user action (drives high-priority APNs); bad_timing = should not interrupt right now; completed = terminal."
         },
         "liveActivity": {
           "type": "object",
           "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Lock-Screen / Dynamic-Island headline."
+            },
+            "body": {
+              "type": "string",
+              "description": "Lock-Screen subhead under the title."
+            },
+            "progress": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Completion ratio (0..1). Renders as the activity's progress bar and is what toLiveActivityContentState forwards into ActivityKit."
+            },
+            "deepLink": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9+\\-.]*:\\/\\/",
+              "description": "Tapping the surface opens this URL. Validated as a scheme://… prefix."
+            },
+            "modeLabel": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Compact mode label for the Dynamic Island leading region (e.g. \"active\")."
+            },
+            "contextLabel": {
+              "type": "string",
+              "description": "Trailing context tag for the Dynamic Island (e.g. \"queue · stage 2\")."
+            },
+            "statusLine": {
+              "type": "string",
+              "description": "One-line status string composed for accessibility readout and for the expanded Lock-Screen layout's secondary row."
+            },
+            "actionLabel": {
+              "description": "Label for the activity's primary action button. Omitted when the activity has no action affordance.",
+              "type": "string",
+              "minLength": 1
+            },
             "stage": {
               "type": "string",
               "enum": [
                 "prompted",
                 "inProgress",
                 "completing"
-              ]
+              ],
+              "description": "ActivityKit ContentState stage. Producers transition prompted → inProgress → completing; iOS uses it to decide the Dynamic Island compact layout and the dismissal grace period."
             },
             "estimatedSeconds": {
               "type": "integer",
               "minimum": 0,
-              "maximum": 9007199254740991
+              "maximum": 9007199254740991,
+              "description": "Estimated remaining seconds. Optional hint to the Lock-Screen layout for countdown UIs; zero means \"unknown\"."
             },
             "morePartsCount": {
               "type": "integer",
               "minimum": 0,
-              "maximum": 9007199254740991
+              "maximum": 9007199254740991,
+              "description": "Number of queued follow-up parts (e.g. \"+3 more\"). Lets producers signal continuity without padding the payload with the full queue."
             }
           },
           "required": [
+            "title",
+            "body",
+            "progress",
+            "deepLink",
+            "modeLabel",
+            "contextLabel",
+            "statusLine",
             "stage",
             "estimatedSeconds",
             "morePartsCount"
@@ -97,19 +120,12 @@
         }
       },
       "required": [
-        "kind",
         "schemaVersion",
         "id",
         "surfaceId",
+        "kind",
         "updatedAt",
         "state",
-        "modeLabel",
-        "contextLabel",
-        "statusLine",
-        "primaryText",
-        "secondaryText",
-        "progress",
-        "deepLink",
         "liveActivity"
       ],
       "additionalProperties": false
@@ -117,27 +133,30 @@
     {
       "type": "object",
       "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "const": "4",
+          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV3ToV4 + safeParseAnyVersion before parsing."
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable, idempotent snapshot identifier. The same logical state produced twice MUST yield the same id (e.g. \"<surfaceId>@<revision>\"). Consumers use it to deduplicate re-deliveries from APNs and ActivityKit."
+        },
+        "surfaceId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier for the surface this snapshot updates. One surfaceId is rendered by at most one Live Activity / widget timeline / control / lock-accessory / standby slot at a time. Maps to the App Group key `surface.snapshot.<surfaceId>` and to the per-kind currentSurfaceId pointer."
+        },
         "kind": {
           "type": "string",
           "const": "widget"
         },
-        "schemaVersion": {
-          "default": "3",
-          "type": "string",
-          "const": "3"
-        },
-        "id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "surfaceId": {
-          "type": "string",
-          "minLength": 1
-        },
         "updatedAt": {
           "type": "string",
           "format": "date-time",
-          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+          "description": "RFC 3339 instant the snapshot was authored. Consumers compare against the previously-applied snapshot's updatedAt to drop out-of-order deliveries. UTC (Z-suffixed) recommended for lexicographic comparison; offsets accepted for producers emitting OffsetDateTime / time.Time / Instant."
         },
         "state": {
           "type": "string",
@@ -148,41 +167,34 @@
             "attention",
             "bad_timing",
             "completed"
-          ]
-        },
-        "modeLabel": {
-          "type": "string",
-          "minLength": 1
-        },
-        "contextLabel": {
-          "type": "string"
-        },
-        "statusLine": {
-          "type": "string"
-        },
-        "primaryText": {
-          "type": "string",
-          "minLength": 1
-        },
-        "secondaryText": {
-          "type": "string"
-        },
-        "actionLabel": {
-          "type": "string"
-        },
-        "progress": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "deepLink": {
-          "type": "string",
-          "pattern": "^[a-z][a-z0-9+\\-.]*:\\/\\/"
+          ],
+          "description": "Lifecycle states. queued/active/paused = in-flight; attention = needs user action (drives high-priority APNs); bad_timing = should not interrupt right now; completed = terminal."
         },
         "widget": {
           "type": "object",
           "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Widget headline."
+            },
+            "body": {
+              "type": "string",
+              "description": "Widget secondary line."
+            },
+            "progress": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Optional progress fill on system{Small,Medium,Large} widgets that render a progress ring or bar."
+            },
+            "deepLink": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9+\\-.]*:\\/\\/",
+              "description": "Tapping the surface opens this URL. Validated as a scheme://… prefix."
+            },
             "family": {
+              "description": "Preferred widget family. Optional because the host can render at the user-chosen size and ignore the hint.",
               "type": "string",
               "enum": [
                 "systemSmall",
@@ -191,6 +203,7 @@
               ]
             },
             "reloadPolicy": {
+              "description": "WidgetKit timeline reload policy. \"manual\" means the host reloads only when the App Group write triggers; \"afterDate\" uses the framework's next-update hint.",
               "type": "string",
               "enum": [
                 "manual",
@@ -198,23 +211,22 @@
               ]
             }
           },
+          "required": [
+            "title",
+            "body",
+            "progress",
+            "deepLink"
+          ],
           "additionalProperties": false
         }
       },
       "required": [
-        "kind",
         "schemaVersion",
         "id",
         "surfaceId",
+        "kind",
         "updatedAt",
         "state",
-        "modeLabel",
-        "contextLabel",
-        "statusLine",
-        "primaryText",
-        "secondaryText",
-        "progress",
-        "deepLink",
         "widget"
       ],
       "additionalProperties": false
@@ -222,27 +234,30 @@
     {
       "type": "object",
       "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "const": "4",
+          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV3ToV4 + safeParseAnyVersion before parsing."
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable, idempotent snapshot identifier. The same logical state produced twice MUST yield the same id (e.g. \"<surfaceId>@<revision>\"). Consumers use it to deduplicate re-deliveries from APNs and ActivityKit."
+        },
+        "surfaceId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier for the surface this snapshot updates. One surfaceId is rendered by at most one Live Activity / widget timeline / control / lock-accessory / standby slot at a time. Maps to the App Group key `surface.snapshot.<surfaceId>` and to the per-kind currentSurfaceId pointer."
+        },
         "kind": {
           "type": "string",
           "const": "control"
         },
-        "schemaVersion": {
-          "default": "3",
-          "type": "string",
-          "const": "3"
-        },
-        "id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "surfaceId": {
-          "type": "string",
-          "minLength": 1
-        },
         "updatedAt": {
           "type": "string",
           "format": "date-time",
-          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+          "description": "RFC 3339 instant the snapshot was authored. Consumers compare against the previously-applied snapshot's updatedAt to drop out-of-order deliveries. UTC (Z-suffixed) recommended for lexicographic comparison; offsets accepted for producers emitting OffsetDateTime / time.Time / Instant."
         },
         "state": {
           "type": "string",
@@ -253,75 +268,55 @@
             "attention",
             "bad_timing",
             "completed"
-          ]
-        },
-        "modeLabel": {
-          "type": "string",
-          "minLength": 1
-        },
-        "contextLabel": {
-          "type": "string"
-        },
-        "statusLine": {
-          "type": "string"
-        },
-        "primaryText": {
-          "type": "string",
-          "minLength": 1
-        },
-        "secondaryText": {
-          "type": "string"
-        },
-        "actionLabel": {
-          "type": "string"
-        },
-        "progress": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "deepLink": {
-          "type": "string",
-          "pattern": "^[a-z][a-z0-9+\\-.]*:\\/\\/"
+          ],
+          "description": "Lifecycle states. queued/active/paused = in-flight; attention = needs user action (drives high-priority APNs); bad_timing = should not interrupt right now; completed = terminal."
         },
         "control": {
           "type": "object",
           "properties": {
+            "label": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Button / toggle label rendered in the Control Center tile."
+            },
+            "deepLink": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9+\\-.]*:\\/\\/",
+              "description": "Tapping the surface opens this URL. Validated as a scheme://… prefix."
+            },
             "controlKind": {
               "type": "string",
               "enum": [
                 "toggle",
                 "button",
                 "deepLink"
-              ]
+              ],
+              "description": "Tile behavior. \"toggle\" exposes a boolean value; \"button\" runs an App Intent without state; \"deepLink\" opens the URL."
             },
             "state": {
+              "description": "Toggle state for \"toggle\"-kind controls. Absent on \"button\" / \"deepLink\". Round-trips through App Group storage when the user toggles.",
               "type": "boolean"
             },
             "intent": {
+              "description": "App Intent identifier invoked on tap (\"toggle\" / \"button\").",
               "type": "string"
             }
           },
           "required": [
+            "label",
+            "deepLink",
             "controlKind"
           ],
           "additionalProperties": false
         }
       },
       "required": [
-        "kind",
         "schemaVersion",
         "id",
         "surfaceId",
+        "kind",
         "updatedAt",
         "state",
-        "modeLabel",
-        "contextLabel",
-        "statusLine",
-        "primaryText",
-        "secondaryText",
-        "progress",
-        "deepLink",
         "control"
       ],
       "additionalProperties": false
@@ -329,27 +324,30 @@
     {
       "type": "object",
       "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "const": "4",
+          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV3ToV4 + safeParseAnyVersion before parsing."
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable, idempotent snapshot identifier. The same logical state produced twice MUST yield the same id (e.g. \"<surfaceId>@<revision>\"). Consumers use it to deduplicate re-deliveries from APNs and ActivityKit."
+        },
+        "surfaceId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier for the surface this snapshot updates. One surfaceId is rendered by at most one Live Activity / widget timeline / control / lock-accessory / standby slot at a time. Maps to the App Group key `surface.snapshot.<surfaceId>` and to the per-kind currentSurfaceId pointer."
+        },
         "kind": {
           "type": "string",
           "const": "notification"
         },
-        "schemaVersion": {
-          "default": "3",
-          "type": "string",
-          "const": "3"
-        },
-        "id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "surfaceId": {
-          "type": "string",
-          "minLength": 1
-        },
         "updatedAt": {
           "type": "string",
           "format": "date-time",
-          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+          "description": "RFC 3339 instant the snapshot was authored. Consumers compare against the previously-applied snapshot's updatedAt to drop out-of-order deliveries. UTC (Z-suffixed) recommended for lexicographic comparison; offsets accepted for producers emitting OffsetDateTime / time.Time / Instant."
         },
         "state": {
           "type": "string",
@@ -360,64 +358,50 @@
             "attention",
             "bad_timing",
             "completed"
-          ]
-        },
-        "modeLabel": {
-          "type": "string",
-          "minLength": 1
-        },
-        "contextLabel": {
-          "type": "string"
-        },
-        "statusLine": {
-          "type": "string"
-        },
-        "primaryText": {
-          "type": "string",
-          "minLength": 1
-        },
-        "secondaryText": {
-          "type": "string"
-        },
-        "actionLabel": {
-          "type": "string"
-        },
-        "progress": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "deepLink": {
-          "type": "string",
-          "pattern": "^[a-z][a-z0-9+\\-.]*:\\/\\/"
+          ],
+          "description": "Lifecycle states. queued/active/paused = in-flight; attention = needs user action (drives high-priority APNs); bad_timing = should not interrupt right now; completed = terminal."
         },
         "notification": {
           "type": "object",
           "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Notification title. Maps directly to aps.alert.title in the APNs envelope."
+            },
+            "body": {
+              "type": "string",
+              "description": "Notification body. Maps directly to aps.alert.body."
+            },
+            "deepLink": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9+\\-.]*:\\/\\/",
+              "description": "Tapping the surface opens this URL. Validated as a scheme://… prefix."
+            },
             "category": {
+              "description": "UNNotificationCategory identifier. Selects which set of action buttons the system shows. Maps to aps.category.",
               "type": "string"
             },
             "threadId": {
+              "description": "Thread identifier for notification grouping. Maps to aps.thread-id.",
               "type": "string"
             }
           },
+          "required": [
+            "title",
+            "body",
+            "deepLink"
+          ],
           "additionalProperties": false
         }
       },
       "required": [
-        "kind",
         "schemaVersion",
         "id",
         "surfaceId",
+        "kind",
         "updatedAt",
         "state",
-        "modeLabel",
-        "contextLabel",
-        "statusLine",
-        "primaryText",
-        "secondaryText",
-        "progress",
-        "deepLink",
         "notification"
       ],
       "additionalProperties": false
@@ -425,27 +409,30 @@
     {
       "type": "object",
       "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "const": "4",
+          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV3ToV4 + safeParseAnyVersion before parsing."
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable, idempotent snapshot identifier. The same logical state produced twice MUST yield the same id (e.g. \"<surfaceId>@<revision>\"). Consumers use it to deduplicate re-deliveries from APNs and ActivityKit."
+        },
+        "surfaceId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier for the surface this snapshot updates. One surfaceId is rendered by at most one Live Activity / widget timeline / control / lock-accessory / standby slot at a time. Maps to the App Group key `surface.snapshot.<surfaceId>` and to the per-kind currentSurfaceId pointer."
+        },
         "kind": {
           "type": "string",
           "const": "lockAccessory"
         },
-        "schemaVersion": {
-          "default": "3",
-          "type": "string",
-          "const": "3"
-        },
-        "id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "surfaceId": {
-          "type": "string",
-          "minLength": 1
-        },
         "updatedAt": {
           "type": "string",
           "format": "date-time",
-          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+          "description": "RFC 3339 instant the snapshot was authored. Consumers compare against the previously-applied snapshot's updatedAt to drop out-of-order deliveries. UTC (Z-suffixed) recommended for lexicographic comparison; offsets accepted for producers emitting OffsetDateTime / time.Time / Instant."
         },
         "state": {
           "type": "string",
@@ -456,78 +443,58 @@
             "attention",
             "bad_timing",
             "completed"
-          ]
-        },
-        "modeLabel": {
-          "type": "string",
-          "minLength": 1
-        },
-        "contextLabel": {
-          "type": "string"
-        },
-        "statusLine": {
-          "type": "string"
-        },
-        "primaryText": {
-          "type": "string",
-          "minLength": 1
-        },
-        "secondaryText": {
-          "type": "string"
-        },
-        "actionLabel": {
-          "type": "string"
-        },
-        "progress": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "deepLink": {
-          "type": "string",
-          "pattern": "^[a-z][a-z0-9+\\-.]*:\\/\\/"
+          ],
+          "description": "Lifecycle states. queued/active/paused = in-flight; attention = needs user action (drives high-priority APNs); bad_timing = should not interrupt right now; completed = terminal."
         },
         "lockAccessory": {
           "type": "object",
           "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Accessory headline. accessoryCircular ignores it; accessoryRectangular and accessoryInline render it."
+            },
+            "deepLink": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9+\\-.]*:\\/\\/",
+              "description": "Tapping the surface opens this URL. Validated as a scheme://… prefix."
+            },
             "family": {
               "type": "string",
               "enum": [
                 "accessoryCircular",
                 "accessoryRectangular",
                 "accessoryInline"
-              ]
+              ],
+              "description": "Lock-screen accessory family (accessoryCircular / accessoryRectangular / accessoryInline)."
             },
             "gaugeValue": {
+              "description": "Gauge fill (0..1). Drives the circular ring or rectangular progress; absent means \"no gauge.\"",
               "type": "number",
               "minimum": 0,
               "maximum": 1
             },
             "shortText": {
+              "description": "Compact label. Length-bounded because accessoryInline truncates at ~20 chars; longer strings will be elided by the system.",
               "type": "string",
               "maxLength": 20
             }
           },
           "required": [
+            "title",
+            "deepLink",
             "family"
           ],
           "additionalProperties": false
         }
       },
       "required": [
-        "kind",
         "schemaVersion",
         "id",
         "surfaceId",
+        "kind",
         "updatedAt",
         "state",
-        "modeLabel",
-        "contextLabel",
-        "statusLine",
-        "primaryText",
-        "secondaryText",
-        "progress",
-        "deepLink",
         "lockAccessory"
       ],
       "additionalProperties": false
@@ -535,27 +502,30 @@
     {
       "type": "object",
       "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "const": "4",
+          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV3ToV4 + safeParseAnyVersion before parsing."
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable, idempotent snapshot identifier. The same logical state produced twice MUST yield the same id (e.g. \"<surfaceId>@<revision>\"). Consumers use it to deduplicate re-deliveries from APNs and ActivityKit."
+        },
+        "surfaceId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier for the surface this snapshot updates. One surfaceId is rendered by at most one Live Activity / widget timeline / control / lock-accessory / standby slot at a time. Maps to the App Group key `surface.snapshot.<surfaceId>` and to the per-kind currentSurfaceId pointer."
+        },
         "kind": {
           "type": "string",
           "const": "standby"
         },
-        "schemaVersion": {
-          "default": "3",
-          "type": "string",
-          "const": "3"
-        },
-        "id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "surfaceId": {
-          "type": "string",
-          "minLength": 1
-        },
         "updatedAt": {
           "type": "string",
           "format": "date-time",
-          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+          "description": "RFC 3339 instant the snapshot was authored. Consumers compare against the previously-applied snapshot's updatedAt to drop out-of-order deliveries. UTC (Z-suffixed) recommended for lexicographic comparison; offsets accepted for producers emitting OffsetDateTime / time.Time / Instant."
         },
         "state": {
           "type": "string",
@@ -566,42 +536,35 @@
             "attention",
             "bad_timing",
             "completed"
-          ]
-        },
-        "modeLabel": {
-          "type": "string",
-          "minLength": 1
-        },
-        "contextLabel": {
-          "type": "string"
-        },
-        "statusLine": {
-          "type": "string"
-        },
-        "primaryText": {
-          "type": "string",
-          "minLength": 1
-        },
-        "secondaryText": {
-          "type": "string"
-        },
-        "actionLabel": {
-          "type": "string"
-        },
-        "progress": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "deepLink": {
-          "type": "string",
-          "pattern": "^[a-z][a-z0-9+\\-.]*:\\/\\/"
+          ],
+          "description": "Lifecycle states. queued/active/paused = in-flight; attention = needs user action (drives high-priority APNs); bad_timing = should not interrupt right now; completed = terminal."
         },
         "standby": {
           "type": "object",
           "properties": {
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Standby card / night-mode headline."
+            },
+            "body": {
+              "type": "string",
+              "description": "Standby secondary line."
+            },
+            "progress": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Standby progress fill. Standby is a passive surface; producers usually mirror the active liveActivity's progress here."
+            },
+            "deepLink": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9+\\-.]*:\\/\\/",
+              "description": "Tapping the surface opens this URL. Validated as a scheme://… prefix."
+            },
             "presentation": {
               "default": "card",
+              "description": "\"card\" for full-color Standby; \"night\" for low-light red-shifted rendering.",
               "type": "string",
               "enum": [
                 "card",
@@ -609,6 +572,7 @@
               ]
             },
             "tint": {
+              "description": "Color treatment hint. \"monochrome\" forces white-on-black for accessibility.",
               "type": "string",
               "enum": [
                 "default",
@@ -617,30 +581,27 @@
             }
           },
           "required": [
+            "title",
+            "body",
+            "progress",
+            "deepLink",
             "presentation"
           ],
           "additionalProperties": false
         }
       },
       "required": [
-        "kind",
         "schemaVersion",
         "id",
         "surfaceId",
+        "kind",
         "updatedAt",
         "state",
-        "modeLabel",
-        "contextLabel",
-        "statusLine",
-        "primaryText",
-        "secondaryText",
-        "progress",
-        "deepLink",
         "standby"
       ],
       "additionalProperties": false
     }
   ],
-  "$id": "https://unpkg.com/@mobile-surfaces/surface-contracts@4.0/schema.json",
+  "$id": "https://unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json",
   "title": "LiveSurfaceSnapshot"
 }

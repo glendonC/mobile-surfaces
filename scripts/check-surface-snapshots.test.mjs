@@ -64,8 +64,8 @@ struct MobileSurfacesLockAccessorySnapshot: Codable, Hashable {
   var state: String
   var family: String
   var headline: String
-  var shortText: String
-  var gaugeValue: Double
+  var shortText: String?
+  var gaugeValue: Double?
   var deepLink: String
 }
 

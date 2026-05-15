@@ -38,7 +38,7 @@ export const traps: readonly TrapEntry[] = [
     ],
     "summary": "MobileSurfacesActivityAttributes.swift in packages/live-activity/ios/ and apps/mobile/targets/widget/ must be byte-identical.",
     "symptom": "Activity starts on the device but never appears on the Lock Screen. No log, no error. ActivityKit silently drops updates whose decoded ContentState shape does not match the widget extension's struct.",
-    "fix": "Edit one file and copy verbatim into the other; pnpm surface:check verifies byte-identity. Phase 5 will replace this duplication with a local Swift Package once @bacons/apple-targets and React Native lift the upstream blocks.",
+    "fix": "Edit one file and copy verbatim into the other; pnpm surface:check verifies byte-identity. The follow-up plan to consolidate this duplication into a local Swift Package is upstream-blocked on @bacons/apple-targets and React Native; the byte-identity check is the long-term enforcement.",
     "enforcement": {
       "script": "scripts/check-activity-attributes.mjs"
     },
@@ -175,7 +175,7 @@ export const traps: readonly TrapEntry[] = [
     ],
     "summary": "Per-activity Live Activity pushes are bounded at 4 KB; iOS 18 broadcast pushes at 5 KB.",
     "symptom": "APNs returns 413 PayloadTooLarge, or accepts the payload but iOS silently drops the update. Long localized strings or accumulated morePartsCount details are common offenders.",
-    "fix": "Trim the payload. Per-activity payloads are bounded at 4 KB; broadcast payloads at 5 KB. Shorten secondaryText, lower morePartsCount, or split a state into two smaller pushes. Validate by sending the projection through toLiveActivityContentState and measuring.",
+    "fix": "Trim the payload. Per-activity payloads are bounded at 4 KB; broadcast payloads at 5 KB. Shorten the liveActivity slice's body, lower morePartsCount, or split a state into two smaller pushes. Validate by sending the projection through toLiveActivityContentState and measuring.",
     "iosMin": "16.2",
     "appleDocs": [
       "https://developer.apple.com/documentation/usernotifications/sending-notification-requests-to-apns"

@@ -40,6 +40,12 @@ export const prompts = {
     controlWidget: {
       message: "Include iOS 18 control widget?",
     },
+    lockAccessoryWidget: {
+      message: "Include Lock Screen accessory widget?",
+    },
+    standbyWidget: {
+      message: "Include StandBy widget?",
+    },
   },
   install: {
     message: "Install dependencies and prepare iOS now?",
@@ -150,10 +156,48 @@ export const errors = {
     `CocoaPods isn't on your PATH. expo prebuild needs it to install\niOS pods. The scaffold was rolled back — nothing landed at ./${dir}.\nInstall CocoaPods and re-run:\n  brew install cocoapods    # or: sudo gem install cocoapods\n  npm create mobile-surfaces@latest ${dir}`,
   installInterrupted: (dir) =>
     `Stopped. The scaffold was rolled back — nothing landed at ./${dir}.\nRe-run when you're ready:\n  npm create mobile-surfaces@latest ${dir}`,
+  // Three add-mode failure shapes:
+  //   - applyFailedRolledBack: apply threw and BackupSession.rollback() restored
+  //     every recorded file. The user's project is back to its pre-apply state.
+  //   - applyFailedRollbackErrored: apply threw and rollback itself hit errors
+  //     (rare — usually a permission or transient FS issue). Some files may not
+  //     have been restored; the rollback report below names them.
+  //   - applyFailedPostCommit: apply succeeded and the backup was committed, but
+  //     a *later* step (prebuild) failed. Files are present and intentional;
+  //     only the iOS prepare step needs another pass.
+  applyFailedRolledBack: (restoredCount) =>
+    `A step failed while applying changes.\n` +
+      `Your project files were restored to their pre-apply state ` +
+      `(${restoredCount} file${restoredCount === 1 ? "" : "s"} rolled back).\n` +
+      `node_modules may be partially updated — re-run your package manager's\n` +
+      `install (pnpm install, npm install, etc.) to reconverge it.\n` +
+      `Then fix the underlying issue and re-run create-mobile-surfaces.`,
+  applyFailedRollbackErrored: (restoredCount, rollbackMessage) =>
+    `A step failed while applying changes, and rollback could not restore\n` +
+      `every file it recorded (${restoredCount} restored, plus errors below).\n` +
+      `Review your git status and the log path below to see what changed,\n` +
+      `then either fix the underlying issue and re-run, or restore the\n` +
+      `affected files from git.\n\nRollback errors:\n${rollbackMessage}`,
+  applyFailedPostCommit:
+    "The apply step succeeded, but a follow-up step (expo prebuild) failed.\n" +
+    "Your project edits are in place and intentional; only the iOS prepare\n" +
+    "step needs another pass. Re-run: pnpm mobile:prebuild:ios",
+  // Fallback for any apply error that reaches bin/index.mjs without rollback
+  // metadata (shouldn't happen in practice — applyToExisting and applyMonorepo
+  // both attach `err.rolledBack`). Conservative copy: tell the user we don't
+  // know what state they're in.
   applyFailed:
-    "A step failed while applying changes to your project.\nNo files were rolled back, so some edits may have landed.\nReview your git status and the log below to see what changed,\nthen either fix the underlying issue and re-run, or restore\nthe affected files from git.",
-  applyInterrupted:
-    "Stopped midway through applying changes. Some edits may\nhave landed; review your git status and the log below to\ndecide whether to keep them or restore from git.",
+    "A step failed while applying changes to your project.\n" +
+    "We could not determine whether the rollback ran. Review your git\n" +
+    "status and the log below to see what changed, then either fix the\n" +
+    "underlying issue and re-run, or restore the affected files from git.",
+  applyInterrupted: (restoredCount) =>
+    restoredCount > 0
+      ? `Stopped midway through applying changes.\n` +
+        `Recorded files were restored (${restoredCount} rolled back); a\n` +
+        `partial pnpm install (if it ran) may have updated node_modules —\n` +
+        `re-run your package manager's install to reconverge it.`
+      : "Stopped before any files were changed. Re-run when you're ready.",
 };
 
 // Refuse-path copy. Each non-Expo reason gets a tailored message because the

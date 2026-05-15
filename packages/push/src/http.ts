@@ -16,6 +16,14 @@ export interface Http2RequestInit {
   body?: string | Buffer;
   /** Per-request timeout in ms; 0 disables. Default 30_000. */
   timeoutMs?: number;
+  /**
+   * Optional caller-supplied abort signal. When the signal aborts before the
+   * response completes, the request stream is cancelled via `NGHTTP2_CANCEL`
+   * and the promise rejects with the signal's reason (or a generic AbortError
+   * fallback). An already-aborted signal rejects synchronously without
+   * dispatching the stream.
+   */
+  signal?: AbortSignal;
 }
 
 export interface Http2Response {
@@ -90,6 +98,12 @@ export class Http2Client {
   async request(init: Http2RequestInit): Promise<Http2Response> {
     if (this.#closed) {
       throw new Error("Http2Client is closed");
+    }
+    // Already-aborted signals short-circuit before any dial work. The
+    // #executeRequest path also handles the aborted-before-stream-open case;
+    // checking here saves the round-trip cost of ensureSession() too.
+    if (init.signal?.aborted) {
+      throw abortReason(init.signal);
     }
     // Race window: GOAWAY can fire between ensureSession resolving and
     // executeRequest dispatching, in which case dropSession() has already
@@ -169,6 +183,11 @@ export class Http2Client {
     init: Http2RequestInit,
   ): Promise<Http2Response> {
     return new Promise<Http2Response>((resolve, reject) => {
+      // Already-aborted: never touch the wire.
+      if (init.signal?.aborted) {
+        reject(abortReason(init.signal));
+        return;
+      }
       let req: ClientHttp2Stream;
       try {
         req = session.request(init.headers as http2.OutgoingHttpHeaders);
@@ -187,6 +206,26 @@ export class Http2Client {
       let status = 0;
       let headers: http2.IncomingHttpHeaders = {};
       let body = "";
+      let settled = false;
+      const onAbort = () => {
+        if (settled) return;
+        try {
+          req.close(http2.constants.NGHTTP2_CANCEL);
+        } catch {
+          // stream may already be closing; ignore.
+        }
+        settled = true;
+        reject(abortReason(init.signal));
+      };
+      if (init.signal) {
+        init.signal.addEventListener("abort", onAbort, { once: true });
+      }
+      const cleanup = () => {
+        settled = true;
+        if (init.signal) {
+          init.signal.removeEventListener("abort", onAbort);
+        }
+      };
       req.on("response", (h) => {
         status = Number(h[":status"] ?? 0);
         headers = h;
@@ -195,9 +234,13 @@ export class Http2Client {
         body += chunk;
       });
       req.on("end", () => {
+        if (settled) return;
+        cleanup();
         resolve({ status, headers, body });
       });
       req.on("error", (err) => {
+        if (settled) return;
+        cleanup();
         reject(err);
       });
       if (init.body !== undefined) {
@@ -253,4 +296,19 @@ export class Http2Client {
       }
     });
   }
+}
+
+/**
+ * Resolve the rejection value for an aborted signal. Prefers `signal.reason`
+ * when set (the user-supplied AbortController.abort(reason) value), otherwise
+ * falls back to a generic Error tagged with name="AbortError" so consumers
+ * pattern-matching on `err.name === "AbortError"` see a consistent shape.
+ * Exported only via the Http2Client module's call sites; the package's
+ * public AbortError class wraps this when surfacing aborts through PushClient.
+ */
+function abortReason(signal: AbortSignal | undefined): unknown {
+  if (signal && signal.reason !== undefined) return signal.reason;
+  const err = new Error("Request aborted");
+  err.name = "AbortError";
+  return err;
 }

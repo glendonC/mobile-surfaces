@@ -112,20 +112,20 @@ You write one function:
 ```ts
 function snapshotFromJob(job: Job): LiveSurfaceSnapshot {
   return {
-    schemaVersion: "2",
+    schemaVersion: "4",
     kind: "liveActivity",            // discriminator that picks the projection
     id: `${job.id}@${job.revision}`,
     surfaceId: `job-${job.id}`,
     updatedAt: new Date().toISOString(),
     state: job.status,               // "queued" | "active" | "completed" ...
-    modeLabel: "active",
-    contextLabel: job.queueName,
-    statusLine: `${job.queueName} · ${Math.round(job.progress * 100)}%`,
-    primaryText: job.title,          // headline shown on the Lock Screen
-    secondaryText: job.subtitle,     // subhead
-    progress: job.progress,          // 0 to 1
-    deepLink: `myapp://surface/job-${job.id}`,
     liveActivity: {
+      title: job.title,              // headline shown on the Lock Screen
+      body: job.subtitle,            // subhead
+      progress: job.progress,        // 0 to 1
+      deepLink: `myapp://surface/job-${job.id}`,
+      modeLabel: "active",
+      contextLabel: job.queueName,
+      statusLine: `${job.queueName} · ${Math.round(job.progress * 100)}%`,
       stage: job.status === "done" ? "completing" : "inProgress",
       estimatedSeconds: job.etaSeconds ?? 0,
       morePartsCount: 0,
@@ -175,7 +175,7 @@ const contentState = toLiveActivityContentState(snapshot);
 // { headline, subhead, progress, stage }, pass to your existing bridge.
 ```
 
-See [packages/surface-contracts/README.md](./packages/surface-contracts/README.md) for the bridge-agnostic walkthrough (`expo-live-activity`, hand-rolled, Standard Schema interop, JSON Schema, v2 to v3 migration).
+See [packages/surface-contracts/README.md](./packages/surface-contracts/README.md) for the bridge-agnostic walkthrough (`expo-live-activity`, hand-rolled, Standard Schema interop, JSON Schema, v3 to v4 migration).
 
 ### Contract plus push SDK
 
@@ -206,7 +206,7 @@ await client.update(activityToken, snapshot);
 ## What is actually in the box
 
 - A working Expo app with every surface already wired up: Lock Screen Live Activity, Dynamic Island, home-screen widget, iOS 18 control widget.
-- The shared `LiveSurfaceSnapshot` contract: one TypeScript type, one runtime-checked union where `kind` selects the valid branch, one published JSON Schema (`oneOf`-shaped per the discriminator), kind-gated projection helpers, and `safeParseAnyVersion` for schema v2 to v3 migration. Standard Schema is exposed via Zod 4's built-in `~standard` getter so consumers can drop the Zod runtime dependency.
+- The shared `LiveSurfaceSnapshot` contract: one TypeScript type, one runtime-checked union where `kind` selects the valid branch, one published JSON Schema (`oneOf`-shaped per the discriminator), kind-gated projection helpers, and `safeParseAnyVersion` for schema v3 to v4 migration. Standard Schema is exposed via Zod 4's built-in `~standard` getter so consumers can drop the Zod runtime dependency.
 - `@mobile-surfaces/push`. A Node SDK for APNs with no third-party HTTP or retry framework underneath, supporting alerts, Live Activity start/update/end, **push-to-start (iOS 17.2+)** and **broadcast channels (iOS 18+)**, plus channel management. Priority-aware retry stretch (priority 10 sends clamp to 2 retries to stay inside Apple's MS015 budget) and an `MOBILE_SURFACES_PUSH_DISABLE_RETRY` kill switch.
 - A SwiftUI WidgetKit (Apple's framework for widgets and Live Activities) extension for Lock Screen, Dynamic Island, home-screen widget, and iOS 18 control layouts. You can restyle it. You do not have to write it from scratch.
 - APNs scripts with JWT signing, development and production environment routing, and translated error messages.
@@ -247,7 +247,7 @@ Start with the [docs hub](https://mobile-surfaces.com/docs) if you are not sure 
 - [Push](https://mobile-surfaces.com/docs/push). Wire-layer reference, SDK, smoke script, token taxonomy, error reasons, channel push.
 - [Observability](https://mobile-surfaces.com/docs/observability). Which catalog-bound errors are worth alerting on, hook signatures, recommended log shape.
 - [Multi-surface](https://mobile-surfaces.com/docs/multi-surface). Every `kind` value, what ships today, when to emit each.
-- [Schema migration](https://mobile-surfaces.com/docs/schema-migration). v2 to v3 codec, deprecation timeline, Standard Schema interop, evolution policy.
+- [Schema migration](https://mobile-surfaces.com/docs/schema-migration). v3 to v4 codec, deprecation timeline, Standard Schema interop, evolution policy.
 - [Architecture](https://mobile-surfaces.com/docs/architecture). The contract, the surfaces, the adapter boundary.
 - [Troubleshooting](https://mobile-surfaces.com/docs/troubleshooting). The silent-failure cookbook.
 - [iOS environment](https://mobile-surfaces.com/docs/ios-environment). Simulator vs device, APNs setup.

@@ -12,13 +12,15 @@ import type {
   LiveSurfaceSnapshot,
   LiveSurfaceSnapshotLiveActivity,
 } from "@mobile-surfaces/surface-contracts";
-import { liveActivityAlertPayloadFromSnapshot } from "./payloads.ts";
+import { toApnsAlertPayload } from "./payloads.ts";
 
 import {
+  AbortError,
   ApnsError,
   BadDateError,
   BadExpirationDateError,
   ClientClosedError,
+  CreateChannelResponseError,
   InvalidSnapshotError,
   MissingApnsConfigError,
   PayloadTooLargeError,
@@ -258,6 +260,18 @@ export interface CreatePushClientOptions {
    * secrets but they are the only credential needed to send to a device.
    */
   hooks?: PushHooks;
+  /**
+   * Optional TLS certificate-authority override. Forwarded to `http2.connect`
+   * as the `ca` field on its session options. Production callers never set
+   * this — the Apple root certificate is in Node's default CA store. The
+   * field exists so the package's TLS regression test (`test/tls.test.mjs`)
+   * can point the client at an in-process h2 server whose self-signed cert
+   * the default store would otherwise reject. The same effect was previously
+   * available only through `TEST_TRANSPORT_OVERRIDE.sessionOptions`; the
+   * surfaced option makes the TLS test path readable without exposing the
+   * full session-options surface to production callers.
+   */
+  caOverride?: string | Buffer;
 }
 
 /**
@@ -323,6 +337,14 @@ export interface SendOptions {
   staleDateSeconds?: number;
   /** ActivityKit `dismissal-date` in unix seconds. */
   dismissalDateSeconds?: number;
+  /**
+   * Caller-supplied abort signal. When aborted, an in-flight request is
+   * cancelled via `NGHTTP2_CANCEL`; a request waiting in a retry-backoff
+   * sleep wakes immediately. The promise rejects with the signal's `reason`
+   * (or a generic `AbortError` when no reason was provided). An already-
+   * aborted signal rejects synchronously without dialing.
+   */
+  signal?: AbortSignal;
 }
 
 export interface BroadcastOptions extends SendOptions {
@@ -758,17 +780,24 @@ export class PushClient {
       },
     );
 
+    // Merge caOverride into sessionOptions when set. The test-only
+    // sessionOptions override (TEST_TRANSPORT_OVERRIDE.sessionOptions) wins
+    // on field conflict — its callers know exactly what shape they want.
+    const sessionOptions = mergeSessionOptions(
+      options.caOverride,
+      override?.sessionOptions,
+    );
     this.#send = new Http2Client({
       origin: override?.sendOrigin ?? sendOriginFor(options.environment),
       idleTimeoutMs,
       connect: override?.connect,
-      sessionOptions: override?.sessionOptions,
+      sessionOptions,
     });
     this.#manage = new Http2Client({
       origin: override?.manageOrigin ?? manageOriginFor(options.environment),
       idleTimeoutMs,
       connect: override?.connect,
-      sessionOptions: override?.sessionOptions,
+      sessionOptions,
     });
   }
 
@@ -783,7 +812,7 @@ export class PushClient {
     this.#assertOpen();
     const validated = validateSnapshot(snapshot);
     const live = snapshotMustBeLiveActivity(validated, "alert()");
-    const payload = JSON.stringify(liveActivityAlertPayloadFromSnapshot(live));
+    const payload = JSON.stringify(toApnsAlertPayload(live));
     return this.#sendDevice({
       operation: "alert",
       snapshotId: live.id,
@@ -924,6 +953,7 @@ export class PushClient {
       snapshotId: live.id,
       token: channelId,
       priority,
+      signal: options.signal,
     });
   }
 
@@ -931,7 +961,12 @@ export class PushClient {
    * Create a new broadcast channel. Apple returns the channel-id in the
    * `apns-channel-id` response header.
    */
-  async createChannel(options: { storagePolicy?: "no-storage" | "most-recent-message" } = {}): Promise<ChannelInfo> {
+  async createChannel(
+    options: {
+      storagePolicy?: "no-storage" | "most-recent-message";
+      signal?: AbortSignal;
+    } = {},
+  ): Promise<ChannelInfo> {
     this.#assertOpen();
     const storagePolicy = options.storagePolicy ?? "no-storage";
     const body = JSON.stringify({
@@ -946,23 +981,29 @@ export class PushClient {
     };
     const res = await this.#performManage(headers, body, {
       operation: "createChannel",
+      signal: options.signal,
     });
     const channelId =
       pickHeader(res.headers, "apns-channel-id") ??
       tryParseChannelIdFromBody(res.body);
     if (!channelId) {
-      throw new Error(
-        `createChannel: APNs returned ${res.status} but no apns-channel-id was found in headers or body.`,
-      );
+      throw new CreateChannelResponseError(res.status, res.body);
     }
-    return { channelId, storagePolicy, raw: tryParseJson(res.body) };
+    return {
+      channelId,
+      storagePolicy,
+      environment: this.#options.environment,
+      raw: tryParseJson(res.body),
+    };
   }
 
   /**
    * List all broadcast channels for this bundle id (in this environment).
    * Apple returns a JSON body with a `channels` array.
    */
-  async listChannels(): Promise<ChannelInfo[]> {
+  async listChannels(
+    options: { signal?: AbortSignal } = {},
+  ): Promise<ChannelInfo[]> {
     this.#assertOpen();
     const headers: Record<string, string> = {
       ":method": "GET",
@@ -971,17 +1012,23 @@ export class PushClient {
     };
     const res = await this.#performManage(headers, undefined, {
       operation: "listChannels",
+      signal: options.signal,
     });
     const parsed = tryParseJson(res.body);
     const channels = extractChannelList(parsed);
-    return channels.map((entry) => normalizeChannelEntry(entry));
+    return channels.map((entry) =>
+      normalizeChannelEntry(entry, this.#options.environment),
+    );
   }
 
   /**
    * Delete a broadcast channel by id. Apple's documented shape: the channel
    * id travels in the `apns-channel-id` header, NOT as a path parameter.
    */
-  async deleteChannel(channelId: string): Promise<void> {
+  async deleteChannel(
+    channelId: string,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<void> {
     this.#assertOpen();
     const headers: Record<string, string> = {
       ":method": "DELETE",
@@ -992,6 +1039,7 @@ export class PushClient {
     await this.#performManage(headers, undefined, {
       operation: "deleteChannel",
       token: channelId,
+      signal: options.signal,
     });
   }
 
@@ -1022,7 +1070,7 @@ export class PushClient {
     assertActivityTimestampOptions(input.options ?? {});
     switch (input.operation) {
       case "alert": {
-        const payload = liveActivityAlertPayloadFromSnapshot(live);
+        const payload = toApnsAlertPayload(live);
         return this.#finishDescription({
           operation: "alert",
           path: `/3/device/${input.deviceToken}`,
@@ -1253,6 +1301,7 @@ export class PushClient {
     defaultPriority: 5 | 10;
     apnsTopic: string;
     options: SendOptions;
+    signal?: AbortSignal;
   }): Promise<PushResult> {
     assertPayloadWithinLimit(args.payload, args.operation as PayloadKind);
     // MS032 pre-flight: reject malformed timestamp fields before the round-
@@ -1279,6 +1328,7 @@ export class PushClient {
       snapshotId: args.snapshotId,
       token: args.token,
       priority,
+      signal: args.signal ?? args.options.signal,
     });
   }
 
@@ -1305,6 +1355,12 @@ export class PushClient {
        * to 5, which leaves the base policy unmodified.
        */
       priority?: 5 | 10;
+      /**
+       * Optional caller-supplied abort signal. Plumbed into transport.request
+       * for in-flight cancellation and into sleep() for backoff-window
+       * cancellation. Pre-aborted signals reject before the first dial.
+       */
+      signal?: AbortSignal;
     },
     mapSuccess: (
       res: {
@@ -1319,6 +1375,11 @@ export class PushClient {
     const retried: RetryAttempt[] = [];
     const policy = effectiveRetryPolicy(this.#retryPolicy, hookMeta.priority ?? 5);
     let attempt = 0;
+    // Already-aborted: synchronously reject before any work. The signal's
+    // reason (if set) is preserved; otherwise we surface a typed AbortError.
+    if (hookMeta.signal?.aborted) {
+      throw toAbortError(hookMeta.signal);
+    }
     while (true) {
       this.#assertOpen();
       const startedAt = Date.now();
@@ -1327,6 +1388,7 @@ export class PushClient {
           headers,
           body,
           timeoutMs: this.#requestTimeoutMs,
+          signal: hookMeta.signal,
         });
         const durationMs = Date.now() - startedAt;
         // For management ops the apns-id is only known after response;
@@ -1368,7 +1430,18 @@ export class PushClient {
             status: res.status,
             backoffMs,
           });
-          await sleep(backoffMs);
+          try {
+            await sleep(backoffMs, hookMeta.signal);
+          } catch (abortErr) {
+            // sleep() rejects with the signal's reason when aborted mid-
+            // backoff. Re-throw as a typed AbortError so callers can pattern-
+            // match on `err instanceof AbortError` regardless of which leg
+            // (in-flight stream vs. backoff window) the abort landed on.
+            if (hookMeta.signal?.aborted) {
+              throw toAbortError(hookMeta.signal);
+            }
+            throw abortErr;
+          }
           attempt += 1;
           // Refresh JWT in case the rejection was provider-token-related.
           headers.authorization = `bearer ${this.#jwt.get()}`;
@@ -1378,6 +1451,20 @@ export class PushClient {
       } catch (err) {
         if (err instanceof ApnsError) {
           throw err;
+        }
+        // Abort short-circuits the retry loop entirely; do not consult
+        // isTransportError. The thrown error is normalized to AbortError
+        // so the public contract is uniform across the in-flight, pre-dial,
+        // and mid-backoff abort paths.
+        if (hookMeta.signal?.aborted) {
+          this.#fireErrorHook(err, {
+            ...hookMeta,
+            attempt,
+            isFinalAttempt: true,
+            apnsId: hookMeta.apnsId,
+            durationMs: Date.now() - startedAt,
+          });
+          throw toAbortError(hookMeta.signal);
         }
         const willRetry =
           isTransportError(err) && attempt < policy.maxRetries;
@@ -1394,7 +1481,14 @@ export class PushClient {
             reason: transportErrorReason(err),
             backoffMs,
           });
-          await sleep(backoffMs);
+          try {
+            await sleep(backoffMs, hookMeta.signal);
+          } catch (abortErr) {
+            if (hookMeta.signal?.aborted) {
+              throw toAbortError(hookMeta.signal);
+            }
+            throw abortErr;
+          }
           attempt += 1;
           continue;
         }
@@ -1406,7 +1500,11 @@ export class PushClient {
   #performManage(
     headers: Record<string, string>,
     body: string | undefined,
-    hookMeta: { operation: PushHookOperation; token?: string },
+    hookMeta: {
+      operation: PushHookOperation;
+      token?: string;
+      signal?: AbortSignal;
+    },
   ): Promise<ChannelManageResponse> {
     // Channel-management callers don't read PushResult metadata today; drop
     // it on the floor to keep the ChannelInfo shape stable. If we ever
@@ -1429,6 +1527,7 @@ export class PushClient {
       snapshotId?: string;
       token?: string;
       priority?: 5 | 10;
+      signal?: AbortSignal;
     },
   ): Promise<PushResult> {
     return this.#executeWithRetry(
@@ -1475,6 +1574,16 @@ export class PushClient {
     // permanently-broken tokens (BadDeviceToken, Unregistered, etc.).
     if (TERMINAL_REASONS.has(err.reason)) return false;
     if (err instanceof TooManyRequestsError) return true;
+    // Audit fix (v5): a bare 5xx response with no parseable body yields
+    // UnknownApnsError(reason="Unknown", status>=500). The reason is not in
+    // DEFAULT_RETRYABLE_REASONS, so the previous code gave up after one
+    // attempt — which silently masked transient APNs outages that did not
+    // carry a JSON body. Any 5xx is retryable regardless of parsed reason,
+    // including "Unknown"; the terminal-reasons guard above still prevents
+    // a caller-customized policy from re-enabling retries on permanently-
+    // broken tokens that happen to be returned with a 5xx (which APNs
+    // does not do today, but the deny-list precedence is the right contract).
+    if (err.status >= 500 && err.status < 600) return true;
     return policy.retryableReasons.has(err.reason);
   }
 }
@@ -1511,6 +1620,42 @@ function transportErrorReason(err: unknown): string {
     if (typeof code === "string" && code.length > 0) return code;
   }
   return "TransportError";
+}
+
+/**
+ * Compose `http2.connect` session options from the public `caOverride` knob
+ * and the test-only `TEST_TRANSPORT_OVERRIDE.sessionOptions` escape hatch.
+ * Returns undefined when neither is set so production callers do not pay the
+ * cost of a custom session-options object on every dial.
+ */
+function mergeSessionOptions(
+  caOverride: string | Buffer | undefined,
+  testSessionOptions:
+    | import("node:http2").ClientSessionOptions
+    | import("node:http2").SecureClientSessionOptions
+    | undefined,
+):
+  | import("node:http2").ClientSessionOptions
+  | import("node:http2").SecureClientSessionOptions
+  | undefined {
+  if (caOverride === undefined && testSessionOptions === undefined) {
+    return undefined;
+  }
+  return {
+    ...(caOverride !== undefined ? { ca: caOverride } : {}),
+    ...(testSessionOptions ?? {}),
+  };
+}
+
+/**
+ * Normalize an aborted signal into the SDK's typed AbortError. The signal's
+ * `reason` is preserved as `cause` (matching the AbortController.abort(reason)
+ * convention) so callers can drill in when needed, but `err instanceof
+ * AbortError` is the recommended pattern-match because it covers every abort
+ * path uniformly (pre-dial, in-flight, mid-backoff).
+ */
+function toAbortError(signal: AbortSignal | undefined): AbortError {
+  return new AbortError(signal?.reason);
 }
 
 /**

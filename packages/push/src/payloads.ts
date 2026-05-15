@@ -6,6 +6,13 @@
 // package now stops at the snapshot shape; anything that emits an APNs
 // envelope (alert payload sidecar, channel-broadcast variants when they
 // land) lives next to the SDK that sends it.
+//
+// Renamed `liveActivityAlertPayloadFromSnapshot` → `toApnsAlertPayload` in
+// 5.0.0 for naming consistency with the other `to*` projection helpers in
+// `@mobile-surfaces/surface-contracts`. The wire shape did not change; only
+// the function name. The input now reads `snapshot.liveActivity.title` /
+// `body` / `deepLink` instead of the v3 base fields (`primaryText`,
+// `secondaryText`, `deepLink`) that no longer exist on the v4 base.
 
 import { z } from "zod";
 import {
@@ -48,15 +55,17 @@ export type LiveActivityAlertPayload = z.infer<typeof liveActivityAlertPayload>;
  * typed as the narrowed variant rather than the full union; callers narrow
  * via `snapshot.kind === "liveActivity"` at the call site, matching the
  * rest of the SDK's preference for TS narrowing over runtime kind checks.
+ *
+ * v5 rename: was `liveActivityAlertPayloadFromSnapshot` in 3.x–4.x.
  */
-export function liveActivityAlertPayloadFromSnapshot(
+export function toApnsAlertPayload(
   snapshot: LiveSurfaceSnapshotLiveActivity,
 ): LiveActivityAlertPayload {
   return {
     aps: {
       alert: {
-        title: snapshot.primaryText,
-        body: snapshot.secondaryText,
+        title: snapshot.liveActivity.title,
+        body: snapshot.liveActivity.body,
       },
       sound: "default",
     },
@@ -65,7 +74,7 @@ export function liveActivityAlertPayloadFromSnapshot(
       snapshotId: snapshot.id,
       surfaceId: snapshot.surfaceId,
       state: snapshot.state,
-      deepLink: snapshot.deepLink,
+      deepLink: snapshot.liveActivity.deepLink,
     },
   };
 }

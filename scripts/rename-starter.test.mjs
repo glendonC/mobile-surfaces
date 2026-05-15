@@ -16,6 +16,7 @@ import {
   renameCliPackageDir,
   TEXT_EXTENSIONS,
   SKIP_DIRS,
+  SKIP_PATH_PREFIXES,
 } from "./rename-starter.mjs";
 
 function makeTempRepo() {
@@ -251,6 +252,52 @@ test("TEXT_EXTENSIONS covers the file types observed in real consumer projects",
 test("SKIP_DIRS includes the standard generated/cache directories", () => {
   for (const name of ["node_modules", ".git", "dist", "build"]) {
     assert.ok(SKIP_DIRS.has(name), `SKIP_DIRS missing ${name}`);
+  }
+});
+
+test("SKIP_PATH_PREFIXES excludes the App Group codegen output", () => {
+  // The codegen script regenerates these from the substituted app.json
+  // after the rename pass; the substitution pass must not touch them.
+  assert.ok(
+    SKIP_PATH_PREFIXES.includes("apps/mobile/src/generated"),
+    "SKIP_PATH_PREFIXES must skip apps/mobile/src/generated",
+  );
+  assert.ok(
+    SKIP_PATH_PREFIXES.includes(
+      "apps/mobile/targets/widget/_shared/MobileSurfacesAppGroup.swift",
+    ),
+    "SKIP_PATH_PREFIXES must skip MobileSurfacesAppGroup.swift",
+  );
+});
+
+test("walkTextFiles skips the App Group generated files", () => {
+  const dir = makeFixtureRepo({
+    "apps/mobile/src/generated/appGroup.ts":
+      `export const APP_GROUP = "group.com.example.mobilesurfaces" as const;\n`,
+    "apps/mobile/targets/widget/_shared/MobileSurfacesAppGroup.swift":
+      `enum MobileSurfacesAppGroup { static let identifier = "group.com.example.mobilesurfaces" }\n`,
+    "apps/mobile/src/index.ts":
+      `export const x = "@mobile-surfaces/surface-contracts";\n`,
+  });
+  try {
+    const found = new Set(walkTextFiles(dir));
+    assert.ok(
+      !found.has("apps/mobile/src/generated/appGroup.ts"),
+      "appGroup.ts should be skipped",
+    );
+    assert.ok(
+      !found.has(
+        "apps/mobile/targets/widget/_shared/MobileSurfacesAppGroup.swift",
+      ),
+      "MobileSurfacesAppGroup.swift should be skipped",
+    );
+    // Sanity: the non-skipped sibling under apps/mobile/src/ IS walked.
+    assert.ok(
+      found.has("apps/mobile/src/index.ts"),
+      "non-generated sibling should still be walked",
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 

@@ -1,9 +1,15 @@
 // End-to-end tests for scripts/check-app-group-identity.mjs.
 //
-// MS013 is the App-Group-must-match check. Drift between any of the five
+// MS013 is the App-Group-must-match check. Drift between any of the four
 // declaration sites renders widgets blank with no error log, so the script
 // must detect every form of mismatch and every form of missing/malformed
 // source.
+//
+// As of v5 the layout is four sources (was five):
+//   - apps/mobile/app.json
+//   - apps/mobile/targets/widget/generated.entitlements
+//   - apps/mobile/targets/widget/_shared/MobileSurfacesAppGroup.swift (generated)
+//   - apps/mobile/src/generated/appGroup.ts (generated)
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -50,32 +56,38 @@ function widgetEntitlements(group) {
 `;
 }
 
-function sharedStateSwift(group) {
-  return `import Foundation
-enum MobileSurfacesSharedState {
-  static let appGroup = "${group}"
+function appGroupSwift(group) {
+  return `// GENERATED - DO NOT EDIT. Source: apps/mobile/app.json.
+// Regenerate: pnpm surface:codegen
+
+import Foundation
+
+enum MobileSurfacesAppGroup {
+  static let identifier = "${group}"
 }
 `;
 }
 
-function tsConsumer(group) {
-  return `const APP_GROUP = "${group}";\nconsole.log(APP_GROUP);\n`;
+function appGroupTs(group) {
+  return `// GENERATED - DO NOT EDIT. Source: apps/mobile/app.json.
+// Regenerate: pnpm surface:codegen
+
+export const APP_GROUP = "${group}" as const;
+`;
 }
 
 function withWorkspace({
   appGroupApp = CANONICAL,
   appGroupWidgetPlist = CANONICAL,
-  appGroupSwift = CANONICAL,
-  appGroupSurfaceStorage = CANONICAL,
-  appGroupCheckSetup = CANONICAL,
+  appGroupSwiftValue = CANONICAL,
+  appGroupTsValue = CANONICAL,
 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "ms-check-appgrp-"));
   const writes = {
     "apps/mobile/app.json": appJson(appGroupApp),
     "apps/mobile/targets/widget/generated.entitlements": widgetEntitlements(appGroupWidgetPlist),
-    "apps/mobile/targets/widget/_shared/MobileSurfacesSharedState.swift": sharedStateSwift(appGroupSwift),
-    "apps/mobile/src/surfaceStorage/index.ts": tsConsumer(appGroupSurfaceStorage),
-    "apps/mobile/src/diagnostics/checkSetup.ts": tsConsumer(appGroupCheckSetup),
+    "apps/mobile/targets/widget/_shared/MobileSurfacesAppGroup.swift": appGroupSwift(appGroupSwiftValue),
+    "apps/mobile/src/generated/appGroup.ts": appGroupTs(appGroupTsValue),
   };
   for (const [relPath, contents] of Object.entries(writes)) {
     const full = join(dir, relPath);
@@ -98,7 +110,7 @@ test("baseline: every source declares the canonical identifier", () => {
   try {
     const r = runCheck(ws.dir);
     assert.equal(r.status, 0, r.stdout + r.stderr);
-    assert.match(r.stdout, /All 5 sources resolve to "group\.com\.example\.mobilesurfaces"/);
+    assert.match(r.stdout, /All 4 sources resolve to "group\.com\.example\.mobilesurfaces"/);
   } finally {
     ws.cleanup();
   }
@@ -117,34 +129,23 @@ test("flags a widget plist that declares a different App Group identifier", () =
   }
 });
 
-test("flags a Swift shared-state file declaring a different App Group identifier", () => {
-  const ws = withWorkspace({ appGroupSwift: "group.com.example.wrong" });
+test("flags a generated Swift file declaring a different App Group identifier", () => {
+  const ws = withWorkspace({ appGroupSwiftValue: "group.com.example.wrong" });
   try {
     const r = runCheck(ws.dir);
     assert.notEqual(r.status, 0);
-    assert.match(r.stdout + r.stderr, /MobileSurfacesSharedState/);
+    assert.match(r.stdout + r.stderr, /MobileSurfacesAppGroup/);
   } finally {
     ws.cleanup();
   }
 });
 
-test("flags surfaceStorage/index.ts declaring a different App Group identifier", () => {
-  const ws = withWorkspace({ appGroupSurfaceStorage: "group.com.example.fork" });
+test("flags the generated TS appGroup.ts declaring a different App Group identifier", () => {
+  const ws = withWorkspace({ appGroupTsValue: "group.com.example.fork" });
   try {
     const r = runCheck(ws.dir);
     assert.notEqual(r.status, 0);
-    assert.match(r.stdout + r.stderr, /surfaceStorage/);
-  } finally {
-    ws.cleanup();
-  }
-});
-
-test("flags diagnostics/checkSetup.ts declaring a different App Group identifier", () => {
-  const ws = withWorkspace({ appGroupCheckSetup: "group.com.example.other" });
-  try {
-    const r = runCheck(ws.dir);
-    assert.notEqual(r.status, 0);
-    assert.match(r.stdout + r.stderr, /checkSetup/);
+    assert.match(r.stdout + r.stderr, /appGroup\.ts|generated/);
   } finally {
     ws.cleanup();
   }

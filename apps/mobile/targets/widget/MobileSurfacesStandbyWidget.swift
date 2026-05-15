@@ -26,18 +26,31 @@ struct MobileSurfacesStandbyWidget: Widget {
 struct MobileSurfacesStandbyEntry: TimelineEntry {
   let date: Date
   let snapshot: MobileSurfacesStandbySnapshot?
+  let writtenAt: Date?
 }
 
 struct MobileSurfacesStandbyProvider: TimelineProvider {
   func placeholder(in context: Context) -> MobileSurfacesStandbyEntry {
-    MobileSurfacesStandbyEntry(date: Date(), snapshot: .placeholder)
+    MobileSurfacesStandbyEntry(date: Date(), snapshot: .placeholder, writtenAt: nil)
   }
 
   func getSnapshot(
     in context: Context,
     completion: @escaping (MobileSurfacesStandbyEntry) -> Void
   ) {
-    completion(MobileSurfacesStandbyEntry(date: Date(), snapshot: currentSnapshot()))
+    if context.isPreview {
+      completion(MobileSurfacesStandbyEntry(
+        date: Date(),
+        snapshot: .marketing,
+        writtenAt: nil
+      ))
+      return
+    }
+    completion(MobileSurfacesStandbyEntry(
+      date: Date(),
+      snapshot: currentSnapshot(),
+      writtenAt: currentWrittenAt()
+    ))
   }
 
   func getTimeline(
@@ -45,12 +58,22 @@ struct MobileSurfacesStandbyProvider: TimelineProvider {
     completion: @escaping (Timeline<MobileSurfacesStandbyEntry>) -> Void
   ) {
     completion(Timeline(entries: [
-      MobileSurfacesStandbyEntry(date: Date(), snapshot: currentSnapshot())
+      MobileSurfacesStandbyEntry(
+        date: Date(),
+        snapshot: currentSnapshot(),
+        writtenAt: currentWrittenAt()
+      )
     ], policy: .never))
   }
 
   private func currentSnapshot() -> MobileSurfacesStandbySnapshot {
     MobileSurfacesSharedState.standbySnapshot() ?? .placeholder
+  }
+
+  private func currentWrittenAt() -> Date? {
+    MobileSurfacesSharedState.snapshotWrittenAt(
+      currentSurfaceIdKey: MobileSurfacesSharedState.standbyCurrentSurfaceIdKey
+    )
   }
 }
 
@@ -59,9 +82,13 @@ private struct MobileSurfacesStandbyView: View {
 
   var body: some View {
     let snapshot = entry.snapshot ?? .placeholder
+    let isStale = MobileSurfacesSharedState.isSnapshotStale(
+      writtenAt: entry.writtenAt,
+      threshold: MobileSurfacesSharedState.standbyStaleAfter
+    )
     let isMonochrome = snapshot.tint == "monochrome"
     VStack(alignment: .leading, spacing: 6) {
-      Text(snapshot.state.uppercased())
+      Text((isStale ? "· " : "") + snapshot.state.uppercased())
         .font(.caption2.weight(.semibold))
         .foregroundStyle(.secondary)
       Text(snapshot.headline)
@@ -76,6 +103,7 @@ private struct MobileSurfacesStandbyView: View {
         .tint(isMonochrome ? Color.primary : Color("AccentColor"))
     }
     .padding()
+    .opacity(isStale ? 0.7 : 1.0)
   }
 }
 
@@ -103,5 +131,18 @@ private extension MobileSurfacesStandbySnapshot {
     subhead: "Refresh a StandBy fixture from the harness.",
     progress: 0,
     deepLink: "mobilesurfaces://surface/surface-placeholder"
+  )
+
+  static let marketing = MobileSurfacesStandbySnapshot(
+    kind: "standby",
+    snapshotId: "marketing",
+    surfaceId: "surface-marketing",
+    state: "active",
+    presentation: "card",
+    tint: "default",
+    headline: "Tour 42",
+    subhead: "Charging · 72% to next stop",
+    progress: 0.72,
+    deepLink: "mobilesurfaces://surface/surface-marketing"
   )
 }

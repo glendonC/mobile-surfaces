@@ -1,38 +1,43 @@
 // Roundtrip and shape pins for liveActivityAlertPayload. Moved from
 // scripts/surface-contracts.test.mjs in 3.0.0 when the alert payload helper
 // migrated from @mobile-surfaces/surface-contracts into this package.
+//
+// v5.0.0: helper renamed `liveActivityAlertPayloadFromSnapshot` →
+// `toApnsAlertPayload`; reads now come from the `liveActivity` slice
+// (`snapshot.liveActivity.title`/`body`/`deepLink`) instead of the v3 base
+// fields that were lifted into per-kind slices.
 
 import test from "node:test";
 import assert from "node:assert/strict";
 import { surfaceFixtureSnapshots } from "@mobile-surfaces/surface-contracts";
 import {
   liveActivityAlertPayload,
-  liveActivityAlertPayloadFromSnapshot,
+  toApnsAlertPayload,
 } from "../src/payloads.ts";
 
 const queued = surfaceFixtureSnapshots.queued;
 
-// liveActivityAlertPayloadFromSnapshot constructs its return shape by hand.
-// Round-trip through the liveActivityAlertPayload Zod schema so the two
-// cannot drift: any field rename or type change in the schema breaks this
-// assertion before the helper ships.
-test("liveActivityAlertPayloadFromSnapshot output parses as liveActivityAlertPayload", () => {
+// toApnsAlertPayload constructs its return shape by hand. Round-trip through
+// the liveActivityAlertPayload Zod schema so the two cannot drift: any field
+// rename or type change in the schema breaks this assertion before the helper
+// ships.
+test("toApnsAlertPayload output parses as liveActivityAlertPayload", () => {
   assert.equal(queued.kind, "liveActivity");
-  const payload = liveActivityAlertPayloadFromSnapshot(queued);
+  const payload = toApnsAlertPayload(queued);
   const parsed = liveActivityAlertPayload.parse(payload);
   assert.deepEqual(parsed, payload);
 });
 
-test("liveActivityAlertPayloadFromSnapshot pulls fields from the snapshot", () => {
-  const payload = liveActivityAlertPayloadFromSnapshot(queued);
-  assert.equal(payload.aps.alert.title, queued.primaryText);
-  assert.equal(payload.aps.alert.body, queued.secondaryText);
+test("toApnsAlertPayload pulls fields from the snapshot's liveActivity slice", () => {
+  const payload = toApnsAlertPayload(queued);
+  assert.equal(payload.aps.alert.title, queued.liveActivity.title);
+  assert.equal(payload.aps.alert.body, queued.liveActivity.body);
   assert.equal(payload.aps.sound, "default");
   assert.equal(payload.liveSurface.kind, "surface_snapshot");
   assert.equal(payload.liveSurface.snapshotId, queued.id);
   assert.equal(payload.liveSurface.surfaceId, queued.surfaceId);
   assert.equal(payload.liveSurface.state, queued.state);
-  assert.equal(payload.liveSurface.deepLink, queued.deepLink);
+  assert.equal(payload.liveSurface.deepLink, queued.liveActivity.deepLink);
 });
 
 // MS011 payload-size ceilings. Per-activity Live Activity pushes are bounded
@@ -55,7 +60,7 @@ test(`every liveActivity fixture stays within the MS011 per-activity 4 KB ceilin
     "expected at least one liveActivity fixture",
   );
   for (const [name, snap] of LIVE_ACTIVITY_FIXTURES) {
-    const payload = liveActivityAlertPayloadFromSnapshot(snap);
+    const payload = toApnsAlertPayload(snap);
     const bytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
     assert.ok(
       bytes <= MAX_PAYLOAD_BYTES_DEFAULT,
@@ -66,7 +71,7 @@ test(`every liveActivity fixture stays within the MS011 per-activity 4 KB ceilin
 
 test(`every liveActivity fixture stays within the MS011 broadcast 5 KB ceiling`, () => {
   for (const [name, snap] of LIVE_ACTIVITY_FIXTURES) {
-    const payload = liveActivityAlertPayloadFromSnapshot(snap);
+    const payload = toApnsAlertPayload(snap);
     const bytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
     assert.ok(
       bytes <= MAX_PAYLOAD_BYTES_BROADCAST,
@@ -78,12 +83,15 @@ test(`every liveActivity fixture stays within the MS011 broadcast 5 KB ceiling`,
 test("a snapshot bloated past 4 KB triggers the MS011 catch", () => {
   // Negative case so a future regression where the ceiling check itself was
   // weakened would surface. Use a fixture as the base then attach a long
-  // secondaryText to push past the per-activity limit.
+  // body to push past the per-activity limit.
   const fat = {
     ...queued,
-    secondaryText: "x".repeat(5000),
+    liveActivity: {
+      ...queued.liveActivity,
+      body: "x".repeat(5000),
+    },
   };
-  const payload = liveActivityAlertPayloadFromSnapshot(fat);
+  const payload = toApnsAlertPayload(fat);
   const bytes = Buffer.byteLength(JSON.stringify(payload), "utf8");
   assert.ok(
     bytes > MAX_PAYLOAD_BYTES_DEFAULT,

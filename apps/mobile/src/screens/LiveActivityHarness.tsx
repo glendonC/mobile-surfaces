@@ -137,7 +137,7 @@ export function LiveActivityHarness() {
       const snapshot = surfaceFixtures[key];
       const result = await LiveActivity.start(
         snapshot.surfaceId,
-        snapshot.modeLabel,
+        snapshot.liveActivity.modeLabel,
         activityFixtureStates[key],
       );
       setActivityId(result.id);
@@ -325,7 +325,7 @@ export function LiveActivityHarness() {
           {fixtureKeys.map((key) => (
             <Btn
               key={`start-${String(key)}`}
-              label={surfaceFixtures[key].modeLabel}
+              label={surfaceFixtures[key].liveActivity.modeLabel}
               onPress={() => handleStart(key)}
               disabled={busy}
             />
@@ -338,7 +338,7 @@ export function LiveActivityHarness() {
           {fixtureKeys.map((key) => (
             <Btn
               key={`update-${String(key)}`}
-              label={`→ ${surfaceFixtures[key].modeLabel}`}
+              label={`→ ${surfaceFixtures[key].liveActivity.modeLabel}`}
               onPress={() => handleUpdate(key)}
               disabled={busy || !activityId}
             />

@@ -19,6 +19,10 @@ const {
   ChannelNotRegisteredError,
   BadChannelIdError,
   CannotCreateChannelConfigError,
+  UnknownApnsError,
+  CreateChannelResponseError,
+  AbortError,
+  DEFAULT_RETRY_POLICY,
 } = await import("../dist/index.js");
 
 import { generateEs256Pem, writeTempP8 } from "./fixtures/setup-cert.mjs";
@@ -34,6 +38,21 @@ const WIDGET_SNAPSHOT = JSON.parse(
 
 const PEM = generateEs256Pem();
 const KEY = writeTempP8(PEM);
+
+// Helper: produce a SNAPSHOT clone whose `liveActivity.body` is `ch` repeated
+// `n` times. The MS011 payload-size tests use this to push past the 4 KB /
+// 5 KB ceilings without other field changes. v4 lifted the rendering fields
+// into the per-kind slice, so what was `{ ...SNAPSHOT, secondaryText: "x"... }`
+// in v3-shape tests now nests under liveActivity.
+function withBody(snap, ch, n) {
+  return {
+    ...snap,
+    liveActivity: {
+      ...snap.liveActivity,
+      body: ch.repeat(n),
+    },
+  };
+}
 
 function makeClient({ sendOrigin, manageOrigin, retryPolicy } = {}) {
   return createPushClient({
@@ -83,8 +102,8 @@ test("alert() sends a properly-shaped request and resolves with apns-id", async 
   assert.equal(req.headers["apns-id"], "fixed-id-1");
   const body = JSON.parse(req.body);
   assert.deepEqual(body.aps.alert, {
-    title: SNAPSHOT.primaryText,
-    body: SNAPSHOT.secondaryText,
+    title: SNAPSHOT.liveActivity.title,
+    body: SNAPSHOT.liveActivity.body,
   });
 });
 
@@ -103,9 +122,9 @@ test("update() targets liveactivity push-type with priority 5 and projected cont
   const payload = JSON.parse(req.body);
   assert.equal(payload.aps.event, "update");
   assert.deepEqual(payload.aps["content-state"], {
-    headline: SNAPSHOT.primaryText,
-    subhead: SNAPSHOT.secondaryText,
-    progress: SNAPSHOT.progress,
+    headline: SNAPSHOT.liveActivity.title,
+    subhead: SNAPSHOT.liveActivity.body,
+    progress: SNAPSHOT.liveActivity.progress,
     stage: SNAPSHOT.liveActivity.stage,
   });
 });
@@ -153,10 +172,20 @@ test("createChannel/listChannels/deleteChannel hit the management host with docu
   const created = await client.createChannel({ storagePolicy: "no-storage" });
   assert.equal(created.channelId, "newChannel==");
   assert.equal(created.storagePolicy, "no-storage");
+  assert.equal(
+    created.environment,
+    "development",
+    "createChannel() should stamp the client's environment on the returned ChannelInfo",
+  );
 
   const list = await client.listChannels();
   assert.equal(list.length, 1);
   assert.equal(list[0].channelId, "newChannel==");
+  assert.equal(
+    list[0].environment,
+    "development",
+    "listChannels() entries should carry the client's environment",
+  );
   assert.equal(list[0].storagePolicy, "no-storage");
 
   await client.deleteChannel("newChannel==");
@@ -429,7 +458,10 @@ test("invalid snapshot (Zod) -> InvalidSnapshotError with issue paths", async (t
   const client = makeClient({ sendOrigin: mock.origin });
   teardown(t, client, mock);
 
-  const broken = { ...SNAPSHOT, progress: "nope" };
+  const broken = {
+    ...SNAPSHOT,
+    liveActivity: { ...SNAPSHOT.liveActivity, progress: "nope" },
+  };
   await assert.rejects(
     () => client.alert("h".repeat(64), broken),
     (err) => {
@@ -466,7 +498,10 @@ test("start() includes attributes-type and attributes in the payload aps block",
   await client.start(
     "j".repeat(64),
     SNAPSHOT,
-    { surfaceId: SNAPSHOT.surfaceId, modeLabel: SNAPSHOT.modeLabel },
+    {
+      surfaceId: SNAPSHOT.surfaceId,
+      modeLabel: SNAPSHOT.liveActivity.modeLabel,
+    },
     { attributesType: "MyAttributes" },
   );
   const payload = JSON.parse(mock.requests[0].body);
@@ -474,7 +509,7 @@ test("start() includes attributes-type and attributes in the payload aps block",
   assert.equal(payload.aps["attributes-type"], "MyAttributes");
   assert.deepEqual(payload.aps.attributes, {
     surfaceId: SNAPSHOT.surfaceId,
-    modeLabel: SNAPSHOT.modeLabel,
+    modeLabel: SNAPSHOT.liveActivity.modeLabel,
   });
 });
 
@@ -688,10 +723,7 @@ test("describeSend reports withinLimit=false for an oversize payload without thr
   const client = makeClient({ sendOrigin: mock.origin });
   teardown(t, client, mock);
 
-  const fat = {
-    ...SNAPSHOT,
-    secondaryText: "x".repeat(5000),
-  };
+  const fat = withBody(SNAPSHOT, "x", 5000);
   const description = client.describeSend({
     operation: "alert",
     deviceToken: "d".repeat(64),
@@ -1137,9 +1169,9 @@ test("update() rejects oversized per-activity payload before any network call", 
   const client = makeClient({ sendOrigin: mock.origin });
   teardown(t, client, mock);
 
-  // 5000 bytes of secondaryText alone clears the 4096 ceiling once the
+  // 5000 bytes of body alone clears the 4096 ceiling once the
   // ActivityKit envelope (aps, content-state, timestamp, etc.) is layered on.
-  const oversized = { ...SNAPSHOT, secondaryText: "x".repeat(5000) };
+  const oversized = withBody(SNAPSHOT, "x", 5000);
 
   await assert.rejects(
     () => client.update("a".repeat(64), oversized),
@@ -1161,7 +1193,7 @@ test("alert() rejects oversized payload before any network call", async (t) => {
   const client = makeClient({ sendOrigin: mock.origin });
   teardown(t, client, mock);
 
-  const oversized = { ...SNAPSHOT, secondaryText: "y".repeat(5000) };
+  const oversized = withBody(SNAPSHOT, "y", 5000);
 
   await assert.rejects(
     () => client.alert("a".repeat(64), oversized),
@@ -1182,7 +1214,7 @@ test("broadcast() rejects oversized payload before any network call", async (t) 
 
   // Broadcast ceiling is 5120; pad past it so this test pins the broadcast
   // branch rather than incidentally tripping the 4096 default.
-  const oversized = { ...SNAPSHOT, secondaryText: "z".repeat(6000) };
+  const oversized = withBody(SNAPSHOT, "z", 6000);
 
   await assert.rejects(
     () => client.broadcast("ChannelId123", oversized),
@@ -1629,10 +1661,10 @@ test("broadcast() accepts a payload that fits the 5120-byte broadcast ceiling bu
   const client = makeClient({ sendOrigin: mock.origin });
   teardown(t, client, mock);
 
-  // 4500 bytes of secondaryText sits between the two ceilings: the assembled
+  // 4500 bytes of body sits between the two ceilings: the assembled
   // payload exceeds 4096 (so update() would reject it) but stays under 5120.
   // This pins that broadcast uses the higher ceiling rather than the default.
-  const oversized = { ...SNAPSHOT, secondaryText: "w".repeat(4500) };
+  const oversized = withBody(SNAPSHOT, "w", 4500);
 
   const res = await client.broadcast("ChannelId123", oversized);
   assert.equal(res.status, 200);
@@ -1644,9 +1676,9 @@ test("update() accepts a payload just under the 4096-byte ceiling", async (t) =>
   const client = makeClient({ sendOrigin: mock.origin });
   teardown(t, client, mock);
 
-  // 3000 bytes of secondaryText leaves headroom for the envelope; total
+  // 3000 bytes of body leaves headroom for the envelope; total
   // serialized payload stays well under 4096.
-  const fits = { ...SNAPSHOT, secondaryText: "u".repeat(3000) };
+  const fits = withBody(SNAPSHOT, "u", 3000);
 
   const res = await client.update("a".repeat(64), fits);
   assert.equal(res.status, 200);
@@ -1662,7 +1694,7 @@ test("PayloadTooLargeError thrown by pre-flight carries trapId MS011", async (t)
   const client = makeClient({ sendOrigin: mock.origin });
   teardown(t, client, mock);
 
-  const oversized = { ...SNAPSHOT, secondaryText: "q".repeat(5000) };
+  const oversized = withBody(SNAPSHOT, "q", 5000);
 
   await assert.rejects(
     () => client.update("a".repeat(64), oversized),
@@ -2030,6 +2062,236 @@ test("createChannel() 400 CannotCreateChannelConfig throws CannotCreateChannelCo
       assert.match(err.message, /10,000 channels/);
       return true;
     },
+  );
+});
+
+// --- 5xx-with-empty-body retry (v5 audit fix 2.1) ------------------------
+//
+// Before v5, a bare 5xx with no parseable JSON body became
+// UnknownApnsError(reason="Unknown"), which is not in DEFAULT_RETRYABLE_REASONS,
+// so the SDK gave up after one attempt. The audit fix retries any response
+// with status >= 500 regardless of parsed reason. The terminal-reasons guard
+// still keeps caller-customized retry sets from re-enabling retries on
+// permanently broken tokens.
+
+test("500 with empty body is retried up to the default maxRetries", async (t) => {
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    // No body, no headers - the worst-case shape that previously short-
+    // circuited the retry loop. UnknownApnsError(reason="Unknown") would
+    // surface; the v5 fix retries it because status >= 500.
+    return { status: 500 };
+  });
+  const client = makeClient({
+    sendOrigin: mock.origin,
+    retryPolicy: { maxRetries: 3, baseDelayMs: 1, maxDelayMs: 5, jitter: false },
+  });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.update("a".repeat(64), SNAPSHOT),
+    (err) => {
+      assert.ok(err instanceof UnknownApnsError);
+      assert.equal(err.status, 500);
+      assert.equal(err.reason, "Unknown");
+      return true;
+    },
+  );
+  // 1 initial + 3 retries = 4 calls. If the audit fix regressed, calls would
+  // be 1 (no retries) because UnknownApnsError is not in retryableReasons.
+  assert.equal(calls, 4);
+});
+
+test("503 with empty body is retried (transport-level 5xx fallthrough)", async (t) => {
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    if (calls <= 2) return { status: 503 };
+    return { status: 200, headers: { "apns-id": "after-503" } };
+  });
+  const client = makeClient({
+    sendOrigin: mock.origin,
+    retryPolicy: { maxRetries: 3, baseDelayMs: 1, maxDelayMs: 5, jitter: false },
+  });
+  teardown(t, client, mock);
+
+  const res = await client.update("b".repeat(64), SNAPSHOT, {
+    apnsId: "after-503",
+  });
+  assert.equal(res.status, 200);
+  assert.equal(calls, 3);
+});
+
+test("400 with empty body (UnknownApnsError, non-5xx) is NOT retried", async (t) => {
+  // Negative case: only 5xx responses qualify for the "Unknown reason"
+  // fallthrough. A 4xx without a parseable body is a caller error - retrying
+  // it would amplify load without changing the outcome.
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    return { status: 400 };
+  });
+  const client = makeClient({
+    sendOrigin: mock.origin,
+    retryPolicy: { maxRetries: 3, baseDelayMs: 1, maxDelayMs: 5, jitter: false },
+  });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.alert("c".repeat(64), SNAPSHOT),
+    (err) => {
+      assert.ok(err instanceof UnknownApnsError);
+      assert.equal(err.status, 400);
+      assert.equal(err.reason, "Unknown");
+      return true;
+    },
+  );
+  assert.equal(calls, 1, "4xx with Unknown reason must not retry");
+});
+
+// --- createChannel typed-error for unparseable response (v5 audit fix 2.4)
+
+test("createChannel throws CreateChannelResponseError when channel id is missing from headers + body", async (t) => {
+  const mock = await startMockApns(() => ({
+    status: 201,
+    body: { foo: "bar" }, // no apns-channel-id / channel-id / channelId
+  }));
+  const client = makeClient({ manageOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.createChannel({ storagePolicy: "no-storage" }),
+    (err) => {
+      assert.ok(err instanceof CreateChannelResponseError);
+      assert.equal(err.status, 201);
+      assert.match(err.message, /no apns-channel-id was found/);
+      return true;
+    },
+  );
+});
+
+// --- AbortSignal support (v5 audit fix 2.3) ------------------------------
+
+test("aborting mid-request rejects with AbortError", async (t) => {
+  let release;
+  const mock = await startMockApns(() => {
+    return new Promise((resolve) => {
+      release = resolve;
+    });
+  });
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const controller = new AbortController();
+  const inflight = client.alert("a".repeat(64), SNAPSHOT, {
+    signal: controller.signal,
+  });
+  // Give the request a tick to dispatch before aborting.
+  await new Promise((res) => setTimeout(res, 10));
+  controller.abort();
+  // Release the hung response so the server can clean up - by this point the
+  // client has already cancelled the stream.
+  release?.({ status: 200 });
+
+  await assert.rejects(
+    inflight,
+    (err) => {
+      assert.ok(err instanceof AbortError, `expected AbortError, got ${err?.name}`);
+      return true;
+    },
+  );
+});
+
+test("aborting during a retry-backoff sleep rejects with AbortError", async (t) => {
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    return { status: 503, body: { reason: "ServiceUnavailable" } };
+  });
+  // Generous backoff so the abort lands while the SDK is sleeping between
+  // attempts rather than during the in-flight request.
+  const client = makeClient({
+    sendOrigin: mock.origin,
+    retryPolicy: { maxRetries: 5, baseDelayMs: 500, maxDelayMs: 5000, jitter: false },
+  });
+  teardown(t, client, mock);
+
+  const controller = new AbortController();
+  const inflight = client.update("b".repeat(64), SNAPSHOT, {
+    signal: controller.signal,
+  });
+  // Wait long enough for the first attempt to complete and enter backoff,
+  // but well under the 500ms base delay.
+  await new Promise((res) => setTimeout(res, 100));
+  controller.abort();
+
+  await assert.rejects(
+    inflight,
+    (err) => err instanceof AbortError,
+  );
+  // One attempt completed; the backoff sleep was aborted before the retry
+  // could dispatch.
+  assert.equal(calls, 1);
+});
+
+test("aborting after a successful response is a no-op", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const controller = new AbortController();
+  const res = await client.alert("c".repeat(64), SNAPSHOT, {
+    signal: controller.signal,
+  });
+  assert.equal(res.status, 200);
+  controller.abort(); // No reject, no throw - the request already completed.
+});
+
+test("an already-aborted signal rejects immediately without dialing", async (t) => {
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    return { status: 200 };
+  });
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const controller = new AbortController();
+  controller.abort();
+
+  await assert.rejects(
+    () =>
+      client.alert("d".repeat(64), SNAPSHOT, { signal: controller.signal }),
+    (err) => err instanceof AbortError,
+  );
+  // No request reached the wire.
+  assert.equal(calls, 0);
+  assert.equal(mock.sessionCount, 0);
+});
+
+test("AbortSignal plumbs through createChannel/listChannels/deleteChannel", async (t) => {
+  // Coverage smoke for the management methods: an already-aborted signal
+  // makes each method reject without contacting APNs. The send path's full
+  // mid-flight + mid-backoff coverage above pins the deeper behavior.
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ manageOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const controller = new AbortController();
+  controller.abort();
+
+  await assert.rejects(
+    () => client.createChannel({ signal: controller.signal }),
+    (err) => err instanceof AbortError,
+  );
+  await assert.rejects(
+    () => client.listChannels({ signal: controller.signal }),
+    (err) => err instanceof AbortError,
+  );
+  await assert.rejects(
+    () => client.deleteChannel("abc==", { signal: controller.signal }),
+    (err) => err instanceof AbortError,
   );
 });
 

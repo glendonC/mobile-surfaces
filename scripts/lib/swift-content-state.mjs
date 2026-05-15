@@ -333,3 +333,82 @@ function findBracedBlockFromMatch(source, m) {
     body: source.slice(openIdx + 1, i),
   };
 }
+
+// ---------- Shared Zod → Swift type resolver ----------
+//
+// Resolve a Zod field schema to the Swift type its JSONDecoder counterpart
+// must declare. Returns `{ expected, reason }` where `expected` is the Swift
+// type string (e.g. "String", "Double", "Bool", "String?") or null when the
+// resolver does not recognize the shape. `reason` explains a null so the
+// caller can emit a "teach the checker" issue rather than passing silently.
+//
+// `optional()` / `nullable()` both map to a Swift Optional. The projection
+// helpers use `.optional()` for genuinely-absent slice fields and
+// `.nullable()` for "present but null" projected fields. Swift Codable
+// decodes both an absent key and an explicit JSON null into `T?`, so for the
+// wire shape they are equivalent: the inner type must match and the Swift
+// type must be the Optional form.
+//
+// Zod enums and string literals collapse to plain Swift `String`. The
+// shared-state snapshot structs intentionally use plain scalars rather than
+// nominal Swift enums so JSONDecoder stays tolerant of a host that emits a
+// state value the widget binary predates.
+//
+// `check-activity-attributes.mjs` has one extra concern this resolver does
+// not handle: the Live Activity Stage enum maps to a nominal Swift `Stage`
+// (not `String`). That script special-cases the Stage instance check before
+// delegating to this resolver.
+export function resolveExpectedSwiftType(schema) {
+  const def = schema?._zod?.def;
+  if (!def) return { expected: null, reason: "no resolvable Zod def" };
+
+  if (def.type === "optional" || def.type === "nullable") {
+    const inner = resolveExpectedSwiftType(def.innerType);
+    if (inner.expected === null) {
+      return {
+        expected: null,
+        reason: `${def.type} wrapping an unsupported inner shape (${inner.reason})`,
+      };
+    }
+    if (inner.expected.endsWith("?")) {
+      // optional(optional(...)) collapses to a single Swift Optional, but
+      // the contract does not use that shape; flag rather than guess.
+      return {
+        expected: null,
+        reason: `nested ${def.type} is not a shape this checker handles`,
+      };
+    }
+    return { expected: `${inner.expected}?`, reason: null };
+  }
+
+  if (def.type === "string") return { expected: "String", reason: null };
+  if (def.type === "boolean") return { expected: "Bool", reason: null };
+  if (def.type === "number") {
+    if (def.format && /int/i.test(String(def.format))) {
+      return { expected: "Int", reason: null };
+    }
+    return { expected: "Double", reason: null };
+  }
+  if (def.type === "enum") {
+    const members = def.entries ? Object.values(def.entries) : [];
+    if (members.length > 0 && members.every((v) => typeof v === "string")) {
+      return { expected: "String", reason: null };
+    }
+    return {
+      expected: null,
+      reason: "enum with non-string members is not handled",
+    };
+  }
+  if (def.type === "literal") {
+    const vals = def.values ?? [];
+    if (vals.length > 0 && vals.every((v) => typeof v === "string")) {
+      return { expected: "String", reason: null };
+    }
+    return {
+      expected: null,
+      reason: "literal with non-string value is not handled",
+    };
+  }
+
+  return { expected: null, reason: `unrecognized Zod type "${def.type}"` };
+}

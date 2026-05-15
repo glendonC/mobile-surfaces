@@ -56,9 +56,19 @@ export function effectiveRetryPolicy(
 /**
  * Compute the next backoff window for `attempt` (0-indexed; first retry is
  * attempt 0). Returns `retryAfterMs` if provided (caller already converted
- * Retry-After seconds to ms). Otherwise: min(base * 2^attempt + jitter, max),
- * where jitter ∈ [0, base) when enabled. `maxDelayMs` is a hard ceiling on the
- * returned value; jitter cannot push the result past the cap.
+ * Retry-After seconds to ms). Otherwise: min(base * 2^attempt, maxDelayMs)
+ * + jitter, where jitter ∈ [0, baseDelayMs) when enabled.
+ *
+ * Audit fix (v5): jitter is applied AFTER the exponential is clamped to
+ * `maxDelayMs`, not before. The previous shape — `min(exp + jitter, max)` —
+ * would saturate every retry at exactly `maxDelayMs` once `exp + jitter`
+ * exceeded the cap, collapsing the distribution to a constant and creating
+ * a thundering-herd risk when many clients retry the same incident in
+ * lockstep. Clamping first preserves jitter at saturation. The new ceiling
+ * is `maxDelayMs + baseDelayMs - 1` rather than strictly `maxDelayMs`; this
+ * is the deliberate trade — a small (<= baseDelayMs) overshoot that keeps
+ * the distribution non-degenerate vs. a hard cap that produces synchronized
+ * retries.
  */
 export function computeBackoffMs(
   attempt: number,
@@ -70,8 +80,9 @@ export function computeBackoffMs(
     return retryAfterMs;
   }
   const exp = policy.baseDelayMs * 2 ** attempt;
+  const capped = Math.min(exp, policy.maxDelayMs);
   const jitter = policy.jitter ? Math.floor(random() * policy.baseDelayMs) : 0;
-  return Math.min(exp + jitter, policy.maxDelayMs);
+  return capped + jitter;
 }
 
 /**

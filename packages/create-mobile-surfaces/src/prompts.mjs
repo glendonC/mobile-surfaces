@@ -65,9 +65,9 @@ export async function runPrompts({ initialName, overrides = {}, yes = false, ui 
   ui.rail.step(3, 5, "Surfaces");
 
   // Live Activity + Dynamic Island always ship — they're the load-bearing
-  // surface this template was built around. Home and control widgets are
-  // independent opt-ins; deselecting them strips their Swift target files,
-  // fixtures, harness sections, and (in add-to-existing) entitlements.
+  // surface this template was built around. The four widget kinds are
+  // independent opt-ins; deselecting one strips its Swift target file,
+  // fixtures, harness section, and (in add-to-existing) entitlements.
   const homeWidget = overrides.homeWidget !== undefined
     ? overrides.homeWidget
     : yes
@@ -83,6 +83,24 @@ export async function runPrompts({ initialName, overrides = {}, yes = false, ui 
       ? true
       : await ui.askConfirm({
           message: copy.surfaces.controlWidget.message,
+          defaultValue: true,
+        });
+
+  const lockAccessoryWidget = overrides.lockAccessoryWidget !== undefined
+    ? overrides.lockAccessoryWidget
+    : yes
+      ? true
+      : await ui.askConfirm({
+          message: copy.surfaces.lockAccessoryWidget.message,
+          defaultValue: true,
+        });
+
+  const standbyWidget = overrides.standbyWidget !== undefined
+    ? overrides.standbyWidget
+    : yes
+      ? true
+      : await ui.askConfirm({
+          message: copy.surfaces.standbyWidget.message,
           defaultValue: true,
         });
 
@@ -106,13 +124,15 @@ export async function runPrompts({ initialName, overrides = {}, yes = false, ui 
 
     // Recap — single stdout.write block. Cannot be redrawn over.
     const recapBody = [
-      `name          ${pc.bold(projectName)}`,
-      `scheme        ${pc.bold(scheme)}`,
-      `bundle        ${pc.bold(bundleId)}`,
-      `team id       ${teamId ? pc.bold(teamId) : pc.dim("skip — set later in app.json")}`,
-      `home widget   ${homeWidget ? pc.bold("yes") : pc.dim("no")}`,
-      `control       ${controlWidget ? pc.bold("yes") : pc.dim("no")}`,
-      `install       ${installNow ? pc.bold("yes") : pc.dim("no")}`,
+      `name             ${pc.bold(projectName)}`,
+      `scheme           ${pc.bold(scheme)}`,
+      `bundle           ${pc.bold(bundleId)}`,
+      `team id          ${teamId ? pc.bold(teamId) : pc.dim("skip — set later in app.json")}`,
+      `home widget      ${homeWidget ? pc.bold("yes") : pc.dim("no")}`,
+      `control widget   ${controlWidget ? pc.bold("yes") : pc.dim("no")}`,
+      `lock accessory   ${lockAccessoryWidget ? pc.bold("yes") : pc.dim("no")}`,
+      `standby          ${standbyWidget ? pc.bold("yes") : pc.dim("no")}`,
+      `install          ${installNow ? pc.bold("yes") : pc.dim("no")}`,
     ].join("\n");
     ui.section("Recap", recapBody);
 
@@ -132,14 +152,14 @@ export async function runPrompts({ initialName, overrides = {}, yes = false, ui 
     scheme,
     bundleId,
     teamId: teamId || null,
-    // lockAccessoryWidget and standbyWidget are always-on in the picker; they
-    // are flag-only opt-outs so the interactive flow stays focused on the two
-    // marquee surfaces. Overrides come through unchanged from --no-* flags.
+    // All four widget kinds are surfaced in the interactive picker as of v5;
+    // --no-* flag overrides still win because their truthiness was resolved at
+    // the top of the prompt block (an explicit override skips the askConfirm).
     surfaces: {
       homeWidget,
       controlWidget,
-      lockAccessoryWidget: overrides.lockAccessoryWidget ?? true,
-      standbyWidget: overrides.standbyWidget ?? true,
+      lockAccessoryWidget,
+      standbyWidget,
     },
     installNow,
     // Pass through the New Architecture override only when the user supplied

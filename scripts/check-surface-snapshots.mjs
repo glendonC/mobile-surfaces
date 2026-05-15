@@ -31,7 +31,10 @@ import {
   liveSurfaceStandbyEntry,
 } from "../packages/surface-contracts/src/schema.ts";
 import { buildReport, emitDiagnosticReport } from "./lib/diagnostics.mjs";
-import { parseContentState } from "./lib/swift-content-state.mjs";
+import {
+  parseContentState,
+  resolveExpectedSwiftType as expectedSwiftType,
+} from "./lib/swift-content-state.mjs";
 
 const { values } = parseArgs({
   options: { json: { type: "boolean", default: false } },
@@ -197,86 +200,11 @@ function checkSurface(surface, swiftSource, swiftRel) {
   };
 }
 
-// ---------- Helpers ----------
-
-// Resolve a Zod field schema to the Swift type its JSONDecoder counterpart
-// must declare. Returns `{ expected, reason }` where `expected` is the Swift
-// type string (e.g. "String", "Double", "Bool", "String?") or null when the
-// checker does not recognize the shape. `reason` explains a null so the
-// caller can emit a "teach the checker" issue rather than passing silently.
-//
-// The shared-state snapshot structs intentionally use plain Swift scalar
-// types - `String` for Zod enums and literals, `Double` for numbers, `Bool`
-// for booleans - rather than nominal Swift enums. That keeps JSONDecoder
-// tolerant of a host that emits a state value the widget binary predates.
-// So enum and string-literal both map to "String" here; that is deliberate
-// and differs from the Live Activity Stage handling in
-// check-activity-attributes.mjs (which does use a nominal `Stage` enum).
-function expectedSwiftType(schema) {
-  const def = schema?._zod?.def;
-  if (!def) return { expected: null, reason: "no resolvable Zod def" };
-
-  // optional() / nullable() both map to a Swift Optional. The projection
-  // helpers use .optional() for genuinely-absent slice fields (widget
-  // family/reloadPolicy) and .nullable() for "present but null" projected
-  // fields (control value/intent, standby tint). Swift Codable decodes both
-  // an absent key and an explicit JSON null into `T?`, so for the wire shape
-  // they are equivalent: the inner type must match and the Swift type must
-  // be the Optional form.
-  if (def.type === "optional" || def.type === "nullable") {
-    const inner = expectedSwiftType(def.innerType);
-    if (inner.expected === null) {
-      return {
-        expected: null,
-        reason: `${def.type} wrapping an unsupported inner shape (${inner.reason})`,
-      };
-    }
-    if (inner.expected.endsWith("?")) {
-      // optional(optional(...)) or nullable(optional(...)): collapses to a
-      // single Swift Optional, but this is not a shape the contract uses and
-      // we would rather flag it than guess.
-      return {
-        expected: null,
-        reason: `nested ${def.type} is not a shape this checker handles`,
-      };
-    }
-    return { expected: `${inner.expected}?`, reason: null };
-  }
-
-  if (def.type === "string") return { expected: "String", reason: null };
-  if (def.type === "boolean") return { expected: "Bool", reason: null };
-  if (def.type === "number") {
-    // z.int() etc. set a numeric format; treat any integer format as Int.
-    if (def.format && /int/i.test(String(def.format))) {
-      return { expected: "Int", reason: null };
-    }
-    return { expected: "Double", reason: null };
-  }
-  if (def.type === "enum") {
-    // Snapshot structs render Zod enums as plain Swift String (see note
-    // above). Guard that every enum member is a string so a future numeric
-    // enum would be flagged rather than silently mapped to String.
-    const members = def.entries ? Object.values(def.entries) : [];
-    if (members.length > 0 && members.every((v) => typeof v === "string")) {
-      return { expected: "String", reason: null };
-    }
-    return {
-      expected: null,
-      reason: "enum with non-string members is not handled",
-    };
-  }
-  if (def.type === "literal") {
-    // Snapshot structs render literal discriminators (kind: "widget") as
-    // plain Swift String. Guard that every literal value is a string.
-    const vals = def.values ?? [];
-    if (vals.length > 0 && vals.every((v) => typeof v === "string")) {
-      return { expected: "String", reason: null };
-    }
-    return {
-      expected: null,
-      reason: "literal with non-string value is not handled",
-    };
-  }
-
-  return { expected: null, reason: `unrecognized Zod type "${def.type}"` };
-}
+// The shared Zod → Swift type resolver lives in
+// scripts/lib/swift-content-state.mjs (imported above as `expectedSwiftType`).
+// It is optionality-aware (handles `optional()` / `nullable()` → `T?`) and
+// understands enums/literals/numbers/strings/booleans. The shared-state
+// snapshot structs use plain Swift scalars rather than nominal enums so the
+// resolver maps Zod enums and literals to `String`. The Live Activity Stage
+// enum is the only consumer that needs a nominal Swift type, and
+// check-activity-attributes.mjs special-cases that before delegating.

@@ -409,6 +409,13 @@ export async function applyToExisting({
     return summary;
   } catch (err) {
     summary.rolledBack = true;
+    // Capture the manifest size before rollback() consumes the session so the
+    // CLI top level can tell the user how many files were restored ("X file(s)
+    // rolled back"). Without this attribution the applyFailed copy could only
+    // say "we tried" — exactly the kind of honesty wrinkle the audit flagged.
+    const restoredCount = session.manifest.filter((e) => e.kind === "file").length;
+    err.rolledBack = true;
+    err.restoredCount = restoredCount;
     try {
       await session.rollback();
     } catch (rollbackErr) {
