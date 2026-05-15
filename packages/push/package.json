@@ -61,5 +61,8 @@
   },
   "dependencies": {
     "@mobile-surfaces/surface-contracts": "workspace:*"
+  },
+  "peerDependencies": {
+    "zod": "4.3.6"
   }
 }

@@ -8,7 +8,7 @@ Node SDK for sending Mobile Surfaces snapshots to Apple Push Notification servic
 - iOS 18 broadcast pushes
 - channel-management (create / list / delete)
 
-Zero npm runtime dependencies, only the workspace `surface-contracts` package. Uses `node:http2`, `node:crypto`, and `node:fs` directly.
+Wire-layer code only — no HTTP, retry, or APNs client framework. Uses `node:http2`, `node:crypto`, and `node:fs` directly. Runtime deps are the workspace `surface-contracts` package, plus `zod` as a peer (the same instance the contract package uses, so schemas stay interoperable).
 
 ## Install
 
@@ -119,7 +119,7 @@ createPushClient({
 
 The name is deliberately ugly: the defaults are tuned against MS015 and the priority-aware stretch, and overriding them is usually wrong. The legacy `retryPolicy` option still works in 3.x and logs a one-time deprecation warning per process; it will be removed in 4.0.
 
-`MOBILE_SURFACES_PUSH_DISABLE_RETRY=1` in the environment turns retries off entirely. Useful for tests and for diagnosing whether a flake is APNs-side or your retry policy.
+`MOBILE_SURFACES_PUSH_DISABLE_RETRY=1` in the environment turns retries off entirely — useful for tests and for diagnosing whether a flake is APNs-side or your retry policy.
 
 ## Connection lifecycle
 

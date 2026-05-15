@@ -199,13 +199,13 @@ const snapshot = assertSnapshot(snapshotFromJob(job));
 await client.update(activityToken, snapshot);
 ```
 
-`@mobile-surfaces/push` has zero npm runtime dependencies. It only uses `node:http2`, `node:crypto`, and the workspace contract package. See [packages/push/README.md](./packages/push/README.md) and [https://mobile-surfaces.com/docs/push](https://mobile-surfaces.com/docs/push) for the deep reference (token taxonomy, error classes, channel management, retry policy).
+`@mobile-surfaces/push` is wire-layer code only. It uses `node:http2`, `node:crypto`, and the workspace contract package directly, with `zod` as a peer dependency (the same instance the contract uses, so schemas stay interoperable). No third-party HTTP, APNs, or retry framework underneath. See [packages/push/README.md](./packages/push/README.md) and [https://mobile-surfaces.com/docs/push](https://mobile-surfaces.com/docs/push) for the deep reference (token taxonomy, error classes, channel management, retry policy).
 
 ## What is actually in the box
 
 - A working Expo app with every surface already wired up: Lock Screen Live Activity, Dynamic Island, home-screen widget, iOS 18 control widget.
 - The shared `LiveSurfaceSnapshot` contract: one TypeScript type, one runtime-checked union where `kind` selects the valid branch, one published JSON Schema (`oneOf`-shaped per the discriminator), kind-gated projection helpers, and `safeParseAnyVersion` for schema v1 to v2 migration. Standard Schema is exposed via Zod 4's built-in `~standard` getter so consumers can drop the Zod runtime dependency.
-- `@mobile-surfaces/push`. A Node SDK for APNs with zero npm runtime dependencies, supporting alerts, Live Activity start/update/end, **push-to-start (iOS 17.2+)** and **broadcast channels (iOS 18+)**, plus channel management.
+- `@mobile-surfaces/push`. A Node SDK for APNs with no third-party HTTP or retry framework underneath, supporting alerts, Live Activity start/update/end, **push-to-start (iOS 17.2+)** and **broadcast channels (iOS 18+)**, plus channel management. Priority-aware retry stretch (priority 10 sends clamp to 2 retries to stay inside Apple's MS015 budget) and an `MOBILE_SURFACES_PUSH_DISABLE_RETRY` kill switch.
 - A SwiftUI WidgetKit (Apple's framework for widgets and Live Activities) extension for Lock Screen, Dynamic Island, home-screen widget, and iOS 18 control layouts. You can restyle it. You do not have to write it from scratch.
 - APNs scripts with JWT signing, development and production environment routing, and translated error messages.
 - A `doctor` command that catches setup mistakes before you waste a day on them.
