@@ -37,3 +37,24 @@ jobs:
       - run: pnpm cli:smoke:monorepo
       - name: Pack-and-install smoke
         run: bash scripts/smoke-pack-and-install.sh
+
+  scaffold-e2e:
+    # Scaffolds a greenfield project into /tmp, then installs and runs
+    # surface:check + typecheck inside the scaffold. Catches the class
+    # of bug the in-process smokes can't: dep-resolution failure on the
+    # generated tree, contract-API drift between template and shipped
+    # @mobile-surfaces/* versions, TypeScript regressions at the import
+    # boundary. Slow (pnpm install on a fresh tree); runs in its own
+    # job so a fail here is a distinct signal from the fast checks.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.7.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm cli:smoke:e2e

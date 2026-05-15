@@ -4,7 +4,7 @@ import type { LiveSurfaceSnapshot } from "./index";
 // Edit the JSON fixtures, then run pnpm surface:check.
 export const surfaceFixtureSnapshots = {
   "queued": {
-    "schemaVersion": "2",
+    "schemaVersion": "3",
     "kind": "liveActivity",
     "id": "fixture-queued",
     "surfaceId": "surface-queued",
@@ -25,7 +25,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "attention": {
-    "schemaVersion": "2",
+    "schemaVersion": "3",
     "kind": "liveActivity",
     "id": "fixture-attention",
     "surfaceId": "surface-attention",
@@ -46,7 +46,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "activeProgress": {
-    "schemaVersion": "2",
+    "schemaVersion": "3",
     "kind": "liveActivity",
     "id": "fixture-active-progress",
     "surfaceId": "surface-active-progress",
@@ -67,7 +67,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "activeCountdown": {
-    "schemaVersion": "2",
+    "schemaVersion": "3",
     "kind": "liveActivity",
     "id": "fixture-active-countdown",
     "surfaceId": "surface-active-countdown",
@@ -88,7 +88,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "paused": {
-    "schemaVersion": "2",
+    "schemaVersion": "3",
     "kind": "liveActivity",
     "id": "fixture-paused",
     "surfaceId": "surface-paused",
@@ -109,7 +109,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "badTiming": {
-    "schemaVersion": "2",
+    "schemaVersion": "3",
     "kind": "liveActivity",
     "id": "fixture-bad-timing",
     "surfaceId": "surface-none-bad-timing",
@@ -130,7 +130,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "completed": {
-    "schemaVersion": "2",
+    "schemaVersion": "3",
     "kind": "liveActivity",
     "id": "fixture-completed",
     "surfaceId": "surface-completed",
@@ -151,7 +151,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "activeDetails": {
-    "schemaVersion": "2",
+    "schemaVersion": "3",
     "kind": "liveActivity",
     "id": "fixture-active-details",
     "surfaceId": "surface-active-details",
@@ -172,7 +172,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "widgetDashboard": {
-    "schemaVersion": "2",
+    "schemaVersion": "3",
     "kind": "widget",
     "id": "fixture-widget-dashboard",
     "surfaceId": "surface-widget-dashboard",
@@ -192,7 +192,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "controlToggle": {
-    "schemaVersion": "2",
+    "schemaVersion": "3",
     "kind": "control",
     "id": "fixture-control-toggle",
     "surfaceId": "surface-control-toggle",
@@ -207,13 +207,13 @@ export const surfaceFixtureSnapshots = {
     "progress": 1,
     "deepLink": "mobilesurfaces://surface/surface-control-toggle",
     "control": {
-      "kind": "toggle",
+      "controlKind": "toggle",
       "state": false,
       "intent": "toggleSurface"
     }
   },
   "lockAccessoryCircular": {
-    "schemaVersion": "2",
+    "schemaVersion": "3",
     "kind": "lockAccessory",
     "id": "fixture-lock-accessory-circular",
     "surfaceId": "surface-lock-accessory-circular",
@@ -234,7 +234,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "standbyCard": {
-    "schemaVersion": "2",
+    "schemaVersion": "3",
     "kind": "standby",
     "id": "fixture-standby-card",
     "surfaceId": "surface-standby-card",
@@ -254,7 +254,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "notificationAlert": {
-    "schemaVersion": "2",
+    "schemaVersion": "3",
     "kind": "notification",
     "id": "fixture-notification-alert",
     "surfaceId": "surface-notification-alert",

@@ -59,9 +59,13 @@ const manifest = buildManifestFromLive(repoRoot);
 // In dev mode, our @mobile-surfaces/* packages show up in the manifest as
 // `workspace:*` markers and the CLI skips installing them (they live as
 // workspace siblings in the user's cloned monorepo for greenfield). For
-// the published manifest, rewrite those markers to concrete `^<version>`
-// ranges read from each package's own package.json so the add-to-existing
-// flow can pull them from npm.
+// the published manifest, rewrite those markers to concrete pinned
+// versions read from each package's own package.json so the
+// add-to-existing flow can pull them from npm. Exact pins match the
+// project's wider exact-pin discipline (check-external-pins.mjs) and the
+// linked-group release cadence: every @mobile-surfaces/* package ships
+// together on the same version, so a caret here would float silently
+// across linked-group republishes without an intentional bump.
 const packagesByName = new Map();
 const packagesDir = path.join(repoRoot, "packages");
 for (const dirName of fs.readdirSync(packagesDir)) {
@@ -74,7 +78,7 @@ manifest.addPackages = manifest.addPackages.map((pkg) => {
   if (!pkg.workspace) return pkg;
   const v = packagesByName.get(pkg.name);
   if (!v) return pkg;
-  return { name: pkg.name, version: `^${v}` };
+  return { name: pkg.name, version: v };
 });
 
 fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");

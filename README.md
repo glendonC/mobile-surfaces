@@ -56,7 +56,9 @@ What it does not cover:
 - **The backend.** It hands your app a push token and stops there. You write the Apple Push Notification service (APNs) HTTP/2 client, the JWT signing, the retry logic, and the error-code translator yourself. That is two to three weeks of work for someone who has not done it before.
 - **A shared data contract.** Without one, each surface (Lock Screen, widget, control, alert) gets its own hand-rolled mapping function. They drift the moment one is updated and the others are not. Mobile Surfaces gives you one type that feeds every surface so they cannot drift.
 
-Pick `expo-live-activity` for a single-surface project where the backend is already solved. Pick Mobile Surfaces when you want multiple surfaces sharing one data shape and a Node SDK that drives the push side.
+Where `expo-live-activity` is genuinely ahead: its bridge surface is wider. It exposes `relevanceScore`, custom small images, compact-trailing fallbacks, and other ActivityKit knobs the Mobile Surfaces bridge does not. It also has more shipped apps and contributors behind it; Mobile Surfaces' bridge is newer and largely battle-tested by one project (this one). If you need those bridge knobs today, use `expo-live-activity`. The `@mobile-surfaces/surface-contracts` and `@mobile-surfaces/push` packages are bridge-agnostic and work alongside it.
+
+Pick `expo-live-activity` for a single-surface project where the backend is already solved, or where you need the wider ActivityKit knob surface. Pick Mobile Surfaces when you want multiple surfaces sharing one data shape and a Node SDK that drives the push side.
 
 ### Why not just ask AI to build it?
 
@@ -173,7 +175,7 @@ const contentState = toLiveActivityContentState(snapshot);
 // { headline, subhead, progress, stage }, pass to your existing bridge.
 ```
 
-See [packages/surface-contracts/README.md](./packages/surface-contracts/README.md) for the bridge-agnostic walkthrough (`expo-live-activity`, hand-rolled, Standard Schema interop, JSON Schema, v1 to v2 migration).
+See [packages/surface-contracts/README.md](./packages/surface-contracts/README.md) for the bridge-agnostic walkthrough (`expo-live-activity`, hand-rolled, Standard Schema interop, JSON Schema, v2 to v3 migration).
 
 ### Contract plus push SDK
 
@@ -199,13 +201,13 @@ const snapshot = assertSnapshot(snapshotFromJob(job));
 await client.update(activityToken, snapshot);
 ```
 
-`@mobile-surfaces/push` has zero npm runtime dependencies. It only uses `node:http2`, `node:crypto`, and the workspace contract package. See [packages/push/README.md](./packages/push/README.md) and [https://mobile-surfaces.com/docs/push](https://mobile-surfaces.com/docs/push) for the deep reference (token taxonomy, error classes, channel management, retry policy).
+`@mobile-surfaces/push` is wire-layer code only. It uses `node:http2`, `node:crypto`, and the workspace contract package directly, with `zod` as a peer dependency (the same instance the contract uses, so schemas stay interoperable). No third-party HTTP, APNs, or retry framework underneath. See [packages/push/README.md](./packages/push/README.md) and [https://mobile-surfaces.com/docs/push](https://mobile-surfaces.com/docs/push) for the deep reference (token taxonomy, error classes, channel management, retry policy).
 
 ## What is actually in the box
 
 - A working Expo app with every surface already wired up: Lock Screen Live Activity, Dynamic Island, home-screen widget, iOS 18 control widget.
-- The shared `LiveSurfaceSnapshot` contract: one TypeScript type, one runtime-checked union where `kind` selects the valid branch, one published JSON Schema (`oneOf`-shaped per the discriminator), kind-gated projection helpers, and `safeParseAnyVersion` for schema v1 to v2 migration. Standard Schema is exposed via Zod 4's built-in `~standard` getter so consumers can drop the Zod runtime dependency.
-- `@mobile-surfaces/push`. A Node SDK for APNs with zero npm runtime dependencies, supporting alerts, Live Activity start/update/end, **push-to-start (iOS 17.2+)** and **broadcast channels (iOS 18+)**, plus channel management.
+- The shared `LiveSurfaceSnapshot` contract: one TypeScript type, one runtime-checked union where `kind` selects the valid branch, one published JSON Schema (`oneOf`-shaped per the discriminator), kind-gated projection helpers, and `safeParseAnyVersion` for schema v2 to v3 migration. Standard Schema is exposed via Zod 4's built-in `~standard` getter so consumers can drop the Zod runtime dependency.
+- `@mobile-surfaces/push`. A Node SDK for APNs with no third-party HTTP or retry framework underneath, supporting alerts, Live Activity start/update/end, **push-to-start (iOS 17.2+)** and **broadcast channels (iOS 18+)**, plus channel management. Priority-aware retry stretch (priority 10 sends clamp to 2 retries to stay inside Apple's MS015 budget) and an `MOBILE_SURFACES_PUSH_DISABLE_RETRY` kill switch.
 - A SwiftUI WidgetKit (Apple's framework for widgets and Live Activities) extension for Lock Screen, Dynamic Island, home-screen widget, and iOS 18 control layouts. You can restyle it. You do not have to write it from scratch.
 - APNs scripts with JWT signing, development and production environment routing, and translated error messages.
 - A `doctor` command that catches setup mistakes before you waste a day on them.
@@ -245,7 +247,7 @@ Start with the [docs hub](https://mobile-surfaces.com/docs) if you are not sure 
 - [Push](https://mobile-surfaces.com/docs/push). Wire-layer reference, SDK, smoke script, token taxonomy, error reasons, channel push.
 - [Observability](https://mobile-surfaces.com/docs/observability). Which catalog-bound errors are worth alerting on, hook signatures, recommended log shape.
 - [Multi-surface](https://mobile-surfaces.com/docs/multi-surface). Every `kind` value, what ships today, when to emit each.
-- [Schema migration](https://mobile-surfaces.com/docs/schema-migration). v1 to v2 codec, deprecation timeline, Standard Schema interop, evolution policy.
+- [Schema migration](https://mobile-surfaces.com/docs/schema-migration). v2 to v3 codec, deprecation timeline, Standard Schema interop, evolution policy.
 - [Architecture](https://mobile-surfaces.com/docs/architecture). The contract, the surfaces, the adapter boundary.
 - [Troubleshooting](https://mobile-surfaces.com/docs/troubleshooting). The silent-failure cookbook.
 - [iOS environment](https://mobile-surfaces.com/docs/ios-environment). Simulator vs device, APNs setup.

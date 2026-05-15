@@ -1,6 +1,6 @@
 {
-  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@3.2/schema.json",
-  "schemaVersion": "2",
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@4.0/schema.json",
+  "schemaVersion": "3",
   "kind": "control",
   "id": "fixture-control-toggle",
   "surfaceId": "surface-control-toggle",
@@ -15,7 +15,7 @@
   "progress": 1,
   "deepLink": "mobilesurfaces://surface/surface-control-toggle",
   "control": {
-    "kind": "toggle",
+    "controlKind": "toggle",
     "state": false,
     "intent": "toggleSurface"
   }

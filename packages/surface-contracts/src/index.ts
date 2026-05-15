@@ -6,7 +6,7 @@ export {
   liveSurfaceSnapshotNotification,
   liveSurfaceSnapshotLockAccessory,
   liveSurfaceSnapshotStandby,
-  liveSurfaceSnapshotV1,
+  liveSurfaceSnapshotV2,
   liveSurfaceLiveActivitySlice,
   liveSurfaceState,
   liveSurfaceStage,
@@ -29,7 +29,7 @@ export {
   liveSurfaceKinds,
   assertSnapshot,
   safeParseSnapshot,
-  migrateV1ToV2,
+  migrateV2ToV3,
   safeParseAnyVersion,
 } from "./schema.ts";
 export type {
@@ -40,7 +40,7 @@ export type {
   LiveSurfaceSnapshotNotification,
   LiveSurfaceSnapshotLockAccessory,
   LiveSurfaceSnapshotStandby,
-  LiveSurfaceSnapshotV1,
+  LiveSurfaceSnapshotV2,
   LiveSurfaceLiveActivitySlice,
   LiveSurfaceState,
   LiveSurfaceStage,
@@ -58,7 +58,6 @@ export type {
   LiveSurfaceLockAccessoryEntryOutput,
   LiveSurfaceStandbyEntryOutput,
   LiveSurfaceNotificationContentPayloadOutput,
-  MigrateV1ToV2Options,
   SafeParseAnyVersionResult,
   SafeParseAnyVersionSuccess,
   SafeParseAnyVersionFailure,
@@ -96,7 +95,7 @@ export interface LiveSurfaceControlValueProvider {
   kind: "control";
   snapshotId: string;
   surfaceId: string;
-  controlKind: LiveSurfaceSnapshotControl["control"]["kind"];
+  controlKind: LiveSurfaceSnapshotControl["control"]["controlKind"];
   value: boolean | null;
   intent: string | null;
   label: string;
@@ -211,25 +210,19 @@ export function toControlValueProvider(
   // `actionLabel` is optional and `z.string().optional()` accepts the empty
   // string, but `??` only triggers on null/undefined. An empty actionLabel
   // would silently produce an empty button label downstream, so coerce
-  // empty-string to "absent" before falling back to primaryText.
-  const labelCandidate = controlSnap.actionLabel?.length
+  // empty-string to "absent" before falling back to primaryText. The fallback
+  // is guaranteed non-empty because the base shape pins `primaryText.min(1)`.
+  const label = controlSnap.actionLabel?.length
     ? controlSnap.actionLabel
     : controlSnap.primaryText;
-  if (!labelCandidate) {
-    throw new IncompleteProjectionError(
-      "toControlValueProvider",
-      "actionLabel or primaryText",
-      "control snapshots must supply a non-empty actionLabel or primaryText to drive the control widget label.",
-    );
-  }
   return {
     kind: "control",
     snapshotId: controlSnap.id,
     surfaceId: controlSnap.surfaceId,
-    controlKind: control.kind,
+    controlKind: control.controlKind,
     value: control.state ?? null,
     intent: control.intent ?? null,
-    label: labelCandidate,
+    label,
     deepLink: controlSnap.deepLink,
   };
 }

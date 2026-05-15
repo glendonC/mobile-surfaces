@@ -1,6 +1,6 @@
 {
-  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@3.2/schema.json",
-  "schemaVersion": "2",
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@4.0/schema.json",
+  "schemaVersion": "3",
   "kind": "standby",
   "id": "fixture-standby-card",
   "surfaceId": "surface-standby-card",

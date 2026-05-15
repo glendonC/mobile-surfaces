@@ -135,7 +135,7 @@ packages/surface-contracts/schema.json must be regenerated whenever the Zod sour
 
 **severity:** error  •  **detection:** static (script-checkable)  •  **tags:** contract  •  **enforced by:** `scripts/validate-surface-fixtures.mjs`
 
-Every JSON file under data/surface-fixtures/ must parse via the v2 discriminated union (after $schema is stripped).
+Every JSON file under data/surface-fixtures/ must parse via the v3 discriminated union (after $schema is stripped).
 
 **Symptom.** Tests that exercise fixtures pass locally but fail in CI on a fixture nobody noticed was malformed; or fixture-driven previews silently render placeholder data.
 
@@ -177,7 +177,7 @@ Per-activity Live Activity pushes are bounded at 4 KB; iOS 18 broadcast pushes a
 
 ### MS012: iOS deployment target must be 17.2 or higher
 
-**severity:** error  •  **detection:** config (declarative file)  •  **tags:** ios-version, config  •  **ios min:** 17.2
+**severity:** error  •  **detection:** config (declarative file)  •  **tags:** ios-version, config  •  **ios min:** 17.2  •  **enforced by:** `scripts/probe-app-config.mjs`
 
 Mobile Surfaces commits to push-to-start tokens (Activity<...>.pushToStartTokenUpdates) without if #available ceremony; deployment target below 17.2 breaks the live-activity adapter at compile time.
 
@@ -261,7 +261,7 @@ Both pushTokenUpdates and pushToStartTokenUpdates may emit fresh values at any m
 
 ### MS024: Project must depend on @mobile-surfaces/surface-contracts (and push, when sending)
 
-**severity:** error  •  **detection:** config (declarative file)  •  **tags:** contract, push
+**severity:** error  •  **detection:** config (declarative file)  •  **tags:** contract, push  •  **enforced by:** `scripts/probe-app-config.mjs`
 
 Foreign Expo projects auditing as Mobile Surfaces consumers must list the contract package; backends sending pushes must additionally list @mobile-surfaces/push.
 
@@ -273,7 +273,7 @@ Foreign Expo projects auditing as Mobile Surfaces consumers must list the contra
 
 ### MS025: App Group declared in app.json
 
-**severity:** error  •  **detection:** config (declarative file)  •  **tags:** app-group, config
+**severity:** error  •  **detection:** config (declarative file)  •  **tags:** app-group, config  •  **enforced by:** `scripts/probe-app-config.mjs`
 
 app.json must declare a com.apple.security.application-groups entry for widgets and controls to share state with the host app.
 
@@ -297,7 +297,7 @@ The Mobile Surfaces widget target lives outside the generated ios/ directory and
 
 ### MS027: Foreign Expo project must target iOS 17.2 or higher
 
-**severity:** error  •  **detection:** config (declarative file)  •  **tags:** ios-version, config  •  **ios min:** 17.2
+**severity:** error  •  **detection:** config (declarative file)  •  **tags:** ios-version, config  •  **ios min:** 17.2  •  **enforced by:** `scripts/probe-app-config.mjs`
 
 Same constraint as MS012, applied during an audit of an arbitrary Expo project that adopts Mobile Surfaces.
 

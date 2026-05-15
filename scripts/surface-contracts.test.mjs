@@ -8,10 +8,10 @@ import {
   liveSurfaceLockAccessoryEntry,
   liveSurfaceNotificationContentPayload,
   liveSurfaceSnapshot,
-  liveSurfaceSnapshotV1,
+  liveSurfaceSnapshotV2,
   liveSurfaceStandbyEntry,
   liveSurfaceWidgetTimelineEntry,
-  migrateV1ToV2,
+  migrateV2ToV3,
   safeParseAnyVersion,
   safeParseSnapshot,
   surfaceFixtureSnapshots,
@@ -26,7 +26,7 @@ import {
 const queued = surfaceFixtureSnapshots.queued;
 
 // `queued` is a liveActivity-kind snapshot. Tests that build a different
-// kind by spreading queued need to strip the liveActivity slice first; v2's
+// kind by spreading queued need to strip the liveActivity slice first; the
 // strict per-kind objects reject unknown sibling slices.
 function withoutLiveActivity(snapshot) {
   const { liveActivity: _drop, ...rest } = snapshot;
@@ -84,7 +84,7 @@ test("control projection accepts control snapshots and rejects mismatches", () =
     id: "fixture-control",
     surfaceId: "surface-control",
     kind: "control",
-    control: { kind: "toggle", state: true, intent: "toggleSurface" },
+    control: { controlKind: "toggle", state: true, intent: "toggleSurface" },
   });
 
   assert.deepEqual(toControlValueProvider(control), {
@@ -180,11 +180,12 @@ test("kind/slice mismatch is rejected: liveActivity kind without liveActivity sl
   assert.equal(result.success, false);
 });
 
-test("v2 requires kind: payload without kind fails safeParse (no preprocess fallback)", () => {
+test("v3 requires kind: payload without kind fails safeParse (no preprocess fallback)", () => {
   const { kind: _omit, ...withoutKind } = queued;
   const result = safeParseSnapshot(withoutKind);
-  // v2 dropped the v1 missing-kind preprocess. Producers must set kind
-  // explicitly; the v1->v2 codec sets it during migration. Bare snapshots
+  // v3 (and v2 before it) does not have a missing-kind preprocess.
+  // Producers must set kind explicitly; the v2->v3 codec sets it during
+  // migration. Bare snapshots
   // without kind are no longer valid.
   assert.equal(result.success, false);
 });
@@ -301,137 +302,107 @@ test("toStandbyEntry applies presentation default and null tint when absent", ()
 });
 
 // ---------------------------------------------------------------------------
-// v1 -> v2 migration codec
+// v2 -> v3 migration codec. v3 renamed liveSurfaceControlSlice's inner `kind`
+// field to `controlKind`; every other kind is pass-through with a bumped
+// schemaVersion literal. The v1 codec was sunset at 4.0 per the v2 RFC; the
+// frozen schema-v1.ts file is gone and only v2 payloads are migrated here.
 // ---------------------------------------------------------------------------
 
-const v1LiveActivitySample = {
-  schemaVersion: "1",
-  kind: "liveActivity",
-  id: "fixture-v1-live",
-  surfaceId: "surface-v1-live",
-  state: "active",
-  modeLabel: "active",
-  contextLabel: "progress",
-  statusLine: "active",
-  primaryText: "Surface",
-  secondaryText: "v1 sample",
-  actionLabel: "Open",
-  estimatedSeconds: 120,
-  morePartsCount: 1,
-  progress: 0.4,
-  stage: "inProgress",
-  deepLink: "mobilesurfaces://surface/surface-v1-live",
+const v2ControlSample = {
+  schemaVersion: "2",
+  kind: "control",
+  id: "fixture-v2-control",
+  surfaceId: "surface-v2-control",
   updatedAt: "2026-05-12T18:00:00.000Z",
+  state: "active",
+  modeLabel: "control",
+  contextLabel: "toggle",
+  statusLine: "control",
+  primaryText: "Surface",
+  secondaryText: "v2 sample",
+  actionLabel: "Surface toggle",
+  progress: 1,
+  deepLink: "mobilesurfaces://surface/surface-v2-control",
+  control: { kind: "toggle", state: true, intent: "toggleSurface" },
 };
 
-const v1WidgetSample = {
-  schemaVersion: "1",
+const v2WidgetSample = {
+  schemaVersion: "2",
   kind: "widget",
-  id: "fixture-v1-widget",
-  surfaceId: "surface-v1-widget",
+  id: "fixture-v2-widget",
+  surfaceId: "surface-v2-widget",
+  updatedAt: "2026-05-12T18:00:00.000Z",
   state: "active",
   modeLabel: "widget",
   contextLabel: "home",
   statusLine: "widget",
   primaryText: "Widget",
-  secondaryText: "v1 sample",
-  estimatedSeconds: 60,
-  morePartsCount: 0,
+  secondaryText: "v2 sample",
   progress: 0.5,
-  stage: "inProgress",
-  deepLink: "mobilesurfaces://surface/surface-v1-widget",
-  updatedAt: "2026-05-12T18:00:00.000Z",
+  deepLink: "mobilesurfaces://surface/surface-v2-widget",
   widget: { family: "systemMedium" },
 };
 
-test("migrateV1ToV2 packs liveActivity-only fields into the new slice", () => {
-  const v1 = liveSurfaceSnapshotV1.parse(v1LiveActivitySample);
-  const v2 = migrateV1ToV2(v1);
-  assert.equal(v2.schemaVersion, "2");
-  assert.equal(v2.kind, "liveActivity");
-  assert.ok("liveActivity" in v2);
-  if (v2.kind === "liveActivity") {
-    assert.equal(v2.liveActivity.stage, "inProgress");
-    assert.equal(v2.liveActivity.estimatedSeconds, 120);
-    assert.equal(v2.liveActivity.morePartsCount, 1);
+test("migrateV2ToV3 renames the control slice's inner kind field to controlKind", () => {
+  const v2 = liveSurfaceSnapshotV2.parse(v2ControlSample);
+  const v3 = migrateV2ToV3(v2);
+  assert.equal(v3.schemaVersion, "3");
+  assert.equal(v3.kind, "control");
+  if (v3.kind === "control") {
+    assert.equal(v3.control.controlKind, "toggle");
+    assert.equal("kind" in v3.control, false);
+    // state and intent are pass-through.
+    assert.equal(v3.control.state, true);
+    assert.equal(v3.control.intent, "toggleSurface");
   }
-  // The three liveActivity-only fields are not on the base anymore.
-  assert.equal("stage" in v2, false);
-  assert.equal("estimatedSeconds" in v2, false);
-  assert.equal("morePartsCount" in v2, false);
-  // Round-trip through v2 parse to prove the migration result is valid.
-  const reparsed = liveSurfaceSnapshot.parse(v2);
-  assert.equal(reparsed.schemaVersion, "2");
+  // Round-trip through v3 parse to prove the migration result is valid.
+  const reparsed = liveSurfaceSnapshot.parse(v3);
+  assert.equal(reparsed.schemaVersion, "3");
 });
 
-test("migrateV1ToV2 drops liveActivity-only fields for non-liveActivity kinds", () => {
-  const v1 = liveSurfaceSnapshotV1.parse(v1WidgetSample);
-  const v2 = migrateV1ToV2(v1);
-  assert.equal(v2.schemaVersion, "2");
-  assert.equal(v2.kind, "widget");
-  assert.equal("stage" in v2, false);
-  assert.equal("estimatedSeconds" in v2, false);
-  assert.equal("morePartsCount" in v2, false);
-  assert.equal("liveActivity" in v2, false);
-  // widget slice survives the migration.
-  if (v2.kind === "widget") {
-    assert.equal(v2.widget.family, "systemMedium");
+test("migrateV2ToV3 is a pass-through (with version bump) for non-control kinds", () => {
+  const v2 = liveSurfaceSnapshotV2.parse(v2WidgetSample);
+  const v3 = migrateV2ToV3(v2);
+  assert.equal(v3.schemaVersion, "3");
+  assert.equal(v3.kind, "widget");
+  if (v3.kind === "widget") {
+    assert.equal(v3.widget.family, "systemMedium");
   }
-});
-
-test("migrateV1ToV2 leaves updatedAt undefined when v1 omitted it (default-fail behavior)", () => {
-  const { updatedAt: _omit, ...withoutUpdatedAt } = v1LiveActivitySample;
-  const v1 = liveSurfaceSnapshotV1.parse(withoutUpdatedAt);
-  const v2Like = migrateV1ToV2(v1);
-  // The migrate result is not yet a valid v2 snapshot — v2 requires
-  // updatedAt. Default behavior leaves it undefined so v2 parse fails
-  // loudly rather than synthesizing a "now" lie.
-  assert.equal(v2Like.schemaVersion, "2");
-  assert.equal(v2Like.updatedAt, undefined);
-  const result = liveSurfaceSnapshot.safeParse(v2Like);
-  assert.equal(result.success, false);
-});
-
-test("migrateV1ToV2 honors updatedAtFallback when v1 omitted updatedAt", () => {
-  const { updatedAt: _omit, ...withoutUpdatedAt } = v1LiveActivitySample;
-  const v1 = liveSurfaceSnapshotV1.parse(withoutUpdatedAt);
-  const v2 = migrateV1ToV2(v1, {
-    updatedAtFallback: "2026-05-12T18:30:00.000Z",
-  });
-  assert.equal(v2.updatedAt, "2026-05-12T18:30:00.000Z");
-  // With the fallback in place, the result parses as a valid v2 snapshot.
-  const reparsed = liveSurfaceSnapshot.parse(v2);
-  assert.equal(reparsed.updatedAt, "2026-05-12T18:30:00.000Z");
+  const reparsed = liveSurfaceSnapshot.parse(v3);
+  assert.equal(reparsed.schemaVersion, "3");
 });
 
 // ---------------------------------------------------------------------------
-// safeParseAnyVersion: v2 (strict) -> v1 (codec, deprecated, removed in 4.0)
+// safeParseAnyVersion: v3 (strict) -> v2 (codec, deprecated, removed in 5.0)
 // ---------------------------------------------------------------------------
 
-test("safeParseAnyVersion accepts a v2 payload with no deprecation warning", () => {
+test("safeParseAnyVersion accepts a v3 payload with no deprecation warning", () => {
   const result = safeParseAnyVersion(queued);
   assert.equal(result.success, true);
   if (result.success) {
     assert.equal(result.data.kind, "liveActivity");
-    assert.equal(result.data.schemaVersion, "2");
+    assert.equal(result.data.schemaVersion, "3");
     assert.equal(result.deprecationWarning, undefined);
   }
 });
 
-test("safeParseAnyVersion accepts a v1 payload and surfaces a v1 deprecation warning", () => {
-  const result = safeParseAnyVersion(v1LiveActivitySample);
+test("safeParseAnyVersion accepts a v2 control payload and surfaces a v2 deprecation warning", () => {
+  const result = safeParseAnyVersion(v2ControlSample);
   assert.equal(result.success, true);
   if (result.success) {
-    assert.equal(result.data.schemaVersion, "2");
-    assert.equal(result.data.kind, "liveActivity");
+    assert.equal(result.data.schemaVersion, "3");
+    assert.equal(result.data.kind, "control");
+    if (result.data.kind === "control") {
+      assert.equal(result.data.control.controlKind, "toggle");
+    }
     assert.match(
       result.deprecationWarning ?? "",
-      /v1 is deprecated/i,
+      /v2 is deprecated/i,
     );
   }
 });
 
-test("safeParseAnyVersion fails with v2 error when no version parses", () => {
+test("safeParseAnyVersion fails with v3 error when no version parses", () => {
   const result = safeParseAnyVersion({ schemaVersion: "999", nonsense: true });
   assert.equal(result.success, false);
   if (!result.success) {
@@ -439,8 +410,8 @@ test("safeParseAnyVersion fails with v2 error when no version parses", () => {
   }
 });
 
-test("strict assertSnapshot does NOT auto-migrate v1 payloads", () => {
-  assert.throws(() => assertSnapshot(v1LiveActivitySample));
+test("strict assertSnapshot does NOT auto-migrate v2 payloads", () => {
+  assert.throws(() => assertSnapshot(v2ControlSample));
 });
 
 // ---------------------------------------------------------------------------
@@ -528,10 +499,10 @@ test("morePartsCount rejects string-encoded integers", () => {
 });
 
 // ---------------------------------------------------------------------------
-// updatedAt (required in v2)
+// updatedAt (required since v2)
 // ---------------------------------------------------------------------------
 
-test("updatedAt is required in v2: payloads without it fail safeParse", () => {
+test("updatedAt is required: payloads without it fail safeParse", () => {
   const { updatedAt: _omit, ...withoutUpdatedAt } = queued;
   const result = safeParseSnapshot(withoutUpdatedAt);
   assert.equal(result.success, false);
@@ -579,7 +550,7 @@ test("toControlValueProvider falls back to primaryText when actionLabel is absen
     surfaceId: "surface-control",
     actionLabel: undefined,
     kind: "control",
-    control: { kind: "toggle", state: true, intent: "toggleSurface" },
+    control: { controlKind: "toggle", state: true, intent: "toggleSurface" },
   });
   const projected = toControlValueProvider(control);
   assert.equal(projected.label, queued.primaryText);
@@ -592,7 +563,7 @@ test("toControlValueProvider falls back to primaryText when actionLabel is empty
     surfaceId: "surface-control",
     actionLabel: "",
     kind: "control",
-    control: { kind: "button", intent: "openSurface" },
+    control: { controlKind: "button", intent: "openSurface" },
   });
   const projected = toControlValueProvider(control);
   // Empty-string actionLabel must NOT be passed through. The fix-site coerces
@@ -618,7 +589,7 @@ test("toControlValueProvider preserves null when control.state and control.inten
     id: "fixture-control-bare",
     surfaceId: "surface-control",
     kind: "control",
-    control: { kind: "deepLink" },
+    control: { controlKind: "deepLink" },
   });
   const projected = toControlValueProvider(control);
   assert.equal(projected.value, null);

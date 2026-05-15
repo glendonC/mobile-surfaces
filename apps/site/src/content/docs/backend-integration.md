@@ -35,7 +35,7 @@ flowchart LR
 
 ```ts
 interface LiveSurfaceSnapshotBase {
-  schemaVersion: "2";         // discriminator; bumped only on breaking changes
+  schemaVersion: "3";         // discriminator; bumped only on breaking changes
   kind: "liveActivity" | "widget" | "control" | "lockAccessory" | "standby" | "notification";
   id: string;                 // unique per snapshot revision (event-scoped)
   surfaceId: string;          // stable across snapshots for the same surface
@@ -87,7 +87,7 @@ function snapshotFromJob(job: Job): LiveSurfaceSnapshot {
     : "attention";
 
   return {
-    schemaVersion: "2",
+    schemaVersion: "3",
     kind: "liveActivity",
     id: `${job.id}@${job.revision}`,
     surfaceId: `job-${job.id}`,
@@ -146,7 +146,7 @@ if (versioned.success) {
 
 `safeParseAnyVersion` is the migration path documented in [`docs/schema-migration.md`](/docs/schema-migration). Use it whenever you read snapshots from a store that may still hold v1 payloads. (The v0 codec was removed in 3.0.0; `safeParseAnyVersion` chains v2 -> v1 only.)
 
-The published JSON Schema at [`unpkg.com/@mobile-surfaces/surface-contracts@3.0/schema.json`](https://unpkg.com/@mobile-surfaces/surface-contracts@3.0/schema.json) is generated from the same Zod source and pinned to `major.minor`. Use it for IDE tooling, OpenAPI components, or non-TypeScript validators (Ajv, jsonschema, etc.). Standard Schema interop is automatic, every exported Zod schema implements the `~standard` getter (`{ vendor: "zod", version: 1, validate, jsonSchema }`), so the contract drops directly into Standard-Schema-aware libraries (Valibot runners, ArkType, `@standard-schema/spec`) without depending on Zod at runtime.
+The published JSON Schema at [`unpkg.com/@mobile-surfaces/surface-contracts@4.0/schema.json`](https://unpkg.com/@mobile-surfaces/surface-contracts@4.0/schema.json) is generated from the same Zod source and pinned to `major.minor`. Use it for IDE tooling, OpenAPI components, or non-TypeScript validators (Ajv, jsonschema, etc.). Standard Schema interop is automatic, every exported Zod schema implements the `~standard` getter (`{ vendor: "zod", version: 1, validate, jsonSchema }`), so the contract drops directly into Standard-Schema-aware libraries (Valibot runners, ArkType, `@standard-schema/spec`) without depending on Zod at runtime.
 
 ### 3. Send the APNs request
 

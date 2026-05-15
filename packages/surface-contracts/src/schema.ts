@@ -1,10 +1,10 @@
 import { z } from "zod";
 import {
-  liveSurfaceSnapshotV1,
-  type LiveSurfaceSnapshotV1,
-} from "./schema-v1.ts";
+  liveSurfaceSnapshotV2,
+  type LiveSurfaceSnapshotV2,
+} from "./schema-v2.ts";
 
-export { liveSurfaceSnapshotV1, type LiveSurfaceSnapshotV1 };
+export { liveSurfaceSnapshotV2, type LiveSurfaceSnapshotV2 };
 
 export const liveSurfaceState = z.enum([
   "queued",
@@ -41,9 +41,15 @@ export const liveSurfaceWidgetSlice = z
   .strict();
 export type LiveSurfaceWidgetSlice = z.infer<typeof liveSurfaceWidgetSlice>;
 
+// v3 renamed the inner `kind` field to `controlKind`. In v2 it shadowed the
+// outer discriminator (controlSnap.kind === "control" vs
+// controlSnap.control.kind === "toggle") and was a hand-authoring footgun
+// in raw payloads. The projection output (liveSurfaceControlValueProvider)
+// already exposed the field as `controlKind`, so consumers reading the
+// projected value didn't see the shadow; v3 closes the gap on the wire.
 export const liveSurfaceControlSlice = z
   .object({
-    kind: z.enum(["toggle", "button", "deepLink"]),
+    controlKind: z.enum(["toggle", "button", "deepLink"]),
     state: z.boolean().optional(),
     intent: z.string().optional(),
   })
@@ -120,7 +126,7 @@ export type LiveSurfaceLiveActivitySlice = z.infer<
 // raw shape (instead of a built schema) lets each variant call `.strict()`
 // after attaching its kind-specific slice.
 const liveSurfaceSnapshotBaseShape = {
-  schemaVersion: z.literal("2").default("2"),
+  schemaVersion: z.literal("3").default("3"),
   id: z.string().min(1),
   surfaceId: z.string().min(1),
   // Wall-clock instant the snapshot was authored, as an RFC 3339 datetime
@@ -430,100 +436,66 @@ export type SafeParseAnyVersionResult =
   | SafeParseAnyVersionSuccess
   | SafeParseAnyVersionFailure;
 
-export type MigrateV1ToV2Options = {
-  /**
-   * Synthesizes a value for `updatedAt` when the v1 payload omits it.
-   * v2 requires `updatedAt`; the codec's default is to leave it undefined
-   * so the resulting v2 snapshot fails parse with an explicit
-   * "Required" error, which is louder than a synthesized "now" lie that
-   * silently breaks ordering. Pass this only when the caller can vouch
-   * for the substituted timestamp's correctness.
-   */
-  updatedAtFallback?: string;
-};
-
 /**
- * Pure v1->v2 transform. Always succeeds for a parsed v1 payload; the
- * result still needs to pass v2 parse if the v1 payload lacked
- * `updatedAt` and the caller did not provide an `updatedAtFallback`.
+ * Pure v2->v3 transform. Always succeeds for a parsed v2 payload.
  *
  * Mapping:
- * - `kind: "liveActivity"` -> the three v1 base fields (stage,
- *   estimatedSeconds, morePartsCount) move under the new
- *   `liveActivity` slice. Everything else carries over unchanged.
- * - `kind: "widget" | "control" | "notification" | "lockAccessory" |
- *   "standby"` -> v1's stage, estimatedSeconds, and morePartsCount are
- *   dropped (they had no meaning on these kinds).
- * - `schemaVersion: "1"` -> `"2"`
- * - `updatedAt`: pass-through; or the provided fallback; or undefined.
+ * - `kind: "control"` -> the control slice's inner field is renamed
+ *   `kind` -> `controlKind` to stop shadowing the outer discriminator.
+ *   Everything else on a control snapshot carries over unchanged.
+ * - Every other kind: pass-through. v3 made no other shape changes.
+ * - `schemaVersion: "2"` -> `"3"`.
  */
-export function migrateV1ToV2(
-  v1: LiveSurfaceSnapshotV1,
-  opts: MigrateV1ToV2Options = {},
+export function migrateV2ToV3(
+  v2: LiveSurfaceSnapshotV2,
 ): LiveSurfaceSnapshot {
-  const {
-    schemaVersion: _v1Version,
-    stage,
-    estimatedSeconds,
-    morePartsCount,
-    updatedAt,
-    ...rest
-  } = v1;
-  const effectiveUpdatedAt =
-    updatedAt ?? opts.updatedAtFallback;
-  const base = {
-    ...rest,
-    schemaVersion: "2" as const,
-    ...(effectiveUpdatedAt !== undefined
-      ? { updatedAt: effectiveUpdatedAt }
-      : {}),
-  };
-  if (v1.kind === "liveActivity") {
+  const { schemaVersion: _v2Version, ...rest } = v2;
+  if (v2.kind === "control") {
+    const { kind: innerKind, ...controlRest } = v2.control;
     return {
-      ...base,
-      kind: "liveActivity",
-      liveActivity: { stage, estimatedSeconds, morePartsCount },
+      ...rest,
+      schemaVersion: "3" as const,
+      kind: "control",
+      control: { controlKind: innerKind, ...controlRest },
     } as LiveSurfaceSnapshot;
   }
-  // Every non-liveActivity kind drops the three liveActivity-only fields
-  // and carries through its own existing slice unchanged. The cast keeps
-  // TS from re-narrowing across each branch; the runtime data is correct
-  // by construction since we only stripped fields v2 does not accept.
-  return base as unknown as LiveSurfaceSnapshot;
+  return {
+    ...rest,
+    schemaVersion: "3" as const,
+  } as unknown as LiveSurfaceSnapshot;
 }
 
 /**
- * Multi-version safe-parse. Tries v2 (strict) first; on failure, tries v1
- * (frozen, with the v1 missing-kind preprocess) and migrates the result to
- * v2. Returns the v2 ZodError when both attempts fail so callers see the most
- * relevant message.
+ * Multi-version safe-parse. Tries v3 (strict) first; on failure, tries v2
+ * (frozen) and migrates the result to v3. Returns the v3 ZodError when
+ * both attempts fail so callers see the most relevant message.
  *
- * On v1->v2 migration, the result carries a `deprecationWarning` so
+ * On v2->v3 migration, the result carries a `deprecationWarning` so
  * telemetry can surface producers still on the old shape; see
  * https://mobile-surfaces.com/docs/observability for the recommended log.
+ *
+ * The v1 codec was dropped at 4.0.0 per the v2 RFC commitment. Consumers
+ * still emitting v1 must run their payloads through @mobile-surfaces/surface-contracts@3
+ * to migrate to v2 first, then this package to reach v3.
  */
 export function safeParseAnyVersion(value: unknown): SafeParseAnyVersionResult {
-  const v2 = liveSurfaceSnapshot.safeParse(value);
-  if (v2.success) {
-    return { success: true, data: v2.data };
+  const v3 = liveSurfaceSnapshot.safeParse(value);
+  if (v3.success) {
+    return { success: true, data: v3.data };
   }
-  const v1 = liveSurfaceSnapshotV1.safeParse(value);
-  if (v1.success) {
-    const migrated = migrateV1ToV2(v1.data);
-    const v2Recheck = liveSurfaceSnapshot.safeParse(migrated);
-    if (v2Recheck.success) {
+  const v2 = liveSurfaceSnapshotV2.safeParse(value);
+  if (v2.success) {
+    const migrated = migrateV2ToV3(v2.data);
+    const v3Recheck = liveSurfaceSnapshot.safeParse(migrated);
+    if (v3Recheck.success) {
       return {
         success: true,
-        data: v2Recheck.data,
+        data: v3Recheck.data,
         deprecationWarning:
-          'liveSurfaceSnapshot v1 is deprecated and will be removed in @mobile-surfaces/surface-contracts@4.0. Migrate producers to schemaVersion "2" and explicit liveActivity-slice fields.',
+          'liveSurfaceSnapshot v2 is deprecated and will be removed in @mobile-surfaces/surface-contracts@5.0. Migrate producers to schemaVersion "3" and rename control.kind to control.controlKind.',
       };
     }
-    // The v1 payload parsed v1 but failed v2 parse after migration. The
-    // most common case is a v1 payload with no updatedAt: v2 requires it
-    // and migrateV1ToV2 deliberately does not synthesize one. Surface the
-    // v2 ZodError so callers see the missing-field path explicitly.
-    return { success: false, error: v2Recheck.error };
+    return { success: false, error: v3Recheck.error };
   }
-  return { success: false, error: v2.error };
+  return { success: false, error: v3.error };
 }

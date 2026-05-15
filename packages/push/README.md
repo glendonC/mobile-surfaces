@@ -8,7 +8,7 @@ Node SDK for sending Mobile Surfaces snapshots to Apple Push Notification servic
 - iOS 18 broadcast pushes
 - channel-management (create / list / delete)
 
-Zero npm runtime dependencies, only the workspace `surface-contracts` package. Uses `node:http2`, `node:crypto`, and `node:fs` directly.
+Wire-layer code only — no HTTP, retry, or APNs client framework. Uses `node:http2`, `node:crypto`, and `node:fs` directly. Runtime deps are the workspace `surface-contracts` package, plus `zod` as a peer (the same instance the contract package uses, so schemas stay interoperable).
 
 ## Install
 
@@ -60,7 +60,7 @@ await client.deleteChannel(channel.channelId);
 await client.close();
 ```
 
-Tokens in this example come from different places: `deviceToken` from normal APNs notification registration, `activityToken` from an active Live Activity, and `pushToStartToken` from ActivityKit's push-to-start token stream. See [`https://mobile-surfaces.com/docs/push`](../.https://mobile-surfaces.com/docs/push#token-taxonomy) for the full token lifecycle and [`https://mobile-surfaces.com/docs/ios-environment`](../.https://mobile-surfaces.com/docs/ios-environment#apns-environment) for matching `environment` to development vs production builds.
+Tokens in this example come from different places: `deviceToken` from normal APNs notification registration, `activityToken` from an active Live Activity, and `pushToStartToken` from ActivityKit's push-to-start token stream. See [`https://mobile-surfaces.com/docs/push`](https://mobile-surfaces.com/docs/push#token-taxonomy) for the full token lifecycle and [`https://mobile-surfaces.com/docs/ios-environment`](https://mobile-surfaces.com/docs/ios-environment#apns-environment) for matching `environment` to development vs production builds.
 
 ## Environment routing
 
@@ -100,12 +100,14 @@ The default policy retries up to 3 times with exponential backoff (100ms base, 5
 - `ServiceUnavailable`
 - transport errors: `ECONNRESET`, `ECONNREFUSED`, `ETIMEDOUT`, `EPIPE`, `ENETUNREACH`, `EHOSTUNREACH`, `NGHTTP2_REFUSED_STREAM`
 
-Override via `retryPolicy`:
+Priority 10 sends (the user-visible state transitions) get a tighter retry budget at runtime: `maxRetries` is clamped to 2 and the backoff windows are doubled, so sustained priority-10 retries cannot blow past APNs's budget (see MS015).
+
+Override via `_unsafeRetryOverride`:
 
 ```ts
 createPushClient({
   // ...
-  retryPolicy: {
+  _unsafeRetryOverride: {
     maxRetries: 5,
     baseDelayMs: 250,
     maxDelayMs: 10_000,
@@ -115,6 +117,10 @@ createPushClient({
 });
 ```
 
+The name is deliberately ugly: the defaults are tuned against MS015 and the priority-aware stretch, and overriding them is usually wrong. The legacy `retryPolicy` option still works in 3.x and logs a one-time deprecation warning per process; it will be removed in 4.0.
+
+`MOBILE_SURFACES_PUSH_DISABLE_RETRY=1` in the environment turns retries off entirely — useful for tests and for diagnosing whether a flake is APNs-side or your retry policy.
+
 ## Connection lifecycle
 
 A single long-lived HTTP/2 session per (origin) is multiplexed across concurrent requests. The session auto-reconnects on `goaway` or socket close. After `idleTimeoutMs` (default 60s) of no in-flight requests, the session is closed; the next send re-opens it.
@@ -123,6 +129,6 @@ A single long-lived HTTP/2 session per (origin) is multiplexed across concurrent
 
 ## Next steps
 
-- Read [`https://mobile-surfaces.com/docs/backend-integration`](../.https://mobile-surfaces.com/docs/backend-integration) for the full domain event to snapshot to APNs flow.
-- Read [`https://mobile-surfaces.com/docs/push`](../.https://mobile-surfaces.com/docs/push) for retry policy, APNs hosts, token taxonomy, and smoke-script flags.
-- Read [`https://mobile-surfaces.com/docs/troubleshooting`](../.https://mobile-surfaces.com/docs/troubleshooting) when APNs returns 200 but nothing appears on the Lock Screen.
+- Read [`https://mobile-surfaces.com/docs/backend-integration`](https://mobile-surfaces.com/docs/backend-integration) for the full domain event to snapshot to APNs flow.
+- Read [`https://mobile-surfaces.com/docs/push`](https://mobile-surfaces.com/docs/push) for retry policy, APNs hosts, token taxonomy, and smoke-script flags.
+- Read [`https://mobile-surfaces.com/docs/troubleshooting`](https://mobile-surfaces.com/docs/troubleshooting) when APNs returns 200 but nothing appears on the Lock Screen.
