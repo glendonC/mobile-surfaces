@@ -2,6 +2,7 @@
 title: "Troubleshooting"
 description: "Symptom-to-fix recipes for silent iOS failures."
 order: 90
+group: "Operate"
 ---
 # Troubleshooting
 

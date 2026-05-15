@@ -1,6 +1,9 @@
 ---
 import { getCollection } from "astro:content";
+import { DOC_GROUPS, type DocGroup } from "../../content.config";
 import DocsLayout from "../../layouts/DocsLayout.astro";
+import { READING_PATHS } from "../../config/readingPaths";
+import trapCatalog from "../../../../../data/traps.json";
 
 const allDocs = await getCollection("docs");
 const docs = allDocs
@@ -9,86 +12,149 @@ const docs = allDocs
     title: doc.data.title,
     description: doc.data.description,
     order: doc.data.order,
+    group: doc.data.group,
   }))
   .sort((a, b) => a.order - b.order);
 
-const personas = [
-  {
-    label: "Backend integrator",
-    intro: "A service that emits snapshots and sends APNs pushes from Node, no mobile work.",
-    path: ["backend-integration", "push", "troubleshooting"],
-  },
-  {
-    label: "Mobile app developer",
-    intro: "An iPhone app on the starter, every surface wired up locally.",
-    path: ["ios-environment", "multi-surface", "troubleshooting"],
-  },
-  {
-    label: "Foreign Expo integrator",
-    intro: "An existing Expo app that adopts Mobile Surfaces without forking the starter.",
-    path: ["compatibility", "architecture", "schema-migration"],
-  },
-  {
-    label: "Triaging a silent failure",
-    intro: "A live bug where the Lock Screen is empty or APNs returns 200 with no effect.",
-    path: ["troubleshooting", "push", "observability"],
-  },
-];
+const docsByGroup = DOC_GROUPS.map((group) => ({
+  group,
+  entries: docs.filter((d) => d.group === group),
+})).filter((g) => g.entries.length > 0);
 
-function titleFor(slug: string) {
-  return docs.find((d) => d.slug === slug)?.title ?? slug;
+function docFor(slug: string) {
+  return docs.find((d) => d.slug === slug);
 }
+
+type TrapEntry = { severity: "error" | "warning" | "info"; deprecated?: boolean };
+const trapEntries = (trapCatalog.entries as TrapEntry[]).filter((t) => !t.deprecated);
+const trapCounts = trapEntries.reduce(
+  (acc, t) => {
+    acc[t.severity] += 1;
+    acc.total += 1;
+    return acc;
+  },
+  { total: 0, error: 0, warning: 0, info: 0 },
+);
 ---
 
 <DocsLayout
   title="Documentation | Mobile Surfaces"
   description="Mobile Surfaces documentation hub: architecture, push, multi-surface, troubleshooting."
 >
-  <article class="docs-prose">
-    <h1>Documentation</h1>
-    <p>
-      Mobile Surfaces is a starter and reference architecture for iOS Live
-      Activities, Dynamic Island, home-screen widgets, and iOS 18 control
-      widgets in Expo apps. Pick the path that fits your role, or jump
-      straight into the full reference.
-    </p>
+  <article class="docs-prose docs-index">
+    <section class="docs-hero">
+      <p class="docs-hero-eyebrow">Documentation</p>
+      <h1>iOS Live Activities that don't silently fail.</h1>
+      <p class="docs-hero-lede">
+        Mobile Surfaces is a starter and reference architecture for Live
+        Activities, Dynamic Island, home-screen widgets, and iOS 18 control
+        widgets in Expo apps. Pick a path that matches your role, or browse
+        the full reference.
+      </p>
+    </section>
 
-    <h2>Reading paths</h2>
-    <ul>
-      {
-        personas.map((p) => (
-          <li>
-            <strong>{p.label}.</strong> {p.intro}
-            {" "}
-            {p.path.map((slug, i) => (
-              <>
-                {i > 0 && " → "}
-                <a href={`/docs/${slug}`}>{titleFor(slug)}</a>
-              </>
-            ))}
-          </li>
-        ))
-      }
-    </ul>
+    <section class="docs-section" aria-labelledby="reading-paths">
+      <h2 id="reading-paths">Reading Paths</h2>
+      <ul class="docs-persona-grid">
+        {
+          READING_PATHS.map((p) => (
+            <li class="docs-persona-card">
+              <header class="docs-persona-head">
+                <p class="docs-persona-label">{p.label}</p>
+                <p class="docs-persona-intro">{p.intro}</p>
+              </header>
+              <ol class="docs-persona-steps">
+                {p.slugs.map((slug, i) => {
+                  const doc = docFor(slug);
+                  const stepNum = String(i + 1).padStart(2, "0");
+                  const href = `/docs/${slug}?path=${p.id}&step=${i + 1}`;
+                  return (
+                    <li>
+                      <a class="docs-persona-step" href={href}>
+                        <span class="docs-persona-step-num">{stepNum}</span>
+                        <span class="docs-persona-step-body">
+                          <span class="docs-persona-step-title">
+                            {doc?.title ?? slug}
+                          </span>
+                          {doc?.description && (
+                            <span class="docs-persona-step-desc">
+                              {doc.description}
+                            </span>
+                          )}
+                        </span>
+                      </a>
+                    </li>
+                  );
+                })}
+              </ol>
+            </li>
+          ))
+        }
+      </ul>
+    </section>
 
-    <h2>Full reference</h2>
-    <ul>
-      {
-        docs.map((d) => (
-          <li>
-            <a href={`/docs/${d.slug}`}>{d.title}</a>
-            {d.description && <> — {d.description}</>}
-          </li>
-        ))
-      }
-    </ul>
+    <section class="docs-section" aria-labelledby="full-reference">
+      <h2 id="full-reference">Full Reference</h2>
+      <div class="docs-reference">
+        {
+          docsByGroup.map(({ group, entries }) => (
+            <div class="docs-reference-group">
+              <h3 class="docs-reference-group-label">{group}</h3>
+              <ul>
+                {entries.map((d) => (
+                  <li>
+                    <a class="docs-reference-link" href={`/docs/${d.slug}`}>
+                      <span class="docs-reference-title">{d.title}</span>
+                      {d.description && (
+                        <span class="docs-reference-desc">{d.description}</span>
+                      )}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))
+        }
+      </div>
+    </section>
 
-    <h2>Trap catalog</h2>
-    <p>
-      Every iOS Live Activity silent-failure mode this project documents
-      lives in <a href="/traps">the trap catalog</a>, rendered from
-      <code>data/traps.json</code>. Each entry has a symptom, a fix, and
-      (for static rules) an enforcement script in the repo.
-    </p>
+    <section class="docs-section" aria-labelledby="trap-catalog">
+      <h2 id="trap-catalog" class="docs-sr-only">Trap catalog</h2>
+      <a
+        class="docs-trap-tile"
+        href="/traps"
+        data-tooltip="Browse the full trap catalog"
+        data-tooltip-pos="top"
+      >
+        <div class="docs-trap-tile-body">
+          <p class="docs-trap-tile-eyebrow">Trap catalog</p>
+          <p class="docs-trap-tile-title">
+            Every iOS Live Activity silent-failure mode, with symptom and fix.
+          </p>
+          <p class="docs-trap-tile-meta">
+            Generated from <code>data/traps.json</code>. Static rules ship with an
+            enforcement script in the repo.
+          </p>
+        </div>
+        <dl class="docs-trap-tile-stats">
+          <div>
+            <dt>Total</dt>
+            <dd>{trapCounts.total}</dd>
+          </div>
+          <div>
+            <dt>Errors</dt>
+            <dd>{trapCounts.error}</dd>
+          </div>
+          <div>
+            <dt>Warnings</dt>
+            <dd>{trapCounts.warning}</dd>
+          </div>
+          <div>
+            <dt>Info</dt>
+            <dd>{trapCounts.info}</dd>
+          </div>
+        </dl>
+      </a>
+    </section>
   </article>
 </DocsLayout>

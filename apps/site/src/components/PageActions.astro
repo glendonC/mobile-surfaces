@@ -1,0 +1,199 @@
+---
+// Single split button on the title row: primary action copies the page
+// as markdown to the clipboard; the chevron opens a menu with the other
+// LLM-friendly actions (Open in Claude, Open in ChatGPT).
+//
+// The markdown body is read at build time and base64-embedded in a data
+// attribute so the inline script can drop it onto the clipboard without
+// a runtime fetch.
+//
+// Brand glyphs for Claude / ChatGPT are looked up at build time from
+// apps/site/public/brand/. If a brand asset is missing, the icon column
+// for that item collapses cleanly instead of showing a broken-image
+// placeholder. Official SVGs must be supplied by the operator; this
+// project does not ship third-party brand marks.
+
+import Icon from "./Icon.astro";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+interface Props {
+  slug: string;
+  title: string;
+  markdown: string;
+  origin: string;
+}
+
+const { slug, title, markdown, origin } = Astro.props;
+
+const pageUrl = `${origin}/docs/${slug}`;
+const markdownUrl = `${origin}/docs/${slug}.md`;
+const llmPrompt = `Read ${pageUrl} (raw: ${markdownUrl}) and help me apply it.`;
+const claudeHref = `https://claude.ai/new?q=${encodeURIComponent(llmPrompt)}`;
+const chatGptHref = `https://chatgpt.com/?q=${encodeURIComponent(llmPrompt)}`;
+
+const markdownB64 = Buffer.from(markdown, "utf8").toString("base64");
+
+const brandDir = fileURLToPath(new URL("../../public/brand/", import.meta.url));
+const hasClaudeIcon = existsSync(`${brandDir}claude.svg`);
+const hasChatGptIcon = existsSync(`${brandDir}chatgpt.svg`);
+---
+
+<div
+  class="docs-page-actions"
+  data-page-actions
+  data-markdown-b64={markdownB64}
+>
+  <div class="docs-action-split">
+    <button type="button" class="docs-action-primary" data-action="copy">
+      <Icon name="copy" class="docs-action-icon" />
+      <span class="docs-action-label">Copy page</span>
+    </button>
+    <button
+      type="button"
+      class="docs-action-toggle"
+      aria-label="More page actions"
+      aria-expanded="false"
+      aria-haspopup="menu"
+    >
+      <Icon name="chevron" class="docs-action-chevron" />
+    </button>
+  </div>
+
+  <div class="docs-action-menu" role="menu" hidden>
+    <button type="button" role="menuitem" class="docs-action-menu-item" data-action="copy">
+      <span class="docs-action-menu-glyph"><Icon name="copy" class="docs-action-menu-icon" /></span>
+      <span class="docs-action-menu-text">
+        <span class="docs-action-menu-title">Copy page</span>
+        <span class="docs-action-menu-desc">Copy page as Markdown for LLMs</span>
+      </span>
+    </button>
+    <a
+      role="menuitem"
+      class="docs-action-menu-item"
+      href={claudeHref}
+      target="_blank"
+      rel="noopener"
+    >
+      {hasClaudeIcon && (
+        <span class="docs-action-menu-glyph">
+          <img src="/brand/claude.svg" alt="" class="docs-action-menu-brand" />
+        </span>
+      )}
+      <span class="docs-action-menu-text">
+        <span class="docs-action-menu-title">Open in Claude</span>
+        <span class="docs-action-menu-desc">Ask Claude about this page</span>
+      </span>
+    </a>
+    <a
+      role="menuitem"
+      class="docs-action-menu-item"
+      href={chatGptHref}
+      target="_blank"
+      rel="noopener"
+    >
+      {hasChatGptIcon && (
+        <span class="docs-action-menu-glyph">
+          <img src="/brand/chatgpt.svg" alt="" class="docs-action-menu-brand" />
+        </span>
+      )}
+      <span class="docs-action-menu-text">
+        <span class="docs-action-menu-title">Open in ChatGPT</span>
+        <span class="docs-action-menu-desc">Ask ChatGPT about this page</span>
+      </span>
+    </a>
+  </div>
+</div>
+
+<script>
+  function decodeMarkdown(b64: string): string {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    return new TextDecoder("utf-8").decode(bytes);
+  }
+
+  async function copyToClipboard(text: string): Promise<boolean> {
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        // fall through
+      }
+    }
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.top = "-1000px";
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try {
+      ok = document.execCommand("copy");
+    } catch {
+      ok = false;
+    }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  document.querySelectorAll<HTMLElement>("[data-page-actions]").forEach((root) => {
+    const primary = root.querySelector<HTMLButtonElement>(".docs-action-primary");
+    const toggle = root.querySelector<HTMLButtonElement>(".docs-action-toggle");
+    const menu = root.querySelector<HTMLElement>(".docs-action-menu");
+    const menuCopy = menu?.querySelector<HTMLButtonElement>(
+      ".docs-action-menu-item[data-action='copy']",
+    );
+    const primaryLabel = primary?.querySelector<HTMLElement>(".docs-action-label");
+    const b64 = root.dataset.markdownB64 ?? "";
+
+    if (!primary || !toggle || !menu) return;
+
+    function openMenu() {
+      if (!menu || !toggle) return;
+      menu.hidden = false;
+      toggle.setAttribute("aria-expanded", "true");
+    }
+    function closeMenu() {
+      if (!menu || !toggle) return;
+      menu.hidden = true;
+      toggle.setAttribute("aria-expanded", "false");
+    }
+
+    toggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (menu.hidden) openMenu();
+      else closeMenu();
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!root.contains(e.target as Node)) closeMenu();
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeMenu();
+    });
+
+    async function runCopy() {
+      const md = decodeMarkdown(b64);
+      const ok = await copyToClipboard(md);
+      if (!primaryLabel || !primary) return;
+      const original = primaryLabel.textContent ?? "Copy page";
+      primaryLabel.textContent = ok ? "Copied" : "Copy failed";
+      primary.classList.toggle("is-copied", ok);
+      window.setTimeout(() => {
+        primaryLabel.textContent = original;
+        primary.classList.remove("is-copied");
+      }, 1600);
+    }
+
+    primary.addEventListener("click", () => {
+      void runCopy();
+    });
+
+    menuCopy?.addEventListener("click", () => {
+      closeMenu();
+      void runCopy();
+    });
+  });
+</script>

@@ -2,6 +2,7 @@
 title: "Observability"
 description: "Which catalog-bound errors are worth alerting on, hook signatures, recommended log shape."
 order: 50
+group: "Operate"
 ---
 # Observability
 

@@ -2,6 +2,7 @@
 title: "iOS Environment"
 description: "Dev builds, App Groups, generated native folders, simulator/device loops."
 order: 60
+group: "Build"
 ---
 # iOS Environment
 
