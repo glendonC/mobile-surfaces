@@ -113,6 +113,66 @@ test("Http2Client surfaces per-request timeout as an ETIMEDOUT-coded error", asy
   );
 });
 
+// Regression for the timeout-cleanup leak: the pre-fix code rejected on
+// request timeout without removing the AbortSignal's "abort" listener. Long-
+// lived signals (an app-wide AbortController, for example) would accumulate
+// listeners on every timed-out request and trip Node's
+// MaxListenersExceededWarning. The fixed code mirrors the onAbort handler:
+// settled-guard, cleanup() to detach the listener, then reject. This test
+// pins the listener count to zero after a timeout.
+
+test("Http2Client detaches AbortSignal listener after a request timeout", async (t) => {
+  const mock = await startMockApns(() => new Promise(() => {}));
+  const connectInsecure = (origin, options) =>
+    http2.connect(origin, { ...(options ?? {}) });
+
+  const client = new Http2Client({
+    origin: mock.origin,
+    idleTimeoutMs: 1_000,
+    connect: connectInsecure,
+  });
+
+  t.after(async () => {
+    await client.close();
+    await mock.close();
+  });
+
+  // AbortSignal-shaped object that counts attached "abort" listeners. The
+  // Http2Client code path only touches addEventListener("abort", ...) and
+  // removeEventListener("abort", ...) plus reads `.aborted`, so a minimal
+  // shim is sufficient and lets us assert listener count directly.
+  const listeners = new Set();
+  const signal = {
+    aborted: false,
+    addEventListener(type, listener) {
+      if (type === "abort") listeners.add(listener);
+    },
+    removeEventListener(type, listener) {
+      if (type === "abort") listeners.delete(listener);
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      client.request({
+        headers: { ":method": "POST", ":path": "/3/device/token" },
+        body: "{}",
+        timeoutMs: 30,
+        signal,
+      }),
+    (err) => {
+      assert.equal(err.code, "ETIMEDOUT");
+      return true;
+    },
+  );
+
+  assert.equal(
+    listeners.size,
+    0,
+    "abort listener must be removed after a timeout-induced reject",
+  );
+});
+
 // close() timeout contract: the previous implementation awaited graceful close
 // with no upper bound. A stuck APNs peer could hang process teardown
 // indefinitely; the mock-server fixture force-destroys sessions in its own

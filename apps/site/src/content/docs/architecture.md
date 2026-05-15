@@ -123,6 +123,28 @@ export interface LiveActivityAdapter {
 
 Six async methods (`areActivitiesEnabled`, `start`, `update`, `end`, `listActive`, `getPushToStartToken`) plus three events (`onPushToken`, `onActivityStateChange`, `onPushToStartToken`). Adding to this surface counts as a breaking change; all adapters and the harness must update together.
 
+## ActivityKit terminology
+
+Three Swift types in the ActivityKit story look interchangeable but are not:
+
+- `MobileSurfacesActivityAttributes` — the static `ActivityAttributes` keyed by the widget extension. Identity fields only (`surfaceId`, `modeLabel`). Lives in two byte-identical Swift files (MS002) so the host module and the widget target both see the same shape.
+- `MobileSurfacesActivityAttributes.ContentState` — the per-update payload ActivityKit decodes from each push `content-state` JSON. This is what `toLiveActivityContentState` projects into and what the Zod `liveSurfaceActivityContentState` describes. MS003 enforces field-and-JSON-key parity.
+- `ActivityContent<ContentState>` — Apple's wrapper, carries `state`, optional `staleDate`, and optional `relevanceScore`. The bridge unwraps it before passing the decoded state across the JS bridge, so JS consumers see `ContentState` directly. As of 5.x the native `update()` and `start()` plumbing both thread `staleDateSeconds` and `relevanceScore` through this wrapper when the caller supplies them; the push wire layer also writes them into the APNs `aps` envelope (`aps.stale-date`, `aps.relevance-score`).
+
+When this site says "ContentState" it means the inner shape. When push docs say "`stale-date`" they mean the APNs `aps` key; iOS reads it equivalently to `ActivityContent.staleDate` for delivery purposes.
+
+## Live Activity lifecycle ceilings
+
+ActivityKit enforces ceilings on how long an activity can live. The SDK accepts any positive unix-seconds value for `staleDateSeconds` and `dismissalDateSeconds`; iOS clamps to its own ceiling at delivery time.
+
+| iOS version | Default active window | Max staleDate window | Max dismissalDate window |
+| --- | --- | --- | --- |
+| 16.2 – 17.x | 8 hours | 8 hours after start | 4 hours after end |
+| 18+ (typed app) | 8 hours | 8 hours after start | 8 hours after end (relaxed) |
+| 18+ (channel) | per-channel storage policy | n/a (broadcast scope) | n/a |
+
+`updatedAt` on the snapshot is a business-event timestamp the contract uses for out-of-order deduplication at the host → APNs boundary; it is not the ActivityKit stale-date. Set `staleDateSeconds` explicitly when you want iOS to grey the activity out before its 8-hour default.
+
 ## Research Findings
 
 - `expo-widgets`: alpha, iOS-only, dev-build only, and subject to breaking changes. It can create widgets and Live Activities with Expo UI, but recent reports include blank widget bundles and intermittent Live Activity spinner overlays. Not stable enough for the default starter path.
@@ -133,7 +155,7 @@ Six async methods (`areActivitiesEnabled`, `start`, `update`, `end`, `listActive
 
 ## Reusable Foundation
 
-- `packages/surface-contracts/` defines `LiveSurfaceSnapshot` (a discriminated union across six `kind` values), `LiveSurfaceActivityContentState`, the frozen v3 schema and `migrateV3ToV4` / `safeParseAnyVersion` migration codec, generated fixture exports, and kind-gated projection helpers for each supported surface kind. The APNs alert-payload helper (`liveActivityAlertPayloadFromSnapshot`) lives in `@mobile-surfaces/push` since 3.0; see [`schema-migration.md`](/docs/schema-migration).
+- `packages/surface-contracts/` defines `LiveSurfaceSnapshot` (a discriminated union across six `kind` values), `LiveSurfaceActivityContentState`, the frozen v3 schema and `migrateV3ToV4` / `safeParseAnyVersion` migration codec, generated fixture exports, and kind-gated projection helpers for each supported surface kind. The APNs alert-payload helper (`toApnsAlertPayload`) lives in `@mobile-surfaces/push` since 3.0; see [`schema-migration.md`](/docs/schema-migration).
 - `packages/design-tokens/` defines colors and shared token names for React Native and Swift asset catalogs. `tokens.json` is the source of truth used by both TypeScript and the widget target config.
 - `packages/live-activity/` contains `@mobile-surfaces/live-activity`, the Expo native module wrapping ActivityKit (push tokens, push-to-start tokens, iOS 18 channel start).
 - `packages/push/` contains `@mobile-surfaces/push`, the Node SDK for sending Mobile Surfaces snapshots to APNs (per-activity update, push-to-start, channel broadcast, channel management). ES256 JWT cache, HTTP/2 reconnect, exponential-backoff retry, typed error hierarchy.
@@ -153,7 +175,7 @@ import {
   toWidgetTimelineEntry,
   toControlValueProvider,
 } from "@mobile-surfaces/surface-contracts";
-import { liveActivityAlertPayloadFromSnapshot } from "@mobile-surfaces/push";
+import { toApnsAlertPayload } from "@mobile-surfaces/push";
 
 const snapshot = mapDomainEventToLiveSurfaceSnapshot(event);
 const activityState = toLiveActivityContentState(snapshot);
@@ -161,7 +183,7 @@ const widgetEntry = toWidgetTimelineEntry(snapshot);
 const controlValue = toControlValueProvider(snapshot);
 const alertPayload =
   snapshot.kind === "liveActivity"
-    ? liveActivityAlertPayloadFromSnapshot(snapshot)
+    ? toApnsAlertPayload(snapshot)
     : undefined;
 ```
 

@@ -20,7 +20,7 @@ The contract is one type with kind-gated derived shapes.
 flowchart LR
   Event["Domain event<br/>(yours)"] --> Snapshot["LiveSurfaceSnapshot<br/>(@mobile-surfaces/surface-contracts)"]
   Snapshot --> Content["ActivityKit ContentState<br/>toLiveActivityContentState()"]
-  Snapshot --> Alert["Alert payload<br/>liveActivityAlertPayloadFromSnapshot()<br/>(@mobile-surfaces/push)"]
+  Snapshot --> Alert["Alert payload<br/>toApnsAlertPayload()<br/>(@mobile-surfaces/push)"]
   Snapshot --> Widget["Widget timeline entry<br/>toWidgetTimelineEntry()"]
   Snapshot --> Control["Control value<br/>toControlValueProvider()"]
   Snapshot --> Notification["Notification content<br/>toNotificationContentPayload()"]
@@ -165,13 +165,13 @@ await push.update(activityToken, snapshot);
 // Live Activity remote start (iOS 17.2+) against the push-to-start token.
 await push.start(pushToStartToken, snapshot, {
   surfaceId: snapshot.surfaceId,
-  modeLabel: snapshot.modeLabel,
+  modeLabel: snapshot.liveActivity.modeLabel,
 });
 
 // End the activity. dismissalDateSeconds defaults to now.
 await push.end(activityToken, snapshot);
 
-// Alert push (uses liveActivityAlertPayloadFromSnapshot internally; works
+// Alert push (uses toApnsAlertPayload internally; works
 // as a fallback for users who have Live Activities turned off).
 await push.alert(deviceToken, snapshot);
 
@@ -226,7 +226,7 @@ Live Activity end:
 { "aps": { "timestamp": 1700000000, "event": "end", "content-state": { ... }, "dismissal-date": 1700000060 } }
 ```
 
-Alert push (the `liveActivityAlertPayloadFromSnapshot` shape):
+Alert push (the `toApnsAlertPayload` shape):
 
 ```
 apns-topic: <bundle-id>           # no push-type suffix
@@ -303,7 +303,7 @@ A future `LocalizedString` shape (e.g. `{ en: string; "es-MX"?: string }`) would
 ## What Stays Stable
 
 - `LiveSurfaceSnapshot` and its TypeScript schema.
-- The projection helpers (`toLiveActivityContentState`, `toWidgetTimelineEntry`, `toControlValueProvider`, `toNotificationContentPayload`) and their kind gates, plus `liveActivityAlertPayloadFromSnapshot` in `@mobile-surfaces/push`.
+- The projection helpers (`toLiveActivityContentState`, `toWidgetTimelineEntry`, `toControlValueProvider`, `toNotificationContentPayload`) and their kind gates, plus `toApnsAlertPayload` in `@mobile-surfaces/push`.
 - The `@mobile-surfaces/push` SDK public surface (the exports listed in `packages/push/src/index.ts`). Implementation detail (HTTP/2 transport, JWT cache internals) may change without a version bump.
 - The APNs topic / push-type / priority defaults emitted by the SDK and the script.
 

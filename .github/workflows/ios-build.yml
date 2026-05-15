@@ -125,3 +125,23 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY=""
+
+  swift-tests:
+    name: LiveActivity Swift Package tests
+    # The Swift Package at packages/live-activity/ios/Tests targets macOS
+    # so `swift test` runs natively — no simulator, no CocoaPods, no
+    # ExpoModulesCore. It exercises the platform-agnostic surfaces
+    # (LiveActivityError, ObserverRegistry, LiveActivityCodableBridge)
+    # that the v5 extraction made independently testable.
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same Xcode major as the host-app build so the Swift compiler row
+      # matches. swift test reads from the active developer dir.
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.2'
+
+      - name: Run Swift tests
+        run: swift test --package-path packages/live-activity/ios/Tests

@@ -55,6 +55,29 @@ Every request authenticates with an ES256 JWT signed by your `.p8` auth key. The
 
 ## Setup
 
+Two halves: mint the APNs auth key in the Apple Developer portal, then wire its four credentials into a `.env` via the interactive wizard.
+
+### Mint an APNs auth key
+
+1. Sign in to [developer.apple.com/account](https://developer.apple.com/account) → **Certificates, Identifiers & Profiles** → **Keys**.
+2. Click **+**. Name the key (e.g. `Mobile Surfaces dev`).
+3. Tick **Apple Push Notifications service (APNs)**. If you need iOS 18 broadcast channels, also tick **Broadcast Notifications** ([MS034](/docs/traps#ms034-broadcast-capability-must-be-enabled-on-the-apns-auth-key)).
+4. Click **Continue** → **Register**.
+5. Download the `.p8` file. Apple lets you download once; save outside the repo and lock the permissions:
+
+   ```bash
+   mkdir -p ~/.mobile-surfaces
+   mv ~/Downloads/AuthKey_*.p8 ~/.mobile-surfaces/
+   chmod 600 ~/.mobile-surfaces/AuthKey_*.p8
+   ```
+
+6. Copy the 10-character **Key ID** from the key detail page → `APNS_KEY_ID`.
+7. Copy your 10-character **Team ID** from the **Membership** tab → `APNS_TEAM_ID`.
+8. Your bundle id (the bare `expo.ios.bundleIdentifier` from `apps/mobile/app.json`) goes into `APNS_BUNDLE_ID`. Do NOT append `.push-type.liveactivity` ([MS018](/docs/traps#ms018-apns-bundle-id-must-not-include-the-push-type-liveactivity-suffix)) — the SDK appends it internally.
+9. Pick an environment for `APNS_ENVIRONMENT`: `development` for dev-client / TestFlight-development builds, `production` for App Store / TestFlight production. Tokens are environment-scoped ([MS014](/docs/traps#ms014-apns-token-environment-must-match-the-build-environment)).
+
+### Wire the wizard
+
 ```bash
 pnpm surface:setup-apns
 ```
@@ -101,7 +124,7 @@ One client per `(auth-key, environment, bundleId)` tuple. A single client multip
 
 ### `alert(deviceToken, snapshot, options?)`
 
-Plain alert push. Snapshot must be `kind: "liveActivity"`; payload is built via `liveActivityAlertPayloadFromSnapshot` (also exported from this package for callers who want to construct the payload by hand).
+Plain alert push **from a `liveActivity`-kind snapshot** — the alert-fallback path. Same wire shape as `sendNotification` (push-type `alert`, bare bundle-id topic, priority 10 default) but reads the `liveActivity` slice; payload is built via `toApnsAlertPayload` (also exported for callers who want to construct the payload by hand). Use `sendNotification()` below for the dedicated `notification`-kind snapshot.
 
 ```ts
 import { surfaceFixtureSnapshots } from "@mobile-surfaces/surface-contracts";
@@ -109,10 +132,25 @@ import { surfaceFixtureSnapshots } from "@mobile-surfaces/surface-contracts";
 await client.alert(deviceToken, surfaceFixtureSnapshots.attention, {
   priority: 10,                  // default 10 for alerts
   expirationSeconds: 1700003600, // default now + 3600
+  collapseId: "order-42",        // optional; APNs dedupes alerts with the same id
 });
 ```
 
-Returns `{ apnsId, status, timestamp }`.
+Returns `{ apnsId, status, timestamp, attempts, latencyMs, retried, trapHits }`.
+
+### `sendNotification(deviceToken, snapshot, options?)`
+
+Notification push from a `notification`-kind snapshot. Payload is built via `toNotificationContentPayload` from `@mobile-surfaces/surface-contracts`; carries `aps.alert.title/body`, optional `category` and `thread-id`, plus a `liveSurface` sidecar discriminated as `kind: "surface_notification"`. The OS renders a standard alert; no `UNNotificationContentExtension` is required. A future rich-notification renderer would layer custom UI on top of the same payload.
+
+```ts
+import { surfaceFixtureSnapshots } from "@mobile-surfaces/surface-contracts";
+
+await client.sendNotification(deviceToken, surfaceFixtureSnapshots.notificationAlert, {
+  collapseId: "thread-3",
+});
+```
+
+Same push-type / topic / priority defaults as `alert()`; the two methods differ only in input snapshot kind (and therefore payload shape and sidecar discriminator).
 
 ### `update(activityToken, snapshot, options?)`
 
@@ -134,7 +172,7 @@ await client.start(
   surfaceFixtureSnapshots.queued,
   {
     surfaceId: surfaceFixtureSnapshots.queued.surfaceId,
-    modeLabel: surfaceFixtureSnapshots.queued.modeLabel,
+    modeLabel: surfaceFixtureSnapshots.queued.liveActivity.modeLabel,
   },
   { attributesType: "MobileSurfacesActivityAttributes" },
 );
@@ -193,6 +231,8 @@ Every non-2xx APNs response throws a typed subclass of `ApnsError`. Each instanc
 | `InvalidProviderTokenError` | `InvalidProviderToken` | JWT rejected (key id, team id, or .p8 wrong). |
 | `ExpiredProviderTokenError` | `ExpiredProviderToken` | JWT older than 1 hour (clock skew). |
 | `TopicDisallowedError` | `TopicDisallowed` | Auth key not enabled for this bundle id. |
+| `UnregisteredError` | `Unregistered` | Device, per-activity, or push-to-start token is permanently dead (410). Drop from your token store. |
+| `ForbiddenError` | `Forbidden` | Auth key was revoked in the Apple Developer portal. Mint a new one and rotate `APNS_KEY_ID` / `APNS_KEY_PATH`. |
 | `PayloadTooLargeError` | `PayloadTooLarge` | Activity payload > 4 KB (5 KB for broadcast). |
 | `BadPriorityError` | `BadPriority` | Priority is not 5 or 10. |
 | `BadExpirationDateError` | `BadExpirationDate` | `expirationSeconds` malformed. |
@@ -206,14 +246,19 @@ Every non-2xx APNs response throws a typed subclass of `ApnsError`. Each instanc
 | `FeatureNotEnabledError` | `FeatureNotEnabled` | Broadcast capability not enabled on the auth key. |
 | `MissingPushTypeError` | `MissingPushType` | `apns-push-type` header missing. |
 | `TooManyRequestsError` | `TooManyRequests` | 429. `retryAfterSeconds` parsed from `Retry-After` when present. |
+| `InternalServerError` | (5xx, no reason) | APNs internal error. Retried by the default policy; surface if it persists. |
+| `ServiceUnavailableError` | (503) | APNs unavailable. Retried by the default policy. |
 | `UnknownApnsError` | (any other) | Reason not in the local guide. Raw reason preserved on `.reason`. |
 
-Two non-APNs errors complete the picture:
+Five non-APNs errors complete the picture:
 
 | Class | When |
 | --- | --- |
 | `InvalidSnapshotError` | Snapshot failed `liveSurfaceSnapshot.safeParse`, or `kind` is not allowed for the chosen method (e.g. calling `update` with a `widget`-kind snapshot). Carries `issues: readonly string[]` for ergonomic logging. Thrown **before any network call**. |
+| `MissingApnsConfigError` | `createPushClient` was called with one of `APNS_KEY_ID` / `APNS_TEAM_ID` / `APNS_KEY_PATH` / `APNS_BUNDLE_ID` unset or empty. Thrown at construction time so the failure surfaces before the first send. |
+| `CreateChannelResponseError` | `createChannel` succeeded over the wire (2xx) but the response carried no usable channel id. Carries `bodySnippet` (truncated to 200 chars) for post-hoc debugging. |
 | `ClientClosedError` | Any send/manage method called after `close()`. |
+| `AbortError` | A send was canceled via the `AbortSignal` passed in `SendOptions.signal`. |
 
 ### Retry policy
 
@@ -368,7 +413,7 @@ The full mapping mirrors `packages/push/src/reasons.ts` and `scripts/send-apns.m
 ### Common flags
 
 - `--env=development|production`: picks the host pair (default `development`).
-- `--snapshot-file=./data/surface-fixtures/active-progress.json`: load a `LiveSurfaceSnapshot` from disk; the script projects it through `liveActivityAlertPayloadFromSnapshot` or `toLiveActivityContentState` as appropriate.
+- `--snapshot-file=./data/surface-fixtures/active-progress.json`: load a `LiveSurfaceSnapshot` from disk; the script projects it through `toApnsAlertPayload` or `toLiveActivityContentState` as appropriate.
 - `--state-file=./scripts/sample-state.json`: bypass the projection and ship a raw ActivityKit `content-state` JSON. Useful for testing renderer behavior without going through the contract.
 - `--attributes-file=…`: required for `--event=start`. JSON file with `surfaceId` and `modeLabel`. The surface fixtures match this shape.
 - `--attributes-type=MobileSurfacesActivityAttributes`: override the type name after `pnpm surface:rename`.
@@ -406,6 +451,16 @@ node scripts/send-apns.mjs \
 ```
 
 The script prints the HTTP status, request topic, push-type, payload, and any APNs response body. On non-2xx responses it appends the matching `APNS_REASON_GUIDE` entry, so you do not need to switch tabs to debug a 400 / 403 / 410. It also warns on >5 minute clock skew detected from the `Date` response header.
+
+## What the SDK does not expose
+
+Knobs the SDK intentionally does not surface, with the reason in each row. Open an issue if you need one of these wired through; the contract is bridge-agnostic so a fork can land them without breaking other consumers.
+
+- **Compact-trailing custom images, `ActivityUIDismissalPolicy.after`, and other ActivityKit knobs Apple has added since iOS 16.2** beyond `staleDate` and `relevanceScore`. The bridge is intentionally narrow; the trap catalog lists what is enforced, everything else is unwrapped.
+- **`signal: AbortSignal`** is exposed on every send method (`alert`, `sendNotification`, `update`, `start`, `end`, `broadcast`) and on each channel-management call. When aborted, an in-flight request is cancelled via `NGHTTP2_CANCEL`; a request waiting in a retry-backoff sleep wakes immediately; the promise rejects with the signal's reason or a generic `AbortError`. Pre-aborted signals reject synchronously without dialing.
+- **`describeSend(input)`** is a side-effect-free preview of the exact request a matching `send()` would issue (method, path, headers, payload, byte count). No JWT mint, no socket open. Useful for compose-time MS011 checks and `send-apns.mjs --describe`.
+- **`MOBILE_SURFACES_PUSH_DISABLE_RETRY`** env-var kill switch forces `maxRetries: 0` regardless of `_unsafeRetryOverride`. Documented because operators occasionally want to bisect "is this my retry policy or APNs?" without redeploying.
+- **`caOverride`** on `createPushClient` accepts a self-signed CA bundle. Test-only knob — the TLS regression test points the client at an in-process h2 server. Production callers never set this.
 
 ## Anti-goals
 

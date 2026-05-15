@@ -88,7 +88,7 @@ private struct MobileSurfacesStandbyView: View {
     )
     let isMonochrome = snapshot.tint == "monochrome"
     VStack(alignment: .leading, spacing: 6) {
-      Text((isStale ? "· " : "") + snapshot.state.uppercased())
+      Text((isStale ? "· " : "") + MobileSurfacesLifecycleStateDisplay.displayLabel(for: snapshot.state))
         .font(.caption2.weight(.semibold))
         .foregroundStyle(.secondary)
       Text(snapshot.headline)

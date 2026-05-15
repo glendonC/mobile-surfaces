@@ -15,7 +15,7 @@ For production-traffic failure modes (which catalog-bound errors are worth alert
 The harness reads `Activity<…>.activityAuthorizationInfo().areActivitiesEnabled`. iOS reports `false` when:
 
 - The user has Live Activities turned off for this app. Open iOS Settings → your app's name → Live Activities and toggle it on.
-- The user has Live Activities turned off globally. Open iOS Settings → Face ID & Passcode → Allow Notifications, or Settings → Notifications → Live Activities, depending on iOS version.
+- The user has Live Activities turned off globally. Open iOS Settings → Notifications → Live Activities and toggle the global switch on. There is a second toggle at Settings → Face ID & Passcode → Allow Access When Locked → Live Activities that controls Lock-Screen rendering specifically; flip both on if Lock-Screen activities are missing.
 - The build is still running on Expo Go. Live Activities require a development build; run `pnpm mobile:sim` or `pnpm mobile:run:ios:device`.
 - The deployment target dropped below the project floor. Confirm `apps/mobile/app.json` still has `expo.ios.deploymentTarget: "17.2"` and the `expo-build-properties` plugin block sets the same.
 

@@ -3,19 +3,19 @@
 // Mobile Surfaces contract (Zod source of truth, generated derivatives,
 // Swift parity, App Group identity, trap catalog, doc snapshots).
 //
-// Replaces a 19-step `&&` chain. Each step is a named object so a failure
-// surfaces a clear "which gate failed" header instead of a bare exit code,
-// and so contributors can scope a run with `--only` / `--skip`.
+// Each step is a named registry entry so a failure surfaces a clear "which
+// gate failed" header instead of a bare exit code, and so contributors can
+// scope a run with `--only` / `--skip`.
 //
 // All steps in this chain run in `--check` mode (or are intrinsically
 // read-only validators). They do not mutate the working tree, so they are
 // safe to run concurrently. Steps are grouped into stages purely so output
 // stays legible: every step inside a stage runs in parallel; stages run in
-// sequence. The intra-stage grouping mirrors the conceptual layers
-// (source-of-truth validation -> generated-file drift checks -> parity and
-// boundary checks -> environment/config probes -> tests and trap catalog ->
-// trap-derived generated files), which preserves the original chain's order
-// as a contract.
+// sequence.
+//
+// The step inventory lives in scripts/lib/check-registry.mjs — the single
+// source of truth for surface-check, diagnose, and validate-check-registry.
+// Adding a new check means adding one entry to that file.
 //
 // Flags:
 //   --only=id1,id2     Run only the listed step ids (comma separated).
@@ -32,172 +32,18 @@ import { spawn } from "node:child_process";
 import { parseArgs } from "node:util";
 import { performance } from "node:perf_hooks";
 
-const NODE_FLAGS = ["--experimental-strip-types", "--no-warnings=ExperimentalWarning"];
+import { orchestratorSteps } from "./lib/check-registry.mjs";
 
-// Helper for the common pattern: invoke node on a script under scripts/ with
-// the project's standard --experimental-strip-types flags.
-function nodeStep(scriptPath, scriptArgs = []) {
-  return ["node", ...NODE_FLAGS, scriptPath, ...scriptArgs];
-}
+// Step inventory from the registry. The registry runs its own integrity
+// checks at import time (id uniqueness, dependsOn cycles, mode/args
+// coherence) so surface-check fails fast if a contributor adds a malformed
+// entry.
+const STEPS = orchestratorSteps();
 
-// Step inventory. `stage` controls execution grouping (sequential between
-// stages, parallel within). `dependsOn` is informational/asserted: every id
-// in `dependsOn` must appear in an earlier stage. The chain's load-bearing
-// ordering is encoded by stage assignment.
-const STEPS = [
-  // Stage 1: source-of-truth validation. Nothing here depends on anything
-  // else in this run; these read pure source files (Zod schemas, JSON
-  // fixtures, the trap catalog) and assert internal consistency.
-  {
-    id: "validate-surface-fixtures",
-    label: "validate surface fixtures against Zod",
-    stage: 1,
-    cmd: nodeStep("scripts/validate-surface-fixtures.mjs"),
-  },
-  {
-    id: "validate-trap-catalog",
-    label: "validate data/traps.json catalog",
-    stage: 1,
-    cmd: nodeStep("scripts/validate-trap-catalog.mjs"),
-  },
-
-  // Stage 2: generated-file drift checks. Each --check mode regenerates in
-  // memory from its source and diffs the committed file. They are read-only
-  // and independent of each other; running in parallel is safe.
-  {
-    id: "build-schema",
-    label: "JSON Schema in sync with Zod source",
-    stage: 2,
-    cmd: nodeStep("scripts/build-schema.mjs", ["--check"]),
-    dependsOn: ["validate-surface-fixtures"],
-  },
-  {
-    id: "generate-surface-fixtures",
-    label: "TS fixtures in sync with JSON sources",
-    stage: 2,
-    cmd: nodeStep("scripts/generate-surface-fixtures.mjs", ["--check"]),
-    dependsOn: ["validate-surface-fixtures"],
-  },
-  {
-    id: "generate-app-group-constants",
-    label: "App Group constants in sync with app.json",
-    stage: 2,
-    cmd: nodeStep("scripts/generate-app-group-constants.mjs", ["--check"]),
-  },
-
-  // Stage 3: Swift parity and boundary checks. Each scans a distinct slice
-  // of the repo; no shared mutable state. The activity-attributes and
-  // surface-snapshots scripts read the same Zod schema the stage-2 check
-  // validates against the committed JSON Schema, so they conceptually run
-  // after stage 2 to ensure we report Zod-source issues first.
-  {
-    id: "check-activity-attributes",
-    label: "ActivityKit Swift attributes match Zod (MS002/MS003/MS004)",
-    stage: 3,
-    cmd: nodeStep("scripts/check-activity-attributes.mjs"),
-    dependsOn: ["build-schema"],
-  },
-  {
-    id: "check-surface-snapshots",
-    label: "Swift snapshot structs match Zod projection outputs (MS036)",
-    stage: 3,
-    cmd: nodeStep("scripts/check-surface-snapshots.mjs"),
-    dependsOn: ["build-schema"],
-  },
-  {
-    id: "check-adapter-boundary",
-    label: "Live Activity adapter boundary intact (MS001)",
-    stage: 3,
-    cmd: nodeStep("scripts/check-adapter-boundary.mjs"),
-  },
-  {
-    id: "check-validator-sync",
-    label: "validator re-exports in sync with source",
-    stage: 3,
-    cmd: nodeStep("scripts/check-validator-sync.mjs"),
-  },
-  {
-    id: "check-app-group-identity",
-    label: "App Group identifier parity across 4 sources (MS013)",
-    stage: 3,
-    cmd: nodeStep("scripts/check-app-group-identity.mjs"),
-    dependsOn: ["generate-app-group-constants"],
-  },
-  {
-    id: "check-ios-gitignore",
-    label: "apps/mobile/ios is gitignored and untracked (MS029)",
-    stage: 3,
-    cmd: nodeStep("scripts/check-ios-gitignore.mjs"),
-  },
-
-  // Stage 4: environment/config probes. Read-only inspection of app.json,
-  // package.json pins, and doc files for stale schema-version literals.
-  {
-    id: "check-external-pins",
-    label: "external pin discipline (MS010/MS026)",
-    stage: 4,
-    cmd: nodeStep("scripts/check-external-pins.mjs"),
-  },
-  {
-    id: "probe-app-config",
-    label: "app.json + package.json audit (MS012/MS018/MS024/MS025/MS027)",
-    stage: 4,
-    cmd: nodeStep("scripts/probe-app-config.mjs"),
-  },
-  {
-    id: "check-doc-schema-version",
-    label: "doc schemaVersion literals match canonical major",
-    stage: 4,
-    cmd: nodeStep("scripts/check-doc-schema-version.mjs"),
-  },
-
-  // Stage 5: full contract test suite. This is the broadest gate; it
-  // exercises Zod parsing, projections, migrations, and Standard Schema
-  // interop. Runs after stage 1-4 so its output appears after the
-  // narrower drift/parity reports it complements.
-  {
-    id: "surface-contracts-tests",
-    label: "surface-contracts.test.mjs (full unit suite)",
-    stage: 5,
-    cmd: ["node", ...NODE_FLAGS, "--test", "scripts/surface-contracts.test.mjs"],
-    dependsOn: ["build-schema"],
-  },
-
-  // Stage 6: trap-derived files. The trap catalog must validate before
-  // anything that consumes it.
-  {
-    id: "check-trap-error-binding",
-    label: "trap catalog error-class citations resolve",
-    stage: 6,
-    cmd: nodeStep("scripts/check-trap-error-binding.mjs"),
-    dependsOn: ["validate-trap-catalog"],
-  },
-  {
-    id: "generate-trap-bindings",
-    label: "packages/push/src/trap-bindings.ts in sync with traps.json",
-    stage: 6,
-    cmd: nodeStep("scripts/generate-trap-bindings.mjs", ["--check"]),
-    dependsOn: ["validate-trap-catalog"],
-  },
-  {
-    id: "generate-traps-data",
-    label: "packages/surface-contracts/src/traps-data.ts in sync",
-    stage: 6,
-    cmd: nodeStep("scripts/generate-traps-data.mjs", ["--check"]),
-    dependsOn: ["validate-trap-catalog"],
-  },
-  {
-    id: "build-agents-md",
-    label: "AGENTS.md / CLAUDE.md in sync with traps.json",
-    stage: 6,
-    cmd: nodeStep("scripts/build-agents-md.mjs", ["--check"]),
-    dependsOn: ["validate-trap-catalog"],
-  },
-];
-
-// Defense-in-depth: assert dependsOn references resolve and never point
-// forward (i.e., every dependency lives in an earlier stage). Catches
-// future edits that accidentally invert the order.
+// Defense-in-depth: assert dependsOn references resolve and point only at
+// earlier stages. The registry already enforces this; surface-check repeats
+// the assertion so a future change that bypasses the helper still fails
+// loud here.
 {
   const idToStage = new Map(STEPS.map((s) => [s.id, s.stage]));
   for (const step of STEPS) {
@@ -243,11 +89,8 @@ if (cli.list) {
 
 const onlySet = cli.only ? new Set(cli.only.split(",").map((s) => s.trim()).filter(Boolean)) : null;
 const skipSet = cli.skip ? new Set(cli.skip.split(",").map((s) => s.trim()).filter(Boolean)) : new Set();
-// `bail` defaults true; --no-bail flips it off.
 const bail = cli["no-bail"] ? false : cli.bail;
 
-// Validate --only / --skip ids against the inventory; a typo should fail
-// loud, not silently run nothing.
 const knownIds = new Set(STEPS.map((s) => s.id));
 for (const id of [...(onlySet ?? []), ...skipSet]) {
   if (!knownIds.has(id)) {
@@ -297,7 +140,6 @@ function formatMs(ms) {
   return `${(ms / 1000).toFixed(2)}s`;
 }
 
-// Group selected steps by stage, preserving stage ordering.
 const stages = new Map();
 for (const step of selected) {
   if (!stages.has(step.stage)) stages.set(step.stage, []);
@@ -320,15 +162,11 @@ for (const stageId of stageOrder) {
       }, Promise.resolve([]))
     : await Promise.all(stageSteps.map(runOne));
 
-  // Emit per-step output in stage order so the log is deterministic across
-  // runs even though execution was concurrent.
   for (const r of stageResults) {
     const ok = r.code === 0;
     const tag = ok ? "PASS" : "FAIL";
     console.log(`\n[${tag}] ${r.step.id}  (${formatMs(r.ms)})  -- ${r.step.label}`);
     if (r.output.trim().length > 0) {
-      // Indent script output two spaces so it visually nests under the step
-      // header without losing copy-pastable file paths.
       const indented = r.output.replace(/\r?\n$/, "").split("\n").map((l) => `  ${l}`).join("\n");
       console.log(indented);
     }
@@ -341,7 +179,6 @@ for (const stageId of stageOrder) {
   }
 }
 
-// Final summary table.
 console.log(`\n${HR}\nsurface:check summary\n${HR}`);
 const totalMs = results.reduce((a, r) => a + r.ms, 0);
 const passCount = results.filter((r) => r.code === 0).length;

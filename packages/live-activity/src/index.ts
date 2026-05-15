@@ -28,6 +28,26 @@ export interface LiveActivityChannelStartResult {
   channelId: string;
 }
 
+/**
+ * Optional ActivityKit knobs passed to `start()` / `update()` that the
+ * native module threads into `ActivityContent(state:, staleDate:,
+ * relevanceScore:)`.
+ *
+ * - `staleDateSeconds`: when the activity should be greyed out on the Lock
+ *   Screen if the host hasn't updated it. Unix seconds; iOS clamps to its
+ *   own ceiling (8h for typed apps; 8h relaxed on iOS 18). Omit to let the
+ *   OS pick the default.
+ * - `relevanceScore`: [0, 1]. The OS uses it to decide which Live Activity
+ *   wins the Dynamic Island compact slot when multiple activities are
+ *   active for the same app. Higher score wins. Omit for the Apple-side
+ *   default. The push wire layer also accepts `relevanceScore` on
+ *   `SendOptions` so remote sends can drive it without a bridge call.
+ */
+export interface LiveActivityContentOptions {
+  staleDateSeconds?: number;
+  relevanceScore?: number;
+}
+
 export type LiveActivityEvents = {
   onPushToken: (payload: { activityId: string; token: string }) => void;
   onActivityStateChange: (payload: {
@@ -94,12 +114,17 @@ export interface LiveActivityAdapter {
     modeLabel: string,
     state: LiveActivityContentState,
     channelId?: string | null,
+    options?: LiveActivityContentOptions | null,
   ): Promise<{
     id: string;
     state: LiveActivityContentState;
     channelId?: string;
   }>;
-  update(activityId: string, state: LiveActivityContentState): Promise<void>;
+  update(
+    activityId: string,
+    state: LiveActivityContentState,
+    options?: LiveActivityContentOptions | null,
+  ): Promise<void>;
   end(
     activityId: string,
     dismissalPolicy: "immediate" | "default",
@@ -138,6 +163,7 @@ declare class LiveActivityNativeModule
     modeLabel: string,
     state: LiveActivityContentState,
     channelId?: string | null,
+    options?: LiveActivityContentOptions | null,
   ): Promise<{
     id: string;
     state: LiveActivityContentState;
@@ -146,6 +172,7 @@ declare class LiveActivityNativeModule
   update(
     activityId: string,
     state: LiveActivityContentState,
+    options?: LiveActivityContentOptions | null,
   ): Promise<void>;
   end(
     activityId: string,

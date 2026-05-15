@@ -220,13 +220,6 @@ export class Http2Client {
         reject(err);
         return;
       }
-      const timeoutMs = init.timeoutMs ?? 30_000;
-      if (timeoutMs > 0) {
-        req.setTimeout(timeoutMs, () => {
-          req.close(http2.constants.NGHTTP2_CANCEL);
-          reject(Object.assign(new Error("Request timed out"), { code: "ETIMEDOUT" }));
-        });
-      }
       req.setEncoding("utf8");
       let status = 0;
       let headers: http2.IncomingHttpHeaders = {};
@@ -251,6 +244,25 @@ export class Http2Client {
           init.signal.removeEventListener("abort", onAbort);
         }
       };
+      // The timeout callback must mirror onAbort: settled-guard, cleanup() to
+      // detach the AbortSignal listener (otherwise long-lived signals
+      // accumulate listeners on every timed-out request and trip Node's
+      // MaxListenersExceededWarning), then close the stream and reject. The
+      // earlier shape called only req.close() + reject(), which left the
+      // listener attached.
+      const timeoutMs = init.timeoutMs ?? 30_000;
+      if (timeoutMs > 0) {
+        req.setTimeout(timeoutMs, () => {
+          if (settled) return;
+          cleanup();
+          try {
+            req.close(http2.constants.NGHTTP2_CANCEL);
+          } catch {
+            // stream may already be closing; ignore.
+          }
+          reject(Object.assign(new Error("Request timed out"), { code: "ETIMEDOUT" }));
+        });
+      }
       req.on("response", (h) => {
         status = Number(h[":status"] ?? 0);
         headers = h;

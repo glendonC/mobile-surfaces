@@ -118,7 +118,7 @@ Pinning to `5.0` rather than `5` lets a future minor that adds a discriminated-u
 - **Bump `schemaVersion`** only on a breaking change: renaming or removing a field, changing a type, tightening a constraint (e.g. an enum drops a value, a string gains a regex it did not have before), or anything that makes a previously valid payload fail to parse.
 - **Additive optional fields are non-breaking.** Adding a new `actionLabel`-style optional field, or a new `kind` branch with its own optional slice, does not require a bump.
 - **A new `kind` value is a minor bump on the published JSON Schema** (new `oneOf` branch, new `$id` at `@5.N/schema.json`). The TypeScript union widens, but no existing payload becomes invalid.
-- **When v5 lands**, the migration story extends naturally: add `liveSurfaceSnapshotV4` (frozen at the v5 cutover), `migrateV4ToV5`, and update `safeParseAnyVersion` to chain v5 -> v4. Consumers using the codec do not need to change call sites; the v3 codec ages out at the 6.0 boundary regardless of when v5 lands.
+- **When v5 lands**, the migration story extends naturally: add `liveSurfaceSnapshotV4` (frozen at the v5 cutover), `migrateV4ToV5`, and update `safeParseAnyVersion` to chain v4 -> v5. Consumers using the codec do not need to change call sites; the v3 codec ages out at the 6.0 boundary regardless of when v5 lands.
 
 ## Standard Schema interop
 

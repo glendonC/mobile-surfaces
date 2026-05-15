@@ -7,26 +7,33 @@ import crypto from "node:crypto";
 import {
   liveSurfaceSnapshot,
   toLiveActivityContentState,
+  toNotificationContentPayload,
 } from "@mobile-surfaces/surface-contracts";
 import type {
   LiveSurfaceSnapshot,
   LiveSurfaceSnapshotLiveActivity,
+  LiveSurfaceSnapshotNotification,
 } from "@mobile-surfaces/surface-contracts";
 import { toApnsAlertPayload } from "./payloads.ts";
 
 import {
   AbortError,
   ApnsError,
-  BadDateError,
-  BadExpirationDateError,
   ClientClosedError,
   CreateChannelResponseError,
   InvalidSnapshotError,
   MissingApnsConfigError,
-  PayloadTooLargeError,
   TooManyRequestsError,
   reasonToError,
 } from "./errors.ts";
+import {
+  MAX_PAYLOAD_BYTES_BROADCAST,
+  MAX_PAYLOAD_BYTES_DEFAULT,
+  assertActivityTimestampOptions,
+  assertPayloadWithinLimit,
+  resolveBroadcastExpiration,
+} from "./preflight.ts";
+import type { PayloadKind } from "./preflight.ts";
 import type { Http2ConnectFactory } from "./http.ts";
 import { Http2Client } from "./http.ts";
 import { JwtCache, resolveKeyPem } from "./jwt.ts";
@@ -48,171 +55,9 @@ import type { ChannelInfo } from "./channels.ts";
 
 export type { ChannelInfo } from "./channels.ts";
 
-// APNs payload ceilings per MS011. Per-activity and alert sends are bounded at
-// 4 KB; iOS 18 broadcast pushes get an extra 1 KB. The SDK enforces these
-// client-side so callers see PayloadTooLargeError before the round-trip.
-const MAX_PAYLOAD_BYTES_DEFAULT = 4096;
-const MAX_PAYLOAD_BYTES_BROADCAST = 5120;
-
-type PayloadKind = "alert" | "update" | "start" | "end" | "broadcast";
-
-function assertPayloadWithinLimit(
-  payload: string,
-  kind: PayloadKind,
-): void {
-  const limit =
-    kind === "broadcast" ? MAX_PAYLOAD_BYTES_BROADCAST : MAX_PAYLOAD_BYTES_DEFAULT;
-  const size = Buffer.byteLength(payload, "utf8");
-  if (size > limit) {
-    throw new PayloadTooLargeError({
-      status: 413,
-      message: `Client-side pre-flight: payload size ${size} bytes exceeds limit ${limit} for ${kind}; rejected before APNs round-trip. See MS011.`,
-    });
-  }
-}
-
-/**
- * Lower bound below which a value is treated as a millisecond-magnitude
- * timestamp rather than unix seconds. Unix-seconds values for any realistic
- * date stay well under 1e11 (year 2286 is ~9.9e9 seconds); a millisecond
- * timestamp for any date past 1973 is already above it. Date.now() returns
- * ~1.7e12, the single most common MS032 offender, so any field at or above
- * this boundary is rejected as a millisecond value passed where seconds were
- * expected.
- */
-const MILLISECOND_MAGNITUDE_FLOOR = 1e11;
-
-/**
- * Client-side pre-flight for MS032: every Live Activity timestamp field
- * (`staleDateSeconds`, `dismissalDateSeconds`, and the `expirationSeconds`
- * that derives `apns-expiration`) must be a positive unix-seconds integer.
- * APNs rejects non-integer, negative, zero, NaN, and millisecond-magnitude
- * values with 400 BadDate / 400 BadExpirationDate; we surface that before the
- * round-trip the same way `assertPayloadWithinLimit` handles MS011 — reusing
- * the typed error class with `status: 400` so observability hooks bucket the
- * client-caught and server-returned variants together.
- *
- * Rules match scripts/send-apns.mjs's `parseUnixSeconds` (not finite, not an
- * integer, or <= 0 is rejected) and additionally reject millisecond-magnitude
- * values, which `parseUnixSeconds` would accept but APNs would not.
- *
- * `undefined` passes through untouched: the field is optional and the caller
- * (or a downstream default) supplies it later. `errorClass` selects BadDate
- * for stale/dismissal fields and BadExpirationDate for the expiration field,
- * matching the reason APNs returns for each; both classes carry trapId
- * "MS032" through the generated trap-bindings table.
- */
-function assertValidActivityTimestamp(
-  value: number | undefined,
-  field: "staleDateSeconds" | "dismissalDateSeconds" | "expirationSeconds",
-  errorClass: typeof BadDateError | typeof BadExpirationDateError,
-): void {
-  if (value === undefined) return;
-  let problem: string | undefined;
-  if (!Number.isFinite(value)) {
-    problem = "must be a finite number";
-  } else if (!Number.isInteger(value)) {
-    problem = "must be an integer (no fractional seconds)";
-  } else if (value <= 0) {
-    problem = "must be a positive unix-seconds value (got zero or negative)";
-  } else if (value >= MILLISECOND_MAGNITUDE_FLOOR) {
-    problem =
-      "looks like a millisecond timestamp; pass unix seconds " +
-      "(divide a Date.now() value by 1000)";
-  }
-  if (problem === undefined) return;
-  throw new errorClass({
-    status: 400,
-    message:
-      `Client-side pre-flight: ${field} ${problem} (received ${JSON.stringify(value)}); ` +
-      `rejected before APNs round-trip. See MS032.`,
-  });
-}
-
-/**
- * MS032 pre-flight for the timestamp options shared by device sends and
- * broadcasts. `staleDateSeconds` and `dismissalDateSeconds` are absolute
- * unix-seconds dates with no special-case values. `expirationSeconds` is
- * different: 0 is a documented, valid `apns-expiration` value ("attempt
- * delivery once, do not store") and is policy-required for a no-storage
- * broadcast channel, so a zero passes through untouched here; only a defined,
- * nonzero value is checked for malformed magnitude. #sendDevice, broadcast(),
- * and describeSend() all route through this so the three paths cannot drift.
- */
-function assertActivityTimestampOptions(options: {
-  staleDateSeconds?: number;
-  dismissalDateSeconds?: number;
-  expirationSeconds?: number;
-}): void {
-  assertValidActivityTimestamp(
-    options.staleDateSeconds,
-    "staleDateSeconds",
-    BadDateError,
-  );
-  assertValidActivityTimestamp(
-    options.dismissalDateSeconds,
-    "dismissalDateSeconds",
-    BadDateError,
-  );
-  if (
-    options.expirationSeconds !== undefined &&
-    options.expirationSeconds !== 0
-  ) {
-    assertValidActivityTimestamp(
-      options.expirationSeconds,
-      "expirationSeconds",
-      BadExpirationDateError,
-    );
-  }
-}
-
-const BROADCAST_DEFAULT_TTL_SECONDS = 3600;
-
-/**
- * Resolve `apns-expiration` for a broadcast send. The two channel storage
- * policies have opposite semantics — no-storage requires 0, most-recent-message
- * requires nonzero — and Apple rejects the wrong combination with 400
- * BadExpirationDate (MS032). We surface that as a client-side pre-flight
- * the same way `assertPayloadWithinLimit` handles MS011: reuse the typed
- * error class with `status: 400` so observability hooks bucket the
- * client-caught and server-returned variants together.
- *
- * The matrix:
- *
- *   storagePolicy           expirationSeconds   resolved expiration
- *   --------------------   ------------------   --------------------
- *   "no-storage" (default)  unset or 0           0
- *   "no-storage"            nonzero              throw (no-storage cannot defer)
- *   "most-recent-message"   unset                now + 3600
- *   "most-recent-message"   0                    throw (defeats the policy)
- *   "most-recent-message"   nonzero              expirationSeconds
- */
-function resolveBroadcastExpiration(options: BroadcastOptions): number {
-  const policy = options.storagePolicy ?? "no-storage";
-  const requested = options.expirationSeconds;
-  if (policy === "no-storage") {
-    if (requested !== undefined && requested !== 0) {
-      throw new BadExpirationDateError({
-        status: 400,
-        message:
-          `Client-side pre-flight: broadcast() with storagePolicy "no-storage" must send apns-expiration: 0 ` +
-          `(received expirationSeconds: ${requested}). No-storage channels cannot defer delivery; ` +
-          `if you need a TTL, create the channel with storagePolicy: "most-recent-message". See MS032.`,
-      });
-    }
-    return 0;
-  }
-  if (requested === 0) {
-    throw new BadExpirationDateError({
-      status: 400,
-      message:
-        `Client-side pre-flight: broadcast() with storagePolicy "most-recent-message" requires a nonzero apns-expiration ` +
-        `(received 0). A TTL of 0 defeats the channel's storage policy; pass expirationSeconds as a unix-seconds value ` +
-        `or omit it to default to now + ${BROADCAST_DEFAULT_TTL_SECONDS}s. See MS032.`,
-    });
-  }
-  return requested ?? Math.floor(Date.now() / 1000) + BROADCAST_DEFAULT_TTL_SECONDS;
-}
+// MS011 payload ceilings and MS032 timestamp pre-flight live in
+// ./preflight.ts so they are independently testable and so the post-split
+// operations/*.ts modules can compose them without re-importing client.ts.
 
 export interface CreatePushClientOptions {
   /** 10-character APNs Auth Key ID from the Apple Developer portal. */
@@ -345,6 +190,23 @@ export interface SendOptions {
   staleDateSeconds?: number;
   /** ActivityKit `dismissal-date` in unix seconds. */
   dismissalDateSeconds?: number;
+  /**
+   * Optional ActivityKit `relevance-score` in [0, 1]. The OS uses it to
+   * decide which Live Activity wins the Dynamic Island compact slot when
+   * multiple activities are active for the same app. Higher score wins;
+   * undefined leaves the field out (matching Apple's default). Has no
+   * effect on alert-type pushes; APNs ignores it there.
+   */
+  relevanceScore?: number;
+  /**
+   * Optional `apns-collapse-id` header. APNs coalesces multiple alert
+   * notifications with the same collapse-id into a single Notification
+   * Center entry. Has no effect on Live Activity sends (Apple ignores it
+   * there) so the SDK only sets the header when pushType === "alert".
+   * Max 64 bytes; the SDK does not validate length — APNs returns 400
+   * BadCollapseId when malformed.
+   */
+  collapseId?: string;
   /**
    * Caller-supplied abort signal. When aborted, an in-flight request is
    * cancelled via `NGHTTP2_CANCEL`; a request waiting in a retry-backoff
@@ -726,6 +588,18 @@ function snapshotMustBeLiveActivity(
   return snapshot;
 }
 
+function snapshotMustBeNotification(
+  snapshot: LiveSurfaceSnapshot,
+  method: string,
+): LiveSurfaceSnapshotNotification {
+  if (snapshot.kind !== "notification") {
+    throw new InvalidSnapshotError(
+      `${method} requires a notification-kind snapshot; got kind=${snapshot.kind}.`,
+    );
+  }
+  return snapshot;
+}
+
 function validateSnapshot(input: unknown): LiveSurfaceSnapshot {
   const result = liveSurfaceSnapshot.safeParse(input);
   if (!result.success) {
@@ -813,7 +687,11 @@ export class PushClient {
   }
 
   /**
-   * Send a regular alert push. Snapshot must be `liveActivity`-kind.
+   * Send a regular alert push derived from a liveActivity-kind snapshot
+   * (the alert-fallback path: same content as the Live Activity but
+   * rendered as a standard notification). Snapshot must be
+   * `liveActivity`-kind. Use `sendNotification()` for a notification-kind
+   * snapshot (the contract's dedicated notification slice).
    */
   async alert(
     deviceToken: string,
@@ -827,6 +705,41 @@ export class PushClient {
     return this.#sendDevice({
       operation: "alert",
       snapshotId: live.id,
+      token: deviceToken,
+      payload,
+      pushType: "alert",
+      defaultPriority: 10,
+      apnsTopic: this.#options.bundleId,
+      options,
+    });
+  }
+
+  /**
+   * Send a notification push derived from a notification-kind snapshot.
+   * Payload is built via `toNotificationContentPayload` from
+   * `@mobile-surfaces/surface-contracts`; the wire shape carries the
+   * notification slice's title/body/category/threadId plus a
+   * `kind: "surface_notification"` sidecar. The OS renders a standard alert
+   * — no `UNNotificationContentExtension` required — so this surface ships
+   * end-to-end without an extension target. A future rich-notification
+   * renderer would layer custom UI on top of the same payload.
+   *
+   * Same APNs `push-type: alert` and bare-bundle-id `apns-topic` as
+   * `alert()`; the two methods differ only in input kind (and therefore
+   * payload shape).
+   */
+  async sendNotification(
+    deviceToken: string,
+    snapshot: LiveSurfaceSnapshot,
+    options: SendOptions = {},
+  ): Promise<PushResult> {
+    this.#assertOpen();
+    const validated = validateSnapshot(snapshot);
+    const note = snapshotMustBeNotification(validated, "sendNotification()");
+    const payload = JSON.stringify(toNotificationContentPayload(note));
+    return this.#sendDevice({
+      operation: "alert",
+      snapshotId: note.id,
       token: deviceToken,
       payload,
       pushType: "alert",
@@ -1300,6 +1213,13 @@ export class PushClient {
     if (options.dismissalDateSeconds !== undefined) {
       aps["dismissal-date"] = options.dismissalDateSeconds;
     }
+    if (options.relevanceScore !== undefined) {
+      // ActivityKit reads this off the push payload as aps.relevance-score
+      // and uses it to pick the Dynamic Island slot when multiple
+      // activities are active. Range [0, 1] per Apple's docs; the SDK does
+      // not clamp — out-of-range values surface as the APNs reject.
+      aps["relevance-score"] = options.relevanceScore;
+    }
     return { aps };
   }
 
@@ -1334,6 +1254,13 @@ export class PushClient {
       "apns-expiration": expiration,
       "content-type": "application/json",
     };
+    // apns-collapse-id is an alert-only mechanism (Apple's docs note that
+    // Live Activity push types ignore it). Setting it on a liveactivity send
+    // would be silent dead weight; setting it on an alert send dedupes
+    // Notification Center entries with the same id.
+    if (args.options.collapseId !== undefined && args.pushType === "alert") {
+      headers["apns-collapse-id"] = args.options.collapseId;
+    }
     return this.#performWithRetry(this.#send, headers, args.payload, apnsId, {
       operation: args.operation,
       snapshotId: args.snapshotId,

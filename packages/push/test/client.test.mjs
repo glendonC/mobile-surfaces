@@ -129,6 +129,134 @@ test("update() targets liveactivity push-type with priority 5 and projected cont
   });
 });
 
+// Phase 3 notification surface: contract has kind: "notification" and a
+// toNotificationContentPayload helper that produces a wire-correct APNs
+// alert payload (kind: "surface_notification" sidecar; aps.alert + optional
+// category + thread-id). sendNotification() ships this end-to-end so the
+// contract surface stops being half-promised. Same push-type / topic /
+// priority as alert(); differs only in input kind and sidecar shape.
+
+const NOTIFICATION_SNAPSHOT = (() => {
+  // The committed JSON fixture carries a $schema link for editor tooling;
+  // strip it before handing to the SDK so the strict Zod schema parses.
+  const raw = JSON.parse(
+    fs.readFileSync(
+      path.resolve(
+        __dirname,
+        "../../../data/surface-fixtures/notification-alert.json",
+      ),
+      "utf8",
+    ),
+  );
+  delete raw.$schema;
+  return raw;
+})();
+
+test("sendNotification() sends an alert push from a notification-kind snapshot", async (t) => {
+  const mock = await startMockApns(() => ({
+    status: 200,
+    headers: { "apns-id": "notif-id-1" },
+  }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  const res = await client.sendNotification(
+    "n".repeat(64),
+    NOTIFICATION_SNAPSHOT,
+    { apnsId: "notif-id-1" },
+  );
+  assert.equal(res.status, 200);
+
+  const req = mock.requests[0];
+  assert.equal(req.path, `/3/device/${"n".repeat(64)}`);
+  assert.equal(req.headers["apns-push-type"], "alert");
+  assert.equal(req.headers["apns-priority"], "10");
+  // Bare bundle id — no .push-type.liveactivity suffix on a notification.
+  assert.equal(req.headers["apns-topic"], "com.example.test");
+
+  const body = JSON.parse(req.body);
+  assert.deepEqual(body.aps.alert, {
+    title: NOTIFICATION_SNAPSHOT.notification.title,
+    body: NOTIFICATION_SNAPSHOT.notification.body,
+  });
+  assert.equal(body.aps.category, NOTIFICATION_SNAPSHOT.notification.category);
+  assert.equal(body.aps["thread-id"], NOTIFICATION_SNAPSHOT.notification.threadId);
+  assert.equal(body.liveSurface.kind, "surface_notification");
+  assert.equal(body.liveSurface.snapshotId, NOTIFICATION_SNAPSHOT.id);
+});
+
+test("sendNotification() rejects a liveActivity-kind snapshot", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.sendNotification("n".repeat(64), SNAPSHOT),
+    (err) => {
+      assert.ok(err instanceof InvalidSnapshotError);
+      assert.match(err.message, /notification-kind snapshot/);
+      return true;
+    },
+  );
+});
+
+test("alert() rejects a notification-kind snapshot", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.alert("a".repeat(64), NOTIFICATION_SNAPSHOT),
+    (err) => {
+      assert.ok(err instanceof InvalidSnapshotError);
+      assert.match(err.message, /liveActivity-kind snapshot/);
+      return true;
+    },
+  );
+});
+
+test("alert() forwards collapseId as apns-collapse-id when supplied", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await client.alert("a".repeat(64), SNAPSHOT, { collapseId: "order-42" });
+  const req = mock.requests[0];
+  assert.equal(req.headers["apns-collapse-id"], "order-42");
+});
+
+test("update() does NOT forward collapseId (Apple ignores it on liveactivity)", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await client.update("a".repeat(64), SNAPSHOT, { collapseId: "should-not-appear" });
+  const req = mock.requests[0];
+  assert.equal(req.headers["apns-collapse-id"], undefined);
+});
+
+test("update() with relevanceScore forwards it into aps.relevance-score", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await client.update("a".repeat(64), SNAPSHOT, { relevanceScore: 0.75 });
+  const req = mock.requests[0];
+  const body = JSON.parse(req.body);
+  assert.equal(body.aps["relevance-score"], 0.75);
+});
+
+test("update() without relevanceScore omits the field from aps", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await client.update("a".repeat(64), SNAPSHOT);
+  const req = mock.requests[0];
+  const body = JSON.parse(req.body);
+  assert.ok(!("relevance-score" in body.aps));
+});
+
 test("broadcast() posts to /4/broadcasts/apps/<bundle> with apns-channel-id and no apns-topic", async (t) => {
   const mock = await startMockApns(() => ({ status: 200 }));
   const client = makeClient({ sendOrigin: mock.origin });

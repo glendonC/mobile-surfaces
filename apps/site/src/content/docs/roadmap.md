@@ -26,7 +26,7 @@ See [`compatibility.md`](/docs/compatibility) for the canonical pinned row.
 `LiveSurfaceSnapshot` is a true `z.discriminatedUnion("kind", […])` with six members: `liveActivity`, `widget`, `control`, `lockAccessory`, `standby`, `notification`. Per-kind slices (`liveActivity`, `widget`, `control`, `notification`, `lockAccessory`, `standby`) are strict objects attached to their respective branches.
 
 - The published JSON Schema is `oneOf` with `const`-discriminated branches, proper kind ↔ slice enforcement, not a loose union.
-- Migration codec ships in `packages/surface-contracts`. Through 4.x: `liveSurfaceSnapshotV2`, `migrateV2ToV3`, `safeParseAnyVersion` chained v3 -> v2. From 5.0 forward: `liveSurfaceSnapshotV3`, `migrateV3ToV4`, `safeParseAnyVersion` chains v3 -> v4; the v2 codec is retired. See [`schema-migration.md`](/docs/schema-migration).
+- Migration codec ships in `packages/surface-contracts`. Through 4.x: `liveSurfaceSnapshotV2`, `migrateV2ToV3`, `safeParseAnyVersion` chained v2 -> v3. From 5.0 forward: `liveSurfaceSnapshotV3`, `migrateV3ToV4`, `safeParseAnyVersion` chains v3 -> v4; the v2 codec is retired. See [`schema-migration.md`](/docs/schema-migration).
 - `$id` pins to `https://unpkg.com/@mobile-surfaces/surface-contracts@<major.minor>/schema.json` so a future minor that adds a discriminated-union variant can publish a new URL without yanking what consumers reference. The current URL is `@5.0/schema.json`; `@4.0`, `@3.2`, `@3.0` etc. stay resolvable on unpkg.
 - Standard Schema interop is live: Zod 4.x implements `~standard` (`{ vendor: "zod", version: 1, validate, jsonSchema }`) on every exported schema. A fixture-validation test pins this so it cannot regress.
 
@@ -63,12 +63,12 @@ Reshape that addressed the four audit findings v1 could not patch:
 
 - `stage`, `estimatedSeconds`, and `morePartsCount` moved out of the base shape into a new `liveActivity` slice. Other kinds stop carrying liveActivity-only values.
 - `updatedAt` promoted from optional to required so consumers can drop out-of-order pushes.
-- `liveSurfaceAlertPayload` and `toAlertPayload` moved to `@mobile-surfaces/push` and renamed `liveActivityAlertPayload` / `liveActivityAlertPayloadFromSnapshot`. The `aps` envelope is APNs wire format and belongs next to the SDK that sends it.
+- `liveSurfaceAlertPayload` and `toAlertPayload` moved to `@mobile-surfaces/push` and renamed `liveActivityAlertPayload` / `liveActivityAlertPayloadFromSnapshot` (the latter further renamed to `toApnsAlertPayload` at 5.0 for naming consistency with the other `to*` projection helpers; the wire shape did not change). The `aps` envelope is APNs wire format and belongs next to the SDK that sends it.
 - v0 codec dropped (it was reconstructed from an internal commit and never consumed externally). The missing-`kind` preprocess removed alongside it; v2 producers must set `kind` explicitly.
 
 The v1->v2 migration codec lives for the entire 3.x release line and is removed in 4.0.0. See [`schema-migration.md`](/docs/schema-migration) for the deprecation timeline and worked examples.
 
-### v3 schema (5.0.0 release)
+### v4 schema (5.0.0 release)
 
 Finished the slice-per-kind transition that v2 started:
 
@@ -77,7 +77,7 @@ Finished the slice-per-kind transition that v2 started:
 - Control slice gained a required `label` field (v3 had been falling back through `actionLabel` -> `primaryText`).
 - v2 codec retired at the 5.0 cutover per the v3 RFC commitment; `safeParseAnyVersion` now chains v3 -> v4.
 
-The v2->v3 migration codec lives for the entire 5.x release line and is removed in 6.0.0. See [`schema-migration.md`](/docs/schema-migration) for the codec timeline and the per-kind field-mapping table.
+The v3->v4 migration codec lives for the entire 5.x release line and is removed in 6.0.0. See [`schema-migration.md`](/docs/schema-migration) for the codec timeline and the per-kind field-mapping table.
 
 ### CLI
 

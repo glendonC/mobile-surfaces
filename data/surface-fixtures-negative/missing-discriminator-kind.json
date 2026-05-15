@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "4",
+  "id": "neg-missing-kind",
+  "surfaceId": "surface-neg",
+  "updatedAt": "2026-05-12T18:30:00.000Z",
+  "state": "queued",
+  "liveActivity": {
+    "title": "Missing discriminator",
+    "body": "kind is required by the discriminated union and both validators must reject its absence.",
+    "progress": 0,
+    "deepLink": "mobilesurfaces://surface/neg",
+    "modeLabel": "neg",
+    "contextLabel": "neg",
+    "statusLine": "neg",
+    "stage": "prompted",
+    "estimatedSeconds": 0,
+    "morePartsCount": 0
+  }
+}

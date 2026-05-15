@@ -51,6 +51,19 @@ const PINNED = [
     name: "expo-build-properties",
     trapId: "MS010",
   },
+  // ajv + ajv-formats power scripts/check-ajv-zod-parity.mjs (the Phase 4
+  // verification gate that asserts the published schema.json and the Zod
+  // source agree on every fixture). Pin exact for the same reason zod is
+  // pinned: a floating range can silently change validator behavior between
+  // contributors and skew CI from local runs.
+  {
+    file: "package.json",
+    name: "ajv",
+  },
+  {
+    file: "package.json",
+    name: "ajv-formats",
+  },
 ];
 
 const EXACT_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;

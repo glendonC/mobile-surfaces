@@ -89,7 +89,7 @@ private struct MobileSurfacesHomeWidgetView: View {
     )
     VStack(alignment: .leading, spacing: 8) {
       HStack {
-        Text(snapshot.state.uppercased())
+        Text(MobileSurfacesLifecycleStateDisplay.displayLabel(for: snapshot.state))
           .font(.caption2.weight(.semibold))
           .foregroundStyle(.secondary)
         Spacer()

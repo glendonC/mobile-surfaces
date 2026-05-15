@@ -59,7 +59,7 @@ The default. Renders as a Lock Screen Live Activity and Dynamic Island compact /
 - `data/surface-fixtures/bad-timing.json`: suppressed, `state: "bad_timing"`.
 - `data/surface-fixtures/completed.json`: done, `state: "completed"`, `progress: 1`.
 
-Projection helpers: `toLiveActivityContentState` (in `@mobile-surfaces/surface-contracts`; returns `{ headline, subhead, progress, stage }`) and `liveActivityAlertPayloadFromSnapshot` (in `@mobile-surfaces/push`; returns the APNs alert + `liveSurface` sidecar). The alert helper moved out of the contract package in 3.0 because its `aps` envelope is APNs wire format, not a contract concern.
+Projection helpers: `toLiveActivityContentState` (in `@mobile-surfaces/surface-contracts`; returns `{ headline, subhead, progress, stage }`) and `toApnsAlertPayload` (in `@mobile-surfaces/push`; returns the APNs alert + `liveSurface` sidecar). The alert helper moved out of the contract package in 3.0 because its `aps` envelope is APNs wire format, not a contract concern.
 
 Native: `apps/mobile/targets/widget/MobileSurfacesLiveActivity.swift` declares the `ActivityConfiguration(for: MobileSurfacesActivityAttributes.self)`. `MobileSurfacesActivityAttributes.swift` is duplicated byte-for-byte across the Expo module (`packages/live-activity/ios/`) and the widget target; `scripts/check-activity-attributes.mjs` enforces the byte-identity until SPM-shared Swift lands (Phase 5, deferred upstream-blocked; see [`docs/roadmap.md`](/docs/roadmap)).
 
@@ -67,7 +67,7 @@ Native: `apps/mobile/targets/widget/MobileSurfacesLiveActivity.swift` declares t
 
 - A backend job (rendering, payment, fulfillment) that the user wants to track in real time.
 - Anything that fits the ActivityKit lifetime ceiling: 8 active hours + 4 hours stale.
-- The user has Live Activities enabled. Send a `kind: "liveActivity"` push and a fallback `alert` (also derived from the same snapshot via `liveActivityAlertPayloadFromSnapshot`) for users who have them disabled.
+- The user has Live Activities enabled. Send a `kind: "liveActivity"` push and a fallback `alert` (also derived from the same snapshot via `toApnsAlertPayload`) for users who have them disabled.
 
 ### Code example
 
@@ -209,7 +209,7 @@ Control surfaces, like widgets, do not flow through APNs directly. The host app 
 
 A notification content payload. Drives the standard alert UI on the Lock Screen / Notification Center, with optional `category` and `threadId` slots.
 
-**Status: contract shipped, fixture and native renderer not yet shipping.** No fixture under `data/surface-fixtures/` today. Projection helper: `toNotificationContentPayload` (returns `{ aps: { alert, sound, category?, "thread-id"? }, liveSurface: { kind, snapshotId, surfaceId, state, deepLink } }`). The starter does not register a notification content extension; a future Phase 4 follow-up adds one. See [`docs/roadmap.md`](/docs/roadmap) ("Lock-screen accessory, notification content extension, StandBy", deferred until Phase 3 has soak time).
+**Status: shipped for the basic alert path.** Fixture: `data/surface-fixtures/notification-alert.json`. Projection helper: `toNotificationContentPayload` (returns `{ aps: { alert, sound, category?, "thread-id"? }, liveSurface: { kind, snapshotId, surfaceId, state, deepLink } }`). The SDK sends via `client.sendNotification(deviceToken, snapshot)`; the OS renders a standard alert with no extension required. A future `UNNotificationContentExtension` target would add rich-notification rendering (images, custom layout) on top of the same payload; the basic alert case does not require it.
 
 ### When to emit
 
@@ -253,7 +253,7 @@ const payload = toNotificationContentPayload(snapshot);
 //   }
 ```
 
-Until the notification content extension lands, you can ship a `kind: "liveActivity"` snapshot and project through `liveActivityAlertPayloadFromSnapshot` (from `@mobile-surfaces/push`) instead; the `liveSurface` sidecar shape is similar (`kind: "surface_snapshot"` rather than `"surface_notification"`).
+Until the notification content extension lands, you can ship a `kind: "liveActivity"` snapshot and project through `toApnsAlertPayload` (from `@mobile-surfaces/push`) instead; the `liveSurface` sidecar shape is similar (`kind: "surface_snapshot"` rather than `"surface_notification"`).
 
 ## `kind: "lockAccessory"`
 
@@ -343,7 +343,7 @@ The `deepLink` field is propagated into every projection: it lands in `LiveActiv
 
 | Domain situation | Recommended `kind` |
 | --- | --- |
-| Long-running task with progress; user wants real-time updates | `liveActivity` (with fallback `liveActivity` -> `liveActivityAlertPayloadFromSnapshot` for users who have activities disabled) |
+| Long-running task with progress; user wants real-time updates | `liveActivity` (with fallback `liveActivity` -> `toApnsAlertPayload` for users who have activities disabled) |
 | Persistent status visible at a glance, infrequent updates | `widget` |
 | Single-tap interaction reachable from Control Center / Lock Screen | `control` |
 | Standalone notification with category / thread routing | `notification` |
