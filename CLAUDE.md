@@ -135,7 +135,7 @@ packages/surface-contracts/schema.json must be regenerated whenever the Zod sour
 
 **severity:** error  •  **detection:** static (script-checkable)  •  **tags:** contract  •  **enforced by:** `scripts/validate-surface-fixtures.mjs`
 
-Every JSON file under data/surface-fixtures/ must parse via the v2 discriminated union (after $schema is stripped).
+Every JSON file under data/surface-fixtures/ must parse via the v3 discriminated union (after $schema is stripped).
 
 **Symptom.** Tests that exercise fixtures pass locally but fail in CI on a fixture nobody noticed was malformed; or fixture-driven previews silently render placeholder data.
 

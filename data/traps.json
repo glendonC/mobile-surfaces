@@ -69,7 +69,7 @@
       "severity": "error",
       "detection": "static",
       "tags": ["contract"],
-      "summary": "Every JSON file under data/surface-fixtures/ must parse via the v2 discriminated union (after $schema is stripped).",
+      "summary": "Every JSON file under data/surface-fixtures/ must parse via the v3 discriminated union (after $schema is stripped).",
       "symptom": "Tests that exercise fixtures pass locally but fail in CI on a fixture nobody noticed was malformed; or fixture-driven previews silently render placeholder data.",
       "fix": "Run pnpm surface:check and address any reported issues. Update data/surface-fixtures/index.json if the fixture was newly added.",
       "enforcement": { "script": "scripts/validate-surface-fixtures.mjs" },

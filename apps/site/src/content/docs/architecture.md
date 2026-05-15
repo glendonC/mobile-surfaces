@@ -131,7 +131,7 @@ Six async methods (`areActivitiesEnabled`, `start`, `update`, `end`, `listActive
 
 ## Reusable Foundation
 
-- `packages/surface-contracts/` defines `LiveSurfaceSnapshot` (a discriminated union across six `kind` values), `LiveSurfaceActivityContentState`, the frozen v1 schema and `migrateV1ToV2` / `safeParseAnyVersion` migration codec, generated fixture exports, and kind-gated projection helpers for each supported surface kind. The APNs alert-payload helper (`liveActivityAlertPayloadFromSnapshot`) lives in `@mobile-surfaces/push` since 3.0; see [`schema-migration.md`](/docs/schema-migration).
+- `packages/surface-contracts/` defines `LiveSurfaceSnapshot` (a discriminated union across six `kind` values), `LiveSurfaceActivityContentState`, the frozen v2 schema and `migrateV2ToV3` / `safeParseAnyVersion` migration codec, generated fixture exports, and kind-gated projection helpers for each supported surface kind. The APNs alert-payload helper (`liveActivityAlertPayloadFromSnapshot`) lives in `@mobile-surfaces/push` since 3.0; see [`schema-migration.md`](/docs/schema-migration).
 - `packages/design-tokens/` defines colors and shared token names for React Native and Swift asset catalogs. `tokens.json` is the source of truth used by both TypeScript and the widget target config.
 - `packages/live-activity/` contains `@mobile-surfaces/live-activity`, the Expo native module wrapping ActivityKit (push tokens, push-to-start tokens, iOS 18 channel start).
 - `packages/push/` contains `@mobile-surfaces/push`, the Node SDK for sending Mobile Surfaces snapshots to APNs (per-activity update, push-to-start, channel broadcast, channel management). ES256 JWT cache, HTTP/2 reconnect, exponential-backoff retry, typed error hierarchy.
@@ -201,14 +201,14 @@ The flow:
 
 ### Schema Evolution
 
-`LiveSurfaceSnapshot` carries a `schemaVersion: "2"` literal and a top-level `kind` discriminator. Version `2` reshapes the v1 base to move liveActivity-only fields into the `liveActivity` slice, promotes `updatedAt` to required, and drops the v1 missing-`kind` preprocess.
+`LiveSurfaceSnapshot` carries a `schemaVersion: "3"` literal and a top-level `kind` discriminator. Version `3` renames the control slice's inner `kind` to `controlKind` (stopping the shadow with the outer discriminator); every other kind is pass-through from v2.
 
 - **The union is strict.** `z.discriminatedUnion("kind", [...])` over six branches; every branch carries its own `.strict()` slice, and unknown keys reject. Cross-kind projection (calling `toWidgetTimelineEntry` on a `liveActivity` snapshot, etc.) fails at parse time and again at the `assertSnapshotKind` runtime narrow.
-- **`kind` must be set explicitly.** v1 had a `.preprocess()` shim that defaulted missing-kind payloads to `"liveActivity"`; v2 removed it. The v1->v2 codec inside `safeParseAnyVersion` sets `kind` during migration so v1 payloads from the wild still parse.
-- **A v1 -> v2 migration codec ships in the package.** `liveSurfaceSnapshotV1`, `migrateV1ToV2(parsed, opts?)`, and `safeParseAnyVersion(value)` let consumers promote stored payloads without manual editing. The codec lives for the entire 3.x release line and is removed in 4.0.0. See [`schema-migration.md`](/docs/schema-migration) for the full story.
+- **`kind` must be set explicitly.** v1 had a `.preprocess()` shim that defaulted missing-kind payloads to `"liveActivity"`; v2 removed it and v3 keeps it removed.
+- **A v2 -> v3 migration codec ships in the package.** `liveSurfaceSnapshotV2`, `migrateV2ToV3(parsed)`, and `safeParseAnyVersion(value)` let consumers promote stored payloads without manual editing. The codec lives for the entire 4.x release line and is removed in 5.0.0. The v1 codec was sunset at 4.0 per the v2 RFC commitment; v1 payloads must be promoted through `@mobile-surfaces/surface-contracts@3` first. See [`schema-migration.md`](/docs/schema-migration) for the full story.
 - **Bump `schemaVersion` only on a breaking change.** Renaming a field, removing a field, changing a type, tightening a constraint (e.g. an enum drops a value, a string gains a regex it did not have before), or anything that would make a previously valid payload fail to parse.
 - **Additive optional fields are non-breaking.** Adding a new `actionLabel`-style optional field does not require a bump. Existing payloads still parse; new clients can read the new field when present.
-- **The `unpkg.com/@mobile-surfaces/surface-contracts@3.0/schema.json` URL pins to major.minor.** This lets a future minor that adds a discriminated-union variant publish a new URL without yanking what consumers already reference. `scripts/build-schema.mjs` derives this `$id` from the surface-contracts `package.json` version, so it tracks the release train automatically.
+- **The `unpkg.com/@mobile-surfaces/surface-contracts@4.0/schema.json` URL pins to major.minor.** This lets a future minor that adds a discriminated-union variant publish a new URL without yanking what consumers already reference. `scripts/build-schema.mjs` derives this `$id` from the surface-contracts `package.json` version, so it tracks the release train automatically.
 
 ### Standard Schema Interop
 
