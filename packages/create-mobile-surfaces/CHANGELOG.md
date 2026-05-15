@@ -1,5 +1,11 @@
 # create-mobile-surfaces
 
+## 4.0.0
+
+### Major Changes
+
+- Linked-group bump for the v3 schema release in `@mobile-surfaces/surface-contracts`. The rename pass now also moves `packages/create-mobile-surfaces/` to `packages/create-<slug>/` so the renamed CLI package's directory matches its `package.json` name. The bundled template manifest pins `@mobile-surfaces/*` exactly instead of with caret ranges, matching the project's wider exact-pin discipline.
+
 ## 3.2.0
 
 ### Minor Changes
