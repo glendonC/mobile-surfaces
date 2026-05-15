@@ -93,10 +93,10 @@ Breaking change in v1.4: refuse paths (cannot-scaffold-here) used to exit `2`. T
 
 ## Links
 
-- [Mobile Surfaces docs hub](https://github.com/glendonC/mobile-surfaces/blob/main/https://mobile-surfaces.com/docs)
-- [Architecture](https://github.com/glendonC/mobile-surfaces/blob/main/https://mobile-surfaces.com/docs/architecture)
-- [Backend integration](https://github.com/glendonC/mobile-surfaces/blob/main/https://mobile-surfaces.com/docs/backend-integration)
-- [Troubleshooting](https://github.com/glendonC/mobile-surfaces/blob/main/https://mobile-surfaces.com/docs/troubleshooting)
+- [Mobile Surfaces docs hub](https://mobile-surfaces.com/docs)
+- [Architecture](https://mobile-surfaces.com/docs/architecture)
+- [Backend integration](https://mobile-surfaces.com/docs/backend-integration)
+- [Troubleshooting](https://mobile-surfaces.com/docs/troubleshooting)
 
 ## License
 
