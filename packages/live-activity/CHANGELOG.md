@@ -1,5 +1,11 @@
 # @mobile-surfaces/live-activity
 
+## 4.0.0
+
+### Major Changes
+
+- Linked-group bump for the v3 schema release in `@mobile-surfaces/surface-contracts`. No bridge API change.
+
 ## 3.2.0
 
 ### Minor Changes

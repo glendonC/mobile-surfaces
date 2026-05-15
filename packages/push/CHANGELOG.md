@@ -1,5 +1,11 @@
 # @mobile-surfaces/push
 
+## 4.0.0
+
+### Major Changes
+
+- Linked-group bump for the v3 schema release in `@mobile-surfaces/surface-contracts`. No SDK API change; `zod` is now declared as a peer dependency (the SDK had been importing it via the contract package's hoisted node_modules, which broke under strict pnpm config). The "zero npm runtime dependencies" headline is corrected to "wire-layer code only, zod as peer." The legacy `retryPolicy` option name is soft-deprecated; rename to `_unsafeRetryOverride`. `MOBILE_SURFACES_PUSH_DISABLE_RETRY=1` env var disables retries entirely (useful for tests).
+
 ## 3.2.0
 
 ### Minor Changes
