@@ -641,6 +641,6 @@
       "additionalProperties": false
     }
   ],
-  "$id": "https://unpkg.com/@mobile-surfaces/surface-contracts@4.0/schema.json",
+  "$id": "https://unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json",
   "title": "LiveSurfaceSnapshot"
 }

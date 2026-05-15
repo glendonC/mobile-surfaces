@@ -1,5 +1,5 @@
 {
-  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@4.0/schema.json",
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json",
   "schemaVersion": "3",
   "kind": "control",
   "id": "fixture-control-toggle",
