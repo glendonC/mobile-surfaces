@@ -100,12 +100,14 @@ The default policy retries up to 3 times with exponential backoff (100ms base, 5
 - `ServiceUnavailable`
 - transport errors: `ECONNRESET`, `ECONNREFUSED`, `ETIMEDOUT`, `EPIPE`, `ENETUNREACH`, `EHOSTUNREACH`, `NGHTTP2_REFUSED_STREAM`
 
-Override via `retryPolicy`:
+Priority 10 sends (the user-visible state transitions) get a tighter retry budget at runtime: `maxRetries` is clamped to 2 and the backoff windows are doubled, so sustained priority-10 retries cannot blow past APNs's budget (see MS015).
+
+Override via `_unsafeRetryOverride`:
 
 ```ts
 createPushClient({
   // ...
-  retryPolicy: {
+  _unsafeRetryOverride: {
     maxRetries: 5,
     baseDelayMs: 250,
     maxDelayMs: 10_000,
@@ -114,6 +116,10 @@ createPushClient({
   },
 });
 ```
+
+The name is deliberately ugly: the defaults are tuned against MS015 and the priority-aware stretch, and overriding them is usually wrong. The legacy `retryPolicy` option still works in 3.x and logs a one-time deprecation warning per process; it will be removed in 4.0.
+
+`MOBILE_SURFACES_PUSH_DISABLE_RETRY=1` in the environment turns retries off entirely. Useful for tests and for diagnosing whether a flake is APNs-side or your retry policy.
 
 ## Connection lifecycle
 
