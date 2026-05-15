@@ -201,6 +201,9 @@ export const traps: readonly TrapEntry[] = [
     "symptom": "Swift compile errors on pushToStartTokenUpdates references, or a build that succeeds on a lower target only because the symbol was guarded, and then push-to-start silently never works on iOS 16 devices.",
     "fix": "Set ios.deploymentTarget to '17.2' in apps/mobile/app.json (or via expo-build-properties) and rerun prebuild.",
     "iosMin": "17.2",
+    "enforcement": {
+      "script": "scripts/probe-app-config.mjs"
+    },
     "docs": [
       "https://mobile-surfaces.com/docs/compatibility"
     ],
@@ -405,6 +408,9 @@ export const traps: readonly TrapEntry[] = [
     "summary": "Foreign Expo projects auditing as Mobile Surfaces consumers must list the contract package; backends sending pushes must additionally list @mobile-surfaces/push.",
     "symptom": "Type errors on snapshot helpers, or hand-rolled APNs code that diverges from the validated contract. The failure mode is wire-level drift between client and server.",
     "fix": "Add @mobile-surfaces/surface-contracts on every layer that emits or consumes a snapshot. Add @mobile-surfaces/push on the backend. Both packages release together (linked group).",
+    "enforcement": {
+      "script": "scripts/probe-app-config.mjs"
+    },
     "docs": [
       "https://mobile-surfaces.com/docs/backend-integration"
     ],
@@ -422,6 +428,9 @@ export const traps: readonly TrapEntry[] = [
     "summary": "app.json must declare a com.apple.security.application-groups entry for widgets and controls to share state with the host app.",
     "symptom": "Widget extension reads its placeholder snapshot, never the live one. Control toggle does nothing visible. No log message; the App Group is just absent.",
     "fix": "Add the entitlement to apps/mobile/app.json under expo.ios.entitlements. Match it on the widget target's expo-target.config.js.",
+    "enforcement": {
+      "script": "scripts/probe-app-config.mjs"
+    },
     "docs": [
       "https://mobile-surfaces.com/docs/ios-environment"
     ],
@@ -458,6 +467,9 @@ export const traps: readonly TrapEntry[] = [
     "symptom": "Audit fails with a deployment-target mismatch; a downstream prebuild surfaces compile errors on iOS 17.2-only symbols.",
     "fix": "Set ios.deploymentTarget to '17.2' (or higher) in app.json or via expo-build-properties.",
     "iosMin": "17.2",
+    "enforcement": {
+      "script": "scripts/probe-app-config.mjs"
+    },
     "docs": [
       "https://mobile-surfaces.com/docs/compatibility"
     ],

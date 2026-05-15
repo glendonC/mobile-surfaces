@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 // Reports the static config state that drives MS012 (deployment target),
-// MS013 (App Group match between host and widget), MS025 (App Group declared
-// at all), and MS026 (widget target managed by @bacons/apple-targets). Reads
-// apps/mobile/app.json and apps/mobile/targets/widget/expo-target.config.js.
-// Emits "skip" cleanly when the apps/mobile/ tree is absent so a foreign
-// consumer running surface:diagnose still gets a useful bundle.
+// MS013 (App Group match between host and widget), MS024 (project depends
+// on @mobile-surfaces/surface-contracts), MS025 (App Group declared at
+// all), MS026 (widget target managed by @bacons/apple-targets), and MS027
+// (foreign Expo project iOS 17.2+; same constraint as MS012 applied at
+// audit). Reads apps/mobile/app.json, apps/mobile/package.json, and
+// apps/mobile/targets/widget/expo-target.config.js. Emits "skip" cleanly
+// when the apps/mobile/ tree is absent so a foreign consumer running
+// surface:diagnose still gets a useful bundle.
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -16,6 +19,7 @@ const { values } = parseArgs({
 
 const TOOL = "probe-app-config";
 const APP_JSON_PATH = resolve("apps/mobile/app.json");
+const APP_PACKAGE_JSON_PATH = resolve("apps/mobile/package.json");
 const WIDGET_CONFIG_PATH = resolve(
   "apps/mobile/targets/widget/expo-target.config.js",
 );
@@ -73,6 +77,47 @@ checks.push({
         detail: {
           message:
             "Set expo.ios.deploymentTarget (or expo-build-properties.ios.deploymentTarget) to 17.2 and rerun prebuild.",
+        },
+      }),
+});
+
+// MS027 is the same constraint as MS012, framed as a foreign-consumer audit
+// rule. Same check, separate trap binding so a foreign project running
+// surface:diagnose sees the audit-flavored row in the report.
+checks.push({
+  id: "foreign-deployment-target",
+  status: targetMeetsFloor ? "ok" : "fail",
+  trapId: "MS027",
+  summary: targetMeetsFloor
+    ? "Foreign-audit deployment-target check passes."
+    : "Foreign-audit deployment-target check fails; see deployment-target row.",
+});
+
+// --- Contract package declared in apps/mobile/package.json (MS024) ------
+let appPackageJson = null;
+try {
+  appPackageJson = JSON.parse(readFileSync(APP_PACKAGE_JSON_PATH, "utf8"));
+} catch {
+  // fall through; null handled below
+}
+const declaredDeps = {
+  ...(appPackageJson?.dependencies ?? {}),
+  ...(appPackageJson?.peerDependencies ?? {}),
+};
+const declaresContract = "@mobile-surfaces/surface-contracts" in declaredDeps;
+checks.push({
+  id: "contract-package-declared",
+  status: declaresContract ? "ok" : "fail",
+  trapId: "MS024",
+  summary: declaresContract
+    ? "apps/mobile/package.json declares @mobile-surfaces/surface-contracts."
+    : "apps/mobile/package.json does not declare @mobile-surfaces/surface-contracts.",
+  ...(declaresContract
+    ? {}
+    : {
+        detail: {
+          message:
+            "Every layer that emits or consumes a snapshot must depend on @mobile-surfaces/surface-contracts. Add it (workspace:* in the starter monorepo, or the published version in foreign projects).",
         },
       }),
 });
