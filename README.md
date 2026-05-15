@@ -56,7 +56,9 @@ What it does not cover:
 - **The backend.** It hands your app a push token and stops there. You write the Apple Push Notification service (APNs) HTTP/2 client, the JWT signing, the retry logic, and the error-code translator yourself. That is two to three weeks of work for someone who has not done it before.
 - **A shared data contract.** Without one, each surface (Lock Screen, widget, control, alert) gets its own hand-rolled mapping function. They drift the moment one is updated and the others are not. Mobile Surfaces gives you one type that feeds every surface so they cannot drift.
 
-Pick `expo-live-activity` for a single-surface project where the backend is already solved. Pick Mobile Surfaces when you want multiple surfaces sharing one data shape and a Node SDK that drives the push side.
+Where `expo-live-activity` is genuinely ahead: its bridge surface is wider. It exposes `relevanceScore`, custom small images, compact-trailing fallbacks, and other ActivityKit knobs the Mobile Surfaces bridge does not. It also has more shipped apps and contributors behind it; Mobile Surfaces' bridge is newer and largely battle-tested by one project (this one). If you need those bridge knobs today, use `expo-live-activity`. The `@mobile-surfaces/surface-contracts` and `@mobile-surfaces/push` packages are bridge-agnostic and work alongside it.
+
+Pick `expo-live-activity` for a single-surface project where the backend is already solved, or where you need the wider ActivityKit knob surface. Pick Mobile Surfaces when you want multiple surfaces sharing one data shape and a Node SDK that drives the push side.
 
 ### Why not just ask AI to build it?
 
