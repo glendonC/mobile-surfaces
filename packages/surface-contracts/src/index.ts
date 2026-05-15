@@ -211,17 +211,11 @@ export function toControlValueProvider(
   // `actionLabel` is optional and `z.string().optional()` accepts the empty
   // string, but `??` only triggers on null/undefined. An empty actionLabel
   // would silently produce an empty button label downstream, so coerce
-  // empty-string to "absent" before falling back to primaryText.
-  const labelCandidate = controlSnap.actionLabel?.length
+  // empty-string to "absent" before falling back to primaryText. The fallback
+  // is guaranteed non-empty because the base shape pins `primaryText.min(1)`.
+  const label = controlSnap.actionLabel?.length
     ? controlSnap.actionLabel
     : controlSnap.primaryText;
-  if (!labelCandidate) {
-    throw new IncompleteProjectionError(
-      "toControlValueProvider",
-      "actionLabel or primaryText",
-      "control snapshots must supply a non-empty actionLabel or primaryText to drive the control widget label.",
-    );
-  }
   return {
     kind: "control",
     snapshotId: controlSnap.id,
@@ -229,7 +223,7 @@ export function toControlValueProvider(
     controlKind: control.kind,
     value: control.state ?? null,
     intent: control.intent ?? null,
-    label: labelCandidate,
+    label,
     deepLink: controlSnap.deepLink,
   };
 }
