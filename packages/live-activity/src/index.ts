@@ -61,7 +61,19 @@ export type LiveActivityEvents = {
   onPushToStartToken: (payload: { token: string }) => void;
 };
 
-declare class LiveActivityNativeModule extends NativeModule<LiveActivityEvents> {
+/**
+ * Stable surface every Live Activity adapter must implement. The harness re-export
+ * at `apps/mobile/src/liveActivity/index.ts` is typed against this interface, and
+ * `LiveActivityNativeModule` below is constrained to `implements LiveActivityAdapter`
+ * so the local Expo module and the boundary cannot drift in opposite directions.
+ *
+ * Swapping to a different runtime (e.g. `expo-live-activity`, `expo-widgets`, a
+ * custom module) is a one-file edit at `apps/mobile/src/liveActivity/index.ts` plus
+ * a shim that conforms to this interface. There is no hand-mirrored prose copy:
+ * this file is the contract.
+ */
+export interface LiveActivityAdapter {
+  /** Probe iOS for Live Activity authorization. Resolves false on iOS < 16.1, when the user has disabled Live Activities, or in Expo Go. */
   areActivitiesEnabled(): Promise<boolean>;
   /**
    * Start a Live Activity.
@@ -87,6 +99,50 @@ declare class LiveActivityNativeModule extends NativeModule<LiveActivityEvents> 
     state: LiveActivityContentState;
     channelId?: string;
   }>;
+  update(activityId: string, state: LiveActivityContentState): Promise<void>;
+  end(
+    activityId: string,
+    dismissalPolicy: "immediate" | "default",
+  ): Promise<void>;
+  listActive(): Promise<LiveActivitySnapshot[]>;
+  /**
+   * Returns the most recent push-to-start token Apple delivered through
+   * `onPushToStartToken`, or `null` if no token has been observed yet on
+   * this bridge session. The Swift side caches the latest emission in an
+   * `ObserverRegistry` actor, so a JS caller polling after the event already
+   * fired does not get a misleading `nil`.
+   *
+   * This is a probe, not a substitute for the event. Tokens may rotate at
+   * any time (MS020); production code subscribes to `onPushToStartToken` in
+   * a mount-time effect and treats every emission as authoritative.
+   */
+  getPushToStartToken(): Promise<string | null>;
+  /**
+   * Subscribe to a Live Activity event. Returns a handle whose `remove()`
+   * detaches the listener. Inherited `removeAllListeners` from `NativeModule`
+   * is not part of the adapter contract.
+   */
+  addListener<E extends keyof LiveActivityEvents>(
+    event: E,
+    handler: LiveActivityEvents[E],
+  ): { remove(): void };
+}
+
+declare class LiveActivityNativeModule
+  extends NativeModule<LiveActivityEvents>
+  implements LiveActivityAdapter
+{
+  areActivitiesEnabled(): Promise<boolean>;
+  start(
+    surfaceId: string,
+    modeLabel: string,
+    state: LiveActivityContentState,
+    channelId?: string | null,
+  ): Promise<{
+    id: string;
+    state: LiveActivityContentState;
+    channelId?: string;
+  }>;
   update(
     activityId: string,
     state: LiveActivityContentState,
@@ -96,15 +152,6 @@ declare class LiveActivityNativeModule extends NativeModule<LiveActivityEvents> 
     dismissalPolicy: "immediate" | "default",
   ): Promise<void>;
   listActive(): Promise<LiveActivitySnapshot[]>;
-  /**
-   * Probe for the current push-to-start token.
-   *
-   * Always resolves to `null` today: Apple does not expose a synchronous
-   * query for this value — it only arrives via the `onPushToStartToken`
-   * event stream (iOS 17.2+). The function is reserved for symmetry with
-   * the adapter contract and as a no-op sanity check; production code
-   * should subscribe to the event instead.
-   */
   getPushToStartToken(): Promise<string | null>;
 }
 

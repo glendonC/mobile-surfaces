@@ -129,7 +129,10 @@ test("flags both quote styles when stale", () => {
   }
 });
 
-test("excludes apps/site/", () => {
+test("scans apps/site/ doc pages", () => {
+  // apps/site/ used to be excluded because the docs/UX chat owned it on a
+  // separate branch. It is in scope now; a stale literal under apps/site/
+  // must be detected so the doc surface and the wire format cannot diverge.
   const ws = makeWorkspace();
   try {
     writeMd(
@@ -138,7 +141,8 @@ test("excludes apps/site/", () => {
       'schemaVersion: "3"\n',
     );
     const r = runCheck(ws);
-    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.notEqual(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout + r.stderr, /schemaVersion: "3" should be "4"/);
   } finally {
     rmSync(ws, { recursive: true, force: true });
   }

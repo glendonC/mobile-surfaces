@@ -2,6 +2,7 @@
 title: "Push"
 description: "Wire-layer reference, SDK, smoke script, token taxonomy, error reasons, channel push."
 order: 40
+group: "Build"
 ---
 # Push
 
@@ -239,7 +240,7 @@ const client = createPushClient({
 });
 ```
 
-The option is named `_unsafeRetryOverride` because changing it usually goes wrong: the defaults are tuned against MS015's iOS budget rules and the priority-aware stretch. The legacy name `retryPolicy` still works in 3.x but logs a one-time deprecation warning per process; it will be removed in 4.0.
+The option is named `_unsafeRetryOverride` because changing it usually goes wrong: the defaults are tuned against MS015's iOS budget rules and the priority-aware stretch. The legacy name `retryPolicy` still works in 5.x but logs a one-time deprecation warning per process; it will be removed in 6.0.
 
 For incidents, set the env var `MOBILE_SURFACES_PUSH_DISABLE_RETRY=1` (or any non-empty value) to force `maxRetries: 0` across every client in the process. This wins over any in-code override — it's an operator kill-switch.
 

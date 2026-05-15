@@ -1,0 +1,16 @@
+{
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json",
+  "schemaVersion": "4",
+  "kind": "lockAccessory",
+  "id": "fixture-lock-accessory-rectangular",
+  "surfaceId": "surface-lock-accessory-rectangular",
+  "updatedAt": "2026-05-15T12:00:30.000Z",
+  "state": "active",
+  "lockAccessory": {
+    "title": "Surface 41% complete",
+    "deepLink": "mobilesurfaces://surface/surface-lock-accessory-rectangular",
+    "family": "accessoryRectangular",
+    "gaugeValue": 0.41,
+    "shortText": "41%"
+  }
+}

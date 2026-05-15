@@ -12,6 +12,11 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { buildReport, emitDiagnosticReport } from "./lib/diagnostics.mjs";
+import {
+  loadAppJson,
+  readAppGroups,
+  readDeploymentTarget,
+} from "./lib/app-config.mjs";
 
 const { values } = parseArgs({
   options: { json: { type: "boolean", default: false } },
@@ -26,7 +31,8 @@ const WIDGET_CONFIG_PATH = resolve(
 
 const checks = [];
 
-if (!existsSync(APP_JSON_PATH)) {
+const appJsonResult = loadAppJson(APP_JSON_PATH);
+if (appJsonResult.status === "missing") {
   checks.push({
     id: "app-json-present",
     status: "skip",
@@ -36,30 +42,24 @@ if (!existsSync(APP_JSON_PATH)) {
   emitDiagnosticReport(buildReport(TOOL, checks), { json: values.json });
 }
 
-let appJson;
-try {
-  appJson = JSON.parse(readFileSync(APP_JSON_PATH, "utf8"));
-} catch (error) {
+if (appJsonResult.status === "invalid") {
   emitDiagnosticReport(
     buildReport(TOOL, [
       {
         id: "app-json-parse",
         status: "fail",
         summary: "apps/mobile/app.json is not valid JSON.",
-        detail: { message: error?.message ?? String(error) },
+        detail: { message: appJsonResult.error },
       },
     ]),
     { json: values.json },
   );
 }
 
+const appJson = appJsonResult.appJson;
+
 // --- Deployment target ---------------------------------------------------
-const explicitDeploymentTarget = appJson?.expo?.ios?.deploymentTarget;
-const buildPropsPlugin = (appJson?.expo?.plugins ?? []).find(
-  (p) => Array.isArray(p) && p[0] === "expo-build-properties",
-);
-const buildPropsTarget = buildPropsPlugin?.[1]?.ios?.deploymentTarget;
-const effectiveTarget = explicitDeploymentTarget ?? buildPropsTarget;
+const { effective: effectiveTarget } = readDeploymentTarget(appJson);
 const targetMeetsFloor =
   typeof effectiveTarget === "string" && parseFloat(effectiveTarget) >= 17.2;
 checks.push({
@@ -123,9 +123,7 @@ checks.push({
 });
 
 // --- App Group declared in app.json -------------------------------------
-const hostAppGroups =
-  appJson?.expo?.ios?.entitlements?.["com.apple.security.application-groups"];
-const hostHasGroups = Array.isArray(hostAppGroups) && hostAppGroups.length > 0;
+const { declared: hostHasGroups, groups: hostAppGroups } = readAppGroups(appJson);
 checks.push({
   id: "app-group-declared",
   status: hostHasGroups ? "ok" : "fail",

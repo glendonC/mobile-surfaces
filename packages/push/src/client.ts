@@ -246,6 +246,14 @@ export interface CreatePushClientOptions {
   /** ms with no in-flight requests before the HTTP/2 session is closed. Default 60_000. */
   idleTimeoutMs?: number;
   /**
+   * Upper bound in ms that `close()` waits for the underlying HTTP/2 sessions
+   * to drain gracefully before force-destroying them. APNs healthy peers drain
+   * in milliseconds; the default exists so a stuck peer cannot hang process
+   * teardown. Set to 0 or negative to disable the bound (graceful close with
+   * no timeout — the pre-5.x behavior). Default 5_000.
+   */
+  closeTimeoutMs?: number;
+  /**
    * Optional observability hooks fired per-attempt for every send and channel
    * management operation. Use these to wire your own Sentry / PostHog / log
    * aggregator without re-implementing APNs error parsing. The SDK never
@@ -762,6 +770,7 @@ export class PushClient {
     this.#hooks = options.hooks ?? {};
 
     const idleTimeoutMs = options.idleTimeoutMs ?? 60_000;
+    const closeTimeoutMs = options.closeTimeoutMs ?? 5_000;
     const override = (options as unknown as Record<symbol, unknown>)[
       TEST_TRANSPORT_OVERRIDE
     ] as TestTransportOverride | undefined;
@@ -790,12 +799,14 @@ export class PushClient {
     this.#send = new Http2Client({
       origin: override?.sendOrigin ?? sendOriginFor(options.environment),
       idleTimeoutMs,
+      closeTimeoutMs,
       connect: override?.connect,
       sessionOptions,
     });
     this.#manage = new Http2Client({
       origin: override?.manageOrigin ?? manageOriginFor(options.environment),
       idleTimeoutMs,
+      closeTimeoutMs,
       connect: override?.connect,
       sessionOptions,
     });

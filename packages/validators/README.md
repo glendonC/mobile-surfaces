@@ -1,6 +1,10 @@
 # @mobile-surfaces/validators
 
-Shared identity validators for Mobile Surfaces project metadata: project slug, URL scheme, bundle identifier, Apple Team ID, and Swift identifier. Single source of truth consumed by [`create-mobile-surfaces`](https://www.npmjs.com/package/create-mobile-surfaces) and by the in-template `scripts/rename-starter.mjs`. Keeping the regexes in one published package means a tweak to "what counts as a valid bundle id" can't drift between the installer that types it and the rename script that applies it.
+Project-identity input regexes for Mobile Surfaces scaffolding — project slug, URL scheme, bundle identifier, Apple Team ID, Swift identifier — consumed by [`create-mobile-surfaces`](https://www.npmjs.com/package/create-mobile-surfaces) and by the in-template `scripts/rename-starter.mjs`.
+
+This is **not** wire-shape validation. If you are looking for a way to validate a `LiveSurfaceSnapshot` payload before sending it to APNs, see [`@mobile-surfaces/surface-contracts`](https://www.npmjs.com/package/@mobile-surfaces/surface-contracts), which exports the Zod schema and `safeParse` helpers.
+
+Why a separate published package, not just a CLI internal? `create-mobile-surfaces` imports these via the bare specifier post-install; `rename-starter.mjs` ships into the scaffolded project and imports the same source via a relative path before `pnpm install` has run. Both paths must land on the same regex, so the regexes live in one published package and a guard script (`scripts/check-validator-sync.mjs`) enforces the dual-import sync.
 
 ## Install
 

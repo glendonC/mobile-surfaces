@@ -3,6 +3,13 @@
 // (Node, iOS deployment target, minimum Xcode major) come from the template
 // manifest — single source of truth, never out of sync with what the
 // generated project will actually need.
+//
+// Scaffold-time vs repo-time: the manifest is the SCAFFOLD-time source (what
+// the generated project will need to build). It is itself built from the
+// repo's root package.json `mobileSurfaces` block via template-manifest.mjs,
+// so the numbers ultimately live in one file — but the two lifecycles stay
+// separate. scripts/doctor.mjs reads the same root package.json directly to
+// enforce REPO-time minimums (what's needed to build this monorepo).
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";

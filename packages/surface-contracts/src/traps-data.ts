@@ -17,7 +17,7 @@ export const traps: readonly TrapEntry[] = [
       "contract"
     ],
     "summary": "Application code under apps/*/src/ must import the live-activity adapter through the boundary re-export, never directly from @mobile-surfaces/live-activity.",
-    "symptom": "Compile-time imports look fine, but the project loses the swap point for switching to expo-live-activity, expo-widgets, or a custom native module without touching call sites.",
+    "symptom": "Compile-time imports look fine, but call sites bypass the centralized re-export typed against LiveActivityAdapter. A future swap to expo-live-activity, expo-widgets, or a custom native module then has to update every importer instead of one shim, and the tsc-enforced adapter surface stops catching drift.",
     "fix": "Import from apps/mobile/src/liveActivity (the boundary re-export) instead of @mobile-surfaces/live-activity directly. Add new methods to the adapter contract first, not at the call site.",
     "enforcement": {
       "script": "scripts/check-adapter-boundary.mjs"

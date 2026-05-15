@@ -180,7 +180,7 @@ The thrown error is always `AbortError` (with the signal's `reason` carried as `
 
 A single long-lived HTTP/2 session per (origin) is multiplexed across concurrent requests. The session auto-reconnects on `goaway` or socket close. After `idleTimeoutMs` (default 60s) of no in-flight requests, the session is closed; the next send re-opens it.
 
-`client.close()` flushes in-flight requests, sets the client to closed, and tears down both sessions (send + management). Subsequent calls throw `ClientClosedError`.
+`client.close()` flushes in-flight requests, sets the client to closed, and tears down both sessions (send + management). Subsequent calls throw `ClientClosedError`. Graceful HTTP/2 close is bounded by `closeTimeoutMs` (default 5_000 ms); a stuck peer is force-destroyed rather than hanging teardown.
 
 ## Next steps
 

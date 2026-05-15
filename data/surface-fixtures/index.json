@@ -8,8 +8,13 @@
   "./completed.json",
   "./active-details.json",
   "./widget-dashboard.json",
+  "./widget-minimal.json",
   "./control-toggle.json",
+  "./control-button.json",
   "./lock-accessory-circular.json",
+  "./lock-accessory-rectangular.json",
+  "./lock-accessory-inline.json",
   "./standby-card.json",
+  "./standby-night.json",
   "./notification-alert.json"
 ]

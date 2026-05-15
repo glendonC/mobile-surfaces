@@ -1,7 +1,7 @@
 {
   "name": "@mobile-surfaces/validators",
   "version": "5.0.0",
-  "description": "Shared identity validators for Mobile Surfaces. Single source of truth consumed by both the create-mobile-surfaces CLI and scripts/rename-starter.mjs.",
+  "description": "Project-identity input validators (slug, scheme, bundle id, Team ID, Swift identifier) for the create-mobile-surfaces CLI and the in-template rename script. Not contract or wire-shape validation — see @mobile-surfaces/surface-contracts for that. Single source of truth across the pre-install (relative import) and post-install (bare specifier) consumer paths.",
   "publishConfig": {
     "access": "public"
   },

@@ -187,6 +187,20 @@ export const surfaceFixtureSnapshots = {
       "reloadPolicy": "manual"
     }
   },
+  "widgetMinimal": {
+    "schemaVersion": "4",
+    "kind": "widget",
+    "id": "fixture-widget-minimal",
+    "surfaceId": "surface-widget-minimal",
+    "updatedAt": "2026-05-15T12:02:00.000Z",
+    "state": "active",
+    "widget": {
+      "title": "Widget surface synced",
+      "body": "Host renders at the user-chosen size with the default reload policy.",
+      "progress": 0.5,
+      "deepLink": "mobilesurfaces://surface/surface-widget-minimal"
+    }
+  },
   "controlToggle": {
     "schemaVersion": "4",
     "kind": "control",
@@ -200,6 +214,20 @@ export const surfaceFixtureSnapshots = {
       "controlKind": "toggle",
       "state": false,
       "intent": "toggleSurface"
+    }
+  },
+  "controlButton": {
+    "schemaVersion": "4",
+    "kind": "control",
+    "id": "fixture-control-button",
+    "surfaceId": "surface-control-button",
+    "updatedAt": "2026-05-15T12:00:00.000Z",
+    "state": "active",
+    "control": {
+      "label": "Refresh surface",
+      "deepLink": "mobilesurfaces://surface/surface-control-button",
+      "controlKind": "button",
+      "intent": "refreshSurface"
     }
   },
   "lockAccessoryCircular": {
@@ -217,6 +245,35 @@ export const surfaceFixtureSnapshots = {
       "shortText": "62%"
     }
   },
+  "lockAccessoryRectangular": {
+    "schemaVersion": "4",
+    "kind": "lockAccessory",
+    "id": "fixture-lock-accessory-rectangular",
+    "surfaceId": "surface-lock-accessory-rectangular",
+    "updatedAt": "2026-05-15T12:00:30.000Z",
+    "state": "active",
+    "lockAccessory": {
+      "title": "Surface 41% complete",
+      "deepLink": "mobilesurfaces://surface/surface-lock-accessory-rectangular",
+      "family": "accessoryRectangular",
+      "gaugeValue": 0.41,
+      "shortText": "41%"
+    }
+  },
+  "lockAccessoryInline": {
+    "schemaVersion": "4",
+    "kind": "lockAccessory",
+    "id": "fixture-lock-accessory-inline",
+    "surfaceId": "surface-lock-accessory-inline",
+    "updatedAt": "2026-05-15T12:01:00.000Z",
+    "state": "active",
+    "lockAccessory": {
+      "title": "Surface running",
+      "deepLink": "mobilesurfaces://surface/surface-lock-accessory-inline",
+      "family": "accessoryInline",
+      "shortText": "Surface running"
+    }
+  },
   "standbyCard": {
     "schemaVersion": "4",
     "kind": "standby",
@@ -231,6 +288,22 @@ export const surfaceFixtureSnapshots = {
       "deepLink": "mobilesurfaces://surface/surface-standby-card",
       "presentation": "card",
       "tint": "default"
+    }
+  },
+  "standbyNight": {
+    "schemaVersion": "4",
+    "kind": "standby",
+    "id": "fixture-standby-night",
+    "surfaceId": "surface-standby-night",
+    "updatedAt": "2026-05-15T12:01:30.000Z",
+    "state": "active",
+    "standby": {
+      "title": "Surface overnight",
+      "body": "Red-shifted rendering for ambient low-light viewing.",
+      "progress": 0.78,
+      "deepLink": "mobilesurfaces://surface/surface-standby-night",
+      "presentation": "night",
+      "tint": "monochrome"
     }
   },
   "notificationAlert": {

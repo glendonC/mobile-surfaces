@@ -2,6 +2,7 @@
 title: "Multi-Surface"
 description: "Every kind value, what ships today, when to emit each."
 order: 20
+group: "Start here"
 ---
 # Multi-Surface
 
@@ -23,7 +24,7 @@ import {
 } from "@mobile-surfaces/surface-contracts";
 ```
 
-`liveSurfaceSnapshot` is a true `z.discriminatedUnion("kind", […])` over six branches at `schemaVersion: "2"`. The base fields shared across every branch are `id`, `surfaceId`, `updatedAt`, `state`, `modeLabel`, `contextLabel`, `statusLine`, `primaryText`, `secondaryText`, `actionLabel?`, `progress`, `deepLink`. Each branch carries its own slice: `liveActivity` adds `{ stage, estimatedSeconds, morePartsCount }`; `widget`, `control`, `notification`, `lockAccessory`, and `standby` add the surface-specific shapes documented per-kind below. The `liveActivity` slice fields used to live in the base in v1 and were moved in 3.0 so non-liveActivity kinds stop carrying meaningless values; see [`schema-migration.md`](/docs/schema-migration).
+`liveSurfaceSnapshot` is a true `z.discriminatedUnion("kind", […])` over six branches at `schemaVersion: "4"`. The base fields shared across every branch are deliberately minimal: `id`, `surfaceId`, `kind`, `updatedAt`, and `state`. Every rendering field (title/body, modeLabel, contextLabel, statusLine, progress, deepLink, actionLabel, control label) now lives inside the per-kind slice for the kind that actually uses it; the base only carries identity and lifecycle. Each branch carries its own slice: `liveActivity` adds `{ title, body, progress, deepLink, modeLabel, contextLabel, statusLine, actionLabel?, stage, estimatedSeconds, morePartsCount }`; `widget`, `control`, `notification`, `lockAccessory`, and `standby` each carry their own surface-specific shape documented per-kind below. Rendering fields were moved out of the base in v2 (3.0) for the liveActivity-only timing hints, and pushed entirely into per-kind slices in v4 (5.0) so each surface declares exactly what it renders; see [`schema-migration.md`](/docs/schema-migration).
 
 ```mermaid
 flowchart LR
@@ -80,21 +81,21 @@ import { createPushClient } from "@mobile-surfaces/push";
 
 function snapshotFromJob(job: Job): LiveSurfaceSnapshot {
   return {
-    schemaVersion: "2",
+    schemaVersion: "4",
     kind: "liveActivity",
     id: `${job.id}@${job.revision}`,
     surfaceId: `job-${job.id}`,
     updatedAt: new Date().toISOString(),
     state: job.status === "done" ? "completed" : "active",
-    modeLabel: "active",
-    contextLabel: job.queueName,
-    statusLine: `${job.queueName} · ${Math.round(job.progress * 100)}%`,
-    primaryText: job.title,
-    secondaryText: job.subtitle ?? "",
-    actionLabel: "Open job",
-    progress: job.progress,
-    deepLink: `mobilesurfaces://surface/job-${job.id}`,
     liveActivity: {
+      title: job.title,
+      body: job.subtitle ?? "",
+      progress: job.progress,
+      deepLink: `mobilesurfaces://surface/job-${job.id}`,
+      modeLabel: "active",
+      contextLabel: job.queueName,
+      statusLine: `${job.queueName} · ${Math.round(job.progress * 100)}%`,
+      actionLabel: "Open job",
       stage: job.status === "done" ? "completing" : "inProgress",
       estimatedSeconds: job.etaSeconds ?? 0,
       morePartsCount: 0,
@@ -197,7 +198,7 @@ const value = toControlValueProvider(snapshot);
 //     controlKind: "toggle",
 //     value: false,
 //     intent: "toggleSurface",
-//     label: "Surface toggle",          // actionLabel falls back to primaryText
+//     label: "Surface toggle",          // control.label (required in v4)
 //     deepLink: "mobilesurfaces://surface/surface-control-toggle",
 //   }
 ```
@@ -225,20 +226,19 @@ import {
 } from "@mobile-surfaces/surface-contracts";
 
 const snapshot: LiveSurfaceSnapshot = {
-  schemaVersion: "2",
+  schemaVersion: "4",
   kind: "notification",
   id: "notif-1",
   surfaceId: "surface-job-42",
   updatedAt: new Date().toISOString(),
   state: "completed",
-  modeLabel: "completed",
-  contextLabel: "fulfillment",
-  statusLine: "completed · ready",
-  primaryText: "Order ready",
-  secondaryText: "Pickup window opens at 5 PM.",
-  progress: 1,
-  deepLink: "mobilesurfaces://surface/surface-job-42",
-  notification: { category: "ORDER_READY", threadId: "orders-42" },
+  notification: {
+    title: "Order ready",
+    body: "Pickup window opens at 5 PM.",
+    deepLink: "mobilesurfaces://surface/surface-job-42",
+    category: "ORDER_READY",
+    threadId: "orders-42",
+  },
 };
 
 const payload = toNotificationContentPayload(snapshot);
@@ -259,7 +259,7 @@ Until the notification content extension lands, you can ship a `kind: "liveActiv
 
 A lock-screen accessory widget (the inline / circular / rectangular Lock Screen complications introduced in iOS 16). Renders next to the clock.
 
-**Status: shipped, lighter slice than `widget`/`control`.** The contract parses cleanly via `liveSurfaceSnapshotLockAccessory`, `toLockAccessoryEntry` projects to the consumer shape (`family`, `shortText` with empty-string fallback to `primaryText`, `gaugeValue` defaulting to overall `progress`), the `lock-accessory-circular.json` fixture exercises it, and `MobileSurfacesLockAccessoryWidget` renders it on device. The slice carries less than `widget`/`control` because the Lock Screen accessory families are themselves constrained — there is intentionally no rich glyph or detail-rows surface here.
+**Status: shipped, lighter slice than `widget`/`control`.** The contract parses cleanly via `liveSurfaceSnapshotLockAccessory`, `toLockAccessoryEntry` projects to the consumer shape (`family`, `shortText` as an optional compact label, `gaugeValue` as an optional 0..1 fill), the `lock-accessory-circular.json` fixture exercises it, and `MobileSurfacesLockAccessoryWidget` renders it on device. The slice carries less than `widget`/`control` because the Lock Screen accessory families are themselves constrained — there is intentionally no rich glyph or detail-rows surface here.
 
 ### When to emit
 
@@ -272,20 +272,17 @@ A lock-screen accessory widget (the inline / circular / rectangular Lock Screen 
 import { liveSurfaceSnapshotLockAccessory } from "@mobile-surfaces/surface-contracts";
 
 const parsed = liveSurfaceSnapshotLockAccessory.parse({
-  schemaVersion: "2",
+  schemaVersion: "4",
   kind: "lockAccessory",
   id: "accessory-1",
   surfaceId: "surface-status",
   updatedAt: new Date().toISOString(),
   state: "active",
-  modeLabel: "active",
-  contextLabel: "status",
-  statusLine: "online",
-  primaryText: "Online",
-  secondaryText: "",
-  progress: 1,
-  deepLink: "mobilesurfaces://surface/surface-status",
-  lockAccessory: { family: "accessoryCircular" },
+  lockAccessory: {
+    title: "Online",
+    deepLink: "mobilesurfaces://surface/surface-status",
+    family: "accessoryCircular",
+  },
 });
 // Renders on device through MobileSurfacesLockAccessoryWidget.
 ```
@@ -294,7 +291,7 @@ const parsed = liveSurfaceSnapshotLockAccessory.parse({
 
 The iOS 17+ StandBy mode (large idle clock view when the phone is charging on its side). Renders existing widget content with a different rendering hint.
 
-**Status: shipped, intentionally minimal slice.** `liveSurfaceSnapshotStandby` parses and validates, `toStandbyEntry` projects to the consumer shape (`presentation`, `tint`, `headline`, `subhead`, `progress`), the `standby-card.json` fixture demonstrates it, and `MobileSurfacesStandbyWidget` renders it on device with day/night-aware backgrounds and a monochrome tint mode. The slice carries only `presentation` and `tint` because StandBy is a rendering-hint surface, not a data surface — everything else flows from the shared base.
+**Status: shipped, intentionally minimal slice.** `liveSurfaceSnapshotStandby` parses and validates, `toStandbyEntry` projects to the consumer shape (`presentation`, `tint`, `headline`, `subhead`, `progress`), the `standby-card.json` fixture demonstrates it, and `MobileSurfacesStandbyWidget` renders it on device with day/night-aware backgrounds and a monochrome tint mode. The slice carries `title`, `body`, `progress`, `deepLink`, `presentation`, and an optional `tint`; the rendering-hint axes (`presentation`, `tint`) are what make StandBy distinct from a plain widget.
 
 ### When to emit
 
@@ -306,20 +303,19 @@ The iOS 17+ StandBy mode (large idle clock view when the phone is charging on it
 import { liveSurfaceSnapshotStandby } from "@mobile-surfaces/surface-contracts";
 
 const parsed = liveSurfaceSnapshotStandby.parse({
-  schemaVersion: "2",
+  schemaVersion: "4",
   kind: "standby",
   id: "standby-1",
   surfaceId: "surface-clock",
   updatedAt: new Date().toISOString(),
   state: "active",
-  modeLabel: "active",
-  contextLabel: "clock",
-  statusLine: "now",
-  primaryText: "12:34",
-  secondaryText: "",
-  progress: 1,
-  deepLink: "mobilesurfaces://surface/surface-clock",
-  standby: { presentation: "card" },
+  standby: {
+    title: "12:34",
+    body: "",
+    progress: 1,
+    deepLink: "mobilesurfaces://surface/surface-clock",
+    presentation: "card",
+  },
 });
 // Renders on device through MobileSurfacesStandbyWidget.
 ```
@@ -354,4 +350,4 @@ The `deepLink` field is propagated into every projection: it lands in `LiveActiv
 | Lock Screen complication next to the clock | `lockAccessory` |
 | StandBy-specific rendering hint | `standby` |
 
-A single domain event can fan out to multiple kinds; emit one snapshot per surface the user has opted in to. The base fields stay equivalent across kinds; only the projection slice and the projection helper change.
+A single domain event can fan out to multiple kinds; emit one snapshot per surface the user has opted in to. The base fields (`id`, `surfaceId`, `kind`, `updatedAt`, `state`) stay equivalent across kinds; only the per-kind slice and the projection helper change.

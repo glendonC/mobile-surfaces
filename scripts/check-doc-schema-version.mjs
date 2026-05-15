@@ -1,8 +1,7 @@
 #!/usr/bin/env node
-// Grep every `.md` file in the repo (outside apps/site/) for stale
-// `schemaVersion: "<n>"` literals that reference a wire-format generation
-// other than the canonical CANONICAL_SCHEMA_VERSION from
-// scripts/lib/schema-url.mjs.
+// Grep every `.md` file in the repo for stale `schemaVersion: "<n>"`
+// literals that reference a wire-format generation other than the canonical
+// CANONICAL_SCHEMA_VERSION from scripts/lib/schema-url.mjs.
 //
 // Why this exists: a schema-major bump touches dozens of doc snippets, and
 // it is easy to miss one. v3 → v4 specifically had to update the root
@@ -11,10 +10,9 @@
 // the doc and the wire format cannot diverge.
 //
 // Coverage:
-//   - Every `.md` file in the repo, outside apps/site/ (owned by the
-//     docs/UX chat — a follow-up issue will add apps/site/ to coverage
-//     once that chat's diff lands on main).
+//   - Every `.md` file in the repo, including apps/site/ doc pages.
 //   - Top-level README.md and packages/<pkg>/README.md.
+//   - Excludes `notes/` (historical RFCs) and CHANGELOG.md basenames.
 //
 // Out of scope:
 //   - The CLI template tarball at packages/create-mobile-surfaces/template/
@@ -57,11 +55,16 @@ const SKIP_DIRS = new Set([
 // Repo-root-relative path prefixes whose .md files are excluded from the
 // scan. Each exclusion is justified inline; keep this list small.
 //
-//   apps/site/    - owned by the docs/UX chat (parallel diff). Coverage
-//                   will expand here once their work lands on main.
 //   notes/        - design/RFC notes record historical decisions and
 //                   reference older schemaVersion literals on purpose.
-const SKIP_PATH_PREFIXES = ["apps/site/", "notes/"];
+//
+// apps/site/ used to be excluded because the docs/UX chat owned it on a
+// separate branch. It is in scope now: a previous schema-major bump shipped
+// stale literals there because the guard was blind. The regex requires a
+// colon (`schemaVersion: "<n>"`), so migration-table rows like
+// `| schemaVersion | "3" | "4" |` and codec-guard examples like
+// `payload.schemaVersion === "3"` do not match and stay legitimate.
+const SKIP_PATH_PREFIXES = ["notes/"];
 
 // File basenames whose `schemaVersion: "<n>"` references are historical by
 // definition (release notes describing past wire formats). Excluded from
@@ -119,7 +122,7 @@ emitDiagnosticReport(
       ...(issues.length > 0
         ? {
             detail: {
-              message: `Canonical schemaVersion is "${CANONICAL_SCHEMA_VERSION}" (from scripts/lib/schema-url.mjs). Update each offending file to match. Note: apps/site/ is intentionally excluded from this scan — see the SKIP_PATH_PREFIXES note in this script.`,
+              message: `Canonical schemaVersion is "${CANONICAL_SCHEMA_VERSION}" (from scripts/lib/schema-url.mjs). Update each offending file to match.`,
               issues,
             },
           }

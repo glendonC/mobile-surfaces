@@ -1,0 +1,15 @@
+{
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json",
+  "schemaVersion": "4",
+  "kind": "widget",
+  "id": "fixture-widget-minimal",
+  "surfaceId": "surface-widget-minimal",
+  "updatedAt": "2026-05-15T12:02:00.000Z",
+  "state": "active",
+  "widget": {
+    "title": "Widget surface synced",
+    "body": "Host renders at the user-chosen size with the default reload policy.",
+    "progress": 0.5,
+    "deepLink": "mobilesurfaces://surface/surface-widget-minimal"
+  }
+}
