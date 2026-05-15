@@ -1,10 +1,21 @@
 #!/usr/bin/env node
-// Enforces external pin discipline for dependencies that must stay
-// exact-pinned across releases. @bacons/apple-targets materializes the
-// widget Xcode target at prebuild time (MS026); a floating range there
-// would silently shift the generated ios/ output across contributors.
-// Other published Mobile Surfaces packages already pin everything via
-// release.md; this script catches the one dep we cannot ship around.
+// Enforces external pin discipline for the deps that must stay
+// exact-pinned across releases. Three reasons a dep ends up here:
+//
+//   - @bacons/apple-targets materializes the widget Xcode target at
+//     prebuild time (MS026); a floating range silently shifts the
+//     generated ios/ output across contributors.
+//   - react and react-native are the load-bearing rows of the
+//     compatibility table (MS010, MS012). Patch drift between
+//     contributors here is exactly the kind of silent build skew the
+//     pinned-toolchain story is supposed to prevent.
+//   - expo-build-properties owns the deploymentTarget plugin config
+//     that backstops MS012; a caret here means the plugin contract
+//     can move under us.
+//
+// Tilde-pinned Expo SDK packages (`expo`, `expo-application`, etc.)
+// are deliberately omitted: Expo coordinates patch releases across
+// the SDK row and tilde is their recommended pinning style.
 import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
@@ -24,6 +35,21 @@ const PINNED = [
     file: "apps/mobile/package.json",
     name: "@bacons/apple-targets",
     trapId: "MS026",
+  },
+  {
+    file: "apps/mobile/package.json",
+    name: "react-native",
+    trapId: "MS010",
+  },
+  {
+    file: "apps/mobile/package.json",
+    name: "react",
+    trapId: "MS010",
+  },
+  {
+    file: "apps/mobile/package.json",
+    name: "expo-build-properties",
+    trapId: "MS010",
   },
 ];
 
