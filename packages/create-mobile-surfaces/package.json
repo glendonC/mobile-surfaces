@@ -44,6 +44,7 @@
     "smoke": "node ./scripts/dev-smoke.mjs",
     "smoke:existing": "node ./scripts/dev-smoke-existing.mjs",
     "smoke:monorepo": "node ./scripts/dev-smoke-monorepo.mjs",
+    "smoke:e2e": "node ./scripts/dev-smoke-e2e.mjs",
     "test": "node --test test/*.test.mjs",
     "build:template": "node ./scripts/build-template.mjs",
     "prepublishOnly": "node ./scripts/build-template.mjs"
