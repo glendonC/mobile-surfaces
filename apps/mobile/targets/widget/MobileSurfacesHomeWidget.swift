@@ -6,8 +6,12 @@ struct MobileSurfacesHomeWidget: Widget {
 
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: Self.kind, provider: MobileSurfacesHomeProvider()) { entry in
-      MobileSurfacesHomeWidgetView(entry: entry)
-        .containerBackground(Color("WidgetBackground"), for: .widget)
+      if entry.versionMismatch {
+        MobileSurfacesVersionMismatchView(kindLabel: "widget")
+      } else {
+        MobileSurfacesHomeWidgetView(entry: entry)
+          .containerBackground(Color("WidgetBackground"), for: .widget)
+      }
     }
     .configurationDisplayName("Mobile Surfaces")
     .description("Preview the latest shared surface snapshot.")
@@ -21,11 +25,19 @@ struct MobileSurfacesHomeEntry: TimelineEntry {
   // Sibling-breadcrumb wall clock for staleness rendering. See
   // MobileSurfacesSharedState.snapshotWrittenAt for context.
   let writtenAt: Date?
+  // True when the App Group snapshot's schemaVersion does not match the
+  // EXPECTED_SCHEMA_VERSION this binary was compiled against (MS041).
+  let versionMismatch: Bool
 }
 
 struct MobileSurfacesHomeProvider: TimelineProvider {
   func placeholder(in context: Context) -> MobileSurfacesHomeEntry {
-    MobileSurfacesHomeEntry(date: Date(), snapshot: .placeholder, writtenAt: nil)
+    MobileSurfacesHomeEntry(
+      date: Date(),
+      snapshot: .placeholder,
+      writtenAt: nil,
+      versionMismatch: false
+    )
   }
 
   func getSnapshot(
@@ -39,15 +51,12 @@ struct MobileSurfacesHomeProvider: TimelineProvider {
       completion(MobileSurfacesHomeEntry(
         date: Date(),
         snapshot: .marketing,
-        writtenAt: nil
+        writtenAt: nil,
+        versionMismatch: false
       ))
       return
     }
-    completion(MobileSurfacesHomeEntry(
-      date: Date(),
-      snapshot: currentSnapshot(),
-      writtenAt: currentWrittenAt()
-    ))
+    completion(currentEntry())
   }
 
   func getTimeline(
@@ -57,17 +66,38 @@ struct MobileSurfacesHomeProvider: TimelineProvider {
     // `.never` is correct for external-snapshot widgets - the host calls
     // reloadTimelines when state changes. The view-layer staleness hint
     // covers the host-crash / killed-process case.
-    completion(Timeline(entries: [
-      MobileSurfacesHomeEntry(
-        date: Date(),
-        snapshot: currentSnapshot(),
-        writtenAt: currentWrittenAt()
-      )
-    ], policy: .never))
+    completion(Timeline(entries: [currentEntry()], policy: .never))
   }
 
-  private func currentSnapshot() -> MobileSurfacesWidgetSnapshot {
-    MobileSurfacesSharedState.widgetSnapshot() ?? .placeholder
+  private func currentEntry() -> MobileSurfacesHomeEntry {
+    let result: SnapshotReadResult<MobileSurfacesWidgetSnapshot> =
+      MobileSurfacesSharedState.readSnapshot(
+        currentSurfaceIdKey: MobileSurfacesSharedState.widgetCurrentSurfaceIdKey
+      )
+    let writtenAt = currentWrittenAt()
+    switch result {
+    case .ok(let snapshot):
+      return MobileSurfacesHomeEntry(
+        date: Date(),
+        snapshot: snapshot,
+        writtenAt: writtenAt,
+        versionMismatch: false
+      )
+    case .versionMismatch:
+      return MobileSurfacesHomeEntry(
+        date: Date(),
+        snapshot: nil,
+        writtenAt: writtenAt,
+        versionMismatch: true
+      )
+    case .empty, .decodeError:
+      return MobileSurfacesHomeEntry(
+        date: Date(),
+        snapshot: .placeholder,
+        writtenAt: writtenAt,
+        versionMismatch: false
+      )
+    }
   }
 
   private func currentWrittenAt() -> Date? {
@@ -123,6 +153,7 @@ private struct MobileSurfacesHomeWidgetView: View {
 
 private extension MobileSurfacesWidgetSnapshot {
   static let placeholder = MobileSurfacesWidgetSnapshot(
+    schemaVersion: EXPECTED_SCHEMA_VERSION,
     kind: "widget",
     snapshotId: "placeholder",
     surfaceId: "surface-placeholder",
@@ -139,6 +170,7 @@ private extension MobileSurfacesWidgetSnapshot {
   // pipeline. Independent of whatever the device's App Group happens to
   // contain at preview time.
   static let marketing = MobileSurfacesWidgetSnapshot(
+    schemaVersion: EXPECTED_SCHEMA_VERSION,
     kind: "widget",
     snapshotId: "marketing",
     surfaceId: "surface-marketing",

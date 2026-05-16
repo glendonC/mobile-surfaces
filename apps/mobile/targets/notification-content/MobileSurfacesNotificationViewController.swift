@@ -100,6 +100,7 @@ final class MobileSurfacesNotificationViewController: UIViewController, UNNotifi
 /// of truth. MS036's check-surface-snapshots gate verifies field/type/optionality
 /// parity against the schema; never hand-edit the field set in isolation.
 struct MobileSurfacesNotificationContentEntry: Codable, Hashable {
+  let schemaVersion: String
   let kind: String
   let snapshotId: String
   let surfaceId: String

@@ -393,7 +393,7 @@ describe("applyStripGreenfield — integration against real source files", () =>
 
   function seedRealisticTree(dir) {
     copyFromRepo(
-      "apps/mobile/src/screens/LiveActivityHarness.tsx",
+      "apps/mobile/src/screens/DiagnosticsScreen.tsx",
       dir,
     );
     copyFromRepo(
@@ -416,7 +416,7 @@ describe("applyStripGreenfield — integration against real source files", () =>
 
   function harnessAt(dir) {
     return fs.readFileSync(
-      path.join(dir, "apps/mobile/src/screens/LiveActivityHarness.tsx"),
+      path.join(dir, "apps/mobile/src/screens/DiagnosticsScreen.tsx"),
       "utf8",
     );
   }

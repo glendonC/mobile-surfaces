@@ -1,31 +1,27 @@
 ---
 title: "Building your app on Mobile Surfaces"
 description: "How to move from the surface harness to a production app that emits real snapshots."
-order: 6
-group: "Start here"
+order: 62
+group: "Operate"
 ---
 
-The starter scaffolds a **surface harness**: a fixture-driven playground where every button fires a canonical snapshot. The harness is a testing appliance, not a template for a production app. It exists so you can verify that the Lock Screen, Dynamic Island, home widget, control, lock accessory, and StandBy surfaces all render correctly against the bridge before you write any application logic.
+The starter ships a reference app with three tabs. **Delivery** is the default tab — a domain-typed example built on `DeliveryOrder` and `deliveryToSnapshot(order, kind)`. **Diagnostics** is the fixture-driven playground where every button fires a canonical snapshot so you can verify Lock Screen, Dynamic Island, home widget, control, lock accessory, and StandBy render correctly against the bridge. **Payload Inspector** is the live App Group dump plus a paste-payload parse playground. Use Delivery as the structural template; use Diagnostics for surface QA; use Payload Inspector to read what your host wrote without round-tripping through a debug build.
 
-This page is the walk from "the harness works" to "my app produces real snapshots from real domain events."
+This page is the walk from "the diagnostics surfaces all render" to "my app produces real snapshots from real domain events."
 
-## What the harness is and is not
+## What the screens are and are not
 
-The harness:
+- **`apps/mobile/src/screens/DeliveryExampleScreen.tsx`** is a domain-typed reference. It uses `useTokenStore` with a mock forwarder, demonstrates `safeParseSnapshot` on hypothetical inbound JSON, and is the closest analog to what your production screen will look like.
+- **`apps/mobile/src/screens/DiagnosticsScreen.tsx`** imports canonical fixtures from `@mobile-surfaces/surface-contracts` and wires every button to a snapshot through `liveActivityAdapter.start/update/end` and `apps/mobile/src/surfaceStorage/index.ts`. It exercises every shipped surface kind so a code change that breaks a renderer fails loudly before it reaches a real device.
+- **`apps/mobile/src/screens/PayloadInspectorScreen.tsx`** is the fixture preview, paste-payload parse playground, and live App Group dump.
 
-- Lives in `apps/mobile/src/screens/LiveActivityHarness.tsx`.
-- Imports canonical fixtures from `apps/mobile/src/fixtures/surfaceFixtures.ts` (which re-export from `@mobile-surfaces/surface-contracts`).
-- Wires every button to a snapshot through `liveActivityAdapter.start/update/end` and `apps/mobile/src/surfaceStorage/index.ts`.
-- Exercises every shipped surface kind so a code change that breaks a renderer fails loudly in the harness before it reaches a real device.
+What none of the reference screens do:
 
-The harness does **not**:
+- Manage application state beyond the per-screen demo state.
+- Talk to a real backend (Delivery uses a mock forwarder; the others do not network at all).
+- Demonstrate end-to-end retry / persistence; that lives in your app.
 
-- Manage application state (no Redux/Zustand/Context, no persistence layer).
-- Talk to a backend (no fetch, no websocket, no retry logic).
-- Demonstrate error recovery beyond surfacing the typed error in `TrapErrorCard`.
-- Show token forwarding to a backend (it captures the push token, but it does not send it anywhere).
-
-These are deliberate omissions. The harness pins surface rendering; your app pins the rest.
+These are deliberate omissions. The reference app pins surface rendering and token-store discipline; your app pins the rest.
 
 ## The pieces you keep
 
@@ -39,7 +35,7 @@ The harness is the entry point that you replace. Everything around it is reusabl
 | `apps/mobile/src/diagnostics/` | Runtime probes (`checkSetup`) that detect missing entitlements, unsupported OS, etc. | Yes |
 | `apps/mobile/src/tokens/` | Token store + forwarding scaffold. Wire `forwardToken.ts` to your backend. | Yes |
 | `apps/mobile/src/generated/appGroup.ts` | Generated App Group identifier. Do not edit by hand. | Yes |
-| `apps/mobile/src/screens/LiveActivityHarness.tsx` | The fixture harness. | Replace |
+| `apps/mobile/src/screens/DiagnosticsScreen.tsx` | The fixture harness. | Replace |
 | `apps/mobile/src/fixtures/surfaceFixtures.ts` | Re-export of canonical fixtures. Useful for tests; not needed in a production screen. | Optional |
 
 ## Worked example: a package-delivery flow
@@ -202,8 +198,8 @@ Concrete order to go from the harness to your app:
 
 1. **Branch.** Make sure the harness still works on simulator before you change anything: `pnpm mobile:sim`, tap a few buttons, verify all five surfaces render.
 2. **Add your domain types** under `apps/mobile/src/types/`.
-3. **Write the projection functions** under `apps/mobile/src/services/<your-domain>/snapshots.ts`. Use the [Multi-surface](/docs/multi-surface) doc as a per-kind reference.
-4. **Add your screen** under `apps/mobile/src/screens/<YourScreen>.tsx`. Import `liveActivityAdapter` and the surface-storage helpers exactly the way `LiveActivityHarness.tsx` does.
+3. **Write the projection functions** under `apps/mobile/src/services/<your-domain>/snapshots.ts`. Use [Surfaces](/docs/surfaces) as a per-kind reference.
+4. **Add your screen** under `apps/mobile/src/screens/<YourScreen>.tsx`. Import `liveActivityAdapter` and the surface-storage helpers exactly the way `DiagnosticsScreen.tsx` does.
 5. **Replace the App entry** to point at your new screen. The harness can stay in the file tree as an internal QA tool; just stop importing it from `App.tsx`.
 6. **Wire token forwarding** to your backend in a mount-time `useEffect`. Mirror the example above.
 7. **Implement your backend sender** with `@mobile-surfaces/push`. Start with `client.alert` for a smoke test, then move to `client.update` for per-activity pushes and `client.broadcast` for iOS 18 channel pushes.
@@ -212,7 +208,7 @@ Concrete order to go from the harness to your app:
 ## What to read next
 
 - [Scenarios](/docs/scenarios) - the canonical delivery scenario rendered step by step across all surfaces.
-- [Multi-surface](/docs/multi-surface) - every `kind` value and which fields its slice requires.
-- [Backend integration](/docs/backend-integration) - domain event to snapshot to APNs in more detail.
+- [Surfaces](/docs/surfaces) - every `kind` value and which fields its slice requires.
+- [Backend](/docs/backend) - domain event to snapshot to APNs in more detail.
 - [Push](/docs/push) - typed error classes, retry policy, channel push, token taxonomy.
 - [Observability](/docs/observability) - hook signatures and recommended log shape.

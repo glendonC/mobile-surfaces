@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 // Display labels for the Live Activity Stage pill and any other surface
 // that needs short, human-readable copy for an ActivityKit Stage value.
@@ -25,6 +26,21 @@ extension MobileSurfacesActivityAttributes.Stage {
     case .prompted: return "READY"
     case .inProgress: return "LIVE"
     case .completing: return "WRAP"
+    }
+  }
+
+  /// Pill tint for the stage. The previous StagePill ignored its `stage`
+  /// argument and used `AccentColor` for every value, which made the pill
+  /// indistinguishable across the prompted -> inProgress -> completing
+  /// lifecycle. Tinting per case gives the Lock Screen a quick visual signal
+  /// without changing the contract. Mapped in one place so any future change
+  /// (e.g. new Stage case from Zod) is exhaustive at compile time, same as
+  /// `displayLabel`.
+  var tintColor: Color {
+    switch self {
+    case .prompted: return .orange
+    case .inProgress: return Color("AccentColor")
+    case .completing: return .green
     }
   }
 }

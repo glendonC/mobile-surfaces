@@ -12,9 +12,12 @@
 // shape, the frozen v3 schema must keep the v3 behavior so a v3 payload
 // continues to parse the same way it did at 4.x.
 //
-// The file will be removed in 6.0.0, when the v3 codec is dropped from
-// safeParseAnyVersion (same lifetime promise the v2 codec had through the
-// 4.x line). Do not extend it; if a future change to v3 parsing is needed,
+// The file will be removed in 8.0.0, when the v3 codec is dropped from
+// safeParseAnyVersion. The original v2 RFC promised retirement at 6.0; the
+// versioning charter (see apps/site/src/content/docs/stability.md) instead
+// guarantees one full major of warning between deprecation announcement and
+// codec removal, so v3 retirement is pushed to 8.0 to honor that. Do not
+// extend it; if a future change to v3 parsing is needed,
 // the change is by definition a new schema version.
 //
 // What v4 changes vs v3: the base shape lost its kind-specific rendering

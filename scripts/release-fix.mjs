@@ -2,7 +2,7 @@
 // `pnpm release:fix` — regenerate every derived file in the repo. Use when
 // `pnpm release:dry-run` reports drift on a generated artifact.
 //
-// Order matters: trap-bindings depends on the catalog, traps-data depends
+// Order matters: the traps-package generator (TS bindings + Swift) depends
 // on the catalog, build-agents-md depends on the catalog. Surface fixtures
 // regenerate from JSON. JSON schema regenerates from the Zod source.
 //
@@ -33,12 +33,8 @@ const QUICK_REGENS = [
     cmd: ["node", "--experimental-strip-types", "--no-warnings=ExperimentalWarning", "scripts/generate-surface-fixtures.mjs"],
   },
   {
-    name: "Trap bindings (generate-trap-bindings.mjs)",
-    cmd: ["node", "--experimental-strip-types", "--no-warnings=ExperimentalWarning", "scripts/generate-trap-bindings.mjs"],
-  },
-  {
-    name: "Traps data export (generate-traps-data.mjs)",
-    cmd: ["node", "--experimental-strip-types", "--no-warnings=ExperimentalWarning", "scripts/generate-traps-data.mjs"],
+    name: "@mobile-surfaces/traps bindings + Swift (generate-traps-package.mjs)",
+    cmd: ["node", "--experimental-strip-types", "--no-warnings=ExperimentalWarning", "scripts/generate-traps-package.mjs"],
   },
   {
     name: "CLAUDE.md + AGENTS.md (build-agents-md.mjs)",

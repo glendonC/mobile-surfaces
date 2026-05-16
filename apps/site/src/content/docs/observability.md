@@ -2,7 +2,7 @@
 title: "Observability"
 description: "Which catalog-bound errors are worth alerting on, hook signatures, recommended log shape."
 order: 50
-group: "Operate"
+group: "Backend"
 ---
 # Observability
 
@@ -34,7 +34,7 @@ const client = createPushClient({
       // trapId is non-undefined for the catalog-bound subset (MS011, MS014,
       // MS015, MS018, MS020, MS028, MS030, MS031, MS032, MS034, MS035).
       // Treat those as silent-failure signals; treat the rest as wire-layer
-      // noise. The authoritative map lives in packages/push/src/trap-bindings.ts.
+      // noise. The authoritative map lives in @mobile-surfaces/traps.
     },
   },
 });
@@ -57,7 +57,7 @@ There is intentionally no `onRetry`: the same `onError` fires with `isFinalAttem
 
 ### Error classes worth observing
 
-`@mobile-surfaces/push/trap-bindings` exports `trapIdForErrorClass(name)`. The catalog-bound error classes are:
+`@mobile-surfaces/traps` exports `trapIdForErrorClass(name)`; the push package re-exports the same helper. The catalog-bound error classes are:
 
 | Error class                   | Trap id | What it means                                                        |
 | ----------------------------- | ------- | -------------------------------------------------------------------- |

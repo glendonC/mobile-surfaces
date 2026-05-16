@@ -47,6 +47,10 @@ let package = Package(
                 "LiveActivityError.swift",
                 "ObserverRegistry.swift",
                 "LiveActivityCodableBridge.swift",
+                // MS040 byte-identity replica. LiveActivityError conforms to
+                // MSTrapBound and stamps trapId / docsUrl via MSTraps; the
+                // protocol + lookup must be in the same SwiftPM target.
+                "MobileSurfacesTraps.swift",
             ]
         ),
         .testTarget(

@@ -21,7 +21,7 @@
 //
 // Order matches the registry's stage order, so generators that consume the
 // output of earlier generators (e.g. build-agents-md reads data/traps.json
-// which generate-traps-data writes) run in the right sequence.
+// which the traps-package generator consumes too) run in the right sequence.
 import { spawnSync } from "node:child_process";
 import { parseArgs } from "node:util";
 import { checkRegistry, buildCommand } from "./lib/check-registry.mjs";

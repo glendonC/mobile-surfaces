@@ -16,13 +16,11 @@ data/traps.json ──► packages/surface-contracts/src/traps.ts (Zod validatio
                 └─► CLAUDE.md   (identical content; Claude Code reads this directly)
 ```
 
-Future consumers (planned, not shipped):
+Additional consumers shipped in v7:
 
-- `mobile-surfaces check --json`: emits SARIF / ESLint-shape findings keyed by rule id.
-- `npx mobile-surfaces --stdio`: MCP server surfacing the same rule catalog as tools an AI agent can call.
-- A GitHub Action wrapping the check command for consuming repos.
+- `npx mobile-surfaces audit [path]`: walks the catalog against an existing Expo project, emits a pass/warn/fail report with MS-id chips and `docsUrl` links. Backed by the same script set that runs in `pnpm surface:check` for this repo. Available with the `create-mobile-surfaces` install.
 
-All of those will read from this catalog. None of them are hand-maintained.
+All consumers read from this catalog. None are hand-maintained.
 
 ## Catalog schema
 
@@ -96,5 +94,5 @@ A structured catalog gives every fact one home. When iOS 27 lands and the deploy
 ## See also
 
 - [`AGENTS.md`](/traps) and [`CLAUDE.md`](/traps): generated guides for AI coding assistants.
-- [`docs/architecture.md`](/docs/architecture): the contract, the surfaces, the adapter boundary.
+- [`docs/concepts.md`](/docs/concepts): the contract, the surfaces, the adapter boundary.
 - [`docs/troubleshooting.md`](/docs/troubleshooting): long-form symptom-to-fix recipes; the catalog summarizes what `troubleshooting.md` walks through.

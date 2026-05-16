@@ -1,14 +1,14 @@
 ---
-title: "Backend Integration"
+title: "Backend"
 description: "Domain event to snapshot to APNs walkthrough."
 order: 30
-group: "Build"
+group: "Backend"
 ---
-# Backend Integration
+# Backend
 
 How a backend service turns a domain event into an APNs push that this starter can render.
 
-In plain English: your backend describes what is happening once, validates that shape, and sends the right projection to Apple Push Notification service (APNs). Mobile Surfaces ships the local pieces, fixtures, the contract package, the Node SDK, the harness, and APNs smoke scripts. A real production push service is intentionally [out of scope](https://github.com/glendonC/mobile-surfaces/blob/main/README.md#what-this-is-not); the goal of this doc is to make the integration shape obvious so you can build the production half against a stable contract.
+In plain English: your backend describes what is happening once, validates that shape, and sends the right projection to Apple Push Notification service (APNs). Mobile Surfaces ships the local pieces, fixtures, the contract package, the Node SDK, the harness, and APNs smoke scripts. A real production push service (queues, durable retries, observability) is intentionally out of scope; the goal of this doc is to make the integration shape obvious so you can build the production half against a stable contract.
 
 For the full push surface (token taxonomy, channel management, error responses, retry policy, smoke-script flag combinations), see [`docs/push.md`](/docs/push). This page is the high-level "how does it work end-to-end" piece; the push doc is the "how do I drive the wire layer" piece.
 
@@ -57,9 +57,9 @@ interface LiveSurfaceSnapshotBase {
 
 `kind` selects the projection path (the schema is a true `z.discriminatedUnion("kind", …)`, invalid kind/slice combinations fail at parse time). `state` is the canonical state machine: drive the lifecycle from the backend. `liveActivity.stage` is a UI-facing axis (whether the surface is being prompted, actively running, or wrapping up); it only applies to liveActivity-kind snapshots. `progress` lives on whichever slice renders it (`liveActivity`, `widget`, `standby`).
 
-`updatedAt` is a required base field. Set it to the wall-clock instant the snapshot was authored, ideally UTC for trivial lexicographic comparison. Consumers use it to discard out-of-order pushes that ActivityKit and APNs do not order in-band; see [`schema-migration.md`](/docs/schema-migration) for the migration policy.
+`updatedAt` is a required base field. Set it to the wall-clock instant the snapshot was authored, ideally UTC for trivial lexicographic comparison. Consumers use it to discard out-of-order pushes that ActivityKit and APNs do not order in-band; see [`schema.md`](/docs/schema) for the migration policy.
 
-For a tour of every `kind` value and the projection it drives, see [`docs/multi-surface.md`](/docs/multi-surface). Look at `data/surface-fixtures/*.json` for committed examples of every state and kind.
+For a tour of every `kind` value and the projection it drives, see [`docs/surfaces.md`](/docs/surfaces). Look at `data/surface-fixtures/*.json` for committed examples of every state and kind.
 
 ## End-to-End Walkthrough
 
@@ -129,7 +129,7 @@ const result = safeParseSnapshot(input);
 // and emits a deprecationWarning on success. Use this on inbound code paths
 // (HTTP handlers, queue consumers) where producers may not have migrated to
 // v4 yet. The v3 codec lives for the entire 5.x release line; see
-// docs/schema-migration.md for the deprecation timeline.
+// docs/schema.md for the deprecation timeline.
 const versioned = safeParseAnyVersion(input);
 if (versioned.success) {
   if (versioned.deprecationWarning) {
@@ -139,7 +139,7 @@ if (versioned.success) {
 }
 ```
 
-`safeParseAnyVersion` is the migration path documented in [`docs/schema-migration.md`](/docs/schema-migration). Use it whenever you read snapshots from a store that may still hold v3 payloads. (The v2 codec was sunset in 5.0.0; `safeParseAnyVersion` chains v3 -> v4 only.)
+`safeParseAnyVersion` is the migration path documented in [`docs/schema.md`](/docs/schema). Use it whenever you read snapshots from a store that may still hold v3 payloads. The v3 -> v4 -> v5 codec chain runs in `safeParseAnyVersion`; the v2 codec was sunset in 5.0.0.
 
 The published JSON Schema at [`unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json`](https://unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json) is generated from the same Zod source and pinned to `major.minor`. Use it for IDE tooling, OpenAPI components, or non-TypeScript validators (Ajv, jsonschema, etc.). Standard Schema interop is automatic, every exported Zod schema implements the `~standard` getter (`{ vendor: "zod", version: 1, validate, jsonSchema }`), so the contract drops directly into Standard-Schema-aware libraries (Valibot runners, ArkType, `@standard-schema/spec`) without depending on Zod at runtime.
 
@@ -180,70 +180,7 @@ await push.close(); // tear down the HTTP/2 sessions when shutting down
 
 The SDK validates every snapshot through `liveSurfaceSnapshot.safeParse` and rejects non-`liveActivity` kinds for `update` / `start` / `end` / `broadcast` with a typed `InvalidSnapshotError` before any network call. `alert()`, `update()`, `start()`, `end()`, and `broadcast()` resolve with `{ apnsId, status, timestamp }`; non-2xx responses throw a typed `ApnsError` subclass per Apple reason. See [`docs/push.md`](/docs/push) for the full SDK reference, error taxonomy, and channel/broadcast surface.
 
-#### Raw HTTP/2 reference
-
-The SDK abstracts the wire shape, but the protocol is open. If you build the integration in a language other than Node, or you want to understand what the SDK is sending, the raw shape is below. `scripts/send-apns.mjs` builds these requests verbatim.
-
-Live Activity update:
-
-```
-POST https://api.development.push.apple.com/3/device/<activity-token>
-authorization: bearer <ES256 JWT signed with the .p8 auth key>
-apns-topic: <bundle-id>.push-type.liveactivity
-apns-push-type: liveactivity
-apns-priority: 5                # 10 only for user-visible urgency
-apns-expiration: <unix-seconds>
-content-type: application/json
-
-{
-  "aps": {
-    "timestamp": <unix-seconds>,
-    "event": "update",
-    "content-state": { "headline": "...", "subhead": "...", "progress": 0.5, "stage": "inProgress" },
-    "stale-date": <optional-unix-seconds>
-  }
-}
-```
-
-Live Activity remote start (iOS 17.2+) requires the static attributes:
-
-```json
-{
-  "aps": {
-    "timestamp": 1700000000,
-    "event": "start",
-    "content-state": { "headline": "...", "subhead": "...", "progress": 0, "stage": "prompted" },
-    "attributes-type": "MobileSurfacesActivityAttributes",
-    "attributes": { "surfaceId": "...", "modeLabel": "..." },
-    "stale-date": 1700003600
-  }
-}
-```
-
-Live Activity end:
-
-```json
-{ "aps": { "timestamp": 1700000000, "event": "end", "content-state": { ... }, "dismissal-date": 1700000060 } }
-```
-
-Alert push (the `toApnsAlertPayload` shape):
-
-```
-apns-topic: <bundle-id>           # no push-type suffix
-apns-push-type: alert
-apns-priority: 10
-```
-
-```json
-{
-  "aps": { "alert": { "title": "...", "body": "..." }, "sound": "default" },
-  "liveSurface": { "kind": "surface_snapshot", "snapshotId": "...", "surfaceId": "...", "state": "active", "deepLink": "mobilesurfaces://..." }
-}
-```
-
-`liveSurface` is your sidecar. The starter does not consume it on the client; it exists so backend events and analytics share the same identifiers as the activity.
-
-For the iOS 18 broadcast / channel-management endpoints (different host, different ports for sandbox vs production), see [`docs/push.md#environments-and-endpoints`](/docs/push#environments-and-endpoints).
+The raw HTTP/2 wire shape — APNs endpoints, topic headers, push-type headers, the per-event `aps` envelope, the iOS 18 broadcast and channel-management endpoints — lives in [`docs/push.md`](/docs/push). `scripts/send-apns.mjs` builds those requests verbatim if you want to read the protocol top-to-bottom in one file.
 
 ### 4. Manage tokens
 

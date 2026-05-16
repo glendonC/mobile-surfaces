@@ -85,18 +85,26 @@ function renderEntry(entry) {
   return lines.join("\n");
 }
 
-const sortedEntries = [...catalog.entries].sort((a, b) => {
+// Index counts and the index table cover only live entries. Retired entries
+// (deprecated: true) used to bloat the index with "MS005 retired" rows that
+// taught nothing actionable; they now live in a "Retired ids" footnote at
+// the bottom of the document for external references that need them to
+// keep resolving.
+const liveEntries = catalog.entries.filter((e) => !e.deprecated);
+const retiredEntries = catalog.entries.filter((e) => e.deprecated);
+
+const sortedEntries = [...liveEntries].sort((a, b) => {
   const severity = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
   if (severity !== 0) return severity;
   return a.id.localeCompare(b.id);
 });
 
-const errorCount = catalog.entries.filter((e) => e.severity === "error").length;
-const warningCount = catalog.entries.filter((e) => e.severity === "warning").length;
-const infoCount = catalog.entries.filter((e) => e.severity === "info").length;
+const errorCount = liveEntries.filter((e) => e.severity === "error").length;
+const warningCount = liveEntries.filter((e) => e.severity === "warning").length;
+const infoCount = liveEntries.filter((e) => e.severity === "info").length;
 
 const tagBuckets = new Map();
-for (const entry of catalog.entries) {
+for (const entry of liveEntries) {
   for (const tag of entry.tags) {
     if (!tagBuckets.has(tag)) tagBuckets.set(tag, []);
     tagBuckets.get(tag).push(entry.id);
@@ -114,6 +122,43 @@ const indexTable = sortedEntries
   )
   .join("\n");
 
+// Cross-references: pairs of trap ids that describe the same wire shape in
+// two contexts or the inverse failures of the same header/setting. Each
+// link is bidirectional in data/traps.json (Zod symmetry refinement), so
+// we de-dupe by emitting only the pair where the lower id comes first.
+const crossRefPairs = [];
+const seenPairs = new Set();
+for (const entry of liveEntries) {
+  for (const siblingId of entry.siblings ?? []) {
+    const [low, high] =
+      entry.id < siblingId ? [entry.id, siblingId] : [siblingId, entry.id];
+    const key = `${low}|${high}`;
+    if (seenPairs.has(key)) continue;
+    seenPairs.add(key);
+    const lowEntry = liveEntries.find((e) => e.id === low);
+    const highEntry = liveEntries.find((e) => e.id === high);
+    if (!lowEntry || !highEntry) continue;
+    crossRefPairs.push({ low: lowEntry, high: highEntry });
+  }
+}
+crossRefPairs.sort((a, b) => a.low.id.localeCompare(b.low.id));
+
+const crossRefSection = crossRefPairs.length > 0
+  ? crossRefPairs
+      .map(
+        ({ low, high }) =>
+          `- **${low.id} ↔ ${high.id}** — ${low.title}; ${high.title}.`,
+      )
+      .join("\n")
+  : "_(no cross-references registered.)_";
+
+const retiredSection = retiredEntries.length > 0
+  ? retiredEntries
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((e) => `- **${e.id}** — ${e.summary}`)
+      .join("\n")
+  : "_(no retired ids reserved.)_";
+
 const body = [
   "<!--",
   "  THIS FILE IS GENERATED. DO NOT EDIT.",
@@ -130,7 +175,7 @@ const body = [
   "",
   "## Index",
   "",
-  `${catalog.entries.length} rules total: ${errorCount} error, ${warningCount} warning, ${infoCount} info.`,
+  `${liveEntries.length} live rules: ${errorCount} error, ${warningCount} warning, ${infoCount} info. ${retiredEntries.length} retired ids reserved (see footnote).`,
   "",
   "| ID | Severity | Detection | Title |",
   "| --- | --- | --- | --- |",
@@ -139,6 +184,12 @@ const body = [
   "## Rules by tag",
   "",
   tagSummary,
+  "",
+  "## Cross-references",
+  "",
+  "Trap ids that describe the same constraint in two contexts, or the inverse failures of the same wire shape:",
+  "",
+  crossRefSection,
   "",
   "## How to use this document",
   "",
@@ -150,6 +201,12 @@ const body = [
   "## Rules",
   "",
   sortedEntries.map(renderEntry).join("\n\n"),
+  "",
+  "## Retired ids",
+  "",
+  "Trap ids are monotonic forever; retired rules keep their id with a one-line tombstone here so external references (PR comments, log lines, blog posts) keep resolving to a known marker.",
+  "",
+  retiredSection,
   "",
   "## Related local documentation",
   "",

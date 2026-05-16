@@ -1,5 +1,43 @@
 # @mobile-surfaces/push
 
+## 7.0.0
+
+### Major Changes
+
+- `@mobile-surfaces/push` moves to independent versioning. It is no longer co-versioned with the linked release group (`surface-contracts` + `validators` + `traps`); its dependency on `@mobile-surfaces/surface-contracts` and `@mobile-surfaces/traps` is now declared as `workspace:^` so the published artifact carries a caret range against those packages instead of an exact pin. See `apps/site/src/content/docs/stability.md` for the versioning charter.
+
+- `ApnsError` and `MissingApnsConfigError` now extend `MobileSurfacesError` from `@mobile-surfaces/traps`. Every error class carries `trapId` and `docsUrl` getters bound to its catalog entry; consumers catching the error see strictly more diagnostic surface (trap id + docs link) on the same instance. The duplicated getter implementations in `packages/push/src/errors.ts` are removed in favor of the inherited ones.
+
+- `packages/push/src/trap-bindings.ts` becomes a thin re-export of the canonical bindings from `@mobile-surfaces/traps` for backward compatibility through the v7 release. Scheduled for removal in v9.
+
+### Minor Changes
+
+- `check-trap-error-binding.mjs` (CI gate) extends to scan every `MobileSurfacesError` subclass across all packages, including the push SDK. New error classes must register a trap binding or land on the explicit unbound allowlist.
+
+## 6.0.0
+
+### Major Changes
+
+- Linked-group bump for the v5 schema release in `@mobile-surfaces/surface-contracts`. No SDK API change. The expired-JWT retry path now refreshes the provider token immediately on the first `ExpiredProviderTokenError` rather than waiting for the 50-minute scheduler tick, closing a window where a long-lived client held an expired JWT past the 60-minute boundary and saw the first send of the next minute fail. The notification-alert path is updated to match the v5 projection-output sidecar's `kind: "surface_snapshot"` literal so `liveActivityAlertPayload` and `toNotificationContentPayload` produce the same `liveSurface.kind` value.
+
+## 5.0.0
+
+### Major Changes
+
+- Linked-group bump for the v4 schema release in `@mobile-surfaces/surface-contracts` (rendering fields move into per-kind slices; `schemaVersion` required without default; v2 codec dropped). The SDK's payload builder is retargeted at v4 snapshots: `liveActivityAlertPayloadFromSnapshot` is renamed to `toApnsAlertPayload` and now consumes the narrowed `LiveSurfaceSnapshotLiveActivity` produced by `assertSnapshotKind` rather than the discriminated union. Callers holding the union narrow at the call site or use the helper from `@mobile-surfaces/surface-contracts`.
+
+- `ChannelInfo` gains a required `environment: "development" | "production"` field. Channels are environment-scoped per MS031 — a channel created against the development endpoint cannot be reached against production — and the field carries that scope through the client's return shape so callers building a multi-environment inventory dedupe correctly. This is a wire-shape change for `ChannelInfo` and `listChannels()`; consumers reading the type with strict typing must recompile.
+
+### Minor Changes
+
+- `SendOptions`, `BroadcastOptions`, `createChannel`, and `deleteChannel` accept an optional `signal: AbortSignal`. An in-flight request is cancelled via `NGHTTP2_CANCEL`; a request waiting in a retry-backoff sleep wakes immediately. An already-aborted signal rejects synchronously without dialing. The rejection is a new `AbortError` carrying the signal's reason on `cause`.
+
+- `createPushClient` accepts an optional `caOverride: string | Buffer` option that forwards to `http2.connect`'s session options. Production callers never set this; the option exists so the TLS regression test in `packages/push/test/tls.test.mjs` can point the client at an in-process h2 server whose self-signed certificate the default Node CA store would reject. Previously only reachable through the symbol-keyed `TEST_TRANSPORT_OVERRIDE.sessionOptions` seam.
+
+- New `CreateChannelResponseError` thrown when APNs returns 2xx for `createChannel()` but no `apns-channel-id` is recoverable from headers or body. Distinct from `ApnsError` because the HTTP layer succeeded; the failure is that the client cannot return the id its caller needs. Carries the response status and a 200-character body snippet for post-hoc debugging.
+
+- Adds `packages/push/test/tls.test.mjs` (TLS regression via in-process h2 server) and `packages/push/test/retry.test.mjs` (provider-token refresh, retryable status codes, abort-during-backoff).
+
 ## 4.0.0
 
 ### Major Changes

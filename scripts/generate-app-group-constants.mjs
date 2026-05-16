@@ -3,11 +3,14 @@
 // consumers from a single source of truth: apps/mobile/app.json at
 // `expo.ios.entitlements["com.apple.security.application-groups"][0]`.
 //
-// Three output files are written, each with a header pointing back at the
+// Four output files are written, each with a header pointing back at the
 // source and the regen command:
 //   - apps/mobile/targets/_shared/MobileSurfacesAppGroup.swift
 //   - apps/mobile/src/generated/appGroup.ts
 //   - apps/mobile/targets/widget/generated.entitlements
+//   - apps/mobile/targets/notification-content/generated.entitlements
+//     (only when the notification-content target dir already exists; older
+//     consumers that have not adopted the notification surface skip it)
 //
 // MobileSurfacesSharedState.swift, surfaceStorage/index.ts, and
 // diagnostics/checkSetup.ts all reference the Swift / TS constants rather
@@ -40,6 +43,15 @@ const SWIFT_OUT = path.resolve(
 const TS_OUT = path.resolve("apps/mobile/src/generated/appGroup.ts");
 const ENTITLEMENTS_OUT = path.resolve(
   "apps/mobile/targets/widget/generated.entitlements",
+);
+// The notification-content target lives outside the widget target dir but
+// must declare the same App Group entitlement so its extension process can
+// read the same UserDefaults suite. check-app-group-identity.mjs reads this
+// path as one of its parity sources; emitting it here keeps the rename path
+// (`pnpm surface:codegen`) byte-identical across both extensions instead of
+// leaving notification-content to drift on the next App Group rename.
+const NOTIFICATION_CONTENT_ENTITLEMENTS_OUT = path.resolve(
+  "apps/mobile/targets/notification-content/generated.entitlements",
 );
 
 const HEADER_LINE_1 =
@@ -133,6 +145,13 @@ const swiftSource = renderSwift(identifier);
 const tsSource = renderTs(identifier);
 const entitlementsSource = renderEntitlements(identifier);
 
+// Notification-content extension is opt-in: only mirror the entitlements
+// file when the target dir already exists. Matches the existence guard in
+// check-app-group-identity.mjs so MS013 parity holds on partial layouts.
+const notificationContentDirExists = fs.existsSync(
+  path.dirname(NOTIFICATION_CONTENT_ENTITLEMENTS_OUT),
+);
+
 if (values.check) {
   const swiftCurrent = fs.existsSync(SWIFT_OUT)
     ? fs.readFileSync(SWIFT_OUT, "utf8")
@@ -141,9 +160,17 @@ if (values.check) {
   const entitlementsCurrent = fs.existsSync(ENTITLEMENTS_OUT)
     ? fs.readFileSync(ENTITLEMENTS_OUT, "utf8")
     : "";
+  const notificationEntitlementsCurrent =
+    notificationContentDirExists &&
+    fs.existsSync(NOTIFICATION_CONTENT_ENTITLEMENTS_OUT)
+      ? fs.readFileSync(NOTIFICATION_CONTENT_ENTITLEMENTS_OUT, "utf8")
+      : "";
   const swiftInSync = swiftCurrent === swiftSource;
   const tsInSync = tsCurrent === tsSource;
   const entitlementsInSync = entitlementsCurrent === entitlementsSource;
+  const notificationEntitlementsInSync = notificationContentDirExists
+    ? notificationEntitlementsCurrent === entitlementsSource
+    : true;
   const issues = [];
   if (!swiftInSync) {
     issues.push({
@@ -160,6 +187,12 @@ if (values.check) {
   if (!entitlementsInSync) {
     issues.push({
       path: path.relative(process.cwd(), ENTITLEMENTS_OUT),
+      message: "out of sync with apps/mobile/app.json",
+    });
+  }
+  if (!notificationEntitlementsInSync) {
+    issues.push({
+      path: path.relative(process.cwd(), NOTIFICATION_CONTENT_ENTITLEMENTS_OUT),
       message: "out of sync with apps/mobile/app.json",
     });
   }
@@ -193,7 +226,12 @@ if (values.check) {
   fs.writeFileSync(SWIFT_OUT, swiftSource);
   fs.writeFileSync(TS_OUT, tsSource);
   fs.writeFileSync(ENTITLEMENTS_OUT, entitlementsSource);
-  const wrote = [SWIFT_OUT, TS_OUT, ENTITLEMENTS_OUT]
+  const writtenPaths = [SWIFT_OUT, TS_OUT, ENTITLEMENTS_OUT];
+  if (notificationContentDirExists) {
+    fs.writeFileSync(NOTIFICATION_CONTENT_ENTITLEMENTS_OUT, entitlementsSource);
+    writtenPaths.push(NOTIFICATION_CONTENT_ENTITLEMENTS_OUT);
+  }
+  const wrote = writtenPaths
     .map((p) => path.relative(process.cwd(), p))
     .join(", ");
   if (values.json) {

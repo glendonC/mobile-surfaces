@@ -1,5 +1,30 @@
 import Foundation
+import OSLog
 import WidgetKit
+
+/// Schema version this widget binary was compiled against. Host snapshots
+/// emitting a different schemaVersion render a placeholder instead of decoding,
+/// preventing silent rendering of incompatible shapes (MS041). Bumped in
+/// lockstep with the Zod `schemaVersion` literal on the projection-output
+/// schemas in `packages/surface-contracts/src/schema.ts`.
+public let EXPECTED_SCHEMA_VERSION = "5"
+
+/// Result of a two-stage snapshot read. The reader decodes
+/// `{ "schemaVersion": String }` first and compares against
+/// `EXPECTED_SCHEMA_VERSION` before attempting the full struct decode. A
+/// mismatch is loud rather than silent: the widget switches on `.versionMismatch`
+/// and renders `MobileSurfacesVersionMismatchView` so the user sees "Update
+/// <surface>" instead of half-rendered or placeholder data.
+public enum SnapshotReadResult<T: Decodable> {
+  case empty
+  case versionMismatch(found: String, expected: String)
+  case decodeError(Error)
+  case ok(T)
+}
+
+private struct SchemaVersionProbe: Decodable {
+  let schemaVersion: String
+}
 
 enum MobileSurfacesSharedState {
   static let appGroup = MobileSurfacesAppGroup.identifier
@@ -20,9 +45,32 @@ enum MobileSurfacesSharedState {
   static let lockAccessoryStaleAfter: TimeInterval = 24 * 60 * 60
   static let standbyStaleAfter: TimeInterval = 24 * 60 * 60
 
-  static var defaults: UserDefaults? {
-    UserDefaults(suiteName: appGroup)
-  }
+  // Cache the suite handle once per process. UserDefaults caches internally by
+  // suiteName, but binding the handle to a `static let` also makes the failure
+  // mode reproducible: if the App Group entitlement is missing or misconfigured
+  // (MS013/MS025), every read sees the same nil rather than a flaky-looking
+  // transient. The one-shot logger below fires the first time any caller
+  // observes the nil so the misconfiguration surfaces in Console.app without
+  // requiring a JS round-trip.
+  static let defaults: UserDefaults? = {
+    let suite = UserDefaults(suiteName: appGroup)
+    if suite == nil {
+      _ = appGroupMissingLogOnce
+    }
+    return suite
+  }()
+
+  // Lazy global: the closure runs at most once on first access, regardless of
+  // which call site triggers it. Stored as `Void` since we only care about the
+  // side effect.
+  private static let appGroupMissingLogOnce: Void = {
+    let message = "[MobileSurfaces] App Group container not available (suite: \(appGroup)). App Group entitlement missing or misconfigured — see MS013/MS025."
+    if #available(iOS 14.0, *) {
+      Logger(subsystem: "com.mobilesurfaces.widget", category: "appGroup").error("\(message, privacy: .public)")
+    } else {
+      print(message)
+    }
+  }()
 
   static func snapshotKey(surfaceId: String) -> String {
     "surface.snapshot.\(surfaceId)"
@@ -57,6 +105,46 @@ enum MobileSurfacesSharedState {
 
   static func standbySnapshot() -> MobileSurfacesStandbySnapshot? {
     decodeSnapshot(currentSurfaceIdKey: standbyCurrentSurfaceIdKey)
+  }
+
+  /// Version-aware snapshot read. Decodes `{ schemaVersion }` first and
+  /// compares against `EXPECTED_SCHEMA_VERSION` before decoding the full
+  /// struct. Callers switch on the result to render a version-mismatch
+  /// placeholder rather than falling back to a generic placeholder that
+  /// hides the cause (MS041).
+  static func readSnapshot<T: Decodable>(
+    currentSurfaceIdKey: String,
+    type: T.Type = T.self
+  ) -> SnapshotReadResult<T> {
+    guard
+      let defaults,
+      let surfaceId = defaults.string(forKey: currentSurfaceIdKey),
+      let raw = defaults.string(forKey: snapshotKey(surfaceId: surfaceId)),
+      let data = raw.data(using: .utf8)
+    else {
+      return .empty
+    }
+    let probe: SchemaVersionProbe
+    do {
+      probe = try JSONDecoder().decode(SchemaVersionProbe.self, from: data)
+    } catch {
+      recordDecodeError(surfaceId: surfaceId, error: error)
+      return .decodeError(error)
+    }
+    if probe.schemaVersion != EXPECTED_SCHEMA_VERSION {
+      return .versionMismatch(
+        found: probe.schemaVersion,
+        expected: EXPECTED_SCHEMA_VERSION
+      )
+    }
+    do {
+      let decoded = try JSONDecoder().decode(T.self, from: data)
+      defaults.removeObject(forKey: decodeErrorKey(surfaceId: surfaceId))
+      return .ok(decoded)
+    } catch {
+      recordDecodeError(surfaceId: surfaceId, error: error)
+      return .decodeError(error)
+    }
   }
 
   // Read the writtenAt breadcrumb for whatever surfaceId is currently bound
@@ -176,10 +264,18 @@ enum MobileSurfacesSharedState {
 
   private static func recordDecodeError(surfaceId: String, error: Error) {
     guard let defaults else { return }
+    // MS036 is the trap this breadcrumb represents: a host-side write that
+    // the widget extension's JSONDecoder rejects (renamed key / type
+    // mismatch / optionality drift). Default to that when the error type
+    // does not opt into MSTrapBound; an MSTrapBound error overrides with
+    // its own binding (e.g. a future widget-side LiveActivityError with
+    // decodingFailed → MS003).
+    let resolvedTrapId = (error as? MSTrapBound)?.trapId ?? "MS036"
     let payload: [String: Any] = [
       "at": iso8601Formatter.string(from: Date()),
       "error": (error as? LocalizedError)?.errorDescription ?? String(describing: error),
-      "type": String(describing: Swift.type(of: error))
+      "type": String(describing: Swift.type(of: error)),
+      "trapId": resolvedTrapId
     ]
     if let data = try? JSONSerialization.data(withJSONObject: payload),
        let raw = String(data: data, encoding: .utf8) {
@@ -198,6 +294,7 @@ enum MobileSurfacesSharedState {
 }
 
 struct MobileSurfacesWidgetSnapshot: Codable, Hashable {
+  var schemaVersion: String
   var kind: String
   var snapshotId: String
   var surfaceId: String
@@ -211,6 +308,7 @@ struct MobileSurfacesWidgetSnapshot: Codable, Hashable {
 }
 
 struct MobileSurfacesControlSnapshot: Codable, Hashable {
+  var schemaVersion: String
   var kind: String
   var snapshotId: String
   var surfaceId: String
@@ -222,6 +320,7 @@ struct MobileSurfacesControlSnapshot: Codable, Hashable {
 }
 
 struct MobileSurfacesLockAccessorySnapshot: Codable, Hashable {
+  var schemaVersion: String
   var kind: String
   var snapshotId: String
   var surfaceId: String
@@ -234,6 +333,7 @@ struct MobileSurfacesLockAccessorySnapshot: Codable, Hashable {
 }
 
 struct MobileSurfacesStandbySnapshot: Codable, Hashable {
+  var schemaVersion: String
   var kind: String
   var snapshotId: String
   var surfaceId: String

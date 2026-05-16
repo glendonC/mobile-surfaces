@@ -3,7 +3,7 @@
 // regenerates the TS fixture bundle so the user gets exactly what they
 // asked for at scaffold time.
 //
-// Marker grammar lives in source files (LiveActivityHarness.tsx,
+// Marker grammar lives in source files (DiagnosticsScreen.tsx,
 // MobileSurfacesWidgetBundle.swift). Each region is bounded by:
 //
 //   // SURFACE-BEGIN: <ids>     ... // SURFACE-END: <ids>

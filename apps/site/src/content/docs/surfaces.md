@@ -1,14 +1,30 @@
 ---
-title: "Multi-Surface"
-description: "Every kind value, what ships today, when to emit each."
+title: "Surfaces"
+description: "Every kind value, what ships today, when to emit each, and the native target it drives."
 order: 20
-group: "Start here"
+group: "Surfaces"
 ---
-# Multi-Surface
+# Surfaces
 
 `LiveSurfaceSnapshot` is one shape with a `kind` discriminator. Every iOS surface (Lock Screen Live Activity, Dynamic Island, home-screen widget, iOS 18 control widget, notification, lock-screen accessory, StandBy) derives its render input from the same snapshot through a `kind`-gated projection helper. This page walks every `kind` value, what it represents on iOS, what ships today, and how a backend would emit it.
 
-For the high-level integration tour, see [`docs/backend-integration.md`](/docs/backend-integration). For the wire layer (SDK + smoke script + APNs reference), see [`docs/push.md`](/docs/push). For the schema-evolution policy, see [`docs/schema-migration.md`](/docs/schema-migration).
+For the high-level integration tour, see [`docs/backend.md`](/docs/backend). For the wire layer (SDK + smoke script + APNs reference), see [`docs/push.md`](/docs/push). For the schema-evolution policy, see [`docs/schema.md`](/docs/schema).
+
+## What ships today
+
+| Surface | Status | Native target |
+| --- | --- | --- |
+| Lock Screen Live Activity | Shipped | `MobileSurfacesLiveActivity.swift` |
+| Dynamic Island | Shipped | Same (ActivityKit renders both from one `Activity`) |
+| Home-screen widget | Shipped | `MobileSurfacesHomeWidget.swift` |
+| iOS 18 control widget | Shipped | `MobileSurfacesControlWidget.swift` + shared App Intents |
+| Lock Screen accessory | Shipped | `MobileSurfacesLockAccessoryWidget.swift` |
+| StandBy widget | Shipped | `MobileSurfacesStandbyWidget.swift` |
+| Push notification (basic alert) | Shipped | `client.sendNotification(...)` projects through `toNotificationContentPayload` |
+| Notification content extension (custom expanded layout) | Shipped | `MobileSurfacesNotificationViewController.swift` renders payload-only via the `liveSurface` sidecar; categories codegened from `notificationCategories.ts` (MS037) |
+| Notification service extension (enrichment, attachments) | Deferred — see [Deferred extensions](#deferred-extensions) |  |
+
+Every shipped surface renders from the same `LiveSurfaceSnapshot`. They cannot drift, because they all project from one source.
 
 ## The contract is one shape
 
@@ -24,7 +40,7 @@ import {
 } from "@mobile-surfaces/surface-contracts";
 ```
 
-`liveSurfaceSnapshot` is a true `z.discriminatedUnion("kind", […])` over six branches at `schemaVersion: "5"`. The base fields shared across every branch are deliberately minimal: `id`, `surfaceId`, `kind`, `updatedAt`, and `state`. Every rendering field (title/body, modeLabel, contextLabel, statusLine, progress, deepLink, actionLabel, control label) now lives inside the per-kind slice for the kind that actually uses it; the base only carries identity and lifecycle. Each branch carries its own slice: `liveActivity` adds `{ title, body, progress, deepLink, modeLabel, contextLabel, statusLine, actionLabel?, stage, estimatedSeconds, morePartsCount }`; `widget`, `control`, `notification`, `lockAccessory`, and `standby` each carry their own surface-specific shape documented per-kind below. Rendering fields were moved out of the base in v2 (3.0) for the liveActivity-only timing hints, and pushed entirely into per-kind slices in v4 (5.0) so each surface declares exactly what it renders; see [`schema-migration.md`](/docs/schema-migration).
+`liveSurfaceSnapshot` is a true `z.discriminatedUnion("kind", […])` over six branches at `schemaVersion: "5"`. The base fields shared across every branch are deliberately minimal: `id`, `surfaceId`, `kind`, `updatedAt`, and `state`. Every rendering field (title/body, modeLabel, contextLabel, statusLine, progress, deepLink, actionLabel, control label) lives inside the per-kind slice for the kind that actually uses it; the base only carries identity and lifecycle. Each branch carries its own slice: `liveActivity` adds `{ title, body, progress, deepLink, modeLabel, contextLabel, statusLine, actionLabel?, stage, estimatedSeconds, morePartsCount }`; `widget`, `control`, `notification`, `lockAccessory`, and `standby` each carry their own surface-specific shape documented per-kind below.
 
 ```mermaid
 flowchart LR
@@ -59,9 +75,9 @@ The default. Renders as a Lock Screen Live Activity and Dynamic Island compact /
 - `data/surface-fixtures/bad-timing.json`: suppressed, `state: "bad_timing"`.
 - `data/surface-fixtures/completed.json`: done, `state: "completed"`, `progress: 1`.
 
-Projection helpers: `toLiveActivityContentState` (in `@mobile-surfaces/surface-contracts`; returns `{ headline, subhead, progress, stage }`) and `toApnsAlertPayload` (in `@mobile-surfaces/push`; returns the APNs alert + `liveSurface` sidecar). The alert helper moved out of the contract package in 3.0 because its `aps` envelope is APNs wire format, not a contract concern.
+Projection helpers: `toLiveActivityContentState` (in `@mobile-surfaces/surface-contracts`; returns `{ headline, subhead, progress, stage }`) and `toApnsAlertPayload` (in `@mobile-surfaces/push`; returns the APNs alert + `liveSurface` sidecar). The alert helper lives next to the wire-layer SDK that emits it.
 
-Native: `apps/mobile/targets/widget/MobileSurfacesLiveActivity.swift` declares the `ActivityConfiguration(for: MobileSurfacesActivityAttributes.self)`. `MobileSurfacesActivityAttributes.swift` is duplicated byte-for-byte across the Expo module (`packages/live-activity/ios/`) and the widget target; `scripts/check-activity-attributes.mjs` enforces the byte-identity until SPM-shared Swift lands (Phase 5, deferred upstream-blocked; see [`docs/roadmap.md`](/docs/roadmap)).
+Native: `apps/mobile/targets/widget/MobileSurfacesLiveActivity.swift` declares the `ActivityConfiguration(for: MobileSurfacesActivityAttributes.self)`. `MobileSurfacesActivityAttributes.swift` is duplicated byte-for-byte across the Expo module (`packages/live-activity/ios/`) and the widget target; `scripts/check-activity-attributes.mjs` enforces the byte-identity. The duplication is mitigated by codegen from a single Zod source; eliminating it entirely waits on upstream Swift Package support.
 
 ### When to emit
 
@@ -129,7 +145,7 @@ A home-screen widget timeline entry. The widget extension reads the latest entry
 
 ### Storage path
 
-Widget snapshots flow through the shared App Group (`group.com.example.mobilesurfaces`) keyed on `surface.snapshot.<surfaceId>`. The pointer at `surface.widget.currentSurfaceId` selects which snapshot the widget renders. The harness's "Refresh widget" action drives this flow today; see `apps/mobile/src/surfaceStorage/index.ts` for the keys.
+Widget snapshots flow through the shared App Group (`group.com.example.mobilesurfaces`) keyed on `surface.snapshot.<surfaceId>`. The pointer at `surface.widget.currentSurfaceId` selects which snapshot the widget renders. See `apps/mobile/src/surfaceStorage/index.ts` for the keys.
 
 ### When to emit
 
@@ -161,7 +177,7 @@ const entry = toWidgetTimelineEntry(snapshot);
 //   }
 ```
 
-Widget surfaces do not flow through APNs in this starter; they update via App Group writes from the host app and a WidgetKit reload. A backend that wants to drive widget state remotely would push a regular alert containing the snapshot, then the host app projects it through `toWidgetTimelineEntry` and writes it through `surfaceStorage`.
+Widget surfaces do not flow through APNs directly; they update via App Group writes from the host app and a WidgetKit reload. A backend that wants to drive widget state remotely pushes a regular alert containing the snapshot, then the host app projects it through `toWidgetTimelineEntry` and writes it through `surfaceStorage`.
 
 ## `kind: "control"`
 
@@ -171,7 +187,7 @@ The iOS 18 control widget surface (Control Center / Lock Screen control). Render
 
 ### Storage path
 
-Control snapshots use the same App Group as widgets, with `surface.control.currentSurfaceId` selecting the active control snapshot. The harness's "Toggle control state" action exercises this end-to-end.
+Control snapshots use the same App Group as widgets, with `surface.control.currentSurfaceId` selecting the active control snapshot.
 
 ### When to emit
 
@@ -222,7 +238,7 @@ A notification content payload. Drives the standard alert UI on the Lock Screen 
 
 Projection helper: `toNotificationContentPayload` (returns the APNs envelope plus a `liveSurface` sidecar typed as `liveSurfaceNotificationContentEntry`). Sidecar discriminator: `kind: "surface_snapshot"`, aligned with the liveActivity alert payload's sidecar so on-device routing code can switch on one literal regardless of which Mobile Surfaces wrapper produced the userInfo.
 
-Native target: `apps/mobile/targets/notification-content/MobileSurfacesNotificationViewController.swift`. The extension renders payload-only: it decodes the `liveSurface` sidecar from `notification.request.content.userInfo` and shows a SwiftUI body next to the standard alert chrome. It does **not** read from the App Group container; that path would only be reliable behind a `UNNotificationServiceExtension` upstream (canonical Apple enrichment pattern), and that target is deferred — see [`docs/roadmap.md`](/docs/roadmap).
+Native target: `apps/mobile/targets/notification-content/MobileSurfacesNotificationViewController.swift`. The extension renders payload-only: it decodes the `liveSurface` sidecar from `notification.request.content.userInfo` and shows a SwiftUI body next to the standard alert chrome. It does **not** read from the App Group container; that path would only be reliable behind a `UNNotificationServiceExtension` upstream (canonical Apple enrichment pattern) — see [Deferred extensions](#deferred-extensions).
 
 The SDK sends via `client.sendNotification(deviceToken, snapshot)`; APNs push-type is `alert`, priority 10, bare-bundle-id `apns-topic`. The 4 KB alert ceiling applies (MS011); the 5 KB allowance is ActivityKit-broadcast-only.
 
@@ -378,3 +394,12 @@ The `deepLink` field is propagated into every projection: it lands in `LiveActiv
 | StandBy-specific rendering hint | `standby` |
 
 A single domain event can fan out to multiple kinds; emit one snapshot per surface the user has opted in to. The base fields (`id`, `surfaceId`, `kind`, `updatedAt`, `state`) stay equivalent across kinds; only the per-kind slice and the projection helper change.
+
+## Deferred extensions
+
+The notification surface ships `kind: "notification"`, the `toNotificationContentPayload` projection helper, the `client.sendNotification` SDK method, and a bundled `UNNotificationContentExtension` (`apps/mobile/targets/notification-content/`) that renders custom expanded content for category-routed notifications. What is intentionally not in the starter is the `UNNotificationServiceExtension` (a separate Apple extension type, `com.apple.usernotifications.service`) that intercepts a push before delivery to enrich its content. The service extension is the canonical Apple path when enrichment cannot fit in the 4 KB alert payload (image attachments, on-device personalization, E2E-decrypted content). Adding it later is purely additive: a sibling `apps/mobile/targets/notification-service/` directory, a `mutable-content: 1` flag on the wire, and an App-Group write path the content extension can read. The bundled content extension is already structured to fall back to payload-only rendering when no enrichment record exists, so the service extension can land independently without changing existing call sites.
+
+Two notification-surface features were also deliberately held for a deliberate RFC rather than bolted on:
+
+- **Attachments** (`UNNotificationAttachment`). Image, video, or audio enrichment served via URL or App Group file. Requires a `UNNotificationServiceExtension` to fetch and attach. The slice is shaped to extend non-breakingly when the time comes.
+- **Localized strings** (`aps.alert.title-loc-key`, `loc-args`, etc.). Changes the projection-output shape (the `aps.alert` block becomes a union of plain vs localized variants).

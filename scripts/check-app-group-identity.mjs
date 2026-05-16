@@ -31,133 +31,164 @@
 // MS013's failure mode is silent - a mismatched identifier means widgets
 // render placeholder forever and the in-app diagnostic returns "ok"
 // against a different container than the widgets are reading.
+//
+// Phase 6 (refactor/v7): exposes a rootDir-parameterised core function so
+// the `mobile-surfaces audit` subcommand can run the same check against a
+// foreign project. CLI behavior preserved when invoked without --root.
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { buildReport, emitDiagnosticReport } from "./lib/diagnostics.mjs";
 
-const { values } = parseArgs({
-  options: { json: { type: "boolean", default: false } },
-});
-
 const TOOL = "check-app-group-identity";
-const APP_JSON = path.resolve("apps/mobile/app.json");
-const WIDGET_ENTITLEMENTS = path.resolve(
-  "apps/mobile/targets/widget/generated.entitlements",
-);
-const NOTIFICATION_CONTENT_ENTITLEMENTS = path.resolve(
-  "apps/mobile/targets/notification-content/generated.entitlements",
-);
-const APP_GROUP_SWIFT = path.resolve(
-  "apps/mobile/targets/_shared/MobileSurfacesAppGroup.swift",
-);
-const APP_GROUP_TS = path.resolve("apps/mobile/src/generated/appGroup.ts");
 
-const sources = [
-  { label: "app.json (host entitlements)", file: APP_JSON, extract: extractFromAppJson },
-  { label: "widget generated.entitlements", file: WIDGET_ENTITLEMENTS, extract: extractFromWidgetEntitlements },
-  // Notification-content extension entitlements file. Optional: when the
-  // target dir does not yet exist (older snapshot of the repo or a
-  // consumer that has not adopted the notification surface), skip the
-  // entry rather than fail-loud so MS013 stays usable on partial layouts.
-  ...(fs.existsSync(NOTIFICATION_CONTENT_ENTITLEMENTS)
-    ? [{
-        label: "notification-content generated.entitlements",
-        file: NOTIFICATION_CONTENT_ENTITLEMENTS,
-        extract: extractFromWidgetEntitlements,
-      }]
-    : []),
-  { label: "MobileSurfacesAppGroup.swift", file: APP_GROUP_SWIFT, extract: extractFromAppGroupSwift },
-  { label: "generated/appGroup.ts", file: APP_GROUP_TS, extract: extractFromTsConstant },
-];
+/**
+ * Verify App Group identifier identity across every source under `rootDir`.
+ * Returns a DiagnosticReport; the caller renders it. Missing source files
+ * are surfaced as `file not found` entries (which become check failures),
+ * matching the script's pre-refactor behavior on a fresh checkout.
+ *
+ * @param {{ rootDir?: string }} [options]
+ */
+export function checkAppGroupIdentity({ rootDir = process.cwd() } = {}) {
+  const root = path.resolve(rootDir);
+  const APP_JSON = path.join(root, "apps/mobile/app.json");
+  const WIDGET_ENTITLEMENTS = path.join(
+    root,
+    "apps/mobile/targets/widget/generated.entitlements",
+  );
+  const NOTIFICATION_CONTENT_ENTITLEMENTS = path.join(
+    root,
+    "apps/mobile/targets/notification-content/generated.entitlements",
+  );
+  const APP_GROUP_SWIFT = path.join(
+    root,
+    "apps/mobile/targets/_shared/MobileSurfacesAppGroup.swift",
+  );
+  const APP_GROUP_TS = path.join(root, "apps/mobile/src/generated/appGroup.ts");
 
-const findings = [];
-for (const source of sources) {
-  if (!fs.existsSync(source.file)) {
-    findings.push({
-      label: source.label,
-      file: source.file,
-      identifier: null,
-      error: "file not found",
-    });
-    continue;
+  const sources = [
+    { label: "app.json (host entitlements)", file: APP_JSON, extract: extractFromAppJson },
+    {
+      label: "widget generated.entitlements",
+      file: WIDGET_ENTITLEMENTS,
+      extract: extractFromWidgetEntitlements,
+    },
+    // Notification-content extension entitlements file. Optional: when the
+    // target dir does not yet exist (older snapshot of the repo or a
+    // consumer that has not adopted the notification surface), skip the
+    // entry rather than fail-loud so MS013 stays usable on partial layouts.
+    ...(fs.existsSync(NOTIFICATION_CONTENT_ENTITLEMENTS)
+      ? [
+          {
+            label: "notification-content generated.entitlements",
+            file: NOTIFICATION_CONTENT_ENTITLEMENTS,
+            extract: extractFromWidgetEntitlements,
+          },
+        ]
+      : []),
+    {
+      label: "MobileSurfacesAppGroup.swift",
+      file: APP_GROUP_SWIFT,
+      extract: extractFromAppGroupSwift,
+    },
+    {
+      label: "generated/appGroup.ts",
+      file: APP_GROUP_TS,
+      extract: extractFromTsConstant,
+    },
+  ];
+
+  const findings = [];
+  for (const source of sources) {
+    if (!fs.existsSync(source.file)) {
+      findings.push({
+        label: source.label,
+        file: source.file,
+        identifier: null,
+        error: "file not found",
+      });
+      continue;
+    }
+    try {
+      const id = source.extract(fs.readFileSync(source.file, "utf8"));
+      findings.push({
+        label: source.label,
+        file: source.file,
+        identifier: id,
+        error: id ? null : "no app-group identifier parsed",
+      });
+    } catch (err) {
+      findings.push({
+        label: source.label,
+        file: source.file,
+        identifier: null,
+        error: err.message,
+      });
+    }
   }
-  try {
-    const id = source.extract(fs.readFileSync(source.file, "utf8"));
-    findings.push({
-      label: source.label,
-      file: source.file,
-      identifier: id,
-      error: id ? null : "no app-group identifier parsed",
-    });
-  } catch (err) {
-    findings.push({
-      label: source.label,
-      file: source.file,
-      identifier: null,
-      error: err.message,
-    });
-  }
+
+  const parseErrors = findings.filter((f) => f.error);
+  const canonical = findings.find((f) => f.label.startsWith("app.json"))?.identifier;
+  const mismatches =
+    canonical && parseErrors.length === 0
+      ? findings.filter((f) => f.identifier !== canonical)
+      : [];
+
+  const checks = [];
+
+  checks.push({
+    id: "app-group-sources-readable",
+    status: parseErrors.length === 0 ? "ok" : "fail",
+    summary:
+      parseErrors.length === 0
+        ? `Parsed App Group identifier from all ${findings.length} source(s).`
+        : `${parseErrors.length} source(s) failed to parse.`,
+    ...(parseErrors.length > 0
+      ? {
+          detail: {
+            message:
+              "Every source must declare a parseable App Group identifier. Inspect each failing file. The Swift/TS sources are generated by `pnpm surface:codegen` from app.json.",
+            issues: parseErrors.map((f) => ({
+              path: path.relative(root, f.file),
+              message: f.error,
+            })),
+          },
+        }
+      : {}),
+  });
+
+  checks.push({
+    id: "app-group-identity-match",
+    status:
+      parseErrors.length > 0
+        ? "fail"
+        : mismatches.length === 0
+          ? "ok"
+          : "fail",
+    summary:
+      parseErrors.length > 0
+        ? "Skipped: one or more sources failed to parse."
+        : mismatches.length === 0
+          ? `All ${findings.length} sources resolve to "${canonical}".`
+          : `${mismatches.length} source(s) declare a different App Group than the host app.`,
+    trapId: "MS013",
+    ...(mismatches.length > 0
+      ? {
+          detail: {
+            message: `Canonical identifier from app.json is "${canonical}". Update app.json and re-run \`pnpm surface:codegen\` to regenerate the Swift and TS constants, or run \`pnpm surface:rename\` to propagate a rename across every source.`,
+            issues: mismatches.map((f) => ({
+              path: path.relative(root, f.file),
+              message: `${f.label} declares "${f.identifier}"`,
+            })),
+          },
+        }
+      : {}),
+  });
+
+  return buildReport(TOOL, checks);
 }
-
-const parseErrors = findings.filter((f) => f.error);
-const canonical = findings.find((f) => f.label.startsWith("app.json"))?.identifier;
-const mismatches =
-  canonical && parseErrors.length === 0
-    ? findings.filter((f) => f.identifier !== canonical)
-    : [];
-
-const checks = [];
-
-checks.push({
-  id: "app-group-sources-readable",
-  status: parseErrors.length === 0 ? "ok" : "fail",
-  summary:
-    parseErrors.length === 0
-      ? `Parsed App Group identifier from all ${findings.length} source(s).`
-      : `${parseErrors.length} source(s) failed to parse.`,
-  ...(parseErrors.length > 0
-    ? {
-        detail: {
-          message:
-            "Every source must declare a parseable App Group identifier. Inspect each failing file. The Swift/TS sources are generated by `pnpm surface:codegen` from app.json.",
-          issues: parseErrors.map((f) => ({
-            path: path.relative(process.cwd(), f.file),
-            message: f.error,
-          })),
-        },
-      }
-    : {}),
-});
-
-checks.push({
-  id: "app-group-identity-match",
-  status: parseErrors.length > 0
-    ? "fail"
-    : mismatches.length === 0
-      ? "ok"
-      : "fail",
-  summary:
-    parseErrors.length > 0
-      ? "Skipped: one or more sources failed to parse."
-      : mismatches.length === 0
-        ? `All ${findings.length} sources resolve to "${canonical}".`
-        : `${mismatches.length} source(s) declare a different App Group than the host app.`,
-  trapId: "MS013",
-  ...(mismatches.length > 0
-    ? {
-        detail: {
-          message: `Canonical identifier from app.json is "${canonical}". Update app.json and re-run \`pnpm surface:codegen\` to regenerate the Swift and TS constants, or run \`pnpm surface:rename\` to propagate a rename across every source.`,
-          issues: mismatches.map((f) => ({
-            path: path.relative(process.cwd(), f.file),
-            message: `${f.label} declares "${f.identifier}"`,
-          })),
-        },
-      }
-    : {}),
-});
-
-emitDiagnosticReport(buildReport(TOOL, checks), { json: values.json });
 
 function extractFromAppJson(src) {
   const json = JSON.parse(src);
@@ -208,4 +239,23 @@ function extractFromTsConstant(src) {
   const match = src.match(/const\s+APP_GROUP\s*=\s*"([^"]+)"/);
   if (!match) throw new Error("`const APP_GROUP = \"...\"` declaration not found");
   return match[1];
+}
+
+// CLI entrypoint. The `cwd` defaulting preserves prior behavior for the
+// `pnpm surface:check` invocation (which spawns this script from the repo
+// root) and the existing tests (which spawn with cwd set to a tmp dir).
+const isDirectInvocation =
+  process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+
+if (isDirectInvocation) {
+  const { values } = parseArgs({
+    options: {
+      json: { type: "boolean", default: false },
+      root: { type: "string" },
+    },
+  });
+  const report = checkAppGroupIdentity({
+    rootDir: values.root ?? process.cwd(),
+  });
+  emitDiagnosticReport(report, { json: values.json });
 }

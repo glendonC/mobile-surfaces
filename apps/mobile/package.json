@@ -21,6 +21,7 @@
     "run:ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test test/*.test.mts",
     "build:ios": "eas build --platform ios"
   },
   "dependencies": {
@@ -35,6 +36,7 @@
     "expo-status-bar": "~55.0.5",
     "expo-task-manager": "~55.0.15",
     "@mobile-surfaces/live-activity": "workspace:*",
+    "@mobile-surfaces/tokens": "workspace:*",
     "react": "19.2.0",
     "react-native": "0.83.6"
   },

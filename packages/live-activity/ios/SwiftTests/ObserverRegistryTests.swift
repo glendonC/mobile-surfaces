@@ -73,6 +73,18 @@ final class ObserverRegistryTests: XCTestCase {
         XCTAssertNil(postToken)
     }
 
+    func testPushToStartTokenIsNilBeforeFirstEmission() async {
+        // Cold-start contract for MS016: until the AsyncSequence drain emits
+        // its first token, `pushToStartToken()` returns nil. A non-nil default
+        // (e.g. "") would let the JS layer ship a malformed token to the
+        // backend and mistake "Apple has not handed us one yet" for "we have
+        // a valid token". Pairs with testClearAllCancelsEveryHandleAndPushToStart
+        // which covers the reset-after-teardown case.
+        let registry = ObserverRegistry()
+        let token = await registry.pushToStartToken()
+        XCTAssertNil(token)
+    }
+
     func testPushToStartTokenLatestWinsMS020() async {
         // MS020: treat the latest emission as authoritative. The registry's
         // setPushToStartToken overwrites the cached value; subsequent reads

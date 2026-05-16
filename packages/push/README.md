@@ -150,6 +150,12 @@ The name is deliberately ugly: the defaults are tuned against MS015 and the prio
 
 `MOBILE_SURFACES_PUSH_DISABLE_RETRY=1` in the environment turns retries off entirely — useful for tests and for diagnosing whether a flake is APNs-side or your retry policy.
 
+## Idempotency and retries
+
+The SDK generates an `apns-id` (UUID v4) once per send call and reuses the same value across every retry attempt in that call's retry budget. APNs treats requests carrying the same `apns-id` as the same logical send and deduplicates them, so an SDK-level retry triggered by a transient `TooManyRequests` or transport reset does not enqueue a second update on the device.
+
+Callers that need end-to-end at-least-once semantics across higher-level retries (process restart, queue replay) can pass their own `apnsId` via the send options. The SDK honors it as-is and reuses it for every retry in the same call. The returned `SendResult.apnsId` echoes whichever value was used.
+
 ## Cancellation
 
 Every send and management method accepts an optional `signal: AbortSignal`:

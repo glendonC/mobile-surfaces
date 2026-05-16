@@ -121,7 +121,11 @@ function snapshotKey(surfaceId: string) {
 
 // Decode-error breadcrumbs are written from the Swift side when JSONDecoder
 // fails to parse the snapshot payload (MS036's silent-fail mode). Shape:
-//   `{ at: <ISO8601>, error: <string> }`
+//   `{ at: <ISO8601>, error: <string>, trapId?: <string> }`
+// `trapId` was added in v7: the Swift writer defaults to "MS036" (the trap
+// the breadcrumb represents) and MSTrapBound errors override with their
+// own binding. Older builds (pre-v7) omit the field; readers tolerate
+// either shape and fall back to MS036.
 // Stored under `surface.snapshot.<id>.decodeError`. Cleared on the next
 // successful decode. Exposed here so the diagnostics layer can probe these
 // keys without reaching directly into the App Group bridge.
@@ -129,6 +133,7 @@ export interface SurfaceDecodeErrorBreadcrumb {
   readonly surfaceId: string;
   readonly at: string;
   readonly error: string;
+  readonly trapId: string;
 }
 
 function decodeErrorKey(surfaceId: string) {
@@ -165,7 +170,66 @@ export function readSurfaceDecodeError(
     }
   }
   if (!parsed || typeof parsed !== "object") return null;
-  const obj = parsed as { at?: unknown; error?: unknown };
+  const obj = parsed as { at?: unknown; error?: unknown; trapId?: unknown };
   if (typeof obj.at !== "string" || typeof obj.error !== "string") return null;
-  return { surfaceId, at: obj.at, error: obj.error };
+  // trapId is optional on the wire (pre-v7 writers omitted it). Default to
+  // MS036, the trap this breadcrumb represents at the host-side write
+  // boundary.
+  const trapId = typeof obj.trapId === "string" ? obj.trapId : "MS036";
+  return { surfaceId, at: obj.at, error: obj.error, trapId };
+}
+
+/**
+ * Read the raw snapshot payload the host last wrote into the App Group for
+ * a single surface, alongside its writtenAt timestamp and any active
+ * decode-error breadcrumb. Returns null when nothing has ever been written
+ * for that surface id this session.
+ *
+ * Used by PayloadInspectorScreen's "Live App Group dump" section to render
+ * the exact bytes the widget extension sees. Tolerates missing or
+ * malformed values: the inspector is read-only and the caller is expected
+ * to surface failures as displayable rows, not throws.
+ */
+export interface SurfaceAppGroupRecord {
+  readonly surfaceId: string;
+  readonly snapshot: unknown | null;
+  readonly writtenAt: number | null;
+  readonly decodeError: SurfaceDecodeErrorBreadcrumb | null;
+}
+
+export function readSurfaceAppGroupRecord(
+  surfaceId: string,
+): SurfaceAppGroupRecord {
+  let rawSnapshot: unknown = null;
+  try {
+    const raw = storage.get(snapshotKey(surfaceId));
+    if (typeof raw === "string") {
+      try {
+        rawSnapshot = JSON.parse(raw);
+      } catch {
+        rawSnapshot = raw;
+      }
+    } else if (raw != null) {
+      rawSnapshot = raw;
+    }
+  } catch {
+    rawSnapshot = null;
+  }
+  let writtenAt: number | null = null;
+  try {
+    const raw = storage.get(writtenAtKey(surfaceId));
+    if (typeof raw === "number" && Number.isFinite(raw)) writtenAt = raw;
+    else if (typeof raw === "string") {
+      const n = Number(raw);
+      if (Number.isFinite(n)) writtenAt = n;
+    }
+  } catch {
+    writtenAt = null;
+  }
+  return {
+    surfaceId,
+    snapshot: rawSnapshot,
+    writtenAt,
+    decodeError: readSurfaceDecodeError(surfaceId),
+  };
 }

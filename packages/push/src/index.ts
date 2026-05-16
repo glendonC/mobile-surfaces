@@ -64,19 +64,23 @@ export {
   AbortError,
 } from "./errors.ts";
 
+// Trap binding helpers are now sourced from @mobile-surfaces/traps (the
+// single home for the catalog, error base, and Swift bindings as of v7).
+// The push package re-exports the runtime-reachable subset so existing
+// consumers keep their imports working without forcing a dep change. The
+// extra-narrow shapes (TRAP_ID_BY_ERROR_CLASS, BoundTrapId,
+// TrapBoundErrorClassName) were package-private in v6 and have no
+// equivalent in the new package; they are removed here. If a consumer
+// was relying on them, the upgrade path is to import the equivalents
+// directly from @mobile-surfaces/traps.
 export {
   TRAP_BINDINGS,
-  TRAP_ID_BY_ERROR_CLASS,
   docsUrlForErrorClass,
   findTrap,
   findTrapByErrorClass,
   trapIdForErrorClass,
-} from "./trap-bindings.ts";
-export type {
-  BoundTrapId,
-  TrapBinding,
-  TrapBoundErrorClassName,
-} from "./trap-bindings.ts";
+} from "@mobile-surfaces/traps";
+export type { TrapBinding } from "@mobile-surfaces/traps";
 
 export {
   liveActivityAlertPayload,

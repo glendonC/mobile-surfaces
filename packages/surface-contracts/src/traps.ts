@@ -81,6 +81,14 @@ export const trapEntry = z
     since: z.string().regex(/^\d+\.\d+\.\d+$/),
     // Set when the rule has been retired but the id is reserved.
     deprecated: z.boolean().optional(),
+    // Cross-references to sibling trap ids that describe the same wire
+    // shape in another context, or the inverse failure of the same
+    // header/setting (e.g. MS012 ↔ MS027 host-app vs foreign-audit;
+    // MS018 ↔ MS035 topic suffix included vs missing). The renderer
+    // emits a "Cross-references" section from these. Validated forward
+    // (every cited id must exist in the catalog) and symmetric (if A
+    // cites B, B must cite A) in the superRefine below.
+    siblings: z.array(z.string().regex(/^MS\d+$/)).optional(),
     // Names of typed error classes (in `@mobile-surfaces/push`) that surface
     // this trap at runtime. Lets the SDK stamp `trapId` on errors without
     // hand-maintaining a parallel mapping; lets consumer log aggregators
@@ -104,6 +112,8 @@ export const trapCatalog = z
   .superRefine((catalog, ctx) => {
     const seen = new Set<string>();
     const errorClassToTrap = new Map<string, string>();
+    const idToEntry = new Map<string, TrapEntry>();
+    catalog.entries.forEach((entry) => idToEntry.set(entry.id, entry));
     catalog.entries.forEach((entry, index) => {
       if (seen.has(entry.id)) {
         ctx.addIssue({
@@ -123,6 +133,36 @@ export const trapCatalog = z
           code: "custom",
           path: ["entries", index, "enforcement"],
           message: `Rule ${entry.id} has detection "static" but no enforcement.script; static rules must cite an enforcer.`,
+        });
+      }
+      if (entry.siblings) {
+        entry.siblings.forEach((siblingId, siblingIndex) => {
+          if (siblingId === entry.id) {
+            ctx.addIssue({
+              code: "custom",
+              path: ["entries", index, "siblings", siblingIndex],
+              message: `Rule ${entry.id} cannot list itself as a sibling.`,
+            });
+            return;
+          }
+          const sibling = idToEntry.get(siblingId);
+          if (!sibling) {
+            ctx.addIssue({
+              code: "custom",
+              path: ["entries", index, "siblings", siblingIndex],
+              message: `Rule ${entry.id} cites unknown sibling ${siblingId}.`,
+            });
+            return;
+          }
+          // Symmetry: if A cites B, B must cite A. This keeps the
+          // cross-reference graph navigable from either direction.
+          if (!sibling.siblings || !sibling.siblings.includes(entry.id)) {
+            ctx.addIssue({
+              code: "custom",
+              path: ["entries", index, "siblings", siblingIndex],
+              message: `Sibling link ${entry.id} → ${siblingId} is not symmetric; ${siblingId} must also cite ${entry.id}.`,
+            });
+          }
         });
       }
       if (entry.errorClasses) {

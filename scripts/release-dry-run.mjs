@@ -186,7 +186,7 @@ if (failed) {
   console.log(`✗ release:dry-run failed at: ${failed.name}`);
   console.log("");
   console.log("If the failure is generated-file drift (CLAUDE.md, AGENTS.md,");
-  console.log("trap-bindings, traps-data, surface fixtures, scaffold snapshots),");
+  console.log("@mobile-surfaces/traps bindings, surface fixtures, scaffold snapshots),");
   console.log("run `pnpm release:fix` to regenerate every derived file and");
   console.log("retry the dry-run.");
   process.exit(1);

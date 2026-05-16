@@ -1,7 +1,7 @@
 {
   "name": "@mobile-surfaces/push",
-  "version": "6.0.0",
-  "description": "Node SDK for sending Mobile Surfaces snapshots to Apple Push Notification service (APNs) \u2014 Live Activities, Dynamic Island, broadcast channels, and channel management.",
+  "version": "7.0.0",
+  "description": "Typed APNs client for Mobile Surfaces snapshots. HTTP/2, JWT, push-to-start, iOS 18 broadcast channels.",
   "publishConfig": {
     "access": "public",
     "main": "./dist/index.js",
@@ -60,7 +60,8 @@
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "@mobile-surfaces/surface-contracts": "workspace:*"
+    "@mobile-surfaces/surface-contracts": "workspace:^",
+    "@mobile-surfaces/traps": "workspace:^"
   },
   "peerDependencies": {
     "zod": "4.3.6"

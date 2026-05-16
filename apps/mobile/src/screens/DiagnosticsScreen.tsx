@@ -1,16 +1,14 @@
-// Surface harness: a fixture-driven playground for every surface kind.
+// Diagnostics console for Mobile Surfaces. Fixture firing range, App Group
+// probes, token-store inspector, MS036 decode-error breadcrumb panel. The
+// Delivery tab is the reference shape for a real app; this tab is the
+// tool you reach for when something silently fails.
 //
-// This is NOT a template for a production app. It is a testing appliance:
-// every button fires a canonical LiveSurfaceSnapshot from data/surface-fixtures/
-// so you can verify that each surface kind (Lock Screen Live Activity,
-// Dynamic Island, home widget, control widget, lock accessory, StandBy)
-// renders correctly against the bridge.
-//
-// To build your real app on this foundation, keep src/liveActivity/,
-// src/surfaceStorage/, and src/theme.ts (the plumbing), replace this file
-// with your domain screen, and wire your backend to emit snapshots through
-// the same projection helpers. The walkthrough lives at
-// https://mobile-surfaces.com/docs/building-your-app.
+// Every button fires a canonical LiveSurfaceSnapshot from
+// data/surface-fixtures/ so you can verify that each surface kind (Lock
+// Screen Live Activity, Dynamic Island, home widget, control widget,
+// lock accessory, StandBy) renders correctly against the bridge. The
+// token store panel near the top shows every token iOS has handed the
+// host this session, via @mobile-surfaces/tokens (MS020/MS021).
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -61,17 +59,35 @@ import {
   // SURFACE-END: standby-widget
 } from "../surfaceStorage";
 // SURFACE-END: home-widget control-widget lock-accessory-widget standby-widget
+import { useTokenStore } from "@mobile-surfaces/tokens/react";
 import { DemoModeCard } from "../components/DemoModeCard";
 import { SetupStatusPanel } from "../components/SetupStatusPanel";
 import { TrapErrorCard } from "../components/TrapErrorCard";
 
-export function LiveActivityHarness() {
+export function DiagnosticsScreen() {
   const [supported, setSupported] = useState<boolean | null>(null);
   const [active, setActive] = useState<LiveActivitySnapshot[]>([]);
   const [activityId, setActivityId] = useState<string | null>(null);
-  const [pushToken, setPushToken] = useState<string | null>(null);
-  const [pushToStartToken, setPushToStartToken] = useState<string | null>(null);
   const [apnsToken, setApnsToken] = useState<string | null>(null);
+
+  // Token-store wiring. All three adapter events (onPushToken,
+  // onPushToStartToken, onActivityStateChange) are owned by the store
+  // (MS016/MS020/MS021). The screen reads `tokenStore.tokens` and
+  // derives the latest push-to-start emission from there; nothing
+  // calls adapter.addListener directly for token events.
+  const tokenStore = useTokenStore({
+    adapter: LiveActivity,
+    environment: "development",
+  });
+  const tokens = tokenStore.tokens;
+  const pushToStartToken =
+    tokens.find((t) => t.kind === "pushToStart")?.token ?? null;
+  const pushToken =
+    activityId !== null
+      ? (tokens.find(
+          (t) => t.kind === "perActivity" && t.activityId === activityId,
+        )?.token ?? null)
+      : null;
   // SURFACE-BEGIN: home-widget control-widget lock-accessory-widget standby-widget
   const [surfaceStatus, setSurfaceStatus] = useState<string | null>(null);
   // SURFACE-END: home-widget control-widget lock-accessory-widget standby-widget
@@ -117,39 +133,57 @@ export function LiveActivityHarness() {
     registerNotificationCategories().catch((e) => {
       console.warn("registerNotificationCategories failed", e);
     });
+  }, [refreshActive]);
 
-    const tokenSub = LiveActivity.addListener("onPushToken", ({ activityId: id, token }) => {
-      if (id === activityIdRef.current) {
-        setPushToken(token);
-      }
-      setActive((prev) =>
-        prev.map((a) => (a.id === id ? { ...a, pushToken: token } : a)),
-      );
-    });
-    const stateSub = LiveActivity.addListener("onActivityStateChange", ({ activityId: id, state }) => {
-      if (state === "ended" || state === "dismissed") {
-        setActive((prev) => prev.filter((a) => a.id !== id));
-        if (activityIdRef.current === id) {
-          setActivityId(null);
-          setPushToken(null);
+  // Token-store-driven UI state. The store owns the three adapter
+  // events (MS039); local diagnostics state derives from its snapshot.
+  // On a terminal lifecycle for the current activityId, the store
+  // flips its matching perActivity record to "dead" — we observe that
+  // here, drop the active-list row, clear activityId, and bump the
+  // setup-status panel so its probes re-run.
+  useEffect(() => {
+    const unsub = tokenStore.subscribe((snapshot) => {
+      const currentId = activityIdRef.current;
+      if (currentId !== null) {
+        const liveRecord = snapshot.find(
+          (t) =>
+            t.kind === "perActivity" &&
+            t.activityId === currentId &&
+            t.lifecycle === "active",
+        );
+        if (!liveRecord) {
+          // The store marked our activity dead/ending (or never minted
+          // a token for it). Drop it from the local list when matching.
+          const deadOrEnding = snapshot.find(
+            (t) =>
+              t.kind === "perActivity" &&
+              t.activityId === currentId &&
+              (t.lifecycle === "dead" || t.lifecycle === "ending"),
+          );
+          if (deadOrEnding) {
+            setActive((prev) => prev.filter((a) => a.id !== currentId));
+            setActivityId(null);
+            setSetupRefreshKey((k) => k + 1);
+          }
         }
-        setSetupRefreshKey((k) => k + 1);
       }
-    });
-    // Push-to-start tokens are app-level (iOS 17.2+), not tied to a specific
-    // activity — surface whatever Apple last handed us regardless of which
-    // activity is currently in focus.
-    const pushToStartSub = LiveActivity.addListener("onPushToStartToken", ({ token }) => {
-      setPushToStartToken(token);
+      // Mirror the latest perActivity token onto the local listActive
+      // rows so the UI keeps showing tokens beside their activity.
+      setActive((prev) =>
+        prev.map((a) => {
+          const match = snapshot.find(
+            (t) =>
+              t.kind === "perActivity" &&
+              t.activityId === a.id &&
+              t.lifecycle === "active",
+          );
+          return match ? { ...a, pushToken: match.token } : a;
+        }),
+      );
       setSetupRefreshKey((k) => k + 1);
     });
-
-    return () => {
-      tokenSub.remove();
-      stateSub.remove();
-      pushToStartSub.remove();
-    };
-  }, [refreshActive]);
+    return unsub;
+  }, [tokenStore]);
 
   // Channel-push starts (iOS 18+) are exercised through scripts/send-apns.mjs,
   // not from the harness UI: channel mode is server-driven (one publish fans
@@ -165,7 +199,6 @@ export function LiveActivityHarness() {
         activityFixtureStates[key],
       );
       setActivityId(result.id);
-      setPushToken(null);
       setSetupRefreshKey((k) => k + 1);
       await refreshActive();
     } catch (e) {
@@ -196,7 +229,6 @@ export function LiveActivityHarness() {
     try {
       await LiveActivity.end(activityId, policy);
       setActivityId(null);
-      setPushToken(null);
       await refreshActive();
     } catch (e) {
       setError(e);
@@ -212,7 +244,6 @@ export function LiveActivityHarness() {
       const list = await LiveActivity.listActive();
       await Promise.all(list.map((activity) => LiveActivity.end(activity.id, "immediate")));
       setActivityId(null);
-      setPushToken(null);
       await refreshActive();
     } catch (e) {
       setError(e);
@@ -327,7 +358,7 @@ export function LiveActivityHarness() {
 
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
-      <Text style={styles.title}>Surface Harness</Text>
+      <Text style={styles.title}>Diagnostics</Text>
       <DemoModeCard />
       <SetupStatusPanel
         pushToStartToken={pushToStartToken}
@@ -335,8 +366,31 @@ export function LiveActivityHarness() {
         refreshKey={setupRefreshKey}
       />
       <Text style={styles.subtitle}>
-        Start, update, end, and push-test generic Live Activity snapshots.
+        Fire fixtures, probe the App Group, watch the token store. The
+        Delivery tab next door is the reference shape for a real app.
       </Text>
+
+      <Section label="Tokens observed">
+        {tokens.length === 0 ? (
+          <Text style={styles.value}>
+            None yet. Push-to-start arrives via the system stream; per-
+            activity tokens arrive after Start when iOS minted one.
+          </Text>
+        ) : (
+          tokens.map((t) => (
+            <View key={t.idempotencyKey} style={styles.tokenStoreRow}>
+              <Text style={styles.value}>
+                {t.kind} · {t.lifecycle}
+                {t.activityId ? ` · ${t.activityId.slice(0, 8)}` : ""} ·{" "}
+                {t.environment}
+              </Text>
+              <Text style={styles.token} selectable>
+                {t.token}
+              </Text>
+            </View>
+          ))
+        )}
+      </Section>
 
       <Section label="Activities supported">
         <Text style={styles.value}>
@@ -575,6 +629,10 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: surfaceColors.surface,
+  },
+  tokenStoreRow: {
+    paddingVertical: 4,
+    gap: 2,
   },
   spinner: {
     marginTop: 12,

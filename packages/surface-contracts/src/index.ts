@@ -125,6 +125,7 @@ export function toWidgetTimelineEntry(
   snapshot: LiveSurfaceSnapshotWidget,
 ): LiveSurfaceWidgetTimelineEntryOutput {
   return {
+    schemaVersion: "5",
     kind: "widget",
     snapshotId: snapshot.id,
     surfaceId: snapshot.surfaceId,
@@ -143,6 +144,7 @@ export function toControlValueProvider(
 ): LiveSurfaceControlValueProviderOutput {
   const control = snapshot.control;
   return {
+    schemaVersion: "5",
     kind: "control",
     snapshotId: snapshot.id,
     surfaceId: snapshot.surfaceId,
@@ -159,6 +161,7 @@ export function toLockAccessoryEntry(
 ): LiveSurfaceLockAccessoryEntryOutput {
   const accessory = snapshot.lockAccessory;
   return {
+    schemaVersion: "5",
     kind: "lockAccessory",
     snapshotId: snapshot.id,
     surfaceId: snapshot.surfaceId,
@@ -179,6 +182,7 @@ export function toStandbyEntry(
   snapshot: LiveSurfaceSnapshotStandby,
 ): LiveSurfaceStandbyEntryOutput {
   return {
+    schemaVersion: "5",
     kind: "standby",
     snapshotId: snapshot.id,
     surfaceId: snapshot.surfaceId,
@@ -197,6 +201,7 @@ export function toNotificationContentPayload(
 ): LiveSurfaceNotificationContentPayloadOutput {
   const note = snapshot.notification;
   return {
+    schemaVersion: "5",
     aps: {
       alert: {
         title: note.title,
@@ -217,6 +222,7 @@ export function toNotificationContentPayload(
         : {}),
     },
     liveSurface: {
+      schemaVersion: "5",
       kind: "surface_snapshot",
       snapshotId: snapshot.id,
       surfaceId: snapshot.surfaceId,
@@ -271,7 +277,16 @@ export type {
   TrapCatalog,
 } from "./traps.ts";
 
-export { traps, findTrap, findTrapByErrorClass } from "./traps-data.ts";
+// Traps catalog runtime helpers are now sourced from @mobile-surfaces/traps
+// (the single home for the catalog, error base, and Swift bindings as of
+// v7). surface-contracts re-exports the lookups so existing consumers
+// (the harness, TrapErrorCard, SetupStatusRow) keep their imports
+// working. The legacy `traps: readonly TrapEntry[]` array (a typed
+// catalog snapshot generated from the full Zod entry shape) is dropped:
+// the new package ships a TrapBinding map keyed by id, which is the
+// shape every consumer actually used. Reach for `TRAP_BINDINGS` from
+// `@mobile-surfaces/traps` if you need the full iterable.
+export { findTrap, findTrapByErrorClass } from "@mobile-surfaces/traps";
 
 export {
   diagnosticCheckStatus,

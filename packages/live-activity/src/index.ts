@@ -1,8 +1,11 @@
 import { NativeModule, requireNativeModule } from "expo";
-import type {
-  LiveSurfaceActivityContentState,
-  LiveSurfaceStage,
+import type { ZodIssue } from "zod";
+import {
+  liveSurfaceActivityContentState,
+  type LiveSurfaceActivityContentState,
+  type LiveSurfaceStage,
 } from "@mobile-surfaces/surface-contracts";
+import { MobileSurfacesError, type TrapId } from "@mobile-surfaces/traps";
 
 export type LiveActivityStage = LiveSurfaceStage;
 
@@ -182,6 +185,234 @@ declare class LiveActivityNativeModule
   getPushToStartToken(): Promise<string | null>;
 }
 
-const LiveActivity = requireNativeModule<LiveActivityNativeModule>("LiveActivity");
+const NativeLiveActivity =
+  requireNativeModule<LiveActivityNativeModule>("LiveActivity");
+
+/**
+ * Thrown when application code calls `LiveActivity.start` or
+ * `LiveActivity.update` with a ContentState that does not parse
+ * against the canonical `liveSurfaceActivityContentState` Zod schema.
+ * The adapter parses on entry (MS038) so a contract drift surfaces at
+ * the call site with `trapId === "MS038"` and the Zod issue list
+ * attached, rather than crossing the native bridge and producing a
+ * silent Lock Screen failure.
+ */
+export class InvalidContentStateError extends MobileSurfacesError {
+  readonly issues: ReadonlyArray<ZodIssue>;
+  constructor(issues: ReadonlyArray<ZodIssue>) {
+    const message = issues.length
+      ? `Invalid Live Activity content state: ${issues
+          .map((issue) => `${issue.path.join(".") || "(root)"} ${issue.message}`)
+          .join("; ")}`
+      : "Invalid Live Activity content state.";
+    super(message);
+    this.name = "InvalidContentStateError";
+    this.issues = issues;
+  }
+}
+
+function parseContentState(
+  state: LiveActivityContentState,
+): LiveActivityContentState {
+  const parsed = liveSurfaceActivityContentState.safeParse(state);
+  if (!parsed.success) {
+    throw new InvalidContentStateError(parsed.error.issues);
+  }
+  return parsed.data;
+}
+
+// Wrap the native module so:
+//   1. Every input crossing the bridge (start, update) is parsed
+//      through liveSurfaceActivityContentState first (MS038). A drift
+//      surfaces as InvalidContentStateError at the call site instead
+//      of as a silent ActivityKit decode failure on the device.
+//   2. Every rejection is routed through wrapNativeError, so the
+//      Swift `[trap=MSXXX url=...]` suffix is parsed and the caught
+//      error carries trapId/docsUrl through MobileSurfacesError.
+const LiveActivity: LiveActivityAdapter = {
+  async areActivitiesEnabled(): Promise<boolean> {
+    try {
+      return await NativeLiveActivity.areActivitiesEnabled();
+    } catch (err) {
+      throw wrapNativeError(err);
+    }
+  },
+  async start(
+    surfaceId: string,
+    modeLabel: string,
+    state: LiveActivityContentState,
+    channelId?: string | null,
+    options?: LiveActivityContentOptions | null,
+  ): Promise<{
+    id: string;
+    state: LiveActivityContentState;
+    channelId?: string;
+  }> {
+    const parsed = parseContentState(state);
+    try {
+      return await NativeLiveActivity.start(
+        surfaceId,
+        modeLabel,
+        parsed,
+        channelId,
+        options,
+      );
+    } catch (err) {
+      throw wrapNativeError(err);
+    }
+  },
+  async update(
+    activityId: string,
+    state: LiveActivityContentState,
+    options?: LiveActivityContentOptions | null,
+  ): Promise<void> {
+    const parsed = parseContentState(state);
+    try {
+      return await NativeLiveActivity.update(activityId, parsed, options);
+    } catch (err) {
+      throw wrapNativeError(err);
+    }
+  },
+  async end(
+    activityId: string,
+    dismissalPolicy: "immediate" | "default",
+  ): Promise<void> {
+    try {
+      return await NativeLiveActivity.end(activityId, dismissalPolicy);
+    } catch (err) {
+      throw wrapNativeError(err);
+    }
+  },
+  async listActive(): Promise<LiveActivitySnapshot[]> {
+    try {
+      return await NativeLiveActivity.listActive();
+    } catch (err) {
+      throw wrapNativeError(err);
+    }
+  },
+  async getPushToStartToken(): Promise<string | null> {
+    try {
+      return await NativeLiveActivity.getPushToStartToken();
+    } catch (err) {
+      throw wrapNativeError(err);
+    }
+  },
+  addListener(event, handler) {
+    return NativeLiveActivity.addListener(event, handler);
+  },
+};
+
+// JS-side carrier for native rejections thrown across the ExpoModulesCore
+// bridge. The Swift `LiveActivityError` description starts with the legacy
+// `ACTIVITY_*` code (which JS-side consumers may still pattern-match on)
+// and, when a case maps to a catalog trap, appends ` [trap=MSXXX url=...]`.
+// `wrapNativeError` parses both fields off the message, sets `name` from
+// the leading code, and rebases the value onto `MobileSurfacesError` so
+// callers can render `err.trapId` + `err.docsUrl` through the catalog
+// without juggling parser logic at every call site.
+//
+// The wrapped `LiveActivity` adapter above (Phase 2, MS038) routes
+// every native rejection through `wrapNativeError`, so callers that
+// `try { await LiveActivity.start(...) }` receive a `MobileSurfacesError`
+// subclass carrying `trapId` + `docsUrl` without re-implementing the
+// parse at each call site.
+export class LiveActivityNativeError extends MobileSurfacesError {
+  /** Leading `ACTIVITY_*` code parsed off the native message. */
+  readonly code: string | undefined;
+
+  /** Trap id parsed off the `[trap=...]` suffix, when present. */
+  readonly nativeTrapId: TrapId | undefined;
+
+  /** Docs URL parsed off the `[trap=... url=...]` suffix, when present. */
+  readonly nativeDocsUrl: string | undefined;
+
+  constructor(cause: unknown) {
+    const message = extractNativeMessage(cause);
+    super(message);
+    const parsed = parseNativeMessage(message);
+    this.name = parsed.errorName ?? "LiveActivityNativeError";
+    this.code = parsed.code;
+    this.nativeTrapId = parsed.trapId;
+    this.nativeDocsUrl = parsed.docsUrl;
+    if (cause !== undefined) {
+      (this as { cause?: unknown }).cause = cause;
+    }
+  }
+
+  // The base `trapId` / `docsUrl` getters resolve through ERROR_CLASS_TO_TRAP_ID
+  // using this.name. When the native message carries a `[trap=...]` suffix we
+  // prefer that, since the Swift side knows the case-specific binding and the
+  // JS-side class table is intentionally narrow (LiveActivityNativeError is
+  // one class for every native case). Fall back to the base lookup so a
+  // future case bound at the class level still resolves.
+  override get trapId(): TrapId | undefined {
+    return this.nativeTrapId ?? super.trapId;
+  }
+
+  override get docsUrl(): string | undefined {
+    return this.nativeDocsUrl ?? super.docsUrl;
+  }
+}
+
+function extractNativeMessage(cause: unknown): string {
+  if (typeof cause === "string") return cause;
+  if (cause && typeof cause === "object") {
+    const m = (cause as { message?: unknown }).message;
+    if (typeof m === "string") return m;
+  }
+  return String(cause);
+}
+
+// Swift `description` shapes (see packages/live-activity/ios/LiveActivityError.swift):
+//   "ACTIVITY_UNSUPPORTED_OS"
+//   "ACTIVITY_DECODE_FAILED: <reason>"
+//   "ACTIVITY_UNSUPPORTED_OS [trap=MS012 url=https://...]"
+//   "ACTIVITY_DECODE_FAILED: <reason> [trap=MS003 url=https://...]"
+// ExpoModulesCore may also prepend a prefix like "ERR_INTERNAL: " around
+// the description before it reaches JS; the regex matches anywhere in the
+// string. Returns undefined fields on no match instead of throwing.
+const TRAP_SUFFIX_RE =
+  /\[trap=(MS\d+)(?:\s+url=([^\]\s]+))?\]/;
+const CODE_RE = /\bACTIVITY_[A-Z_]+\b/;
+const CODE_TO_CLASS: Record<string, string> = {
+  ACTIVITY_DECODE_FAILED: "LiveActivityDecodingError",
+  ACTIVITY_ENCODE_FAILED: "LiveActivityEncodingError",
+  ACTIVITY_UNSUPPORTED_OS: "LiveActivityUnsupportedOSError",
+  ACTIVITY_UNSUPPORTED_FEATURE: "LiveActivityUnsupportedFeatureError",
+  ACTIVITY_NOT_FOUND: "LiveActivityNotFoundError",
+};
+
+function parseNativeMessage(message: string): {
+  code: string | undefined;
+  errorName: string | undefined;
+  trapId: TrapId | undefined;
+  docsUrl: string | undefined;
+} {
+  const codeMatch = CODE_RE.exec(message);
+  const code = codeMatch ? codeMatch[0] : undefined;
+  const errorName = code ? CODE_TO_CLASS[code] : undefined;
+  const trapMatch = TRAP_SUFFIX_RE.exec(message);
+  return {
+    code,
+    errorName,
+    trapId: trapMatch ? (trapMatch[1] as TrapId) : undefined,
+    docsUrl: trapMatch ? trapMatch[2] : undefined,
+  };
+}
+
+/**
+ * Convenience helper: wrap a caught native rejection so the trap id and
+ * docs URL flow through to logging/UI. No-op when `cause` is already a
+ * `LiveActivityNativeError`. Returns the original value when it is not
+ * a real error-like (so callers can `try { ... } catch (e) { throw wrapNativeError(e); }`
+ * without losing non-Error throws).
+ */
+export function wrapNativeError(cause: unknown): unknown {
+  if (cause instanceof LiveActivityNativeError) return cause;
+  if (cause && typeof cause === "object" && "message" in (cause as object)) {
+    return new LiveActivityNativeError(cause);
+  }
+  return cause;
+}
 
 export default LiveActivity;

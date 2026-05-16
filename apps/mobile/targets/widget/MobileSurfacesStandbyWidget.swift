@@ -12,10 +12,14 @@ struct MobileSurfacesStandbyWidget: Widget {
 
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: Self.kind, provider: MobileSurfacesStandbyProvider()) { entry in
-      MobileSurfacesStandbyView(entry: entry)
-        .containerBackground(for: .widget) {
-          MobileSurfacesStandbyBackground(snapshot: entry.snapshot ?? .placeholder)
-        }
+      if entry.versionMismatch {
+        MobileSurfacesVersionMismatchView(kindLabel: "StandBy")
+      } else {
+        MobileSurfacesStandbyView(entry: entry)
+          .containerBackground(for: .widget) {
+            MobileSurfacesStandbyBackground(snapshot: entry.snapshot ?? .placeholder)
+          }
+      }
     }
     .configurationDisplayName("Mobile Surfaces StandBy")
     .description("Show the active surface while the device is charging on its side.")
@@ -27,11 +31,19 @@ struct MobileSurfacesStandbyEntry: TimelineEntry {
   let date: Date
   let snapshot: MobileSurfacesStandbySnapshot?
   let writtenAt: Date?
+  // True when the App Group snapshot's schemaVersion does not match the
+  // EXPECTED_SCHEMA_VERSION this binary was compiled against (MS041).
+  let versionMismatch: Bool
 }
 
 struct MobileSurfacesStandbyProvider: TimelineProvider {
   func placeholder(in context: Context) -> MobileSurfacesStandbyEntry {
-    MobileSurfacesStandbyEntry(date: Date(), snapshot: .placeholder, writtenAt: nil)
+    MobileSurfacesStandbyEntry(
+      date: Date(),
+      snapshot: .placeholder,
+      writtenAt: nil,
+      versionMismatch: false
+    )
   }
 
   func getSnapshot(
@@ -42,32 +54,50 @@ struct MobileSurfacesStandbyProvider: TimelineProvider {
       completion(MobileSurfacesStandbyEntry(
         date: Date(),
         snapshot: .marketing,
-        writtenAt: nil
+        writtenAt: nil,
+        versionMismatch: false
       ))
       return
     }
-    completion(MobileSurfacesStandbyEntry(
-      date: Date(),
-      snapshot: currentSnapshot(),
-      writtenAt: currentWrittenAt()
-    ))
+    completion(currentEntry())
   }
 
   func getTimeline(
     in context: Context,
     completion: @escaping (Timeline<MobileSurfacesStandbyEntry>) -> Void
   ) {
-    completion(Timeline(entries: [
-      MobileSurfacesStandbyEntry(
-        date: Date(),
-        snapshot: currentSnapshot(),
-        writtenAt: currentWrittenAt()
-      )
-    ], policy: .never))
+    completion(Timeline(entries: [currentEntry()], policy: .never))
   }
 
-  private func currentSnapshot() -> MobileSurfacesStandbySnapshot {
-    MobileSurfacesSharedState.standbySnapshot() ?? .placeholder
+  private func currentEntry() -> MobileSurfacesStandbyEntry {
+    let result: SnapshotReadResult<MobileSurfacesStandbySnapshot> =
+      MobileSurfacesSharedState.readSnapshot(
+        currentSurfaceIdKey: MobileSurfacesSharedState.standbyCurrentSurfaceIdKey
+      )
+    let writtenAt = currentWrittenAt()
+    switch result {
+    case .ok(let snapshot):
+      return MobileSurfacesStandbyEntry(
+        date: Date(),
+        snapshot: snapshot,
+        writtenAt: writtenAt,
+        versionMismatch: false
+      )
+    case .versionMismatch:
+      return MobileSurfacesStandbyEntry(
+        date: Date(),
+        snapshot: nil,
+        writtenAt: writtenAt,
+        versionMismatch: true
+      )
+    case .empty, .decodeError:
+      return MobileSurfacesStandbyEntry(
+        date: Date(),
+        snapshot: .placeholder,
+        writtenAt: writtenAt,
+        versionMismatch: false
+      )
+    }
   }
 
   private func currentWrittenAt() -> Date? {
@@ -121,6 +151,7 @@ private struct MobileSurfacesStandbyBackground: View {
 
 private extension MobileSurfacesStandbySnapshot {
   static let placeholder = MobileSurfacesStandbySnapshot(
+    schemaVersion: EXPECTED_SCHEMA_VERSION,
     kind: "standby",
     snapshotId: "placeholder",
     surfaceId: "surface-placeholder",
@@ -134,6 +165,7 @@ private extension MobileSurfacesStandbySnapshot {
   )
 
   static let marketing = MobileSurfacesStandbySnapshot(
+    schemaVersion: EXPECTED_SCHEMA_VERSION,
     kind: "standby",
     snapshotId: "marketing",
     surfaceId: "surface-marketing",

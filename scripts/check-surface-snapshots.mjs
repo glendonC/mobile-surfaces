@@ -53,6 +53,16 @@ const notificationViewControllerPath = path.resolve(
 // schema it must mirror, and names the projection helper that produces it.
 // The helper name appears in failure messages so a contributor knows which
 // projection edit broke parity.
+//
+// `swiftSource` is OPT-IN. Most surfaces decode an App Group write and live
+// inside MobileSurfacesSharedState.swift, so they leave `swiftSource` unset
+// and the loop below falls back to `sharedStatePath`. The notification
+// content entry is an exception: it decodes the wire payload's `liveSurface`
+// sidecar inside the notification-content extension target, so its struct
+// lives in a different Swift file and the entry pins `swiftSource` to that
+// path. If you add a new surface whose Codable lives outside the shared
+// state file, pin `swiftSource` to the new path - otherwise the parity check
+// will look for the struct in MobileSurfacesSharedState.swift and miss it.
 const SURFACES = [
   {
     id: "widget-snapshot-parity",

@@ -1,7 +1,7 @@
 {
   "name": "@mobile-surfaces/surface-contracts",
-  "version": "6.0.0",
-  "description": "Shared LiveSurfaceSnapshot contract, generated fixtures, and ActivityKit/APNs mapping helpers for Mobile Surfaces.",
+  "version": "7.0.0",
+  "description": "Bridge-agnostic wire format for iOS Live Activities, widgets, controls, and notifications. Pairs with @mobile-surfaces/push.",
   "publishConfig": {
     "access": "public",
     "main": "./dist/index.js",
@@ -61,6 +61,7 @@
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
+    "@mobile-surfaces/traps": "workspace:*",
     "zod": "4.3.6"
   }
 }

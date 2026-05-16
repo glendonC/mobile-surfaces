@@ -2,7 +2,7 @@
 title: "Push"
 description: "Wire-layer reference, SDK, smoke script, token taxonomy, error reasons, channel push."
 order: 40
-group: "Build"
+group: "Backend"
 ---
 # Push
 
@@ -10,7 +10,7 @@ In plain English: this page explains how bytes travel from your backend to Apple
 
 Deep reference for the wire layer: what `@mobile-surfaces/push` does, what tokens flow through it, where the APNs requests actually go, how to drive the iOS 18 broadcast/channel surface, and what every error reason means. The SDK is the recommended entry point; `scripts/send-apns.mjs` is the protocol-reference script kept self-contained so you can read the exact same wire shape top-to-bottom in a single file. Both target the same APNs endpoints and produce byte-equivalent payloads.
 
-For the high-level "domain event → snapshot → APNs" tour, see [`docs/backend-integration.md`](/docs/backend-integration). For the multi-kind contract and projection helpers, see [`docs/multi-surface.md`](/docs/multi-surface).
+For the high-level "domain event → snapshot → APNs" tour, see [`docs/backend.md`](/docs/backend). For the multi-kind contract and projection helpers, see [`docs/surfaces.md`](/docs/surfaces).
 
 ## Token taxonomy
 
@@ -25,7 +25,7 @@ ActivityKit and APNs use three distinct token kinds. They are not interchangeabl
 ### Where each token comes from in the harness
 
 - **Device APNs token**: registered by the Expo runtime once notifications are granted. The harness shows it in the bottom row labeled "Device APNs token".
-- **Push-to-start token**: the live-activity adapter (`apps/mobile/src/liveActivity/index.ts`) subscribes to `onPushToStartToken` at mount time and logs every value through. The contract for this event is documented in [`docs/architecture.md#adapter-contract`](/docs/architecture#adapter-contract). Apple does not expose a synchronous query, so `getPushToStartToken()` always resolves `null`; production code subscribes to the event stream.
+- **Push-to-start token**: the live-activity adapter (`apps/mobile/src/liveActivity/index.ts`) subscribes to `onPushToStartToken` at mount time and logs every value through. The contract for this event is documented in [`docs/architecture.md#adapter-contract`](/docs/concepts#adapter-contract). Apple does not expose a synchronous query, so `getPushToStartToken()` always resolves `null`; production code subscribes to the event stream.
 - **Per-activity push token**: emitted on `onPushToken` for each active `Activity` instance. The harness "All active activities" panel renders the token as it streams in.
 
 ### How a backend stores them
@@ -285,11 +285,17 @@ const client = createPushClient({
 });
 ```
 
-The option is named `_unsafeRetryOverride` because changing it usually goes wrong: the defaults are tuned against MS015's iOS budget rules and the priority-aware stretch. The legacy name `retryPolicy` still works in 5.x but logs a one-time deprecation warning per process; it will be removed in 6.0.
+The option is named `_unsafeRetryOverride` because changing it usually goes wrong: the defaults are tuned against MS015's iOS budget rules and the priority-aware stretch. The legacy name `retryPolicy` still works but logs a one-time deprecation warning per process; it will be removed in 8.0.
 
 For incidents, set the env var `MOBILE_SURFACES_PUSH_DISABLE_RETRY=1` (or any non-empty value) to force `maxRetries: 0` across every client in the process. This wins over any in-code override — it's an operator kill-switch.
 
 `computeBackoffMs` lives in `packages/push/src/retry.ts` if you want to reuse the same backoff math elsewhere; the default formula is `min(base * 2^attempt, max) + random(0, base)` with jitter.
+
+### Idempotency and retries
+
+The SDK generates an `apns-id` (UUID v4) once per send call and reuses the same value across every retry attempt within that call's retry budget. APNs treats requests carrying the same `apns-id` as the same logical send and deduplicates them, so a retry triggered by a transient `TooManyRequests` or transport reset does not enqueue a second update on the device.
+
+Callers wanting end-to-end at-least-once semantics across higher-level retries (process restart, queue replay) can pass their own `apnsId` via the send options; the SDK honors it as-is and reuses it for every retry in the same call. The returned `SendResult.apnsId` echoes whichever value was used so the caller can persist it for correlation with APNs server logs.
 
 ### Priority-aware retry stretch
 

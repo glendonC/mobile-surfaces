@@ -1,7 +1,7 @@
 {
   "name": "create-mobile-surfaces",
-  "version": "6.0.0",
-  "description": "Guided installer for the Mobile Surfaces Expo iOS Live Activity starter.",
+  "version": "7.0.0",
+  "description": "Scaffold a Mobile Surfaces project, or add the contract and widget target to an existing Expo app. Also ships the `mobile-surfaces audit` subcommand for checking foreign Expo projects against the trap catalog.",
   "publishConfig": {
     "access": "public"
   },
@@ -26,7 +26,8 @@
   ],
   "type": "module",
   "bin": {
-    "create-mobile-surfaces": "./bin/index.mjs"
+    "create-mobile-surfaces": "./bin/index.mjs",
+    "mobile-surfaces": "./bin/mobile-surfaces.mjs"
   },
   "files": [
     "bin",
@@ -53,7 +54,8 @@
     "@inquirer/ansi": "2.0.5",
     "@inquirer/core": "11.1.9",
     "@inquirer/prompts": "8.4.2",
-    "@mobile-surfaces/validators": "workspace:*",
+    "@mobile-surfaces/traps": "workspace:^",
+    "@mobile-surfaces/validators": "workspace:^",
     "ora": "9.4.0",
     "picocolors": "1.1.1"
   },
