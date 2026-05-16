@@ -3,6 +3,8 @@ import * as Notifications from "expo-notifications";
 import * as TaskManager from "expo-task-manager";
 import { Platform } from "react-native";
 
+export { registerNotificationCategories } from "./categories";
+
 const BACKGROUND_NOTIFICATION_TASK = "MOBILE_SURFACES_BACKGROUND_NOTIFICATION";
 
 Notifications.setNotificationHandler({

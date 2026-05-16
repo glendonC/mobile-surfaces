@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "5",
+  "kind": "liveActivity",
+  "id": "neg-state-enum",
+  "surfaceId": "surface-neg",
+  "updatedAt": "2026-05-12T18:30:00.000Z",
+  "state": "purple",
+  "liveActivity": {
+    "title": "Bad state value",
+    "body": "state is a closed enum; both validators must reject any value outside the documented set.",
+    "progress": 0,
+    "deepLink": "mobilesurfaces://surface/neg",
+    "modeLabel": "neg",
+    "contextLabel": "neg",
+    "statusLine": "neg",
+    "stage": "prompted",
+    "estimatedSeconds": 0,
+    "morePartsCount": 0
+  }
+}

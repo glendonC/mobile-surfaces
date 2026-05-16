@@ -7,6 +7,18 @@ export interface ChannelInfo {
   channelId: string;
   storagePolicy: "no-storage" | "most-recent-message";
   /**
+   * The APNs environment the channel was created in / read from. Channels
+   * are environment-scoped per MS031 — a channel created in `development`
+   * cannot be reached in `production` and vice versa — so this field is
+   * stamped on every `ChannelInfo` the client returns. Callers building a
+   * channel inventory keyed across both environments use this to dedupe;
+   * the SDK never reads it back, the field is purely a hint to the caller.
+   *
+   * Added in 5.0.0 as a wire-shape change; consumers reading `ChannelInfo`
+   * with strict typing need to recompile against the new shape.
+   */
+  environment: "development" | "production";
+  /**
    * Anything else Apple's response carried for this channel, preserved
    * verbatim. Currently Apple returns only the channel-id + storage policy
    * for `createChannel` and a list of channel-ids for `listChannels`; this
@@ -43,9 +55,12 @@ export function extractChannelList(
   return Array.isArray(candidate) ? candidate : [];
 }
 
-export function normalizeChannelEntry(entry: unknown): ChannelInfo {
+export function normalizeChannelEntry(
+  entry: unknown,
+  environment: "development" | "production",
+): ChannelInfo {
   if (typeof entry === "string") {
-    return { channelId: entry, storagePolicy: "no-storage" };
+    return { channelId: entry, storagePolicy: "no-storage", environment };
   }
   if (entry && typeof entry === "object") {
     const obj = entry as Record<string, unknown>;
@@ -57,7 +72,7 @@ export function normalizeChannelEntry(entry: unknown): ChannelInfo {
       policy === 1 || policy === "most-recent-message"
         ? "most-recent-message"
         : "no-storage";
-    return { channelId, storagePolicy, raw: obj };
+    return { channelId, storagePolicy, environment, raw: obj };
   }
-  return { channelId: "", storagePolicy: "no-storage" };
+  return { channelId: "", storagePolicy: "no-storage", environment };
 }

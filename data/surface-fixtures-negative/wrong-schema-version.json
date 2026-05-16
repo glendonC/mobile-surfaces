@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "3",
+  "kind": "liveActivity",
+  "id": "neg-schema-version",
+  "surfaceId": "surface-neg",
+  "updatedAt": "2026-05-12T18:30:00.000Z",
+  "state": "queued",
+  "liveActivity": {
+    "title": "Wrong wire-format version",
+    "body": "schemaVersion is a literal; v3 payloads need to migrate before the v4 union will accept them.",
+    "progress": 0,
+    "deepLink": "mobilesurfaces://surface/neg",
+    "modeLabel": "neg",
+    "contextLabel": "neg",
+    "statusLine": "neg",
+    "stage": "prompted",
+    "estimatedSeconds": 0,
+    "morePartsCount": 0
+  }
+}

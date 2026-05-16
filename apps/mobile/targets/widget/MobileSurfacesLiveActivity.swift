@@ -84,11 +84,5 @@ private struct StagePill: View {
       .foregroundStyle(Color("AccentColor"))
   }
 
-  private var label: String {
-    switch stage {
-    case .prompted: return "READY"
-    case .inProgress: return "LIVE"
-    case .completing: return "WRAP"
-    }
-  }
+  private var label: String { stage.displayLabel }
 }

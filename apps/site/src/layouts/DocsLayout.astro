@@ -3,6 +3,9 @@ import "../styles/global.css";
 import geistLatin from "@fontsource-variable/geist/files/geist-latin-wght-normal.woff2?url";
 import geistMonoLatin from "@fontsource-variable/geist-mono/files/geist-mono-latin-wght-normal.woff2?url";
 import { getCollection } from "astro:content";
+import { DOC_GROUPS } from "../content.config";
+import { READING_PATHS } from "../config/readingPaths";
+import Icon from "../components/Icon.astro";
 
 interface Props {
   title: string;
@@ -23,8 +26,35 @@ const docsNav = allDocs
     slug: doc.id,
     title: doc.data.title,
     order: doc.data.order,
+    group: doc.data.group,
   }))
   .sort((a, b) => a.order - b.order);
+
+const groupedNav = DOC_GROUPS.map((group) => ({
+  group,
+  entries: docsNav.filter((d) => d.group === group),
+})).filter((g) => g.entries.length > 0);
+
+const currentPath = Astro.url.pathname.replace(/\/$/, "");
+const isDocsIndex = currentPath === "/docs";
+const isTrapsCatalog = currentPath === "/traps";
+
+// Payload for the reading-path progress bar. The bar is rendered hidden;
+// a client script reads `?path=<id>` from the URL, looks up the path,
+// finds the current slug in its sequence, and populates the bar with
+// step counter + prev/next links. Slug-to-title map keeps link labels
+// readable.
+const slugTitles: Record<string, string> = Object.fromEntries(
+  docsNav.map((d) => [d.slug, d.title]),
+);
+const readingPathsPayload = JSON.stringify({
+  paths: READING_PATHS.map((p) => ({
+    id: p.id,
+    label: p.label,
+    slugs: p.slugs,
+  })),
+  titles: slugTitles,
+});
 
 const canonicalUrl = Astro.site
   ? new URL(Astro.url.pathname, Astro.site).href
@@ -58,35 +88,246 @@ const ogImageUrl = Astro.site
     <meta name="twitter:image" content={ogImageUrl} />
   </head>
   <body class="docs-body">
-    <header class="docs-header">
-      <a href="/" class="docs-brand">Mobile Surfaces</a>
-      <nav class="docs-topnav" aria-label="Primary">
-        <a href="/docs">Docs</a>
-        <a href="/traps">Traps</a>
-        <a href="https://github.com/glendonC/mobile-surfaces" target="_blank" rel="noopener">GitHub</a>
-      </nav>
-    </header>
     <div class="docs-layout">
       <aside class="docs-sidebar" aria-label="Documentation">
-        <ol>
+        <div class="docs-sidebar-header">
+          <a href="/" class="docs-sidebar-brand">Mobile Surfaces</a>
+          <a
+            href="https://github.com/glendonC/mobile-surfaces"
+            target="_blank"
+            rel="noopener"
+            class="docs-sidebar-link"
+            aria-label="GitHub"
+            data-tooltip="View on GitHub"
+            data-tooltip-pos="bottom"
+          >
+            <Icon name="github" class="docs-sidebar-link-icon" />
+          </a>
+        </div>
+        <nav>
+          <ol class="docs-sidebar-primary">
+            <li>
+              <a
+                href="/docs"
+                aria-current={isDocsIndex ? "page" : undefined}
+                class={isDocsIndex ? "is-active" : undefined}
+              >
+                Overview
+              </a>
+            </li>
+            <li>
+              <a
+                href="/traps"
+                aria-current={isTrapsCatalog ? "page" : undefined}
+                class={isTrapsCatalog ? "is-active" : undefined}
+              >
+                Trap Catalog
+              </a>
+            </li>
+          </ol>
           {
-            docsNav.map((doc) => (
-              <li>
-                <a
-                  href={`/docs/${doc.slug}`}
-                  aria-current={doc.slug === currentSlug ? "page" : undefined}
-                  class={doc.slug === currentSlug ? "is-active" : undefined}
-                >
-                  {doc.title}
-                </a>
-              </li>
+            groupedNav.map(({ group, entries }) => (
+              <div class="docs-sidebar-group">
+                <p class="docs-sidebar-group-label">{group}</p>
+                <ol>
+                  {entries.map((doc) => (
+                    <li>
+                      <a
+                        href={`/docs/${doc.slug}`}
+                        aria-current={doc.slug === currentSlug ? "page" : undefined}
+                        class={doc.slug === currentSlug ? "is-active" : undefined}
+                      >
+                        {doc.title}
+                      </a>
+                    </li>
+                  ))}
+                </ol>
+              </div>
             ))
           }
-        </ol>
+        </nav>
+        <div class="docs-path-bar" data-path-bar hidden>
+          <div class="docs-path-bar-head">
+            <span class="docs-path-bar-eyebrow">Reading path</span>
+            <button
+              type="button"
+              class="docs-path-bar-close"
+              data-path-close
+              aria-label="Exit reading path"
+              data-tooltip="Exit reading path"
+              data-tooltip-pos="left"
+            >
+              <Icon name="close" class="docs-path-bar-close-icon" />
+            </button>
+          </div>
+          <p class="docs-path-bar-label" data-path-label></p>
+          <div class="docs-path-bar-actions">
+            <a
+              class="docs-path-bar-link docs-path-bar-link--prev"
+              data-path-prev
+              hidden
+            >
+              <span class="docs-path-bar-arrow" aria-hidden="true">←</span>
+              <span class="docs-path-bar-link-title" data-path-prev-title></span>
+            </a>
+            <a
+              class="docs-path-bar-link docs-path-bar-link--next"
+              data-path-next
+              hidden
+            >
+              <span class="docs-path-bar-link-title" data-path-next-title></span>
+              <span class="docs-path-bar-arrow" aria-hidden="true">→</span>
+            </a>
+          </div>
+        </div>
       </aside>
       <main class="docs-main">
         <slot />
       </main>
     </div>
+
+    <script
+      type="application/json"
+      id="reading-paths-data"
+      set:html={readingPathsPayload}
+    />
+    <script>
+      // Reading-path progress bar. Each step link from the docs index
+      // appends `?path=<id>&step=<n>`. On page load we read the URL param,
+      // look up the path from the JSON payload, find the current slug's
+      // position in the sequence, and populate prev/next + the step
+      // counter. Exit closes the bar and strips the query param from the
+      // address bar without a navigation.
+      interface PathPayload {
+        paths: { id: string; label: string; slugs: string[] }[];
+        titles: Record<string, string>;
+      }
+      const dataEl = document.getElementById("reading-paths-data");
+      const bar = document.querySelector<HTMLElement>("[data-path-bar]");
+      if (dataEl && bar) {
+        try {
+          const payload = JSON.parse(dataEl.textContent ?? "{}") as PathPayload;
+          const params = new URLSearchParams(window.location.search);
+          const pathId = params.get("path");
+          const path = pathId ? payload.paths.find((p) => p.id === pathId) : null;
+          if (path) {
+            const currentSlug = window.location.pathname
+              .replace(/\/$/, "")
+              .split("/")
+              .pop();
+            const idx = currentSlug ? path.slugs.indexOf(currentSlug) : -1;
+            if (idx >= 0) {
+              const total = path.slugs.length;
+              const labelEl = bar.querySelector<HTMLElement>("[data-path-label]");
+              const prev = bar.querySelector<HTMLAnchorElement>("[data-path-prev]");
+              const next = bar.querySelector<HTMLAnchorElement>("[data-path-next]");
+              const prevTitle = bar.querySelector<HTMLElement>("[data-path-prev-title]");
+              const nextTitle = bar.querySelector<HTMLElement>("[data-path-next-title]");
+              const close = bar.querySelector<HTMLButtonElement>("[data-path-close]");
+
+              if (labelEl) {
+                labelEl.textContent = `${path.label} (${idx + 1}/${total})`;
+              }
+
+              const prevSlug = idx > 0 ? path.slugs[idx - 1] : null;
+              const nextSlug = idx < total - 1 ? path.slugs[idx + 1] : null;
+
+              if (prevSlug && prev && prevTitle) {
+                const t = payload.titles[prevSlug] ?? prevSlug;
+                prev.href = `/docs/${prevSlug}?path=${path.id}&step=${idx}`;
+                prevTitle.textContent = t;
+                prev.setAttribute("data-tooltip", `Previous: ${t}`);
+                prev.setAttribute("data-tooltip-pos", "top");
+                prev.hidden = false;
+              }
+              if (nextSlug && next && nextTitle) {
+                const t = payload.titles[nextSlug] ?? nextSlug;
+                next.href = `/docs/${nextSlug}?path=${path.id}&step=${idx + 2}`;
+                nextTitle.textContent = t;
+                next.setAttribute("data-tooltip", `Next: ${t}`);
+                next.setAttribute("data-tooltip-pos", "top");
+                next.hidden = false;
+              }
+
+              close?.addEventListener("click", () => {
+                bar.hidden = true;
+                const url = new URL(window.location.href);
+                url.searchParams.delete("path");
+                url.searchParams.delete("step");
+                window.history.replaceState({}, "", url.toString());
+              });
+
+              // Reveal first so measurements below see real layout
+              // dimensions; while `hidden` is set, every child has
+              // width 0 and the truncation check can never fire.
+              bar.hidden = false;
+
+              // Stack the prev/next buttons vertically when either title
+              // would truncate in the side-by-side layout. Runs after the
+              // bar is visible, then re-runs on resize so the bar adapts
+              // as the viewport changes. Waits a frame so fonts settle
+              // before measuring.
+              const actions = bar.querySelector<HTMLElement>(
+                ".docs-path-bar-actions",
+              );
+              function syncStackedLayout() {
+                if (!actions) return;
+                actions.classList.remove("is-stacked");
+                const overflowing = Array.from(
+                  actions.querySelectorAll<HTMLElement>(
+                    ".docs-path-bar-link:not([hidden]) .docs-path-bar-link-title",
+                  ),
+                ).some((el) => el.scrollWidth > el.clientWidth + 1);
+                if (overflowing) actions.classList.add("is-stacked");
+              }
+              requestAnimationFrame(syncStackedLayout);
+              if (document.fonts?.ready) {
+                document.fonts.ready.then(syncStackedLayout);
+              }
+              window.addEventListener("resize", syncStackedLayout);
+            }
+          }
+        } catch (err) {
+          console.error("Reading-path bar failed", err);
+        }
+      }
+    </script>
+    <script>
+      // Client-side Mermaid rendering. Astro/Shiki marks fenced ```mermaid
+      // blocks with `<pre data-language="mermaid">`, so we select on that.
+      // The diagram source is the textContent of the inner <code>, which
+      // preserves the original lines across Shiki's <span> wrapping.
+      // Imported dynamically so the ~700KB mermaid bundle only ships on
+      // pages that actually contain a diagram.
+      const blocks = document.querySelectorAll<HTMLPreElement>(
+        '.docs-prose pre[data-language="mermaid"]',
+      );
+      if (blocks.length > 0) {
+        const { default: mermaid } = await import("mermaid");
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: "neutral",
+          fontFamily: "Geist, ui-sans-serif, system-ui, sans-serif",
+          securityLevel: "strict",
+        });
+        for (let i = 0; i < blocks.length; i++) {
+          const pre = blocks[i];
+          const code = pre.querySelector("code");
+          const source = (code?.textContent ?? pre.textContent ?? "").trim();
+          try {
+            const { svg } = await mermaid.render(
+              `mermaid-${i}-${Date.now()}`,
+              source,
+            );
+            const wrapper = document.createElement("div");
+            wrapper.className = "docs-mermaid";
+            wrapper.innerHTML = svg;
+            pre.replaceWith(wrapper);
+          } catch (err) {
+            console.error("Mermaid render failed", err);
+          }
+        }
+      }
+    </script>
   </body>
 </html>

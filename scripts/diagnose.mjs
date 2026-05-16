@@ -31,6 +31,7 @@ import {
   rollupDiagnosticStatus,
 } from "../packages/surface-contracts/src/diagnostics.ts";
 import { redactDeep } from "./lib/redact.mjs";
+import { diagnoseTools } from "./lib/check-registry.mjs";
 
 // Repo root = parent of scripts/. Lets the user run `pnpm surface:diagnose`
 // from any working directory inside the repo (the spawned children all
@@ -45,25 +46,11 @@ const { values } = parseArgs({
   },
 });
 
-// Each tool runs `node --experimental-strip-types <path> [extra...] --json`.
-// `extra` covers the --check toggle for generators. Order matches
-// `surface:check` so the bundle reads the same as the canonical CI run.
-const TOOLS = [
-  { script: "scripts/doctor.mjs", extra: [] },
-  { script: "scripts/validate-surface-fixtures.mjs", extra: [] },
-  { script: "scripts/build-schema.mjs", extra: ["--check"] },
-  { script: "scripts/generate-surface-fixtures.mjs", extra: ["--check"] },
-  { script: "scripts/check-activity-attributes.mjs", extra: [] },
-  { script: "scripts/check-validator-sync.mjs", extra: [] },
-  { script: "scripts/check-app-group-identity.mjs", extra: [] },
-  { script: "scripts/check-adapter-boundary.mjs", extra: [] },
-  { script: "scripts/validate-trap-catalog.mjs", extra: [] },
-  { script: "scripts/check-trap-error-binding.mjs", extra: [] },
-  { script: "scripts/generate-trap-bindings.mjs", extra: ["--check"] },
-  { script: "scripts/generate-traps-data.mjs", extra: ["--check"] },
-  { script: "scripts/probe-environment.mjs", extra: [] },
-  { script: "scripts/probe-app-config.mjs", extra: [] },
-];
+// The tool inventory is sourced from scripts/lib/check-registry.mjs — the
+// same registry that drives surface-check. Diagnose includes every entry
+// with diagnose: true and json !== false; the registry's order matches
+// stage order, so the bundle reads the same as the canonical CI run.
+const TOOLS = diagnoseTools();
 
 const reports = [];
 for (const { script, extra } of TOOLS) {

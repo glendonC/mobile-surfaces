@@ -1,0 +1,4 @@
+{
+  "$schema": "Internal: load order of cross-surface scenarios. Each scenario applies to all five surfaces at once, so the harness can demonstrate the architectural payoff: one domain state change, six projections.",
+  "scenarios": ["delivery.json", "build.json"]
+}

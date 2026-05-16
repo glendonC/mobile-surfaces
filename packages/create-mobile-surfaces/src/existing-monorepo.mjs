@@ -6,8 +6,7 @@
 
 import path from "node:path";
 import pc from "picocolors";
-import { cancelled, monorepo as monorepoCopy, prompts as copy } from "./copy.mjs";
-import { EXIT_CODES } from "./exit-codes.mjs";
+import { monorepo as monorepoCopy, prompts as copy } from "./copy.mjs";
 import * as defaultUi from "./ui.mjs";
 import {
   toBundleId,
@@ -22,6 +21,8 @@ import {
 const DEFAULT_SURFACES = Object.freeze({
   homeWidget: true,
   controlWidget: true,
+  lockAccessoryWidget: true,
+  standbyWidget: true,
 });
 
 // Plan a monorepo scaffold. Mirrors planChanges from existing-expo.mjs but
@@ -81,11 +82,13 @@ function renderPlanRecap(plan, ui) {
 
   // Echo the surface selections so the user sees their choices reflected
   // before "Apply these changes?". Live activity + dynamic island always
-  // ship; only home + control widgets are toggleable.
+  // ship; the four widget kinds are toggleable.
   lines.push("  " + pc.bold("surfaces"));
   lines.push(`    live activity + dynamic island  ${pc.dim("(always)")}`);
   lines.push(`    home widget                     ${plan.surfaces.homeWidget ? pc.bold("yes") : pc.dim("no")}`);
   lines.push(`    control widget                  ${plan.surfaces.controlWidget ? pc.bold("yes") : pc.dim("no")}`);
+  lines.push(`    lock screen accessory           ${plan.surfaces.lockAccessoryWidget ? pc.bold("yes") : pc.dim("no")}`);
+  lines.push(`    standby                         ${plan.surfaces.standbyWidget ? pc.bold("yes") : pc.dim("no")}`);
   lines.push("");
 
   lines.push("  " + pc.bold("new files"));
@@ -188,6 +191,24 @@ export async function runMonorepoPrompts({ evidence, manifest, overrides = {}, y
           defaultValue: true,
         });
 
+  const lockAccessoryWidget = overrides.lockAccessoryWidget !== undefined
+    ? overrides.lockAccessoryWidget
+    : yes
+      ? true
+      : await ui.askConfirm({
+          message: copy.surfaces.lockAccessoryWidget.message,
+          defaultValue: true,
+        });
+
+  const standbyWidget = overrides.standbyWidget !== undefined
+    ? overrides.standbyWidget
+    : yes
+      ? true
+      : await ui.askConfirm({
+          message: copy.surfaces.standbyWidget.message,
+          defaultValue: true,
+        });
+
   const installNow = overrides.installNow !== undefined
     ? overrides.installNow
     : yes
@@ -206,7 +227,7 @@ export async function runMonorepoPrompts({ evidence, manifest, overrides = {}, y
     scheme,
     bundleId,
     teamId,
-    surfaces: { homeWidget, controlWidget },
+    surfaces: { homeWidget, controlWidget, lockAccessoryWidget, standbyWidget },
     installNow,
     ...(overrides.newArchEnabled !== undefined
       ? { newArchEnabled: overrides.newArchEnabled }
@@ -224,8 +245,11 @@ export async function runMonorepoPrompts({ evidence, manifest, overrides = {}, y
       defaultValue: true,
     });
     if (!proceed) {
-      ui.log.message(pc.dim(cancelled));
-      process.exit(EXIT_CODES.SUCCESS);
+      // Mirror greenfield: cancelling the recap restarts the prompt loop
+      // rather than hard-exiting. Lets the user fix a typo'd identity or
+      // surface pick without re-launching create-mobile-surfaces.
+      ui.log.info("Starting over.");
+      return runMonorepoPrompts({ evidence, manifest, overrides, yes, ui });
     }
   }
 

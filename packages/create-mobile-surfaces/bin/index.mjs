@@ -169,13 +169,31 @@ if (mode.kind === MODE.EXISTING_MONOREPO_NO_EXPO) {
     });
   } catch (err) {
     if (interrupted) {
-      log.warn(errors.applyInterrupted);
+      log.warn(errors.applyInterrupted(err?.restoredCount ?? 0));
     } else if (err && err.tag === PNPM_MISSING_TAG) {
       log.error(err.message);
     } else if (err && err.tag === COCOAPODS_MISSING_TAG) {
       log.error(err.message);
+    } else if (err && err.rolledBack) {
+      // The apply phase recorded a backup and restored it. `restoredCount` is
+      // the number of files brought back to their pre-apply bytes. If rollback
+      // itself errored on any entry, surface that separately so the user knows
+      // which path to trust.
+      if (err.rollbackError) {
+        log.error(
+          errors.applyFailedRollbackErrored(
+            err.restoredCount ?? 0,
+            err.rollbackError.message ?? String(err.rollbackError),
+          ),
+        );
+      } else {
+        log.error(errors.applyFailedRolledBack(err.restoredCount ?? 0));
+      }
     } else {
-      log.error(errors.applyFailed);
+      // Post-commit failure (e.g. expo prebuild after the apply succeeded). The
+      // backup is gone; the user's edits are in place and intentional. Tell
+      // them only the prepare step needs another pass.
+      log.error(errors.applyFailedPostCommit);
     }
     log.message(pc.dim(`Full log: ${logger.getPath()}`));
     process.exit(interrupted ? EXIT_CODES.INTERRUPTED : EXIT_CODES.ENV_ERROR);
@@ -215,13 +233,25 @@ if (mode.kind === MODE.EXISTING_EXPO) {
     });
   } catch (err) {
     if (interrupted) {
-      log.warn(errors.applyInterrupted);
+      log.warn(errors.applyInterrupted(err?.restoredCount ?? 0));
     } else if (err && err.tag === PNPM_MISSING_TAG) {
       log.error(err.message);
     } else if (err && err.tag === COCOAPODS_MISSING_TAG) {
       log.error(err.message);
+    } else if (err && err.rolledBack) {
+      // See the monorepo branch above for the three-shape rationale.
+      if (err.rollbackError) {
+        log.error(
+          errors.applyFailedRollbackErrored(
+            err.restoredCount ?? 0,
+            err.rollbackError.message ?? String(err.rollbackError),
+          ),
+        );
+      } else {
+        log.error(errors.applyFailedRolledBack(err.restoredCount ?? 0));
+      }
     } else {
-      log.error(errors.applyFailed);
+      log.error(errors.applyFailedPostCommit);
     }
     log.message(pc.dim(`Full log: ${logger.getPath()}`));
     process.exit(interrupted ? EXIT_CODES.INTERRUPTED : EXIT_CODES.ENV_ERROR);

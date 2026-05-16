@@ -2,6 +2,7 @@
 title: "Backend Integration"
 description: "Domain event to snapshot to APNs walkthrough."
 order: 30
+group: "Build"
 ---
 # Backend Integration
 
@@ -19,7 +20,7 @@ The contract is one type with kind-gated derived shapes.
 flowchart LR
   Event["Domain event<br/>(yours)"] --> Snapshot["LiveSurfaceSnapshot<br/>(@mobile-surfaces/surface-contracts)"]
   Snapshot --> Content["ActivityKit ContentState<br/>toLiveActivityContentState()"]
-  Snapshot --> Alert["Alert payload<br/>liveActivityAlertPayloadFromSnapshot()<br/>(@mobile-surfaces/push)"]
+  Snapshot --> Alert["Alert payload<br/>toApnsAlertPayload()<br/>(@mobile-surfaces/push)"]
   Snapshot --> Widget["Widget timeline entry<br/>toWidgetTimelineEntry()"]
   Snapshot --> Control["Control value<br/>toControlValueProvider()"]
   Snapshot --> Notification["Notification content<br/>toNotificationContentPayload()"]
@@ -35,34 +36,28 @@ flowchart LR
 
 ```ts
 interface LiveSurfaceSnapshotBase {
-  schemaVersion: "3";         // discriminator; bumped only on breaking changes
+  schemaVersion: "5";         // discriminator; bumped only on breaking changes
   kind: "liveActivity" | "widget" | "control" | "lockAccessory" | "standby" | "notification";
   id: string;                 // unique per snapshot revision (event-scoped)
   surfaceId: string;          // stable across snapshots for the same surface
   updatedAt: string;          // RFC 3339 datetime; required for out-of-order discard
   state: "queued" | "active" | "paused" | "attention" | "bad_timing" | "completed";
-  modeLabel: string;          // human label, e.g. "queued", "active"
-  contextLabel: string;       // optional sub-label, e.g. "starter"
-  statusLine: string;         // single line shown in compact regions
-  primaryText: string;        // headline / alert title
-  secondaryText: string;      // subhead / alert body
-  actionLabel?: string;       // CTA label, e.g. "Open surface"
-  progress: number;           // 0..1
-  deepLink: string;           // <scheme>://surface/<surfaceId>
 }
 
-// Plus per-kind slices on the matching branch:
-//   kind: "liveActivity"  -> liveActivity:  { stage: "prompted" | "inProgress" | "completing"; estimatedSeconds: number; morePartsCount: number }
-//   kind: "widget"        -> widget:        { family?: "systemSmall" | "systemMedium" | "systemLarge"; reloadPolicy?: "manual" | "afterDate" }
-//   kind: "control"       -> control:       { kind: "toggle" | "button" | "deepLink"; state?: boolean; intent?: string }
-//   kind: "notification"  -> notification:  { category?: string; threadId?: string }
-//   kind: "lockAccessory" -> lockAccessory: { family: "accessoryCircular" | "accessoryRectangular" | "accessoryInline"; gaugeValue?: number; shortText?: string }
-//   kind: "standby"       -> standby:       { presentation: "card" | "night"; tint?: "default" | "monochrome" }
+// Plus per-kind slices on the matching branch (every rendering field lives in
+// the slice for the kind that actually uses it; v4 collapsed the base to
+// identity + state only):
+//   kind: "liveActivity"  -> liveActivity:  { title, body, progress, deepLink, modeLabel, contextLabel, statusLine, actionLabel?, stage: "prompted" | "inProgress" | "completing", estimatedSeconds, morePartsCount }
+//   kind: "widget"        -> widget:        { title, body, progress, deepLink, family?: "systemSmall" | "systemMedium" | "systemLarge", reloadPolicy?: "manual" | "afterDate" }
+//   kind: "control"       -> control:       { label, deepLink, controlKind: "toggle" | "button" | "deepLink", state?: boolean, intent?: string }
+//   kind: "notification"  -> notification:  { title, body, deepLink, category?: string, threadId?: string }
+//   kind: "lockAccessory" -> lockAccessory: { title, deepLink, family: "accessoryCircular" | "accessoryRectangular" | "accessoryInline", gaugeValue?: number, shortText?: string }
+//   kind: "standby"       -> standby:       { title, body, progress, deepLink, presentation: "card" | "night", tint?: "default" | "monochrome" }
 ```
 
-`kind` selects the projection path (the schema is a true `z.discriminatedUnion("kind", …)`, invalid kind/slice combinations fail at parse time). `state` is the canonical state machine: drive the lifecycle from the backend. `liveActivity.stage` is a UI-facing axis (whether the surface is being prompted, actively running, or wrapping up); it only applies to liveActivity-kind snapshots. `progress` is independent of either.
+`kind` selects the projection path (the schema is a true `z.discriminatedUnion("kind", …)`, invalid kind/slice combinations fail at parse time). `state` is the canonical state machine: drive the lifecycle from the backend. `liveActivity.stage` is a UI-facing axis (whether the surface is being prompted, actively running, or wrapping up); it only applies to liveActivity-kind snapshots. `progress` lives on whichever slice renders it (`liveActivity`, `widget`, `standby`).
 
-`updatedAt` is the new required field in v2. Set it to the wall-clock instant the snapshot was authored, ideally UTC for trivial lexicographic comparison. Consumers use it to discard out-of-order pushes that ActivityKit and APNs do not order in-band; see [`schema-migration.md`](/docs/schema-migration) for the migration policy.
+`updatedAt` is a required base field. Set it to the wall-clock instant the snapshot was authored, ideally UTC for trivial lexicographic comparison. Consumers use it to discard out-of-order pushes that ActivityKit and APNs do not order in-band; see [`schema-migration.md`](/docs/schema-migration) for the migration policy.
 
 For a tour of every `kind` value and the projection it drives, see [`docs/multi-surface.md`](/docs/multi-surface). Look at `data/surface-fixtures/*.json` for committed examples of every state and kind.
 
@@ -87,21 +82,21 @@ function snapshotFromJob(job: Job): LiveSurfaceSnapshot {
     : "attention";
 
   return {
-    schemaVersion: "3",
+    schemaVersion: "5",
     kind: "liveActivity",
     id: `${job.id}@${job.revision}`,
     surfaceId: `job-${job.id}`,
     updatedAt: new Date().toISOString(),
     state,
-    modeLabel: state,
-    contextLabel: job.queueName,
-    statusLine: `${job.queueName} · ${state}`,
-    primaryText: job.title,
-    secondaryText: job.subtitle ?? "",
-    actionLabel: "Open job",
-    progress: clamp01(job.progress ?? 0),
-    deepLink: `mobilesurfaces://surface/job-${job.id}`,
     liveActivity: {
+      title: job.title,
+      body: job.subtitle ?? "",
+      progress: clamp01(job.progress ?? 0),
+      deepLink: `mobilesurfaces://surface/job-${job.id}`,
+      modeLabel: state,
+      contextLabel: job.queueName,
+      statusLine: `${job.queueName} · ${state}`,
+      actionLabel: "Open job",
       stage: state === "completed" ? "completing" : state === "queued" ? "prompted" : "inProgress",
       estimatedSeconds: job.etaSeconds ?? 0,
       morePartsCount: job.extraItems ?? 0,
@@ -123,30 +118,30 @@ import {
   safeParseAnyVersion,
 } from "@mobile-surfaces/surface-contracts";
 
-// Strict v2 only. Throws ZodError on anything that isn't a current-version
+// Strict v4 only. Throws ZodError on anything that isn't a current-version
 // snapshot. Use this on outbound code paths where you control the producer.
 const snapshot = assertSnapshot(snapshotFromJob(job));
 
-// Strict v2 safe-parse. Returns { success, data | error }.
+// Strict v4 safe-parse. Returns { success, data | error }.
 const result = safeParseSnapshot(input);
 
-// Wire-edge tolerant. Tries v2 first; falls back to v1 with auto-migration
+// Wire-edge tolerant. Tries v4 first; falls back to v3 with auto-migration
 // and emits a deprecationWarning on success. Use this on inbound code paths
 // (HTTP handlers, queue consumers) where producers may not have migrated to
-// v2 yet. The v1 codec lives for the entire 3.x release line; see
+// v4 yet. The v3 codec lives for the entire 5.x release line; see
 // docs/schema-migration.md for the deprecation timeline.
 const versioned = safeParseAnyVersion(input);
 if (versioned.success) {
   if (versioned.deprecationWarning) {
     log.warn(versioned.deprecationWarning, { snapshotId: versioned.data.id });
   }
-  // versioned.data is a LiveSurfaceSnapshot in v2 shape.
+  // versioned.data is a LiveSurfaceSnapshot in v4 shape.
 }
 ```
 
-`safeParseAnyVersion` is the migration path documented in [`docs/schema-migration.md`](/docs/schema-migration). Use it whenever you read snapshots from a store that may still hold v1 payloads. (The v0 codec was removed in 3.0.0; `safeParseAnyVersion` chains v2 -> v1 only.)
+`safeParseAnyVersion` is the migration path documented in [`docs/schema-migration.md`](/docs/schema-migration). Use it whenever you read snapshots from a store that may still hold v3 payloads. (The v2 codec was sunset in 5.0.0; `safeParseAnyVersion` chains v3 -> v4 only.)
 
-The published JSON Schema at [`unpkg.com/@mobile-surfaces/surface-contracts@4.0/schema.json`](https://unpkg.com/@mobile-surfaces/surface-contracts@4.0/schema.json) is generated from the same Zod source and pinned to `major.minor`. Use it for IDE tooling, OpenAPI components, or non-TypeScript validators (Ajv, jsonschema, etc.). Standard Schema interop is automatic, every exported Zod schema implements the `~standard` getter (`{ vendor: "zod", version: 1, validate, jsonSchema }`), so the contract drops directly into Standard-Schema-aware libraries (Valibot runners, ArkType, `@standard-schema/spec`) without depending on Zod at runtime.
+The published JSON Schema at [`unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json`](https://unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json) is generated from the same Zod source and pinned to `major.minor`. Use it for IDE tooling, OpenAPI components, or non-TypeScript validators (Ajv, jsonschema, etc.). Standard Schema interop is automatic, every exported Zod schema implements the `~standard` getter (`{ vendor: "zod", version: 1, validate, jsonSchema }`), so the contract drops directly into Standard-Schema-aware libraries (Valibot runners, ArkType, `@standard-schema/spec`) without depending on Zod at runtime.
 
 ### 3. Send the APNs request
 
@@ -170,13 +165,13 @@ await push.update(activityToken, snapshot);
 // Live Activity remote start (iOS 17.2+) against the push-to-start token.
 await push.start(pushToStartToken, snapshot, {
   surfaceId: snapshot.surfaceId,
-  modeLabel: snapshot.modeLabel,
+  modeLabel: snapshot.liveActivity.modeLabel,
 });
 
 // End the activity. dismissalDateSeconds defaults to now.
 await push.end(activityToken, snapshot);
 
-// Alert push (uses liveActivityAlertPayloadFromSnapshot internally; works
+// Alert push (uses toApnsAlertPayload internally; works
 // as a fallback for users who have Live Activities turned off).
 await push.alert(deviceToken, snapshot);
 
@@ -231,7 +226,7 @@ Live Activity end:
 { "aps": { "timestamp": 1700000000, "event": "end", "content-state": { ... }, "dismissal-date": 1700000060 } }
 ```
 
-Alert push (the `liveActivityAlertPayloadFromSnapshot` shape):
+Alert push (the `toApnsAlertPayload` shape):
 
 ```
 apns-topic: <bundle-id>           # no push-type suffix
@@ -303,12 +298,12 @@ For the full set of flags, including `--event=start`, `--push-to-start-token`, `
 
 All string fields on `LiveSurfaceSnapshot` are pre-rendered for one locale per snapshot. The backend selects the locale (per-user preference, request `Accept-Language`, etc.) and emits the snapshot in that locale. If the locale changes, send a fresh snapshot. There is no in-place locale switch on the client.
 
-A future `LocalizedString` shape (e.g. `{ en: string; "es-MX"?: string }`) would arrive in a future major and bump `schemaVersion` again. v2 stays string-only on purpose; ActivityKit content states are size-bound (4 KB) and shipping every translation per push wastes that budget.
+A future `LocalizedString` shape (e.g. `{ en: string; "es-MX"?: string }`) would arrive in a future major and bump `schemaVersion` again. v4 stays string-only on purpose; ActivityKit content states are size-bound (4 KB) and shipping every translation per push wastes that budget.
 
 ## What Stays Stable
 
 - `LiveSurfaceSnapshot` and its TypeScript schema.
-- The projection helpers (`toLiveActivityContentState`, `toWidgetTimelineEntry`, `toControlValueProvider`, `toNotificationContentPayload`) and their kind gates, plus `liveActivityAlertPayloadFromSnapshot` in `@mobile-surfaces/push`.
+- The projection helpers (`toLiveActivityContentState`, `toWidgetTimelineEntry`, `toControlValueProvider`, `toNotificationContentPayload`) and their kind gates, plus `toApnsAlertPayload` in `@mobile-surfaces/push`.
 - The `@mobile-surfaces/push` SDK public surface (the exports listed in `packages/push/src/index.ts`). Implementation detail (HTTP/2 transport, JWT cache internals) may change without a version bump.
 - The APNs topic / push-type / priority defaults emitted by the SDK and the script.
 

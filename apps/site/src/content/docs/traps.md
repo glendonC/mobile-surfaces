@@ -2,6 +2,7 @@
 title: "Trap Catalog Maintenance"
 description: "Schema and workflow for editing the trap catalog that generates AGENTS.md and CLAUDE.md."
 order: 100
+group: "Reference"
 ---
 # Trap Catalog
 

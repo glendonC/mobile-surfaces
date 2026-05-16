@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "5",
+  "kind": "widget",
+  "id": "neg-kind-slice",
+  "surfaceId": "surface-neg",
+  "updatedAt": "2026-05-12T18:30:00.000Z",
+  "state": "active",
+  "liveActivity": {
+    "title": "Wrong slice for kind",
+    "body": "kind=widget requires a widget slice, not a liveActivity slice. MS008 enforces this in Zod; the JSON Schema's oneOf must match.",
+    "progress": 0,
+    "deepLink": "mobilesurfaces://surface/neg",
+    "modeLabel": "neg",
+    "contextLabel": "neg",
+    "statusLine": "neg",
+    "stage": "prompted",
+    "estimatedSeconds": 0,
+    "morePartsCount": 0
+  }
+}

@@ -5,24 +5,41 @@ A working baseline for iOS Live Activities, Dynamic Island, home-screen widgets,
 [![CI](https://github.com/glendonC/mobile-surfaces/actions/workflows/ci.yml/badge.svg)](https://github.com/glendonC/mobile-surfaces/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
-Two ways to use this repo:
+## Pick your path
 
-1. **Run the starter** with `npm create mobile-surfaces@latest`. You get a working iPhone app with every surface wired up.
-2. **Or skip the starter and use the standalone packages.** `@mobile-surfaces/surface-contracts` (the wire format) and `@mobile-surfaces/push` (the Node APNs SDK) work with any iOS Live Activity bridge, including [`expo-live-activity`](https://github.com/software-mansion-labs/expo-live-activity) or a hand-rolled native module.
+### I want a working Expo starter
 
-## What is this?
+```bash
+npm create mobile-surfaces@latest
+```
 
-A one-command install that gives you a working iPhone app with multiple iOS UI surfaces wired together:
+You get a working iPhone app with every surface wired up, the trap checks installed in CI, and a push SDK ready for an APNs auth key. Then run `pnpm mobile:sim` to launch the demo on your simulator. No Xcode UI to navigate, no Swift to write up front, no APNs setup before you see something on screen.
 
-- **The app UI.** A React Native screen that you customize.
-- **The Lock Screen Live Activity.** The persistent panel that shows real-time updates while the phone is locked. Think of the live progress bar Uber and DoorDash show during a ride or delivery.
-- **The Dynamic Island.** The morphing pill at the top of newer iPhones (14 Pro and later).
-- **A home-screen widget.** A tile users place on their home screen, backed by shared App Group state.
-- **An iOS 18 control widget.** A button or toggle for Control Center or the Lock Screen.
+### I already have a bridge, or I am building a backend
 
-All of them render from one shared data shape, so they stay in sync automatically. You write one function that produces that shape from your own data. Everything else is already done.
+```bash
+pnpm add @mobile-surfaces/surface-contracts @mobile-surfaces/push
+```
 
-The contract package and the push SDK are bridge-agnostic. They do not import the rest of the starter and they do not care which ActivityKit (Apple's Live Activity framework) bridge you use. See ["Use it without the starter"](#use-it-without-the-starter) below.
+Both packages are bridge-agnostic. The contract package is one TypeScript type (`LiveSurfaceSnapshot`) that feeds every iOS surface through `kind`-gated projection helpers; the push SDK is the Node APNs client that drives it. They work with [`expo-live-activity`](https://github.com/software-mansion-labs/expo-live-activity), a hand-rolled native module, or this repo's bridge. They do not import the starter and they do not care which ActivityKit bridge you use.
+
+The contract package has its own walkthrough in [packages/surface-contracts/README.md](./packages/surface-contracts/README.md). The push SDK reference is in [packages/push/README.md](./packages/push/README.md) and the wire-layer deep dive at [mobile-surfaces.com/docs/push](https://mobile-surfaces.com/docs/push).
+
+## What is shipped
+
+| Surface | Status | Native target |
+| --- | --- | --- |
+| Lock Screen Live Activity | Shipped | `MobileSurfacesLiveActivity.swift` |
+| Dynamic Island | Shipped | Same (ActivityKit renders both from one `Activity`) |
+| Home-screen widget | Shipped | `MobileSurfacesHomeWidget.swift` |
+| iOS 18 control widget | Shipped | `MobileSurfacesControlWidget.swift` + shared App Intents |
+| Lock Screen accessory | Shipped | `MobileSurfacesLockAccessoryWidget.swift` |
+| StandBy widget | Shipped | `MobileSurfacesStandbyWidget.swift` |
+| Push notification (basic alert) | Shipped | `client.sendNotification(...)` projects through `toNotificationContentPayload` |
+| Notification content extension (custom expanded layout) | Shipped | `MobileSurfacesNotificationViewController.swift` renders payload-only via the `liveSurface` sidecar; categories codegened from `notificationCategories.ts` (MS037) |
+| Notification service extension (enrichment, attachments) | Pending | The service extension target is the canonical Apple path when enrichment cannot fit in the 4 KB alert payload; deferred to a follow-up |
+
+Every shipped surface renders from the same `LiveSurfaceSnapshot`. They cannot drift, because they all project from one source. See [Multi-surface](https://mobile-surfaces.com/docs/multi-surface) for every `kind` value, its projection helper, and when to emit it.
 
 ## Why this exists
 
@@ -40,70 +57,29 @@ Your code compiles. Your push to Apple returns HTTP 200. The app runs. And nothi
 
 Add a home-screen widget, an iOS 18 Control Center button, and a backend that drives all of it through Apple's push notification service, and the surface area for silent failure roughly doubles.
 
-Mobile Surfaces is the working baseline past every one of these traps. You start where most people give up.
+Mobile Surfaces catalogs these traps as [`data/traps.json`](./data/traps.json) (33 invariants, rendered as [`AGENTS.md`](./AGENTS.md) and [`CLAUDE.md`](./CLAUDE.md)) and enforces them in CI through `pnpm surface:check`. Static rules are caught at PR time; runtime rules surface as typed errors from the push SDK. You start where most people give up.
 
-## Why not just...?
+## Working with AI coding assistants
 
-There are two reasonable alternatives. Here is when each is the right call and when it is not.
+Mobile Surfaces is designed to give AI assistants something concrete to ground against. The contract is a discriminated union with semantic field descriptions that flow into the published JSON Schema, so an LLM emitting a snapshot has a typed surface to project into rather than free-form JSON. The trap catalog is a stable list of mandatory rules the assistant must respect, with stable ids and pinned enforcement scripts.
 
-### Why not use [`expo-live-activity`](https://github.com/software-mansion-labs/expo-live-activity)?
+Point your assistant at [`AGENTS.md`](./AGENTS.md) (used by Codex, Cursor, Aider, Windsurf, Factory, Zed, Warp, and Copilot) or [`CLAUDE.md`](./CLAUDE.md) (used by Claude Code). Both are generated from the same catalog; they cannot drift.
+
+When the assistant breaks an invariant, the violation is loud: CI fails on a static check, the push SDK rejects an invalid snapshot at construction time, or a typed APNs error names the exact trap id. The cost of being wrong stays at PR review, not at "my Live Activity is invisible on a customer device."
+
+## Why not use [`expo-live-activity`](https://github.com/software-mansion-labs/expo-live-activity)?
 
 `expo-live-activity` is the popular Expo bridge for Live Activities, maintained by Software Mansion. If you only need a Lock Screen panel and you are happy hand-rolling the rest, it is a fine choice. It is narrower, simpler, and has more contributors and shipped apps behind it.
 
 What it does not cover:
 
-- **Home-screen widgets and iOS 18 Control Center widgets.** It only renders the Lock Screen Live Activity and the Dynamic Island. If you want the same data on a home widget too, you build that yourself.
-- **The backend.** It hands your app a push token and stops there. You write the Apple Push Notification service (APNs) HTTP/2 client, the JWT signing, the retry logic, and the error-code translator yourself. That is two to three weeks of work for someone who has not done it before.
-- **A shared data contract.** Without one, each surface (Lock Screen, widget, control, alert) gets its own hand-rolled mapping function. They drift the moment one is updated and the others are not. Mobile Surfaces gives you one type that feeds every surface so they cannot drift.
+- **Home-screen widgets, iOS 18 control widgets, lock accessory, StandBy.** It only renders the Lock Screen Live Activity and the Dynamic Island. If you want the same data on other surfaces, you build that yourself.
+- **The backend.** It hands your app a push token and stops there. You write the APNs HTTP/2 client, the JWT signing, the retry logic, and the error-code translator yourself. That is two to three weeks of work for someone who has not done it before.
+- **A shared data contract.** Without one, each surface gets its own hand-rolled mapping function. They drift the moment one is updated and the others are not.
 
-Where `expo-live-activity` is genuinely ahead: its bridge surface is wider. It exposes `relevanceScore`, custom small images, compact-trailing fallbacks, and other ActivityKit knobs the Mobile Surfaces bridge does not. It also has more shipped apps and contributors behind it; Mobile Surfaces' bridge is newer and largely battle-tested by one project (this one). If you need those bridge knobs today, use `expo-live-activity`. The `@mobile-surfaces/surface-contracts` and `@mobile-surfaces/push` packages are bridge-agnostic and work alongside it.
+Where `expo-live-activity` is genuinely ahead: its bridge surface is wider. It exposes `relevanceScore`, custom small images, compact-trailing fallbacks, and other ActivityKit knobs the Mobile Surfaces bridge does not. It also has more shipped apps and contributors behind it; Mobile Surfaces' bridge is newer.
 
-Pick `expo-live-activity` for a single-surface project where the backend is already solved, or where you need the wider ActivityKit knob surface. Pick Mobile Surfaces when you want multiple surfaces sharing one data shape and a Node SDK that drives the push side.
-
-### Why not just ask AI to build it?
-
-This is the most realistic alternative in 2026. You open Claude Code, Cursor, or Copilot, point it at an empty Expo project, and ask for "iOS Live Activities and a Dynamic Island."
-
-The demo will look like it works in the simulator. Then you ship to a real device and discover what AI assistants do not know:
-
-- The Swift shape parity this repo enforces with byte-identical attributes (your activity can silently never appear).
-- The App Group entitlement matching (your widget will read placeholder data forever).
-- The dev/prod token environment split (you will get a confusing 400 with no useful error message).
-- The Live Activity payload size limit of 4 KB (oversize payloads are rejected or dropped before users see them).
-- Apple's push priority budgets (your updates will land for the first few minutes, then mysteriously stop).
-- An open Apple bug where push-to-start tokens stop emitting after the user force-quits the app, with no client-side workaround.
-
-These failure modes are invisible when an AI reads your code. They are not in the patterns it was trained on. They live in scattered Apple documentation, dev forum threads, and a feedback radar Apple has not fixed. You end up with a Tuesday demo that breaks on Friday and burns the rest of your week debugging silence.
-
-The realistic best move is to use Mobile Surfaces as the floor that already pays the iOS-trap tax, then have your AI assistant write your application logic on top of a starter where the silent-failure traps are already gone. The repo ships an `AGENTS.md` (and a matching `CLAUDE.md`) that lists the invariants AI assistants must respect when working in a Mobile Surfaces project, so your AI tools have something concrete to ground against.
-
-## Try it
-
-```bash
-npm create mobile-surfaces@latest
-```
-
-The CLI checks your toolchain (macOS, Xcode, Node, an iOS simulator), prompts for your app's name and bundle id (your app's unique identifier on the App Store), installs everything, and prepares your iOS build. Then run `pnpm mobile:sim` to launch the demo on your simulator.
-
-That is it. No Xcode UI to navigate, no Swift you have to write up front, and no APNs (Apple's Push Notification service, the system that delivers pushes to iPhones) setup before you can see something work.
-
-## Scripted usage
-
-If you are wiring this into CI, an AI agent, or any non-interactive automation, pass `--yes` plus the required fields to skip every prompt:
-
-```bash
-npm create mobile-surfaces@latest --yes \
-  --name my-app --bundle-id com.acme.myapp \
-  --no-install
-```
-
-The CLI also detects three starting situations beyond an empty directory:
-
-- **An existing Expo app.** Switches to add-to-existing mode, recaps every change, then patches `app.json`, copies the widget target, and adds Info.plist keys.
-- **A TypeScript monorepo without Expo.** Scaffolds `apps/mobile/` inside the workspace and adds the workspace globs needed for it.
-- **Anything else with files in it.** Refuses with an exit code of `1`, so CI stops early.
-
-The exit-code contract is `0` success, `1` user error (bad inputs), `2` environment error (missing tools, install failed), `3` template error (the published CLI is broken), `130` interrupted (Ctrl+C). See [packages/create-mobile-surfaces/README.md](./packages/create-mobile-surfaces/README.md) for the full flag reference and a CI workflow example.
+Pick `expo-live-activity` for a single-surface project where the backend is already solved, or where you need the wider ActivityKit knob surface. Pick Mobile Surfaces when you want multiple surfaces sharing one data shape and a Node SDK that drives the push side. The `@mobile-surfaces/surface-contracts` and `@mobile-surfaces/push` packages are bridge-agnostic and work alongside `expo-live-activity` if you want both.
 
 ## How it works
 
@@ -112,20 +88,20 @@ You write one function:
 ```ts
 function snapshotFromJob(job: Job): LiveSurfaceSnapshot {
   return {
-    schemaVersion: "2",
+    schemaVersion: "5",
     kind: "liveActivity",            // discriminator that picks the projection
     id: `${job.id}@${job.revision}`,
     surfaceId: `job-${job.id}`,
     updatedAt: new Date().toISOString(),
     state: job.status,               // "queued" | "active" | "completed" ...
-    modeLabel: "active",
-    contextLabel: job.queueName,
-    statusLine: `${job.queueName} · ${Math.round(job.progress * 100)}%`,
-    primaryText: job.title,          // headline shown on the Lock Screen
-    secondaryText: job.subtitle,     // subhead
-    progress: job.progress,          // 0 to 1
-    deepLink: `myapp://surface/job-${job.id}`,
     liveActivity: {
+      title: job.title,
+      body: job.subtitle,
+      progress: job.progress,        // 0 to 1
+      deepLink: `myapp://surface/job-${job.id}`,
+      modeLabel: "active",
+      contextLabel: job.queueName,
+      statusLine: `${job.queueName} · ${Math.round(job.progress * 100)}%`,
       stage: job.status === "done" ? "completing" : "inProgress",
       estimatedSeconds: job.etaSeconds ?? 0,
       morePartsCount: 0,
@@ -147,7 +123,6 @@ flowchart LR
   Snapshot --> Accessory["Lock Screen accessory"]
   Snapshot --> Standby["StandBy widget"]
   Snapshot --> APNs["APNs push payload"]
-  Snapshot --> Future["Notification content extension (contract shipped, native extension pending)"]
 ```
 
 Change the snapshot once, every surface updates together. They cannot drift, because they are all reading from the same shape. The shape is defined in TypeScript with a runtime validator: `kind` picks which branch is valid, and Zod checks that the matching fields are present. Your editor and your CI both catch mistakes before they ship.
@@ -158,7 +133,7 @@ If you already have an Expo app with `expo-live-activity` (or a hand-rolled brid
 
 ### Just the contract
 
-For type-safe wire payloads (the JSON shape that travels between your backend and the iPhone), validation at the backend boundary, JSON Schema, and `kind`-gated projection helpers:
+For type-safe wire payloads, validation at the backend boundary, JSON Schema, and `kind`-gated projection helpers:
 
 ```bash
 pnpm add @mobile-surfaces/surface-contracts
@@ -175,7 +150,7 @@ const contentState = toLiveActivityContentState(snapshot);
 // { headline, subhead, progress, stage }, pass to your existing bridge.
 ```
 
-See [packages/surface-contracts/README.md](./packages/surface-contracts/README.md) for the bridge-agnostic walkthrough (`expo-live-activity`, hand-rolled, Standard Schema interop, JSON Schema, v2 to v3 migration).
+See [packages/surface-contracts/README.md](./packages/surface-contracts/README.md) for the bridge-agnostic walkthrough (`expo-live-activity`, hand-rolled, Standard Schema interop, JSON Schema, v3 to v4 migration).
 
 ### Contract plus push SDK
 
@@ -201,14 +176,33 @@ const snapshot = assertSnapshot(snapshotFromJob(job));
 await client.update(activityToken, snapshot);
 ```
 
-`@mobile-surfaces/push` is wire-layer code only. It uses `node:http2`, `node:crypto`, and the workspace contract package directly, with `zod` as a peer dependency (the same instance the contract uses, so schemas stay interoperable). No third-party HTTP, APNs, or retry framework underneath. See [packages/push/README.md](./packages/push/README.md) and [https://mobile-surfaces.com/docs/push](https://mobile-surfaces.com/docs/push) for the deep reference (token taxonomy, error classes, channel management, retry policy).
+`@mobile-surfaces/push` is wire-layer code only. It uses `node:http2`, `node:crypto`, and the workspace contract package directly, with `zod` as a peer dependency (the same instance the contract uses, so schemas stay interoperable). No third-party HTTP, APNs, or retry framework underneath. See [packages/push/README.md](./packages/push/README.md) and [mobile-surfaces.com/docs/push](https://mobile-surfaces.com/docs/push) for the deep reference (token taxonomy, error classes, channel management, retry policy).
+
+## Scripted CLI usage
+
+If you are wiring the starter into CI, an AI agent, or any non-interactive automation, pass `--yes` plus the required fields to skip every prompt:
+
+```bash
+npm create mobile-surfaces@latest --yes \
+  --name my-app --bundle-id com.acme.myapp \
+  --no-install
+```
+
+The CLI detects four starting situations:
+
+- **Empty directory.** Scaffolds a fresh project in place.
+- **An existing Expo app.** Switches to add-to-existing mode, recaps every change, then patches `app.json`, copies the widget target, and adds Info.plist keys.
+- **A TypeScript monorepo without Expo.** Scaffolds `apps/mobile/` inside the workspace and adds the workspace globs needed for it.
+- **Anything else with files in it.** Refuses with an exit code of `1`, so CI stops early.
+
+The exit-code contract is `0` success, `1` user error (bad inputs), `2` environment error (missing tools, install failed), `3` template error (the published CLI is broken), `130` interrupted (Ctrl+C). See [packages/create-mobile-surfaces/README.md](./packages/create-mobile-surfaces/README.md) for the full flag reference and a CI workflow example.
 
 ## What is actually in the box
 
-- A working Expo app with every surface already wired up: Lock Screen Live Activity, Dynamic Island, home-screen widget, iOS 18 control widget.
-- The shared `LiveSurfaceSnapshot` contract: one TypeScript type, one runtime-checked union where `kind` selects the valid branch, one published JSON Schema (`oneOf`-shaped per the discriminator), kind-gated projection helpers, and `safeParseAnyVersion` for schema v2 to v3 migration. Standard Schema is exposed via Zod 4's built-in `~standard` getter so consumers can drop the Zod runtime dependency.
-- `@mobile-surfaces/push`. A Node SDK for APNs with no third-party HTTP or retry framework underneath, supporting alerts, Live Activity start/update/end, **push-to-start (iOS 17.2+)** and **broadcast channels (iOS 18+)**, plus channel management. Priority-aware retry stretch (priority 10 sends clamp to 2 retries to stay inside Apple's MS015 budget) and an `MOBILE_SURFACES_PUSH_DISABLE_RETRY` kill switch.
-- A SwiftUI WidgetKit (Apple's framework for widgets and Live Activities) extension for Lock Screen, Dynamic Island, home-screen widget, and iOS 18 control layouts. You can restyle it. You do not have to write it from scratch.
+- A working Expo app with every shipped surface wired up: Lock Screen Live Activity, Dynamic Island, home-screen widget, iOS 18 control widget, lock accessory, StandBy.
+- The shared `LiveSurfaceSnapshot` contract: one TypeScript type, one runtime-checked union where `kind` selects the valid branch, one published JSON Schema (`oneOf`-shaped per the discriminator), kind-gated projection helpers, and `safeParseAnyVersion` for schema v3 to v4 migration. Standard Schema is exposed via Zod 4's built-in `~standard` getter so consumers can drop the Zod runtime dependency.
+- `@mobile-surfaces/push`. A Node SDK for APNs with no third-party HTTP or retry framework underneath, supporting alerts, Live Activity start/update/end, push-to-start (iOS 17.2+) and broadcast channels (iOS 18+), plus channel management. Priority-aware retry stretch (priority 10 sends clamp to 2 retries to stay inside Apple's MS015 budget) and an `MOBILE_SURFACES_PUSH_DISABLE_RETRY` kill switch.
+- A SwiftUI WidgetKit extension for Lock Screen, Dynamic Island, home-screen widget, lock accessory, StandBy, and iOS 18 control layouts. You can restyle it. You do not have to write it from scratch.
 - APNs scripts with JWT signing, development and production environment routing, and translated error messages.
 - A `doctor` command that catches setup mistakes before you waste a day on them.
 - Pinned, tested-together versions of Expo, React Native, Xcode, and the widget tooling.
@@ -231,7 +225,7 @@ The CLI checks all of this for you. For reference:
 
 You also need an Apple Developer account (but only when you are ready to test on a real device) and Node 24.
 
-The iOS 17.2 floor is deliberate so push-to-start tokens (`Activity<…>.pushToStartTokenUpdates`) are available without conditional version checks. Dynamic Island additionally requires iPhone 14 Pro or newer. See [https://mobile-surfaces.com/docs/compatibility](https://mobile-surfaces.com/docs/compatibility) for the full toolchain row and upgrade ritual.
+The iOS 17.2 floor is deliberate so push-to-start tokens (`Activity<…>.pushToStartTokenUpdates`) are available without conditional version checks. Dynamic Island additionally requires iPhone 14 Pro or newer. See [mobile-surfaces.com/docs/compatibility](https://mobile-surfaces.com/docs/compatibility) for the full toolchain row and upgrade ritual.
 
 ## What this is not
 
@@ -243,11 +237,13 @@ The iOS 17.2 floor is deliberate so push-to-start tokens (`Activity<…>.pushToS
 
 Start with the [docs hub](https://mobile-surfaces.com/docs) if you are not sure where to go next. It has reading paths for trying the starter, adding to an existing Expo app, writing a backend, debugging silent failures, and maintaining releases.
 
+- [Building your app](https://mobile-surfaces.com/docs/building-your-app). Concrete migration from the harness to your domain screen, with a worked example.
+- [Scenarios](https://mobile-surfaces.com/docs/scenarios). Canonical multi-step flows across all surfaces.
 - [Backend integration](https://mobile-surfaces.com/docs/backend-integration). Domain event to snapshot to APNs.
 - [Push](https://mobile-surfaces.com/docs/push). Wire-layer reference, SDK, smoke script, token taxonomy, error reasons, channel push.
 - [Observability](https://mobile-surfaces.com/docs/observability). Which catalog-bound errors are worth alerting on, hook signatures, recommended log shape.
 - [Multi-surface](https://mobile-surfaces.com/docs/multi-surface). Every `kind` value, what ships today, when to emit each.
-- [Schema migration](https://mobile-surfaces.com/docs/schema-migration). v2 to v3 codec, deprecation timeline, Standard Schema interop, evolution policy.
+- [Schema migration](https://mobile-surfaces.com/docs/schema-migration). v3 to v4 codec, deprecation timeline, Standard Schema interop, evolution policy.
 - [Architecture](https://mobile-surfaces.com/docs/architecture). The contract, the surfaces, the adapter boundary.
 - [Troubleshooting](https://mobile-surfaces.com/docs/troubleshooting). The silent-failure cookbook.
 - [iOS environment](https://mobile-surfaces.com/docs/ios-environment). Simulator vs device, APNs setup.

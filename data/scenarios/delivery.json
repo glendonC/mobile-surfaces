@@ -1,0 +1,274 @@
+{
+  "$schema": "Internal: cross-surface scenario fixture. Each step holds five pre-projected snapshots (one per surface kind) so applying a step lights up Live Activity + widget + control + lock accessory + StandBy in one action.",
+  "id": "delivery",
+  "title": "Package delivery",
+  "summary": "Track a package from depot to doorstep across all five surfaces.",
+  "steps": [
+    {
+      "id": "queued",
+      "label": "1. Queued at depot",
+      "snapshots": {
+        "liveActivity": {
+          "schemaVersion": "5",
+          "kind": "liveActivity",
+          "id": "scenario-delivery-queued-la",
+          "surfaceId": "scenario-delivery",
+          "updatedAt": "2026-05-15T09:00:00.000Z",
+          "state": "queued",
+          "liveActivity": {
+            "title": "Delivery queued",
+            "body": "Your order is preparing for pickup at the depot.",
+            "progress": 0.0,
+            "deepLink": "mobilesurfaces://scenario/delivery",
+            "modeLabel": "queued",
+            "contextLabel": "depot",
+            "statusLine": "queued - ETA 45 min",
+            "actionLabel": "Track",
+            "stage": "prompted",
+            "estimatedSeconds": 2700,
+            "morePartsCount": 0
+          }
+        },
+        "widget": {
+          "schemaVersion": "5",
+          "kind": "widget",
+          "id": "scenario-delivery-queued-w",
+          "surfaceId": "scenario-delivery",
+          "updatedAt": "2026-05-15T09:00:00.000Z",
+          "state": "queued",
+          "widget": {
+            "title": "Delivery queued",
+            "body": "Preparing at depot.",
+            "progress": 0.0,
+            "deepLink": "mobilesurfaces://scenario/delivery",
+            "family": "systemMedium",
+            "reloadPolicy": "manual"
+          }
+        },
+        "control": {
+          "schemaVersion": "5",
+          "kind": "control",
+          "id": "scenario-delivery-queued-c",
+          "surfaceId": "scenario-delivery",
+          "updatedAt": "2026-05-15T09:00:00.000Z",
+          "state": "queued",
+          "control": {
+            "label": "Notify on arrival",
+            "deepLink": "mobilesurfaces://scenario/delivery",
+            "controlKind": "toggle",
+            "state": true,
+            "intent": "toggleDeliveryAlert"
+          }
+        },
+        "lockAccessory": {
+          "schemaVersion": "5",
+          "kind": "lockAccessory",
+          "id": "scenario-delivery-queued-la-acc",
+          "surfaceId": "scenario-delivery",
+          "updatedAt": "2026-05-15T09:00:00.000Z",
+          "state": "queued",
+          "lockAccessory": {
+            "title": "Queued",
+            "deepLink": "mobilesurfaces://scenario/delivery",
+            "family": "accessoryCircular",
+            "gaugeValue": 0.0,
+            "shortText": "0%"
+          }
+        },
+        "standby": {
+          "schemaVersion": "5",
+          "kind": "standby",
+          "id": "scenario-delivery-queued-sb",
+          "surfaceId": "scenario-delivery",
+          "updatedAt": "2026-05-15T09:00:00.000Z",
+          "state": "queued",
+          "standby": {
+            "title": "Delivery queued",
+            "body": "Preparing at depot.",
+            "progress": 0.0,
+            "deepLink": "mobilesurfaces://scenario/delivery",
+            "presentation": "card",
+            "tint": "default"
+          }
+        }
+      }
+    },
+    {
+      "id": "out-for-delivery",
+      "label": "2. Out for delivery",
+      "snapshots": {
+        "liveActivity": {
+          "schemaVersion": "5",
+          "kind": "liveActivity",
+          "id": "scenario-delivery-out-la",
+          "surfaceId": "scenario-delivery",
+          "updatedAt": "2026-05-15T09:25:00.000Z",
+          "state": "active",
+          "liveActivity": {
+            "title": "Out for delivery",
+            "body": "Driver is 8 stops away.",
+            "progress": 0.55,
+            "deepLink": "mobilesurfaces://scenario/delivery",
+            "modeLabel": "in transit",
+            "contextLabel": "8 stops away",
+            "statusLine": "active - ETA 20 min",
+            "actionLabel": "Track",
+            "stage": "inProgress",
+            "estimatedSeconds": 1200,
+            "morePartsCount": 0
+          }
+        },
+        "widget": {
+          "schemaVersion": "5",
+          "kind": "widget",
+          "id": "scenario-delivery-out-w",
+          "surfaceId": "scenario-delivery",
+          "updatedAt": "2026-05-15T09:25:00.000Z",
+          "state": "active",
+          "widget": {
+            "title": "Out for delivery",
+            "body": "8 stops away. ETA 20 min.",
+            "progress": 0.55,
+            "deepLink": "mobilesurfaces://scenario/delivery",
+            "family": "systemMedium",
+            "reloadPolicy": "manual"
+          }
+        },
+        "control": {
+          "schemaVersion": "5",
+          "kind": "control",
+          "id": "scenario-delivery-out-c",
+          "surfaceId": "scenario-delivery",
+          "updatedAt": "2026-05-15T09:25:00.000Z",
+          "state": "active",
+          "control": {
+            "label": "Notify on arrival",
+            "deepLink": "mobilesurfaces://scenario/delivery",
+            "controlKind": "toggle",
+            "state": true,
+            "intent": "toggleDeliveryAlert"
+          }
+        },
+        "lockAccessory": {
+          "schemaVersion": "5",
+          "kind": "lockAccessory",
+          "id": "scenario-delivery-out-la-acc",
+          "surfaceId": "scenario-delivery",
+          "updatedAt": "2026-05-15T09:25:00.000Z",
+          "state": "active",
+          "lockAccessory": {
+            "title": "In transit",
+            "deepLink": "mobilesurfaces://scenario/delivery",
+            "family": "accessoryCircular",
+            "gaugeValue": 0.55,
+            "shortText": "55%"
+          }
+        },
+        "standby": {
+          "schemaVersion": "5",
+          "kind": "standby",
+          "id": "scenario-delivery-out-sb",
+          "surfaceId": "scenario-delivery",
+          "updatedAt": "2026-05-15T09:25:00.000Z",
+          "state": "active",
+          "standby": {
+            "title": "Out for delivery",
+            "body": "8 stops away.",
+            "progress": 0.55,
+            "deepLink": "mobilesurfaces://scenario/delivery",
+            "presentation": "card",
+            "tint": "default"
+          }
+        }
+      }
+    },
+    {
+      "id": "arrived",
+      "label": "3. Arrived",
+      "snapshots": {
+        "liveActivity": {
+          "schemaVersion": "5",
+          "kind": "liveActivity",
+          "id": "scenario-delivery-arrived-la",
+          "surfaceId": "scenario-delivery",
+          "updatedAt": "2026-05-15T09:45:00.000Z",
+          "state": "completed",
+          "liveActivity": {
+            "title": "Delivered",
+            "body": "Left at front door.",
+            "progress": 1.0,
+            "deepLink": "mobilesurfaces://scenario/delivery",
+            "modeLabel": "delivered",
+            "contextLabel": "at doorstep",
+            "statusLine": "completed - left at front door",
+            "stage": "completing",
+            "estimatedSeconds": 0,
+            "morePartsCount": 0
+          }
+        },
+        "widget": {
+          "schemaVersion": "5",
+          "kind": "widget",
+          "id": "scenario-delivery-arrived-w",
+          "surfaceId": "scenario-delivery",
+          "updatedAt": "2026-05-15T09:45:00.000Z",
+          "state": "completed",
+          "widget": {
+            "title": "Delivered",
+            "body": "Left at front door.",
+            "progress": 1.0,
+            "deepLink": "mobilesurfaces://scenario/delivery",
+            "family": "systemMedium",
+            "reloadPolicy": "manual"
+          }
+        },
+        "control": {
+          "schemaVersion": "5",
+          "kind": "control",
+          "id": "scenario-delivery-arrived-c",
+          "surfaceId": "scenario-delivery",
+          "updatedAt": "2026-05-15T09:45:00.000Z",
+          "state": "completed",
+          "control": {
+            "label": "Notify on arrival",
+            "deepLink": "mobilesurfaces://scenario/delivery",
+            "controlKind": "toggle",
+            "state": false,
+            "intent": "toggleDeliveryAlert"
+          }
+        },
+        "lockAccessory": {
+          "schemaVersion": "5",
+          "kind": "lockAccessory",
+          "id": "scenario-delivery-arrived-la-acc",
+          "surfaceId": "scenario-delivery",
+          "updatedAt": "2026-05-15T09:45:00.000Z",
+          "state": "completed",
+          "lockAccessory": {
+            "title": "Delivered",
+            "deepLink": "mobilesurfaces://scenario/delivery",
+            "family": "accessoryCircular",
+            "gaugeValue": 1.0,
+            "shortText": "100%"
+          }
+        },
+        "standby": {
+          "schemaVersion": "5",
+          "kind": "standby",
+          "id": "scenario-delivery-arrived-sb",
+          "surfaceId": "scenario-delivery",
+          "updatedAt": "2026-05-15T09:45:00.000Z",
+          "state": "completed",
+          "standby": {
+            "title": "Delivered",
+            "body": "Left at front door.",
+            "progress": 1.0,
+            "deepLink": "mobilesurfaces://scenario/delivery",
+            "presentation": "card",
+            "tint": "default"
+          }
+        }
+      }
+    }
+  ]
+}

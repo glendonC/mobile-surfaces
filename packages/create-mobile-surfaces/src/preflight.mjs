@@ -3,6 +3,13 @@
 // (Node, iOS deployment target, minimum Xcode major) come from the template
 // manifest — single source of truth, never out of sync with what the
 // generated project will actually need.
+//
+// Scaffold-time vs repo-time: the manifest is the SCAFFOLD-time source (what
+// the generated project will need to build). It is itself built from the
+// repo's root package.json `mobileSurfaces` block via template-manifest.mjs,
+// so the numbers ultimately live in one file — but the two lifecycles stay
+// separate. scripts/doctor.mjs reads the same root package.json directly to
+// enforce REPO-time minimums (what's needed to build this monorepo).
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -51,25 +58,48 @@ async function checkNode({ projectMajor }) {
   return { ok: true, detail: `Node ${process.versions.node}` };
 }
 
+// Parse `xcodebuild -version` output. Returns the first non-empty line, the
+// parsed major/minor, or null when the version line couldn't be recognized.
+// Exported pure helper so the parse logic is unit-testable without spawning
+// xcodebuild on a host that may or may not have it installed.
+//
+// Real-world shape (Xcode 26.0):
+//   Xcode 26.0
+//   Build version 26A100
+// Older Xcode majors share the same first-line shape ("Xcode <N>.<M>").
+// A malformed input returns { firstLine, version: null } — the caller treats
+// that as "tool present, can't pin version" and accepts presence as good
+// enough.
+export function parseXcodeVersion(output) {
+  if (output == null) return null;
+  const firstLine = String(output).split("\n")[0]?.trim() ?? "";
+  if (firstLine.length === 0) return null;
+  const match = firstLine.match(/Xcode\s+(\d+)(?:\.(\d+))?/);
+  if (!match) return { firstLine, version: null };
+  return {
+    firstLine,
+    version: { major: Number(match[1]), minor: Number(match[2] ?? 0) },
+  };
+}
+
 async function checkXcode({ minimumMajor }) {
   try {
     const { stdout } = await exec("xcodebuild", ["-version"], { timeout: 5000 });
-    const firstLine = stdout.split("\n")[0].trim();
-    const match = firstLine.match(/Xcode\s+(\d+)(?:\.(\d+))?/);
-    if (match) {
-      const major = Number(match[1]);
-      if (minimumMajor && major < minimumMajor) {
-        return {
-          ok: false,
-          kind: "fail",
-          title: `Xcode ${minimumMajor} or newer required (you have ${firstLine}).`,
-          fix: "Update via the Mac App Store before building iOS.",
-        };
-      }
-      return { ok: true, detail: firstLine };
+    const parsed = parseXcodeVersion(stdout);
+    if (!parsed) {
+      // exec resolved (so xcodebuild exists) but stdout was empty — treat as
+      // "present, version unknown" rather than failing the user out.
+      return { ok: true, detail: "Xcode (version unknown)" };
     }
-    // Couldn't parse the version line — accept presence as good enough.
-    return { ok: true, detail: firstLine };
+    if (parsed.version && minimumMajor && parsed.version.major < minimumMajor) {
+      return {
+        ok: false,
+        kind: "fail",
+        title: `Xcode ${minimumMajor} or newer required (you have ${parsed.firstLine}).`,
+        fix: "Update via the Mac App Store before building iOS.",
+      };
+    }
+    return { ok: true, detail: parsed.firstLine };
   } catch {
     return {
       ok: false,
@@ -82,23 +112,62 @@ async function checkXcode({ minimumMajor }) {
   }
 }
 
+// Parse a minimum-iOS spec string like "17.2" into a comparable number. Used
+// for both the minimum and each runtime's version field so the comparison is
+// monotonic and tolerant of missing minor segments. Returns null on garbage
+// input so the caller can decide whether to short-circuit.
+export function parseIosVersion(version) {
+  if (version == null) return null;
+  const [majorStr, minorStr = "0"] = String(version).split(".");
+  const major = Number(majorStr);
+  const minor = Number(minorStr);
+  if (!Number.isFinite(major)) return null;
+  return major + (Number.isFinite(minor) ? minor : 0) / 100;
+}
+
+// Parse the `xcrun simctl list runtimes --json` payload and decide whether any
+// installed iOS runtime meets the minimum. Pure: takes the parsed JSON object
+// (or raw string) plus a minimum-iOS string. Returns an object with the
+// boolean decision plus the runtimes considered, so the caller can produce a
+// detail message that names which version was found. Exported for tests.
+export function parseSimulatorRuntimes(payload, minimumIos) {
+  const minVal = parseIosVersion(minimumIos) ?? 0;
+  let parsed = payload;
+  if (typeof payload === "string") {
+    try {
+      parsed = JSON.parse(payload);
+    } catch {
+      return { ok: false, runtimes: [], reason: "unparseable" };
+    }
+  }
+  const runtimes = Array.isArray(parsed?.runtimes) ? parsed.runtimes : [];
+  const iosRuntimes = runtimes.filter((r) => {
+    const platform = r?.platform ?? r?.identifier ?? "";
+    return typeof platform === "string" && platform.includes("iOS");
+  });
+  const ok = iosRuntimes.some((r) => {
+    if (!r.isAvailable) return false;
+    const v = parseIosVersion(r.version);
+    return v != null && v >= minVal;
+  });
+  return { ok, runtimes: iosRuntimes };
+}
+
 async function checkSimulatorRuntime({ minimumIos }) {
   try {
     const { stdout } = await exec("xcrun", ["simctl", "list", "runtimes", "--json"], {
       timeout: 5000,
     });
-    const runtimes = JSON.parse(stdout).runtimes ?? [];
-    const [minMajorStr, minMinorStr = "0"] = (minimumIos ?? "0.0").split(".");
-    const minVal = Number(minMajorStr) + Number(minMinorStr) / 100;
-    const ok = runtimes.some((r) => {
-      if (!r.isAvailable) return false;
-      const platform = r.platform ?? r.identifier ?? "";
-      if (!platform.includes("iOS")) return false;
-      const [major, minor = "0"] = (r.version ?? "0.0").split(".");
-      const v = Number(major) + Number(minor) / 100;
-      return v >= minVal;
-    });
-    if (ok) return { ok: true, detail: `iOS ${minimumIos}+ simulator` };
+    const result = parseSimulatorRuntimes(stdout, minimumIos);
+    if (result.reason === "unparseable") {
+      return {
+        ok: false,
+        kind: "fail",
+        title: "Couldn't parse simulator runtime list (xcrun simctl --json returned non-JSON).",
+        fix: "Make sure Xcode command line tools are installed: xcode-select --install",
+      };
+    }
+    if (result.ok) return { ok: true, detail: `iOS ${minimumIos}+ simulator` };
     return {
       ok: false,
       kind: "fail",
@@ -154,9 +223,11 @@ async function checkCocoapods() {
 // The required Node major comes from a string like ">=24.0.0 <25". Pull the
 // first major-version-floor we can recognize; anything else means we don't
 // pin the project major and only enforce the absolute CLI floor.
-function parseProjectNodeMajor(spec) {
+// Exported for tests so a future template-manifest tweak that ships a
+// different spec syntax (e.g. caret) is caught at unit-test time.
+export function parseProjectNodeMajor(spec) {
   if (!spec) return null;
-  const m = spec.match(/>=\s*(\d+)/);
+  const m = String(spec).match(/>=\s*(\d+)/);
   return m ? Number(m[1]) : null;
 }
 

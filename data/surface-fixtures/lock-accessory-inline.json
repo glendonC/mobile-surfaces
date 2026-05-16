@@ -1,0 +1,15 @@
+{
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@6.0/schema.json",
+  "schemaVersion": "5",
+  "kind": "lockAccessory",
+  "id": "fixture-lock-accessory-inline",
+  "surfaceId": "surface-lock-accessory-inline",
+  "updatedAt": "2026-05-15T12:01:00.000Z",
+  "state": "active",
+  "lockAccessory": {
+    "title": "Surface running",
+    "deepLink": "mobilesurfaces://surface/surface-lock-accessory-inline",
+    "family": "accessoryInline",
+    "shortText": "Surface running"
+  }
+}

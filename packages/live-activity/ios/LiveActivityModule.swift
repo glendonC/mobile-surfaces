@@ -2,74 +2,12 @@ import ActivityKit
 import ExpoModulesCore
 import Foundation
 
-enum LiveActivityError: String, Error {
-  case unsupportedOS = "ACTIVITY_UNSUPPORTED_OS"
-  case notFound = "ACTIVITY_NOT_FOUND"
-  case decodingFailed = "ACTIVITY_DECODE_FAILED"
-  // Raised when a caller asks for a feature that exists in the module's
-  // contract but is unavailable on the current OS (e.g. iOS 18 channel push
-  // requested while running on iOS 17.x). Distinct from `unsupportedOS` so the
-  // JS layer can distinguish "the whole module is dark" from "this one knob
-  // needs a newer OS".
-  case unsupportedFeature = "ACTIVITY_UNSUPPORTED_FEATURE"
-}
-
-// MARK: - Observer task registry
-//
-// Owns the `Task` handles spawned to drain `pushTokenUpdates` /
-// `activityStateUpdates` AsyncSequences. Without explicit handles those Tasks
-// are unbounded — `[weak self]` lets the module deallocate, but the Task itself
-// keeps the AsyncSequence iterator alive and continues spinning. Storing
-// handles here lets us:
-//   1. Cancel prior observers when `OnStartObserving` re-fires for an activity
-//      we are already watching (JS bridge reconnect, hot reload, etc.).
-//   2. Cancel observers on terminal activity states (.ended / .dismissed).
-//   3. Cancel everything on module teardown (`deinit`).
-//
-// An `actor` is the right tool here: serial isolation without manual locking,
-// fully available on Swift 5.9, and forward-compatible with Swift 6 strict
-// concurrency.
-@available(iOS 16.2, *)
-private actor ObserverRegistry {
-  private var handles: [String: [Task<Void, Never>]] = [:]
-  // The push-to-start token stream is a class-level AsyncSequence on
-  // `Activity<MobileSurfacesActivityAttributes>` (iOS 17.2+), not per-activity,
-  // so a single handle is sufficient. Stored here so re-entry of
-  // `OnStartObserving` cancels the prior task instead of stacking observers.
-  private var pushToStartHandle: Task<Void, Never>?
-
-  /// Cancel any existing handles for `id` and replace them with `tasks`.
-  func replace(id: String, tasks: [Task<Void, Never>]) {
-    if let existing = handles[id] {
-      for task in existing { task.cancel() }
-    }
-    handles[id] = tasks
-  }
-
-  /// Cancel and remove handles for a single activity (e.g. terminal state).
-  func clear(id: String) {
-    if let existing = handles.removeValue(forKey: id) {
-      for task in existing { task.cancel() }
-    }
-  }
-
-  /// Cancel + replace the single push-to-start observer task. Invoked from
-  /// `OnStartObserving` (iOS 17.2+ only); re-entry cancels the prior drain.
-  func replacePushToStart(_ task: Task<Void, Never>) {
-    pushToStartHandle?.cancel()
-    pushToStartHandle = task
-  }
-
-  /// Cancel and remove every stored handle.
-  func clearAll() {
-    for (_, tasks) in handles {
-      for task in tasks { task.cancel() }
-    }
-    handles.removeAll()
-    pushToStartHandle?.cancel()
-    pushToStartHandle = nil
-  }
-}
+// Expo Module surface for ActivityKit. Companion types live alongside in:
+//   - LiveActivityError.swift            error enum bridged to JS
+//   - ObserverRegistry.swift             actor-isolated Task-handle registry
+//   - LiveActivityCodableBridge.swift    JSON-dict <-> Codable round-trip
+// Each is independent of ExpoModulesCore so the Swift Package at
+// packages/live-activity/ios/Tests can exercise them directly.
 
 public class LiveActivityModule: Module {
   // The registry is created lazily in `definition()` once we have the iOS
@@ -108,20 +46,22 @@ public class LiveActivityModule: Module {
     }
 
     AsyncFunction("start") {
-      (surfaceId: String, modeLabel: String, state: [String: Any], channelId: String?) -> [String: Any] in
+      (surfaceId: String, modeLabel: String, state: [String: Any], channelId: String?, options: [String: Any]?) -> [String: Any] in
       guard #available(iOS 16.2, *) else {
         throw LiveActivityError.unsupportedOS
       }
 
       let attrs = MobileSurfacesActivityAttributes(surfaceId: surfaceId, modeLabel: modeLabel)
-      let parsed = try Self.decodeState(state)
-      let content = ActivityContent(state: parsed, staleDate: nil)
+      let parsed: MobileSurfacesActivityAttributes.ContentState =
+        try LiveActivityCodableBridge.decode(state)
+      let content = Self.activityContent(state: parsed, options: options)
 
       // Channel push (iOS 18+) is opt-in: only when the JS caller passes a
       // non-nil channelId AND we're on iOS 18. If they ask for it on an older
       // OS we surface a typed error so the adapter can show a clear message
       // instead of silently downgrading to token push.
       let activity: Activity<MobileSurfacesActivityAttributes>
+      let isChannelMode: Bool
       if let channelId = channelId {
         if #available(iOS 18, *) {
           activity = try Activity.request(
@@ -129,6 +69,7 @@ public class LiveActivityModule: Module {
             content: content,
             pushType: .channel(channelId)
           )
+          isChannelMode = true
         } else {
           throw LiveActivityError.unsupportedFeature
         }
@@ -138,13 +79,14 @@ public class LiveActivityModule: Module {
           content: content,
           pushType: .token
         )
+        isChannelMode = false
       }
 
-      self.observe(activity: activity)
+      self.observe(activity: activity, isChannelMode: isChannelMode)
 
       var result: [String: Any] = [
         "id": activity.id,
-        "state": Self.encodeState(parsed)
+        "state": try LiveActivityCodableBridge.encode(parsed)
       ]
       if let channelId = channelId {
         result["channelId"] = channelId
@@ -152,7 +94,7 @@ public class LiveActivityModule: Module {
       return result
     }
 
-    AsyncFunction("update") { (activityId: String, state: [String: Any]) -> Void in
+    AsyncFunction("update") { (activityId: String, state: [String: Any], options: [String: Any]?) -> Void in
       guard #available(iOS 16.2, *) else {
         throw LiveActivityError.unsupportedOS
       }
@@ -160,8 +102,9 @@ public class LiveActivityModule: Module {
         .first(where: { $0.id == activityId }) else {
         throw LiveActivityError.notFound
       }
-      let parsed = try Self.decodeState(state)
-      await activity.update(ActivityContent(state: parsed, staleDate: nil))
+      let parsed: MobileSurfacesActivityAttributes.ContentState =
+        try LiveActivityCodableBridge.decode(state)
+      await activity.update(Self.activityContent(state: parsed, options: options))
     }
 
     AsyncFunction("end") {
@@ -180,12 +123,12 @@ public class LiveActivityModule: Module {
 
     AsyncFunction("listActive") { () -> [[String: Any]] in
       guard #available(iOS 16.2, *) else { return [] }
-      return Activity<MobileSurfacesActivityAttributes>.activities.map { activity in
+      return try Activity<MobileSurfacesActivityAttributes>.activities.map { activity in
         var entry: [String: Any] = [
           "id": activity.id,
           "surfaceId": activity.attributes.surfaceId,
           "modeLabel": activity.attributes.modeLabel,
-          "state": Self.encodeState(activity.content.state),
+          "state": try LiveActivityCodableBridge.encode(activity.content.state),
           "pushToken": NSNull()
         ]
         if let token = activity.pushToken {
@@ -195,23 +138,29 @@ public class LiveActivityModule: Module {
       }
     }
 
-    // Apple does not expose a synchronous query for the latest push-to-start
-    // token; the value only arrives via the async event stream emitted in
-    // `OnStartObserving`. This function exists for symmetry with the JS
-    // adapter contract (callers can `await getPushToStartToken()` as a
-    // probe / no-op sanity check) but always resolves with `nil`.
+    // Returns the most-recent push-to-start token observed via the
+    // OnStartObserving drain. Apple does not expose a synchronous query, so
+    // we read from the actor-backed cache that the drain populates. A JS
+    // caller racing the first emission gets `nil`; a caller that arrives
+    // after at least one emission gets the token, instead of mistakenly
+    // concluding "Apple hasn't delivered one".
     AsyncFunction("getPushToStartToken") { () -> String? in
-      return nil
+      guard #available(iOS 17.2, *) else { return nil }
+      return await self.registry.pushToStartToken()
     }
 
     OnStartObserving {
       if #available(iOS 16.2, *) {
         for activity in Activity<MobileSurfacesActivityAttributes>.activities {
-          self.observe(activity: activity)
+          // Existing activities on cold start are always token-mode; channel
+          // activities re-attach via the channel id passed back from JS.
+          self.observe(activity: activity, isChannelMode: false)
         }
       }
       // Push-to-start is iOS 17.2+. Drain the class-level AsyncSequence and
-      // emit `onPushToStartToken` for each token Apple hands us.
+      // emit `onPushToStartToken` for each token Apple hands us, AND cache
+      // the latest token on the registry so synchronous queries via
+      // `getPushToStartToken()` resolve to the real value.
       //
       // FB21158660: After a forced app termination the system-side stream can
       // go silent (no further token rotations are delivered) until the next
@@ -224,12 +173,26 @@ public class LiveActivityModule: Module {
           for await tokenData in Activity<MobileSurfacesActivityAttributes>.pushToStartTokenUpdates {
             if Task.isCancelled { return }
             guard let self = self else { return }
-            self.sendEvent("onPushToStartToken", [
-              "token": Self.hexString(tokenData)
-            ])
+            let hex = Self.hexString(tokenData)
+            // MS020: treat the latest emission as authoritative. Cache first
+            // so a JS caller racing the event still sees the new value
+            // synchronously via getPushToStartToken().
+            await registry.setPushToStartToken(hex)
+            self.sendEvent("onPushToStartToken", ["token": hex])
           }
         }
         Task { await registry.replacePushToStart(task) }
+      }
+    }
+
+    // Symmetric counterpart to OnStartObserving. When the JS bridge detaches
+    // every listener (component unmount with no other subscribers) Expo
+    // invokes this; without it, the drain Tasks keep iterating against the
+    // AsyncSequences forever and re-attach stacks new ones on next mount.
+    OnStopObserving {
+      if #available(iOS 16.2, *) {
+        let registry = self.registry
+        Task { await registry.clearAll() }
       }
     }
   }
@@ -242,20 +205,31 @@ public class LiveActivityModule: Module {
   /// already watching (e.g. JS bridge reconnect), the prior Tasks are cancelled
   /// before new ones are stored. Each Task self-cancels on `Task.isCancelled`
   /// every iteration and on a `nil` weak-self check.
+  ///
+  /// `isChannelMode` controls whether the per-activity `pushTokenUpdates`
+  /// drain is attached. Channel-mode activities (iOS 18 `.channel(channelId)`)
+  /// never receive per-activity tokens from Apple — the AsyncSequence simply
+  /// never emits — so attaching a drain stacks an idle Task per channel
+  /// activity. Skip it entirely.
   @available(iOS 16.2, *)
-  private func observe(activity: Activity<MobileSurfacesActivityAttributes>) {
+  private func observe(activity: Activity<MobileSurfacesActivityAttributes>, isChannelMode: Bool) {
     let registry = self.registry
     let activityId = activity.id
 
-    let tokenTask = Task { [weak self] in
-      for await tokenData in activity.pushTokenUpdates {
-        if Task.isCancelled { return }
-        guard let self = self else { return }
-        self.sendEvent("onPushToken", [
-          "activityId": activity.id,
-          "token": Self.hexString(tokenData)
-        ])
+    var tasks: [Task<Void, Never>] = []
+
+    if !isChannelMode {
+      let tokenTask = Task { [weak self] in
+        for await tokenData in activity.pushTokenUpdates {
+          if Task.isCancelled { return }
+          guard let self = self else { return }
+          self.sendEvent("onPushToken", [
+            "activityId": activity.id,
+            "token": Self.hexString(tokenData)
+          ])
+        }
       }
+      tasks.append(tokenTask)
     }
 
     let stateTask = Task { [weak self] in
@@ -288,38 +262,54 @@ public class LiveActivityModule: Module {
         }
       }
     }
+    tasks.append(stateTask)
 
     // Hand the new handles to the registry; this also cancels any prior
     // observers for the same activity ID (re-entry from OnStartObserving etc.).
-    Task { await registry.replace(id: activityId, tasks: [tokenTask, stateTask]) }
-  }
-
-  // MARK: - Codable bridge
-
-  private static func decodeState(_ dict: [String: Any]) throws
-    -> MobileSurfacesActivityAttributes.ContentState
-  {
-    do {
-      let data = try JSONSerialization.data(withJSONObject: dict)
-      return try JSONDecoder().decode(
-        MobileSurfacesActivityAttributes.ContentState.self, from: data)
-    } catch {
-      throw LiveActivityError.decodingFailed
-    }
-  }
-
-  private static func encodeState(
-    _ state: MobileSurfacesActivityAttributes.ContentState
-  ) -> [String: Any] {
-    guard let data = try? JSONEncoder().encode(state),
-          let obj = try? JSONSerialization.jsonObject(with: data),
-          let dict = obj as? [String: Any] else {
-      return [:]
-    }
-    return dict
+    Task { await registry.replace(id: activityId, tasks: tasks) }
   }
 
   private static func hexString(_ data: Data) -> String {
     return data.map { String(format: "%02x", $0) }.joined()
+  }
+
+  /// Build an `ActivityContent` from an optional JS-supplied options bag.
+  /// Threads `staleDate` (unix seconds → `Date`) and `relevanceScore`
+  /// through Apple's wrapper so the bridge no longer hard-codes
+  /// `staleDate: nil`. JS callers omit fields by passing `nil` /
+  /// undefined; the wrapper accepts `nil` for both. Used by both
+  /// `start()` and `update()` so the two paths cannot drift.
+  @available(iOS 16.2, *)
+  private static func activityContent(
+    state: MobileSurfacesActivityAttributes.ContentState,
+    options: [String: Any]?
+  ) -> ActivityContent<MobileSurfacesActivityAttributes.ContentState> {
+    let staleDate: Date? = {
+      guard let raw = options?["staleDateSeconds"] else { return nil }
+      // JS numbers arrive as Double through the ExpoModulesCore bridge.
+      // Accept Int and NSNumber too in case a caller pre-coerced.
+      let seconds: Double?
+      if let d = raw as? Double { seconds = d }
+      else if let i = raw as? Int { seconds = Double(i) }
+      else if let n = raw as? NSNumber { seconds = n.doubleValue }
+      else { seconds = nil }
+      guard let seconds, seconds > 0 else { return nil }
+      return Date(timeIntervalSince1970: seconds)
+    }()
+    let relevanceScore: Double? = {
+      guard let raw = options?["relevanceScore"] else { return nil }
+      if let d = raw as? Double { return d }
+      if let i = raw as? Int { return Double(i) }
+      if let n = raw as? NSNumber { return n.doubleValue }
+      return nil
+    }()
+    if let relevanceScore {
+      return ActivityContent(
+        state: state,
+        staleDate: staleDate,
+        relevanceScore: relevanceScore
+      )
+    }
+    return ActivityContent(state: state, staleDate: staleDate)
   }
 }

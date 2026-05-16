@@ -262,6 +262,47 @@ export class UnknownApnsError extends ApnsError {
 }
 
 /**
+ * Thrown by `createChannel()` when APNs returns a 2xx response but neither
+ * the `apns-channel-id` header nor the body's documented id fields are
+ * parseable. Distinct from `ApnsError` because the response was successful
+ * at the HTTP layer; the failure is that the SDK cannot recover the channel
+ * id the caller needs to drive subsequent broadcasts. Carries the status so
+ * observability hooks can correlate, and a short snippet of the body for
+ * post-hoc debugging without leaking arbitrarily large responses.
+ */
+export class CreateChannelResponseError extends Error {
+  readonly status: number;
+  readonly bodySnippet: string;
+
+  constructor(status: number, body: string) {
+    const snippet = body.length > 200 ? `${body.slice(0, 200)}…` : body;
+    super(
+      `createChannel: APNs returned ${status} but no apns-channel-id was ` +
+        `found in headers or body. Body: ${snippet || "<empty>"}.`,
+    );
+    this.name = "CreateChannelResponseError";
+    this.status = status;
+    this.bodySnippet = snippet;
+  }
+}
+
+/**
+ * Thrown when an in-flight request is aborted via the optional `signal`
+ * option on a send/manage method, or when an already-aborted signal is
+ * passed in. The `cause` is the signal's reason (or a fallback Error when
+ * the abort was raised without one).
+ */
+export class AbortError extends Error {
+  constructor(cause?: unknown) {
+    super("Request aborted");
+    this.name = "AbortError";
+    if (cause !== undefined) {
+      (this as { cause?: unknown }).cause = cause;
+    }
+  }
+}
+
+/**
  * Thrown when a snapshot fails `liveSurfaceSnapshot.safeParse` or its `kind`
  * is not allowed for the chosen send method (e.g. calling `update()` with a
  * `widget`-kind snapshot). Carries the underlying issue as a string array so

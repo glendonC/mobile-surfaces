@@ -2,6 +2,7 @@
 title: "Troubleshooting"
 description: "Symptom-to-fix recipes for silent iOS failures."
 order: 90
+group: "Operate"
 ---
 # Troubleshooting
 
@@ -14,7 +15,7 @@ For production-traffic failure modes (which catalog-bound errors are worth alert
 The harness reads `Activity<…>.activityAuthorizationInfo().areActivitiesEnabled`. iOS reports `false` when:
 
 - The user has Live Activities turned off for this app. Open iOS Settings → your app's name → Live Activities and toggle it on.
-- The user has Live Activities turned off globally. Open iOS Settings → Face ID & Passcode → Allow Notifications, or Settings → Notifications → Live Activities, depending on iOS version.
+- The user has Live Activities turned off globally. Open iOS Settings → Notifications → Live Activities and toggle the global switch on. There is a second toggle at Settings → Face ID & Passcode → Allow Access When Locked → Live Activities that controls Lock-Screen rendering specifically; flip both on if Lock-Screen activities are missing.
 - The build is still running on Expo Go. Live Activities require a development build; run `pnpm mobile:sim` or `pnpm mobile:run:ios:device`.
 - The deployment target dropped below the project floor. Confirm `apps/mobile/app.json` still has `expo.ios.deploymentTarget: "17.2"` and the `expo-build-properties` plugin block sets the same.
 
@@ -33,7 +34,7 @@ Simulator support for Live Activities is partial.
 
 - Confirm the simulator model is iPhone 14 Pro or newer (compact and minimal regions only render on Dynamic Island-capable hardware).
 - The expanded layout shows when the activity is invoked from a long press. Compact appears next to the camera; minimal shows when another activity is also active.
-- If only the Lock Screen presentation works, the widget bundle compiled but the `DynamicIsland` block in `apps/mobile/targets/widget/MobileSurfacesLiveActivity.swift` may be unreachable. Check `pnpm surface:check`, which verifies the `MobileSurfacesActivityAttributes.swift` files are byte-identical, which is the most common silent break.
+- If only the Lock Screen presentation works, the widget bundle compiled but the `DynamicIsland` block in `apps/mobile/targets/widget/MobileSurfacesLiveActivity.swift` may be unreachable. Check `pnpm surface:check`, which verifies the `MobileSurfacesActivityAttributes.swift` files match the codegen output from the Zod source (and are therefore byte-identical to each other). The most common silent break here is editing one file by hand and forgetting `pnpm surface:codegen`.
 
 ## Home widget or control widget shows placeholder state
 

@@ -1,0 +1,9 @@
+{
+  "$schema": "Internal: index of intentionally-invalid fixtures used by scripts/check-ajv-zod-parity.mjs to assert that Ajv and Zod agree on rejection.",
+  "fixtures": [
+    "missing-discriminator-kind.json",
+    "wrong-state-enum.json",
+    "kind-slice-mismatch.json",
+    "wrong-schema-version.json"
+  ]
+}

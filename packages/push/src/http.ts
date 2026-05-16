@@ -16,6 +16,14 @@ export interface Http2RequestInit {
   body?: string | Buffer;
   /** Per-request timeout in ms; 0 disables. Default 30_000. */
   timeoutMs?: number;
+  /**
+   * Optional caller-supplied abort signal. When the signal aborts before the
+   * response completes, the request stream is cancelled via `NGHTTP2_CANCEL`
+   * and the promise rejects with the signal's reason (or a generic AbortError
+   * fallback). An already-aborted signal rejects synchronously without
+   * dispatching the stream.
+   */
+  signal?: AbortSignal;
 }
 
 export interface Http2Response {
@@ -41,6 +49,22 @@ export interface Http2ClientOptions {
   origin: string;
   /** ms with no in-flight requests before the session is closed. Default 60_000. */
   idleTimeoutMs?: number;
+  /**
+   * Upper bound in ms that `close()` will wait for a graceful HTTP/2 close
+   * before force-destroying the session. APNs healthy peers drain in
+   * milliseconds; the default exists only so a stuck peer cannot hang
+   * process teardown indefinitely. Set to 0 or negative to disable the
+   * bound (graceful close with no timeout — the pre-5.x behavior). Default 5_000.
+   */
+  closeTimeoutMs?: number;
+  /**
+   * Fires exactly once when `close()` had to force-destroy the session
+   * because the graceful close exceeded `closeTimeoutMs`. Receives the
+   * elapsed wait time in ms. Hook errors are swallowed so an observability
+   * hook can never block teardown. When omitted, the SDK emits a single
+   * `console.warn` instead so the unusual condition is never silent.
+   */
+  onForcedDestroy?: (info: { elapsedMs: number }) => void;
   /** Test-only: override the connect factory. */
   connect?: Http2ConnectFactory;
   /** Test-only: extra options forwarded to http2.connect. */
@@ -55,6 +79,8 @@ export interface Http2ClientOptions {
 export class Http2Client {
   readonly #origin: string;
   readonly #idleTimeoutMs: number;
+  readonly #closeTimeoutMs: number;
+  readonly #onForcedDestroy: ((info: { elapsedMs: number }) => void) | undefined;
   readonly #connect: Http2ConnectFactory;
   readonly #sessionOptions: http2.ClientSessionOptions | http2.SecureClientSessionOptions | undefined;
   #session: ClientHttp2Session | undefined;
@@ -66,6 +92,11 @@ export class Http2Client {
   #inFlight = 0;
   #idleTimer: NodeJS.Timeout | undefined;
   #closed = false;
+  // Memoized close() promise. close() is documented as idempotent — concurrent
+  // or repeat callers receive the same promise and observe the same outcome
+  // (graceful or forced) rather than each racing their own timeout against an
+  // already-closing session.
+  #closePromise: Promise<void> | undefined;
   // Each session gets a unique connect key so a request that hops to a
   // reconnect doesn't accidentally clean up the new session's idle timer.
   #sessionGeneration = 0;
@@ -73,6 +104,8 @@ export class Http2Client {
   constructor(options: Http2ClientOptions) {
     this.#origin = options.origin;
     this.#idleTimeoutMs = options.idleTimeoutMs ?? 60_000;
+    this.#closeTimeoutMs = options.closeTimeoutMs ?? 5_000;
+    this.#onForcedDestroy = options.onForcedDestroy;
     this.#connect = options.connect ?? DEFAULT_CONNECT;
     this.#sessionOptions = options.sessionOptions;
   }
@@ -90,6 +123,12 @@ export class Http2Client {
   async request(init: Http2RequestInit): Promise<Http2Response> {
     if (this.#closed) {
       throw new Error("Http2Client is closed");
+    }
+    // Already-aborted signals short-circuit before any dial work. The
+    // #executeRequest path also handles the aborted-before-stream-open case;
+    // checking here saves the round-trip cost of ensureSession() too.
+    if (init.signal?.aborted) {
+      throw abortReason(init.signal);
     }
     // Race window: GOAWAY can fire between ensureSession resolving and
     // executeRequest dispatching, in which case dropSession() has already
@@ -169,6 +208,11 @@ export class Http2Client {
     init: Http2RequestInit,
   ): Promise<Http2Response> {
     return new Promise<Http2Response>((resolve, reject) => {
+      // Already-aborted: never touch the wire.
+      if (init.signal?.aborted) {
+        reject(abortReason(init.signal));
+        return;
+      }
       let req: ClientHttp2Stream;
       try {
         req = session.request(init.headers as http2.OutgoingHttpHeaders);
@@ -176,17 +220,49 @@ export class Http2Client {
         reject(err);
         return;
       }
-      const timeoutMs = init.timeoutMs ?? 30_000;
-      if (timeoutMs > 0) {
-        req.setTimeout(timeoutMs, () => {
-          req.close(http2.constants.NGHTTP2_CANCEL);
-          reject(Object.assign(new Error("Request timed out"), { code: "ETIMEDOUT" }));
-        });
-      }
       req.setEncoding("utf8");
       let status = 0;
       let headers: http2.IncomingHttpHeaders = {};
       let body = "";
+      let settled = false;
+      const onAbort = () => {
+        if (settled) return;
+        try {
+          req.close(http2.constants.NGHTTP2_CANCEL);
+        } catch {
+          // stream may already be closing; ignore.
+        }
+        settled = true;
+        reject(abortReason(init.signal));
+      };
+      if (init.signal) {
+        init.signal.addEventListener("abort", onAbort, { once: true });
+      }
+      const cleanup = () => {
+        settled = true;
+        if (init.signal) {
+          init.signal.removeEventListener("abort", onAbort);
+        }
+      };
+      // The timeout callback must mirror onAbort: settled-guard, cleanup() to
+      // detach the AbortSignal listener (otherwise long-lived signals
+      // accumulate listeners on every timed-out request and trip Node's
+      // MaxListenersExceededWarning), then close the stream and reject. The
+      // earlier shape called only req.close() + reject(), which left the
+      // listener attached.
+      const timeoutMs = init.timeoutMs ?? 30_000;
+      if (timeoutMs > 0) {
+        req.setTimeout(timeoutMs, () => {
+          if (settled) return;
+          cleanup();
+          try {
+            req.close(http2.constants.NGHTTP2_CANCEL);
+          } catch {
+            // stream may already be closing; ignore.
+          }
+          reject(Object.assign(new Error("Request timed out"), { code: "ETIMEDOUT" }));
+        });
+      }
       req.on("response", (h) => {
         status = Number(h[":status"] ?? 0);
         headers = h;
@@ -195,9 +271,13 @@ export class Http2Client {
         body += chunk;
       });
       req.on("end", () => {
+        if (settled) return;
+        cleanup();
         resolve({ status, headers, body });
       });
       req.on("error", (err) => {
+        if (settled) return;
+        cleanup();
         reject(err);
       });
       if (init.body !== undefined) {
@@ -234,23 +314,101 @@ export class Http2Client {
   }
 
   /**
-   * Close the active session and refuse new requests. Returns once the
-   * session is fully torn down.
+   * Close the active session and refuse new requests. Waits up to
+   * `closeTimeoutMs` (default 5_000 ms) for a graceful HTTP/2 close; if that
+   * bound expires, force-destroys the session and notifies via
+   * `onForcedDestroy` (or `console.warn` if no hook was supplied). Idempotent:
+   * concurrent and repeat callers receive the same memoized promise and
+   * observe the same outcome.
+   *
+   * A force-destroy here cancels any in-flight streams the peer never drained.
+   * That is preferable to hanging process teardown indefinitely on a stuck
+   * APNs peer; healthy peers always finish well before the bound.
    */
-  async close(): Promise<void> {
+  close(): Promise<void> {
+    if (this.#closePromise) return this.#closePromise;
     this.#closed = true;
     this.#cancelIdleTimer();
     const session = this.#session;
     this.#session = undefined;
-    if (!session) return;
-    if (session.closed || session.destroyed) return;
-    await new Promise<void>((resolve) => {
-      session.once("close", () => resolve());
+    if (!session || session.closed || session.destroyed) {
+      this.#closePromise = Promise.resolve();
+      return this.#closePromise;
+    }
+    const closeTimeoutMs = this.#closeTimeoutMs;
+    const startedAt = Date.now();
+    this.#closePromise = new Promise<void>((resolve) => {
+      let settled = false;
+      let timer: NodeJS.Timeout | undefined;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        if (timer) {
+          clearTimeout(timer);
+          timer = undefined;
+        }
+        resolve();
+      };
+      session.once("close", finish);
+      if (closeTimeoutMs > 0) {
+        timer = setTimeout(() => {
+          if (settled) return;
+          // Graceful close did not finish in the allotted window; force the
+          // session down so process teardown can proceed. session.destroy()
+          // synchronously triggers the "close" event, which calls finish()
+          // via the listener above; settled-guard prevents double-resolve.
+          const elapsedMs = Date.now() - startedAt;
+          try {
+            session.destroy();
+          } catch {
+            // session may already be tearing itself down; ignore.
+          }
+          this.#notifyForcedDestroy(elapsedMs);
+          // Belt-and-suspenders: if the "close" event somehow does not fire
+          // after destroy() (e.g. listener was removed by a race), still
+          // resolve so close() honors its contract.
+          finish();
+        }, closeTimeoutMs);
+        timer.unref?.();
+      }
       try {
         session.close();
       } catch {
-        resolve();
+        finish();
       }
     });
+    return this.#closePromise;
   }
+
+  #notifyForcedDestroy(elapsedMs: number): void {
+    if (this.#onForcedDestroy) {
+      try {
+        this.#onForcedDestroy({ elapsedMs });
+      } catch {
+        // Observability hook errors must not propagate out of close().
+      }
+      return;
+    }
+    // Default channel for an unusual lifecycle event. The deprecation warning
+    // in client.ts follows the same `console.warn` convention.
+    console.warn(
+      `[@mobile-surfaces/push] Http2Client.close() force-destroyed session after ${elapsedMs}ms; ` +
+        "graceful HTTP/2 close exceeded closeTimeoutMs. Stuck peer or unresponsive APNs endpoint.",
+    );
+  }
+}
+
+/**
+ * Resolve the rejection value for an aborted signal. Prefers `signal.reason`
+ * when set (the user-supplied AbortController.abort(reason) value), otherwise
+ * falls back to a generic Error tagged with name="AbortError" so consumers
+ * pattern-matching on `err.name === "AbortError"` see a consistent shape.
+ * Exported only via the Http2Client module's call sites; the package's
+ * public AbortError class wraps this when surfacing aborts through PushClient.
+ */
+function abortReason(signal: AbortSignal | undefined): unknown {
+  if (signal && signal.reason !== undefined) return signal.reason;
+  const err = new Error("Request aborted");
+  err.name = "AbortError";
+  return err;
 }

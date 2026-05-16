@@ -459,6 +459,9 @@ describe("applyStripGreenfield — integration against real source files", () =>
         path.join(tmp, "apps/mobile/targets/widget/MobileSurfacesControlWidget.swift"),
       ),
     );
+    // All surfaces on so every fixture stays in the index. Order matches
+    // data/surface-fixtures/index.json. If a new fixture lands and this test
+    // fails, update both the fixture index and this list together.
     assert.deepEqual(indexAt(tmp), [
       "./queued.json",
       "./attention.json",
@@ -469,10 +472,22 @@ describe("applyStripGreenfield — integration against real source files", () =>
       "./completed.json",
       "./active-details.json",
       "./widget-dashboard.json",
+      "./widget-minimal.json",
       "./control-toggle.json",
+      "./control-button.json",
       "./lock-accessory-circular.json",
+      "./lock-accessory-rectangular.json",
+      "./lock-accessory-inline.json",
       "./standby-card.json",
+      "./standby-night.json",
       "./notification-alert.json",
+      "./notification-category-routed.json",
+      "./notification-thread-grouped.json",
+      "./notification-time-sensitive.json",
+      "./notification-relevance-summary.json",
+      "./notification-completed.json",
+      "./notification-subtitle.json",
+      "./notification-deep-link-window.json",
     ]);
   });
 

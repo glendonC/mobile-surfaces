@@ -12,7 +12,12 @@ pnpm create mobile-surfaces
 bun  create mobile-surfaces
 ```
 
-The installer detects whether the current directory is empty (greenfield) or an existing Expo app (add-to-existing) and runs the matching flow.
+The installer detects which of four starting situations applies and runs the matching flow:
+
+- **Empty directory** — scaffolds a fresh project in place.
+- **An existing Expo app** — switches to add-to-existing mode, recaps every change, then patches `app.json`, copies the widget target, and adds Info.plist keys.
+- **A TypeScript monorepo without Expo** — scaffolds `apps/mobile/` inside the workspace and adds the workspace globs needed for it.
+- **Anything else with files in it** — refuses with exit code `1`, so CI stops early.
 
 ### Scripted (non-interactive)
 

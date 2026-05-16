@@ -1,70 +1,68 @@
 import { z } from "zod";
 import {
-  liveSurfaceSnapshotV2,
-  type LiveSurfaceSnapshotV2,
-} from "./schema-v2.ts";
+  liveSurfaceSnapshotV3,
+  liveSurfaceSnapshotV4,
+  migrateV3ToV4,
+  type LiveSurfaceSnapshotV3,
+  type LiveSurfaceSnapshotV4,
+} from "./schema-v4.ts";
+import { NOTIFICATION_CATEGORY_IDS } from "./notificationCategories.ts";
 
-export { liveSurfaceSnapshotV2, type LiveSurfaceSnapshotV2 };
+export {
+  liveSurfaceSnapshotV3,
+  liveSurfaceSnapshotV4,
+  migrateV3ToV4,
+  type LiveSurfaceSnapshotV3,
+  type LiveSurfaceSnapshotV4,
+};
 
-export const liveSurfaceState = z.enum([
-  "queued",
-  "active",
-  "paused",
-  "attention",
-  "bad_timing",
-  "completed",
-]);
+// ---------------------------------------------------------------------------
+// Enums (shared across base, slices, and projection-output schemas).
+// Each `.describe()` adds semantic intent beyond the value list, which is
+// what an LLM emitting structured output (or a human reading the published
+// JSON Schema at unpkg.com/@mobile-surfaces/surface-contracts@6.0/schema.json)
+// needs to use the value correctly.
+// ---------------------------------------------------------------------------
+
+export const liveSurfaceState = z
+  .enum([
+    "queued",
+    "active",
+    "paused",
+    "attention",
+    "bad_timing",
+    "completed",
+  ])
+  .describe(
+    "Lifecycle states. queued/active/paused = in-flight; attention = needs " +
+      "user action (drives high-priority APNs); bad_timing = should not " +
+      "interrupt right now; completed = terminal.",
+  );
 export type LiveSurfaceState = z.infer<typeof liveSurfaceState>;
 
-export const liveSurfaceStage = z.enum([
-  "prompted",
-  "inProgress",
-  "completing",
-]);
+export const liveSurfaceStage = z
+  .enum(["prompted", "inProgress", "completing"])
+  .describe(
+    "ActivityKit-only sub-lifecycle within an active Live Activity. " +
+      "prompted = system-prompted user action; inProgress = work continuing; " +
+      "completing = dismissal grace window.",
+  );
 export type LiveSurfaceStage = z.infer<typeof liveSurfaceStage>;
 
-export const liveSurfaceKind = z.enum([
-  "liveActivity",
-  "widget",
-  "control",
-  "lockAccessory",
-  "standby",
-  "notification",
-]);
+export const liveSurfaceKind = z
+  .enum([
+    "liveActivity",
+    "widget",
+    "control",
+    "lockAccessory",
+    "standby",
+    "notification",
+  ])
+  .describe(
+    "Discriminator. Each value selects exactly one projection helper and " +
+      "exactly one required slice.",
+  );
 export type LiveSurfaceKind = z.infer<typeof liveSurfaceKind>;
-
-export const liveSurfaceWidgetSlice = z
-  .object({
-    family: z.enum(["systemSmall", "systemMedium", "systemLarge"]).optional(),
-    reloadPolicy: z.enum(["manual", "afterDate"]).optional(),
-  })
-  .strict();
-export type LiveSurfaceWidgetSlice = z.infer<typeof liveSurfaceWidgetSlice>;
-
-// v3 renamed the inner `kind` field to `controlKind`. In v2 it shadowed the
-// outer discriminator (controlSnap.kind === "control" vs
-// controlSnap.control.kind === "toggle") and was a hand-authoring footgun
-// in raw payloads. The projection output (liveSurfaceControlValueProvider)
-// already exposed the field as `controlKind`, so consumers reading the
-// projected value didn't see the shadow; v3 closes the gap on the wire.
-export const liveSurfaceControlSlice = z
-  .object({
-    controlKind: z.enum(["toggle", "button", "deepLink"]),
-    state: z.boolean().optional(),
-    intent: z.string().optional(),
-  })
-  .strict();
-export type LiveSurfaceControlSlice = z.infer<typeof liveSurfaceControlSlice>;
-
-export const liveSurfaceNotificationSlice = z
-  .object({
-    category: z.string().optional(),
-    threadId: z.string().optional(),
-  })
-  .strict();
-export type LiveSurfaceNotificationSlice = z.infer<
-  typeof liveSurfaceNotificationSlice
->;
 
 export const liveSurfaceLockAccessoryFamily = z.enum([
   "accessoryCircular",
@@ -75,92 +73,370 @@ export type LiveSurfaceLockAccessoryFamily = z.infer<
   typeof liveSurfaceLockAccessoryFamily
 >;
 
-export const liveSurfaceLockAccessorySlice = z
-  .object({
-    family: liveSurfaceLockAccessoryFamily,
-    gaugeValue: z.number().min(0).max(1).optional(),
-    shortText: z.string().max(20).optional(),
-  })
-  .strict();
-export type LiveSurfaceLockAccessorySlice = z.infer<
-  typeof liveSurfaceLockAccessorySlice
->;
-
 export const liveSurfaceStandbyPresentation = z.enum(["card", "night"]);
 export type LiveSurfaceStandbyPresentation = z.infer<
   typeof liveSurfaceStandbyPresentation
 >;
 
-export const liveSurfaceStandbySlice = z
-  .object({
-    presentation: liveSurfaceStandbyPresentation.default("card"),
-    tint: z.enum(["default", "monochrome"]).optional(),
-  })
-  .strict();
-export type LiveSurfaceStandbySlice = z.infer<typeof liveSurfaceStandbySlice>;
+export const liveSurfaceInterruptionLevel = z
+  .enum(["passive", "active", "timeSensitive", "critical"])
+  .describe(
+    "iOS aps.interruption-level (iOS 15+). passive = no sound, no banner; " +
+      "active (system default) = standard delivery; timeSensitive = breaks " +
+      "through Focus modes; critical = bypasses Do Not Disturb (requires " +
+      "an Apple-granted entitlement). Omit the field to inherit the system " +
+      "default rather than echoing 'active' on the wire.",
+  );
+export type LiveSurfaceInterruptionLevel = z.infer<
+  typeof liveSurfaceInterruptionLevel
+>;
 
-// liveActivity-only timing and stage hints. v1 carried these on every
-// snapshot regardless of kind; v2 moves them into a per-kind slice so a
-// widget or control snapshot no longer pretends to have a stage or an
-// estimatedSeconds.
-//
-// `stage` is what toLiveActivityContentState projects into the
-// ActivityKit ContentState; `estimatedSeconds` is a Lock-Screen duration
-// hint; `morePartsCount` lets a producer indicate queued follow-up parts
-// without inflating the payload. None of these have meaning outside the
-// Lock Screen surface.
+// ---------------------------------------------------------------------------
+// Per-kind slices. v4 carries all kind-specific rendering inside its slice;
+// the base shape (below) is identification + state only.
+// ---------------------------------------------------------------------------
+
+const deepLinkSchema = z
+  .string()
+  .regex(/^[a-z][a-z0-9+\-.]*:\/\//)
+  .describe(
+    "Tapping the surface opens this URL. Validated as a scheme://… prefix.",
+  );
+
 export const liveSurfaceLiveActivitySlice = z
   .object({
-    stage: liveSurfaceStage,
-    estimatedSeconds: z.int().min(0),
-    morePartsCount: z.int().min(0),
+    title: z.string().min(1).describe("Lock-Screen / Dynamic-Island headline."),
+    body: z.string().describe("Lock-Screen subhead under the title."),
+    progress: z
+      .number()
+      .min(0)
+      .max(1)
+      .describe(
+        "Completion ratio (0..1). Renders as the activity's progress bar and " +
+          "is what toLiveActivityContentState forwards into ActivityKit.",
+      ),
+    deepLink: deepLinkSchema,
+    modeLabel: z
+      .string()
+      .min(1)
+      .describe(
+        "Compact mode label for the Dynamic Island leading region (e.g. \"active\").",
+      ),
+    contextLabel: z
+      .string()
+      .describe(
+        "Trailing context tag for the Dynamic Island (e.g. \"queue · stage 2\").",
+      ),
+    statusLine: z
+      .string()
+      .describe(
+        "One-line status string composed for accessibility readout and for " +
+          "the expanded Lock-Screen layout's secondary row.",
+      ),
+    actionLabel: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Label for the activity's primary action button. Omitted when the " +
+          "activity has no action affordance.",
+      ),
+    stage: liveSurfaceStage.describe(
+      "ActivityKit ContentState stage. Producers transition prompted → " +
+        "inProgress → completing; iOS uses it to decide the Dynamic Island " +
+        "compact layout and the dismissal grace period.",
+    ),
+    estimatedSeconds: z
+      .int()
+      .min(0)
+      .describe(
+        "Estimated remaining seconds. Optional hint to the Lock-Screen " +
+          "layout for countdown UIs; zero means \"unknown\".",
+      ),
+    morePartsCount: z
+      .int()
+      .min(0)
+      .describe(
+        "Number of queued follow-up parts (e.g. \"+3 more\"). Lets producers " +
+          "signal continuity without padding the payload with the full queue.",
+      ),
   })
   .strict();
 export type LiveSurfaceLiveActivitySlice = z.infer<
   typeof liveSurfaceLiveActivitySlice
 >;
 
-// Base fields shared by every snapshot variant. We spread this into each
-// per-kind z.object below so types stay inferred from Zod (no hand-written
-// interfaces) while the discriminated union narrows on `kind`. Keeping the
-// raw shape (instead of a built schema) lets each variant call `.strict()`
-// after attaching its kind-specific slice.
+export const liveSurfaceWidgetSlice = z
+  .object({
+    title: z.string().min(1).describe("Widget headline."),
+    body: z.string().describe("Widget secondary line."),
+    progress: z
+      .number()
+      .min(0)
+      .max(1)
+      .describe(
+        "Optional progress fill on system{Small,Medium,Large} widgets that " +
+          "render a progress ring or bar.",
+      ),
+    deepLink: deepLinkSchema,
+    family: z
+      .enum(["systemSmall", "systemMedium", "systemLarge"])
+      .optional()
+      .describe(
+        "Preferred widget family. Optional because the host can render at " +
+          "the user-chosen size and ignore the hint.",
+      ),
+    reloadPolicy: z
+      .enum(["manual", "afterDate"])
+      .optional()
+      .describe(
+        "WidgetKit timeline reload policy. \"manual\" means the host reloads " +
+          "only when the App Group write triggers; \"afterDate\" uses the " +
+          "framework's next-update hint.",
+      ),
+  })
+  .strict();
+export type LiveSurfaceWidgetSlice = z.infer<typeof liveSurfaceWidgetSlice>;
+
+export const liveSurfaceControlSlice = z
+  .object({
+    label: z
+      .string()
+      .min(1)
+      .describe(
+        "Button / toggle label rendered in the Control Center tile.",
+      ),
+    deepLink: deepLinkSchema,
+    controlKind: z
+      .enum(["toggle", "button", "deepLink"])
+      .describe(
+        "Tile behavior. \"toggle\" exposes a boolean value; \"button\" runs " +
+          "an App Intent without state; \"deepLink\" opens the URL.",
+      ),
+    state: z
+      .boolean()
+      .optional()
+      .describe(
+        "Toggle state for \"toggle\"-kind controls. Absent on \"button\" / " +
+          "\"deepLink\". Round-trips through App Group storage when the user " +
+          "toggles.",
+      ),
+    intent: z
+      .string()
+      .optional()
+      .describe(
+        "App Intent identifier invoked on tap (\"toggle\" / \"button\").",
+      ),
+  })
+  .strict();
+export type LiveSurfaceControlSlice = z.infer<typeof liveSurfaceControlSlice>;
+
+export const liveSurfaceLockAccessorySlice = z
+  .object({
+    title: z
+      .string()
+      .min(1)
+      .describe(
+        "Accessory headline. accessoryCircular ignores it; " +
+          "accessoryRectangular and accessoryInline render it.",
+      ),
+    deepLink: deepLinkSchema,
+    family: liveSurfaceLockAccessoryFamily.describe(
+      "Lock-screen accessory family (accessoryCircular / " +
+        "accessoryRectangular / accessoryInline).",
+    ),
+    gaugeValue: z
+      .number()
+      .min(0)
+      .max(1)
+      .optional()
+      .describe(
+        "Gauge fill (0..1). Drives the circular ring or rectangular progress; " +
+          "absent means \"no gauge.\"",
+      ),
+    shortText: z
+      .string()
+      .max(20)
+      .optional()
+      .describe(
+        "Compact label. Length-bounded because accessoryInline truncates at " +
+          "~20 chars; longer strings will be elided by the system.",
+      ),
+  })
+  .strict();
+export type LiveSurfaceLockAccessorySlice = z.infer<
+  typeof liveSurfaceLockAccessorySlice
+>;
+
+export const liveSurfaceStandbySlice = z
+  .object({
+    title: z
+      .string()
+      .min(1)
+      .describe("Standby card / night-mode headline."),
+    body: z.string().describe("Standby secondary line."),
+    progress: z
+      .number()
+      .min(0)
+      .max(1)
+      .describe(
+        "Standby progress fill. Standby is a passive surface; producers " +
+          "usually mirror the active liveActivity's progress here.",
+      ),
+    deepLink: deepLinkSchema,
+    presentation: liveSurfaceStandbyPresentation
+      .default("card")
+      .describe(
+        "\"card\" for full-color Standby; \"night\" for low-light red-shifted " +
+          "rendering.",
+      ),
+    tint: z
+      .enum(["default", "monochrome"])
+      .optional()
+      .describe(
+        "Color treatment hint. \"monochrome\" forces white-on-black for " +
+          "accessibility.",
+      ),
+  })
+  .strict();
+export type LiveSurfaceStandbySlice = z.infer<typeof liveSurfaceStandbySlice>;
+
+export const liveSurfaceNotificationSlice = z
+  .object({
+    title: z
+      .string()
+      .min(1)
+      .describe(
+        "Notification title. Maps directly to aps.alert.title in the APNs " +
+          "envelope.",
+      ),
+    subtitle: z
+      .string()
+      .optional()
+      .describe(
+        "Notification subtitle. Maps to aps.alert.subtitle. Renders between " +
+          "the title and body on iOS 10+.",
+      ),
+    body: z
+      .string()
+      .describe("Notification body. Maps directly to aps.alert.body."),
+    deepLink: deepLinkSchema,
+    category: z
+      .enum(NOTIFICATION_CATEGORY_IDS)
+      .optional()
+      .describe(
+        "UNNotificationCategory identifier. Selects which set of action " +
+          "buttons the system shows AND - when a UNNotificationContentExtension " +
+          "is registered - decides whether the extension's custom view renders. " +
+          "Maps to aps.category. The set of legal values is the registry in " +
+          "packages/surface-contracts/src/notificationCategories.ts; the " +
+          "schema rejects values not declared there so the wire stays in " +
+          "lockstep with the categories the host registers and the extension " +
+          "Info.plist routes on. Producers intending to route into a content " +
+          "extension SHOULD validate against liveSurfaceNotificationSliceForExtension " +
+          "(category required) instead of the base slice.",
+      ),
+    threadId: z
+      .string()
+      .optional()
+      .describe(
+        "Thread identifier for notification grouping. Maps to aps.thread-id.",
+      ),
+    interruptionLevel: liveSurfaceInterruptionLevel.optional().describe(
+      "iOS aps.interruption-level (iOS 15+). Omitted = system default " +
+        "(active). Use timeSensitive for notifications that must break " +
+        "through Focus modes (e.g. delivery-arrived alerts).",
+    ),
+    relevanceScore: z
+      .number()
+      .min(0)
+      .max(1)
+      .optional()
+      .describe(
+        "iOS aps.relevance-score (0..1, iOS 15+). Drives ranking inside the " +
+          "grouped-summary Notification Center view. Higher = more prominent.",
+      ),
+    targetContentId: z
+      .string()
+      .optional()
+      .describe(
+        "iOS aps.target-content-id. Routes the tap to a specific scene/" +
+          "window identifier the host app advertises via " +
+          "UISceneActivationConditions.",
+      ),
+  })
+  .strict();
+export type LiveSurfaceNotificationSlice = z.infer<
+  typeof liveSurfaceNotificationSlice
+>;
+
+/**
+ * Producer-side refinement for the notification slice. The base slice keeps
+ * `category` optional because plain transactional alerts (no custom UI, no
+ * action buttons) do not require it. Producers intending to route into a
+ * UNNotificationContentExtension MUST validate outgoing snapshots against
+ * this refinement: iOS only invokes the extension when aps.category matches
+ * the extension's UNNotificationExtensionCategory Info.plist key, and
+ * omitting category silently falls back to the default system chrome.
+ *
+ * Use at the producer boundary, never at the consumer boundary. Consumers
+ * still parse the loose schema and decide routing at runtime.
+ */
+export const liveSurfaceNotificationSliceForExtension =
+  liveSurfaceNotificationSlice.extend({
+    category: z.string().min(1),
+  });
+export type LiveSurfaceNotificationSliceForExtension = z.infer<
+  typeof liveSurfaceNotificationSliceForExtension
+>;
+
+// ---------------------------------------------------------------------------
+// Minimal base shape: identification + state only.
+//
+// Every cross-kind rendering field that v3 carried in the base (primaryText,
+// secondaryText, modeLabel, contextLabel, statusLine, actionLabel, progress,
+// deepLink) moved into per-kind slices for v4. v5 keeps that base unchanged
+// and adds notification-only optional fields (subtitle / interruptionLevel /
+// relevanceScore / targetContentId) inside the notification slice; see the
+// slice definitions above.
+// ---------------------------------------------------------------------------
 const liveSurfaceSnapshotBaseShape = {
-  schemaVersion: z.literal("3").default("3"),
-  id: z.string().min(1),
-  surfaceId: z.string().min(1),
-  // Wall-clock instant the snapshot was authored, as an RFC 3339 datetime
-  // string. Consumers use it to drop out-of-order pushes: ActivityKit and
-  // APNs offer no in-band ordering guarantee, and the network may reorder
-  // a stage-transition update behind a content-state tick. Comparing
-  // updatedAt against the snapshot already applied is the only correct
-  // discard test on the client.
-  //
-  // UTC (Z-suffixed) is recommended for trivial lexicographic comparison
-  // ("2026-05-12T18:32:11.482Z") but offsets are also accepted so producers
-  // emitting OffsetDateTime / time.Time / Instant do not have to normalize
-  // before serialization. When mixing producers, normalize to UTC before
-  // comparing.
-  //
-  // Required in v2. Optional in v1; the v1->v2 migration codec exposes an
-  // `updatedAtFallback` opt-in for callers who know it is safe to
-  // synthesize a value at migration time.
-  updatedAt: z.string().datetime({ offset: true }),
+  schemaVersion: z.literal("5").describe(
+    "Wire-format generation. Required; producers MUST set this explicitly. " +
+      "Consumers parse against the version they understand; cross-version " +
+      "payloads are upgraded via migrateV4ToV5 (and transitively " +
+      "migrateV3ToV4) inside safeParseAnyVersion before parsing.",
+  ),
+  id: z.string().min(1).describe(
+    "Stable, idempotent snapshot identifier. The same logical state produced " +
+      "twice MUST yield the same id (e.g. \"<surfaceId>@<revision>\"). " +
+      "Consumers use it to deduplicate re-deliveries from APNs and ActivityKit.",
+  ),
+  surfaceId: z.string().min(1).describe(
+    "Identifier for the surface this snapshot updates. One surfaceId is " +
+      "rendered by at most one Live Activity / widget timeline / control / " +
+      "lock-accessory / standby slot at a time. Maps to the App Group key " +
+      "`surface.snapshot.<surfaceId>` and to the per-kind currentSurfaceId " +
+      "pointer.",
+  ),
+  kind: liveSurfaceKind,
+  updatedAt: z
+    .string()
+    .datetime({ offset: true })
+    .describe(
+      "RFC 3339 instant the snapshot was authored. Consumers compare against " +
+        "the previously-applied snapshot's updatedAt to drop out-of-order " +
+        "deliveries. UTC (Z-suffixed) recommended for lexicographic " +
+        "comparison; offsets accepted for producers emitting OffsetDateTime / " +
+        "time.Time / Instant.",
+    ),
   state: liveSurfaceState,
-  modeLabel: z.string().min(1),
-  contextLabel: z.string(),
-  statusLine: z.string(),
-  primaryText: z.string().min(1),
-  secondaryText: z.string(),
-  actionLabel: z.string().optional(),
-  progress: z.number().min(0).max(1),
-  deepLink: z.string().regex(/^[a-z][a-z0-9+\-.]*:\/\//),
 } as const;
 
 export const liveSurfaceSnapshotLiveActivity = z
   .object({
-    kind: z.literal("liveActivity"),
     ...liveSurfaceSnapshotBaseShape,
+    kind: z.literal("liveActivity"),
     liveActivity: liveSurfaceLiveActivitySlice,
   })
   .strict();
@@ -170,8 +446,8 @@ export type LiveSurfaceSnapshotLiveActivity = z.infer<
 
 export const liveSurfaceSnapshotWidget = z
   .object({
-    kind: z.literal("widget"),
     ...liveSurfaceSnapshotBaseShape,
+    kind: z.literal("widget"),
     widget: liveSurfaceWidgetSlice,
   })
   .strict();
@@ -181,8 +457,8 @@ export type LiveSurfaceSnapshotWidget = z.infer<
 
 export const liveSurfaceSnapshotControl = z
   .object({
-    kind: z.literal("control"),
     ...liveSurfaceSnapshotBaseShape,
+    kind: z.literal("control"),
     control: liveSurfaceControlSlice,
   })
   .strict();
@@ -192,8 +468,8 @@ export type LiveSurfaceSnapshotControl = z.infer<
 
 export const liveSurfaceSnapshotNotification = z
   .object({
-    kind: z.literal("notification"),
     ...liveSurfaceSnapshotBaseShape,
+    kind: z.literal("notification"),
     notification: liveSurfaceNotificationSlice,
   })
   .strict();
@@ -203,8 +479,8 @@ export type LiveSurfaceSnapshotNotification = z.infer<
 
 export const liveSurfaceSnapshotLockAccessory = z
   .object({
-    kind: z.literal("lockAccessory"),
     ...liveSurfaceSnapshotBaseShape,
+    kind: z.literal("lockAccessory"),
     lockAccessory: liveSurfaceLockAccessorySlice,
   })
   .strict();
@@ -214,8 +490,8 @@ export type LiveSurfaceSnapshotLockAccessory = z.infer<
 
 export const liveSurfaceSnapshotStandby = z
   .object({
-    kind: z.literal("standby"),
     ...liveSurfaceSnapshotBaseShape,
+    kind: z.literal("standby"),
     standby: liveSurfaceStandbySlice,
   })
   .strict();
@@ -223,9 +499,7 @@ export type LiveSurfaceSnapshotStandby = z.infer<
   typeof liveSurfaceSnapshotStandby
 >;
 
-// Discriminated union over `kind`. v2 requires `kind` to be set explicitly;
-// the v1 missing-kind preprocess shim was removed because every authored
-// fixture in this repo (and every payload the v1->v2 codec emits) sets it.
+// Discriminated union over `kind`. v4 requires `kind` to be set explicitly.
 //
 // Wrapped in z.lazy() so the discriminated-union construction (building the
 // kind -> variant Map across 6 variants) is deferred to the first
@@ -253,31 +527,39 @@ export const liveSurfaceSnapshot = z.lazy(() =>
   ]));
 export type LiveSurfaceSnapshot = z.infer<typeof liveSurfaceSnapshot>;
 
+// ---------------------------------------------------------------------------
+// Projection-output schemas. Each helper in index.ts pairs with one of these
+// so drift tests can project every committed fixture, parse the result, and
+// fail closed on any divergence.
+// ---------------------------------------------------------------------------
+
 export const liveSurfaceActivityContentState = z
   .object({
-    headline: z.string(),
-    subhead: z.string(),
-    progress: z.number().min(0).max(1),
-    stage: liveSurfaceStage,
+    headline: z
+      .string()
+      .describe(
+        "ActivityKit ContentState headline. Sourced from liveActivity.title.",
+      ),
+    subhead: z
+      .string()
+      .describe(
+        "ActivityKit ContentState subhead. Sourced from liveActivity.body.",
+      ),
+    progress: z
+      .number()
+      .min(0)
+      .max(1)
+      .describe(
+        "Completion ratio forwarded into the ActivityKit progress bar.",
+      ),
+    stage: liveSurfaceStage.describe(
+      "Sub-lifecycle stage forwarded into ActivityKit ContentState.",
+    ),
   })
   .strict();
 export type LiveSurfaceActivityContentState = z.infer<
   typeof liveSurfaceActivityContentState
 >;
-
-// Output schemas for the non-alert projections. The projection helpers in
-// index.ts already return strongly-typed results, but TypeScript-only types
-// cannot defend against a future helper edit that silently widens the
-// returned shape (or a fixture edit that drives the helper into a runtime-
-// only branch the type checker missed). Pairing each helper with an output
-// schema lets the drift test in scripts/surface-contracts.test.mjs project
-// every committed fixture through its helper, parse the result, and fail
-// closed on any divergence.
-//
-// Optional fields are modeled with `.optional()` to mirror the projection
-// helpers' "drop empty / falsy" behavior (toNotificationContentPayload omits
-// category/threadId when empty; toStandbyEntry sets tint to null when
-// absent — see the helper for the exact rule).
 
 export const liveSurfaceWidgetTimelineEntry = z
   .object({
@@ -285,7 +567,9 @@ export const liveSurfaceWidgetTimelineEntry = z
     snapshotId: z.string(),
     surfaceId: z.string(),
     state: liveSurfaceState,
-    family: z.enum(["systemSmall", "systemMedium", "systemLarge"]).optional(),
+    family: z
+      .enum(["systemSmall", "systemMedium", "systemLarge"])
+      .optional(),
     reloadPolicy: z.enum(["manual", "afterDate"]).optional(),
     headline: z.string(),
     subhead: z.string(),
@@ -321,8 +605,8 @@ export const liveSurfaceLockAccessoryEntry = z
     state: liveSurfaceState,
     family: liveSurfaceLockAccessoryFamily,
     headline: z.string(),
-    shortText: z.string(),
-    gaugeValue: z.number().min(0).max(1),
+    shortText: z.string().optional(),
+    gaugeValue: z.number().min(0).max(1).optional(),
     deepLink: z.string(),
   })
   .strict();
@@ -348,6 +632,37 @@ export type LiveSurfaceStandbyEntryOutput = z.infer<
   typeof liveSurfaceStandbyEntry
 >;
 
+/**
+ * Sidecar block inside the notification APNs payload's `liveSurface` field.
+ * Hoisted out of the envelope so MS036's check-surface-snapshots gate can
+ * target it directly and so a Codable mirror on the on-device extension can
+ * decode `notification.request.content.userInfo.liveSurface` against the
+ * same shape the wire emits.
+ *
+ * The `kind: "surface_snapshot"` literal aligns with the liveActivity alert
+ * payload's sidecar discriminator (`liveActivityAlertPayload.liveSurface.kind`
+ * in `@mobile-surfaces/push`). v4 emitted `"surface_notification"`; v5
+ * realigns so on-device routing code can switch on one literal regardless of
+ * which Mobile Surfaces wrapper produced the userInfo. The sidecar
+ * intentionally carries minimal data; everything else the extension renders
+ * (title, body, subtitle, etc.) is available on `notification.request.content`
+ * via standard accessors. See `liveSurfaceNotificationContentPayload` for the
+ * full envelope.
+ */
+export const liveSurfaceNotificationContentEntry = z
+  .object({
+    kind: z.literal("surface_snapshot"),
+    snapshotId: z.string(),
+    surfaceId: z.string(),
+    state: liveSurfaceState,
+    deepLink: z.string(),
+    category: z.string().optional(),
+  })
+  .strict();
+export type LiveSurfaceNotificationContentEntryOutput = z.infer<
+  typeof liveSurfaceNotificationContentEntry
+>;
+
 export const liveSurfaceNotificationContentPayload = z
   .object({
     aps: z
@@ -355,23 +670,19 @@ export const liveSurfaceNotificationContentPayload = z
         alert: z
           .object({
             title: z.string(),
+            subtitle: z.string().optional(),
             body: z.string(),
           })
           .strict(),
         sound: z.literal("default"),
         category: z.string().optional(),
         "thread-id": z.string().optional(),
+        "interruption-level": liveSurfaceInterruptionLevel.optional(),
+        "relevance-score": z.number().min(0).max(1).optional(),
+        "target-content-id": z.string().optional(),
       })
       .strict(),
-    liveSurface: z
-      .object({
-        kind: z.literal("surface_notification"),
-        snapshotId: z.string(),
-        surfaceId: z.string(),
-        state: liveSurfaceState,
-        deepLink: z.string(),
-      })
-      .strict(),
+    liveSurface: liveSurfaceNotificationContentEntry,
   })
   .strict();
 export type LiveSurfaceNotificationContentPayloadOutput = z.infer<
@@ -404,8 +715,8 @@ export const liveSurfaceKinds = liveSurfaceKind.options as unknown as readonly [
 ];
 
 /**
- * Strict v2 parser. Throws on any payload that does not match the v2
- * discriminated union. Does NOT auto-migrate v1 payloads — for that, use
+ * Strict v5 parser. Throws on any payload that does not match the v5
+ * discriminated union. Does NOT auto-migrate v3/v4 payloads — for that, use
  * {@link safeParseAnyVersion}.
  */
 export function assertSnapshot(value: unknown): LiveSurfaceSnapshot {
@@ -413,8 +724,8 @@ export function assertSnapshot(value: unknown): LiveSurfaceSnapshot {
 }
 
 /**
- * Strict v2 safe-parse. Returns Zod's standard SafeParseReturnType. Does NOT
- * auto-migrate v1 payloads — for that, use {@link safeParseAnyVersion}.
+ * Strict v5 safe-parse. Returns Zod's standard SafeParseReturnType. Does NOT
+ * auto-migrate v3/v4 payloads — for that, use {@link safeParseAnyVersion}.
  */
 export function safeParseSnapshot(value: unknown) {
   return liveSurfaceSnapshot.safeParse(value);
@@ -423,7 +734,7 @@ export function safeParseSnapshot(value: unknown) {
 export type SafeParseAnyVersionSuccess = {
   success: true;
   data: LiveSurfaceSnapshot;
-  /** Set when the input parsed as v1 and was migrated to v2. */
+  /** Set when the input parsed as v3 or v4 and was migrated to v5. */
   deprecationWarning?: string;
 };
 
@@ -437,65 +748,85 @@ export type SafeParseAnyVersionResult =
   | SafeParseAnyVersionFailure;
 
 /**
- * Pure v2->v3 transform. Always succeeds for a parsed v2 payload.
+ * Pure v4->v5 transform. Always succeeds for a parsed v4 payload.
  *
- * Mapping:
- * - `kind: "control"` -> the control slice's inner field is renamed
- *   `kind` -> `controlKind` to stop shadowing the outer discriminator.
- *   Everything else on a control snapshot carries over unchanged.
- * - Every other kind: pass-through. v3 made no other shape changes.
- * - `schemaVersion: "2"` -> `"3"`.
+ * v5's only wire-shape addition is four optional fields on the notification
+ * slice (subtitle, interruptionLevel, relevanceScore, targetContentId).
+ * Every other kind is unchanged. A v4 snapshot promotes to v5 by bumping the
+ * schemaVersion literal; no field renames, no slice restructure. The breaking
+ * change v5 carries lives in the projection-output sidecar
+ * (`kind: "surface_notification"` -> `"surface_snapshot"` in
+ * `liveSurfaceNotificationContentEntry`), which is consumed by
+ * `toNotificationContentPayload`, not the snapshot itself.
  */
-export function migrateV2ToV3(
-  v2: LiveSurfaceSnapshotV2,
+export function migrateV4ToV5(
+  v4: LiveSurfaceSnapshotV4,
 ): LiveSurfaceSnapshot {
-  const { schemaVersion: _v2Version, ...rest } = v2;
-  if (v2.kind === "control") {
-    const { kind: innerKind, ...controlRest } = v2.control;
-    return {
-      ...rest,
-      schemaVersion: "3" as const,
-      kind: "control",
-      control: { controlKind: innerKind, ...controlRest },
-    } as LiveSurfaceSnapshot;
-  }
-  return {
-    ...rest,
-    schemaVersion: "3" as const,
-  } as unknown as LiveSurfaceSnapshot;
+  return { ...v4, schemaVersion: "5" as const };
 }
 
+const V4_DEPRECATION_WARNING =
+  "liveSurfaceSnapshot v4 is deprecated and will be removed in " +
+  "@mobile-surfaces/surface-contracts@7.0. Migrate producers to " +
+  'schemaVersion "5"; the snapshot wire shape is unchanged but the ' +
+  "notification projection-output sidecar's kind discriminator " +
+  'aligned to "surface_snapshot" (see schema-migration docs).';
+
+const V3_DEPRECATION_WARNING =
+  "liveSurfaceSnapshot v3 is deprecated and will be removed in " +
+  "@mobile-surfaces/surface-contracts@6.0. Migrate producers to " +
+  'schemaVersion "5"; the rendering fields moved from the base shape ' +
+  "into per-kind slices in v4 and the notification slice gained " +
+  "optional subtitle/interruptionLevel/relevanceScore/targetContentId " +
+  "fields in v5 (see schema-migration docs).";
+
 /**
- * Multi-version safe-parse. Tries v3 (strict) first; on failure, tries v2
- * (frozen) and migrates the result to v3. Returns the v3 ZodError when
- * both attempts fail so callers see the most relevant message.
+ * Multi-version safe-parse. Tries v5 (strict) first; on failure, tries v4
+ * (frozen, migrates via migrateV4ToV5); on failure, tries v3 (frozen,
+ * chains migrateV3ToV4 + migrateV4ToV5). Returns the v5 ZodError when every
+ * attempt fails so callers see the most relevant message.
  *
- * On v2->v3 migration, the result carries a `deprecationWarning` so
- * telemetry can surface producers still on the old shape; see
+ * On v3->v5 or v4->v5 migration, the result carries a `deprecationWarning`
+ * so telemetry can surface producers still on the old shape; see
  * https://mobile-surfaces.com/docs/observability for the recommended log.
  *
- * The v1 codec was dropped at 4.0.0 per the v2 RFC commitment. Consumers
- * still emitting v1 must run their payloads through @mobile-surfaces/surface-contracts@3
- * to migrate to v2 first, then this package to reach v3.
+ * The v2 codec was dropped at 5.0.0 per the v3 RFC commitment. Consumers
+ * still emitting v2 must run their payloads through
+ * @mobile-surfaces/surface-contracts@4 to migrate to v3 first, then this
+ * package to reach v5.
  */
 export function safeParseAnyVersion(value: unknown): SafeParseAnyVersionResult {
-  const v3 = liveSurfaceSnapshot.safeParse(value);
-  if (v3.success) {
-    return { success: true, data: v3.data };
-  }
-  const v2 = liveSurfaceSnapshotV2.safeParse(value);
-  if (v2.success) {
-    const migrated = migrateV2ToV3(v2.data);
-    const v3Recheck = liveSurfaceSnapshot.safeParse(migrated);
-    if (v3Recheck.success) {
+  const v5 = liveSurfaceSnapshot.safeParse(value);
+  if (v5.success) return { success: true, data: v5.data };
+
+  const v4 = liveSurfaceSnapshotV4.safeParse(value);
+  if (v4.success) {
+    const migrated = migrateV4ToV5(v4.data);
+    const recheck = liveSurfaceSnapshot.safeParse(migrated);
+    if (recheck.success) {
       return {
         success: true,
-        data: v3Recheck.data,
-        deprecationWarning:
-          'liveSurfaceSnapshot v2 is deprecated and will be removed in @mobile-surfaces/surface-contracts@5.0. Migrate producers to schemaVersion "3" and rename control.kind to control.controlKind.',
+        data: recheck.data,
+        deprecationWarning: V4_DEPRECATION_WARNING,
       };
     }
-    return { success: false, error: v3Recheck.error };
+    return { success: false, error: recheck.error };
   }
-  return { success: false, error: v3.error };
+
+  const v3 = liveSurfaceSnapshotV3.safeParse(value);
+  if (v3.success) {
+    const migratedV4 = migrateV3ToV4(v3.data);
+    const migratedV5 = migrateV4ToV5(migratedV4);
+    const recheck = liveSurfaceSnapshot.safeParse(migratedV5);
+    if (recheck.success) {
+      return {
+        success: true,
+        data: recheck.data,
+        deprecationWarning: V3_DEPRECATION_WARNING,
+      };
+    }
+    return { success: false, error: recheck.error };
+  }
+  // Return v5 error: most relevant to a producer targeting current.
+  return { success: false, error: v5.error };
 }

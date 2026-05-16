@@ -1,0 +1,15 @@
+{
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@6.0/schema.json",
+  "schemaVersion": "5",
+  "kind": "control",
+  "id": "fixture-control-button",
+  "surfaceId": "surface-control-button",
+  "updatedAt": "2026-05-15T12:00:00.000Z",
+  "state": "active",
+  "control": {
+    "label": "Refresh surface",
+    "deepLink": "mobilesurfaces://surface/surface-control-button",
+    "controlKind": "button",
+    "intent": "refreshSurface"
+  }
+}

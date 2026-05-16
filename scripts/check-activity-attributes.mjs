@@ -25,6 +25,7 @@ import { buildReport, emitDiagnosticReport } from "./lib/diagnostics.mjs";
 import {
   parseContentState,
   parseStageCases,
+  resolveExpectedSwiftType,
 } from "./lib/swift-content-state.mjs";
 
 const { values } = parseArgs({
@@ -64,7 +65,7 @@ checks.push({
     : {
         detail: {
           message:
-            "Edit one file, copy verbatim into the other. Until SPM-shared Swift lands, byte-identity is enforced.",
+            "Both files are generated from packages/surface-contracts/src/schema.ts. Edit the Zod source if a field changed; otherwise rerun: pnpm surface:codegen. (The codegen-drift gate at stage 2 normally catches this earlier; if you see this message, codegen was bypassed or one file was hand-edited.)",
           paths: [
             path.relative(process.cwd(), modulePath),
             path.relative(process.cwd(), widgetPath),
@@ -99,7 +100,7 @@ const swiftFields = parsed.fields;
 const swiftStages = parseStageCases(moduleSource) ?? [];
 
 const zodFields = Object.entries(liveSurfaceActivityContentState.shape).map(
-  ([name, schema]) => ({ name, expected: expectedSwiftType(name, schema) }),
+  ([name, schema]) => ({ name, ...expectedSwiftType(name, schema) }),
 );
 const zodStages = liveSurfaceStage.options;
 
@@ -131,7 +132,7 @@ for (const z of zodFields) {
   if (z.expected === null) {
     fieldIssues.push({
       path: z.name,
-      message: `Zod schema is unsupported by this checker (extend expectedSwiftType to teach it)`,
+      message: `Zod field "${z.name}" uses a shape this checker does not understand (${z.reason}). Extend resolveExpectedSwiftType in scripts/lib/swift-content-state.mjs to teach the checker.`,
     });
     continue;
   }
@@ -245,23 +246,33 @@ function findAttributesFile(dir) {
   return matches[0];
 }
 
-// Resolve a Zod field schema to the Swift type it should serialize as.
-// Returns null if we don't know how to map it; the caller surfaces that as a
-// "teach the checker" error so we don't silently pass on unknown shapes.
+// Resolve a Zod field schema to the Swift type it should serialize as,
+// using the shared optionality-aware resolver in
+// scripts/lib/swift-content-state.mjs. The Live Activity ContentState's
+// `stage` field maps to a nominal Swift `Stage` enum, not the plain
+// `String` the shared resolver emits for a generic Zod enum. We special-
+// case by field name (the only enum in liveSurfaceActivityContentState is
+// `stage`, and `.describe()` makes identity checks against
+// `liveSurfaceStage` unreliable). Returns `{ expected, reason }` matching
+// the shared resolver's contract.
 function expectedSwiftType(name, schema) {
-  // Stage reference: same instance as liveSurfaceStage -> Swift `Stage`.
-  if (schema === liveSurfaceStage) return "Stage";
+  if (name === "stage" && isStageEnum(schema)) {
+    return { expected: "Stage", reason: null };
+  }
+  return resolveExpectedSwiftType(schema);
+}
+
+// Defense-in-depth: confirm the schema we're about to map to `Stage` really
+// is the Stage enum (i.e. has the same option set as liveSurfaceStage). A
+// future widening of liveSurfaceActivityContentState that adds a different
+// enum literal under the field name "stage" would otherwise be silently
+// mapped to the wrong Swift type.
+function isStageEnum(schema) {
   const def = schema?._zod?.def;
-  if (!def) return null;
-  if (def.type === "string") return "String";
-  if (def.type === "number") {
-    // z.int() etc. set a numeric format; treat any integer format as Int.
-    if (def.format && /int/i.test(String(def.format))) return "Int";
-    return "Double";
-  }
-  if (def.type === "enum") {
-    // Heuristic: nominal Swift type name matches the field name capitalized.
-    return name.charAt(0).toUpperCase() + name.slice(1);
-  }
-  return null;
+  if (!def || def.type !== "enum") return false;
+  const want = new Set(liveSurfaceStage.options);
+  const got = new Set(def.entries ? Object.values(def.entries) : []);
+  if (want.size !== got.size) return false;
+  for (const v of want) if (!got.has(v)) return false;
+  return true;
 }

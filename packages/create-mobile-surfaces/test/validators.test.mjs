@@ -7,6 +7,7 @@ import {
   validateBundleId,
   validateProjectSlug,
   validateScheme,
+  validateSwiftIdentifier,
   validateTeamId,
 } from "../src/validators.mjs";
 
@@ -112,5 +113,34 @@ describe("default-derivation helpers", () => {
     assert.equal(toSwiftPrefix("my-app"), "MyApp");
     assert.equal(toSwiftPrefix("lockscreen demo"), "LockscreenDemo");
     assert.equal(toSwiftPrefix("foo_bar.baz"), "FooBarBaz");
+  });
+
+  it("toSwiftPrefix strips leading digits so the result is a valid Swift identifier", () => {
+    // Leading digits are legal in npm slugs but illegal in Swift type names.
+    // The function strips them so the iOS bundle still gets a valid prefix.
+    assert.equal(toSwiftPrefix("123-app"), "App");
+    assert.equal(toSwiftPrefix("1password"), "Password");
+    assert.equal(toSwiftPrefix("5-and-dime"), "AndDime");
+    assert.equal(toSwiftPrefix("1password-pro"), "PasswordPro");
+    // The output must always pass validateSwiftIdentifier.
+    assert.equal(
+      validateSwiftIdentifier(toSwiftPrefix("1password")),
+      undefined,
+    );
+    assert.equal(
+      validateSwiftIdentifier(toSwiftPrefix("123-my-app")),
+      undefined,
+    );
+  });
+
+  it("toSwiftPrefix throws when the project name has no letters at all", () => {
+    // If the user picks an all-digits slug, we cannot derive any valid Swift
+    // identifier. Surface a clear error rather than emitting an empty string
+    // that would silently produce broken Xcode targets.
+    assert.throws(
+      () => toSwiftPrefix("123"),
+      /must contain at least one letter/,
+    );
+    assert.throws(() => toSwiftPrefix("4-5-6"), /must contain at least one letter/);
   });
 });

@@ -13,10 +13,10 @@ Wire-layer code only — no HTTP, retry, or APNs client framework. Uses `node:ht
 ## Install
 
 ```bash
-pnpm add @mobile-surfaces/push @mobile-surfaces/surface-contracts
+pnpm add @mobile-surfaces/push@5 @mobile-surfaces/surface-contracts@5
 ```
 
-Requires Node 20+ (for stable HTTP/2 + native `crypto.randomUUID`).
+Requires Node 20+ (for stable HTTP/2 + native `crypto.randomUUID`). Surface contracts and push release together in the v5 linked group; pin to matching majors.
 
 ## Quickstart
 
@@ -33,6 +33,11 @@ const client = createPushClient({
 });
 
 const snapshot = surfaceFixtureSnapshots.activeProgress;
+// v5: rendering fields live under per-kind slices.
+//   snapshot.liveActivity.title
+//   snapshot.liveActivity.body
+//   snapshot.liveActivity.deepLink
+//   snapshot.liveActivity.modeLabel
 
 // Regular alert
 await client.alert(deviceToken, snapshot);
@@ -43,7 +48,7 @@ await client.update(activityToken, snapshot);
 // iOS 17.2+ remote start (push-to-start token)
 await client.start(pushToStartToken, snapshot, {
   surfaceId: snapshot.surfaceId,
-  modeLabel: snapshot.modeLabel,
+  modeLabel: snapshot.liveActivity.modeLabel,
 });
 
 // End the activity
@@ -54,6 +59,8 @@ await client.broadcast(channelId, snapshot);
 
 // Channel management
 const channel = await client.createChannel({ storagePolicy: "no-storage" });
+// channel.environment is "development" or "production" — channels are
+// environment-scoped per MS031.
 const channels = await client.listChannels();
 await client.deleteChannel(channel.channelId);
 
@@ -61,6 +68,20 @@ await client.close();
 ```
 
 Tokens in this example come from different places: `deviceToken` from normal APNs notification registration, `activityToken` from an active Live Activity, and `pushToStartToken` from ActivityKit's push-to-start token stream. See [`https://mobile-surfaces.com/docs/push`](https://mobile-surfaces.com/docs/push#token-taxonomy) for the full token lifecycle and [`https://mobile-surfaces.com/docs/ios-environment`](https://mobile-surfaces.com/docs/ios-environment#apns-environment) for matching `environment` to development vs production builds.
+
+## Building APNs alert payloads from a snapshot
+
+`toApnsAlertPayload` builds the `aps` envelope from a `liveActivity`-kind snapshot. It returns the strict shape `liveActivityAlertPayload` parses. Renamed from `liveActivityAlertPayloadFromSnapshot` in 5.0.0 for naming consistency with the `to*` projection helpers in `@mobile-surfaces/surface-contracts`.
+
+```ts
+import { toApnsAlertPayload } from "@mobile-surfaces/push";
+
+if (snapshot.kind === "liveActivity") {
+  const payload = toApnsAlertPayload(snapshot);
+  // payload.aps.alert.title === snapshot.liveActivity.title
+  // payload.aps.alert.body === snapshot.liveActivity.body
+}
+```
 
 ## Environment routing
 
@@ -89,7 +110,12 @@ All non-2xx responses throw a typed subclass of `ApnsError`:
 | `TooManyRequestsError` | 429; `retryAfterSeconds` parsed from `Retry-After`. |
 | `UnknownApnsError` | Reason not in the local guide; raw reason on `.reason`. |
 
-All carry `apnsId`, `status`, `timestamp`, and `reason`. `InvalidSnapshotError` is thrown for snapshot validation failures (Zod failure or wrong `kind`); `ClientClosedError` is thrown after `close()`.
+All carry `apnsId`, `status`, `timestamp`, and `reason`. The following additional classes round out the taxonomy:
+
+- `InvalidSnapshotError` — Zod validation failure or wrong `kind`.
+- `ClientClosedError` — method called after `close()`.
+- `CreateChannelResponseError` — `createChannel()` 2xx response with no `apns-channel-id` recoverable from the headers or body (new in 5.0.0; previously a bare `Error`).
+- `AbortError` — request was aborted via `options.signal` (new in 5.0.0). Covers in-flight cancellation, mid-backoff cancellation, and already-aborted signals uniformly.
 
 ## Retry behavior
 
@@ -99,8 +125,11 @@ The default policy retries up to 3 times with exponential backoff (100ms base, 5
 - `InternalServerError`
 - `ServiceUnavailable`
 - transport errors: `ECONNRESET`, `ECONNREFUSED`, `ETIMEDOUT`, `EPIPE`, `ENETUNREACH`, `EHOSTUNREACH`, `NGHTTP2_REFUSED_STREAM`
+- **any** response with `status >= 500` (new in 5.0.0): bare 5xx responses with no parseable body, which previously short-circuited as `UnknownApnsError` and gave up after one attempt.
 
 Priority 10 sends (the user-visible state transitions) get a tighter retry budget at runtime: `maxRetries` is clamped to 2 and the backoff windows are doubled, so sustained priority-10 retries cannot blow past APNs's budget (see MS015).
+
+Backoff jitter shape (also new in 5.0.0): jitter is now applied **after** the exponential is clamped to `maxDelayMs`, not before. The previous shape collapsed every saturated retry to exactly the cap value, producing a thundering-herd risk when many clients retried the same incident in lockstep. The new ceiling at saturation is `maxDelayMs + baseDelayMs` (a small, deliberate overshoot that preserves jitter).
 
 Override via `_unsafeRetryOverride`:
 
@@ -117,15 +146,41 @@ createPushClient({
 });
 ```
 
-The name is deliberately ugly: the defaults are tuned against MS015 and the priority-aware stretch, and overriding them is usually wrong. The legacy `retryPolicy` option still works in 3.x and logs a one-time deprecation warning per process; it will be removed in 4.0.
+The name is deliberately ugly: the defaults are tuned against MS015 and the priority-aware stretch, and overriding them is usually wrong. The legacy `retryPolicy` option still works and logs a one-time deprecation warning per process.
 
 `MOBILE_SURFACES_PUSH_DISABLE_RETRY=1` in the environment turns retries off entirely — useful for tests and for diagnosing whether a flake is APNs-side or your retry policy.
+
+## Cancellation
+
+Every send and management method accepts an optional `signal: AbortSignal`:
+
+```ts
+const controller = new AbortController();
+const inflight = client.alert(token, snapshot, { signal: controller.signal });
+setTimeout(() => controller.abort(), 100);
+
+try {
+  await inflight;
+} catch (err) {
+  if (err instanceof AbortError) {
+    // handled
+  }
+}
+```
+
+Behavior:
+- An already-aborted signal rejects synchronously, before any TLS dial.
+- Aborting an in-flight request cancels the HTTP/2 stream via `NGHTTP2_CANCEL`.
+- Aborting during a retry-backoff sleep wakes the sleep and rejects.
+- Aborting after a successful response is a no-op.
+
+The thrown error is always `AbortError` (with the signal's `reason` carried as `cause`) regardless of which leg the abort landed on.
 
 ## Connection lifecycle
 
 A single long-lived HTTP/2 session per (origin) is multiplexed across concurrent requests. The session auto-reconnects on `goaway` or socket close. After `idleTimeoutMs` (default 60s) of no in-flight requests, the session is closed; the next send re-opens it.
 
-`client.close()` flushes in-flight requests, sets the client to closed, and tears down both sessions (send + management). Subsequent calls throw `ClientClosedError`.
+`client.close()` flushes in-flight requests, sets the client to closed, and tears down both sessions (send + management). Subsequent calls throw `ClientClosedError`. Graceful HTTP/2 close is bounded by `closeTimeoutMs` (default 5_000 ms); a stuck peer is force-destroyed rather than hanging teardown.
 
 ## Next steps
 

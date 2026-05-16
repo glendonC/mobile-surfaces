@@ -73,8 +73,42 @@ export async function ensureCocoapodsAvailable({ exec = execFileAsync } = {}) {
   }
 }
 
+// Test-only hook: when CMS_TEST_SCAFFOLD_DELAY_MS is set to a positive integer,
+// the greenfield task pipeline sleeps for that many milliseconds before the
+// first scaffold task. Lets the SIGINT subprocess test catch the CLI mid-task
+// without depending on the tar extract being slow enough on the CI runner.
+//
+// The delay also installs a SIGINT listener that aborts the sleep with a
+// throw. Without it, SIGINT lands on the CLI's top-level handler (which only
+// flips `interrupted=true`) and the delay finishes anyway — the pipeline
+// continues to the next task and exits 0, defeating the test. Production code
+// never sees this path because the env var is unset; the listener is removed
+// once the sleep resolves so it can't leak into the rest of the pipeline.
+function maybeTestDelay() {
+  const raw = process.env.CMS_TEST_SCAFFOLD_DELAY_MS;
+  if (!raw) return Promise.resolve();
+  const ms = Number(raw);
+  if (!Number.isFinite(ms) || ms <= 0) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const onSigint = () => {
+      clearTimeout(timer);
+      const err = new Error("test-delay interrupted by SIGINT");
+      err.code = "TEST_SIGINT";
+      reject(err);
+    };
+    const timer = setTimeout(() => {
+      process.removeListener("SIGINT", onSigint);
+      resolve();
+    }, ms);
+    process.once("SIGINT", onSigint);
+  });
+}
+
 export async function runTasks({ config, target }) {
-  await task("Copying template", () => scaffold.copyTemplate({ target }));
+  await task("Copying template", async () => {
+    await maybeTestDelay();
+    await scaffold.copyTemplate({ target });
+  });
 
   // Strip the freshly-extracted tree to match the surface picker. Always
   // runs — even with every surface selected, this pass removes the

@@ -5,12 +5,16 @@ import { glob } from "astro/loaders";
 // the repo root. Each entry's slug is the filename without extension; the
 // frontmatter `order` controls sidebar position. Keep the order field stable
 // when reshuffling — internal links rely on the slug, not the order.
+export const DOC_GROUPS = ["Start here", "Build", "Operate", "Reference"] as const;
+export type DocGroup = (typeof DOC_GROUPS)[number];
+
 const docs = defineCollection({
   loader: glob({ pattern: "**/*.md", base: "./src/content/docs" }),
   schema: z.object({
     title: z.string(),
     description: z.string().optional(),
     order: z.number().default(999),
+    group: z.enum(DOC_GROUPS).default("Reference"),
   }),
 });
 

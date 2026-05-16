@@ -4,7 +4,7 @@
 // a temp workspace, so the assertions cover the same code path CI runs (struct
 // extraction via lib/swift-content-state.mjs, Zod parity, diagnostic
 // emission). Each test stages
-// apps/mobile/targets/widget/_shared/MobileSurfacesSharedState.swift inside a
+// apps/mobile/targets/_shared/MobileSurfacesSharedState.swift inside a
 // tmp dir; the script is invoked with that dir as cwd. Surface-contracts and
 // lib/ resolve relative to the real script location so we do not reimplement
 // the schema.
@@ -64,8 +64,8 @@ struct MobileSurfacesLockAccessorySnapshot: Codable, Hashable {
   var state: String
   var family: String
   var headline: String
-  var shortText: String
-  var gaugeValue: Double
+  var shortText: String?
+  var gaugeValue: Double?
   var deepLink: String
 }
 
@@ -83,16 +83,41 @@ struct MobileSurfacesStandbySnapshot: Codable, Hashable {
 }
 `;
 
-function withWorkspace(sharedStateSource) {
-  // The script reads apps/mobile/targets/widget/_shared/...swift relative to
-  // its cwd, and imports ../packages/surface-contracts and ./lib relative to
-  // its own location, so only the input file needs to exist at the tmp cwd.
+// Faithful copy of the notification-content extension's userInfo decoder.
+// Lives in a separate Swift file from the four App-Group readers because the
+// content extension is a different Apple extension type; MS036's SURFACES
+// list points its parity entry at this file via `swiftSource`.
+const REAL_NOTIFICATION_VIEW_CONTROLLER = `// Auto-generated for tests.
+import Foundation
+
+struct MobileSurfacesNotificationContentEntry: Codable, Hashable {
+  let kind: String
+  let snapshotId: String
+  let surfaceId: String
+  let state: String
+  let deepLink: String
+  let category: String?
+}
+`;
+
+function withWorkspace(sharedStateSource, notificationVcSource = REAL_NOTIFICATION_VIEW_CONTROLLER) {
+  // The script reads apps/mobile/targets/_shared/...swift and
+  // apps/mobile/targets/notification-content/...swift relative to its cwd
+  // (one path per SURFACES entry), and imports ../packages/surface-contracts
+  // and ./lib relative to its own location, so only the two input files
+  // need to exist at the tmp cwd.
   const dir = mkdtempSync(join(tmpdir(), "ms-check-snapshots-"));
-  const sharedDir = join(dir, "apps", "mobile", "targets", "widget", "_shared");
+  const sharedDir = join(dir, "apps", "mobile", "targets", "_shared");
   mkdirSync(sharedDir, { recursive: true });
   writeFileSync(
     join(sharedDir, "MobileSurfacesSharedState.swift"),
     sharedStateSource,
+  );
+  const notifDir = join(dir, "apps", "mobile", "targets", "notification-content");
+  mkdirSync(notifDir, { recursive: true });
+  writeFileSync(
+    join(notifDir, "MobileSurfacesNotificationViewController.swift"),
+    notificationVcSource,
   );
   return { dir, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
 }
@@ -109,7 +134,7 @@ function runCheck(cwd) {
   );
 }
 
-test("baseline: faithful snapshot structs pass all four parity checks", () => {
+test("baseline: faithful snapshot structs pass all five parity checks", () => {
   const ws = withWorkspace(REAL_SHARED_STATE);
   try {
     const r = runCheck(ws.dir);
@@ -118,6 +143,7 @@ test("baseline: faithful snapshot structs pass all four parity checks", () => {
     assert.match(r.stdout, /\[MS036\] Swift MobileSurfacesControlSnapshot matches Zod/);
     assert.match(r.stdout, /\[MS036\] Swift MobileSurfacesLockAccessorySnapshot matches Zod/);
     assert.match(r.stdout, /\[MS036\] Swift MobileSurfacesStandbySnapshot matches Zod/);
+    assert.match(r.stdout, /\[MS036\] Swift MobileSurfacesNotificationContentEntry matches Zod/);
   } finally {
     ws.cleanup();
   }

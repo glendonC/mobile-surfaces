@@ -102,11 +102,20 @@ export const APNS_REASON_GUIDE: Record<string, ApnsReasonGuideEntry> = {
 /**
  * Reasons that the default retry policy should treat as retryable. Connection
  * errors (ECONNRESET, etc.) are handled separately at the transport layer.
+ *
+ * ExpiredProviderToken is included because the SDK invalidates the JwtCache
+ * on that reason before the retry attempt, so the next request carries a
+ * freshly-minted token. Without that JWT invalidation the retry would loop
+ * sending the same expired bearer; with it, a single retry recovers from a
+ * mid-flight expiry / clock-skew rejection (MS030) without surfacing to the
+ * caller. The TERMINAL_REASONS guard still denies retries for permanently-
+ * broken tokens, so this widening cannot mask BadDeviceToken / Unregistered.
  */
 export const DEFAULT_RETRYABLE_REASONS: ReadonlySet<string> = new Set([
   "TooManyRequests",
   "InternalServerError",
   "ServiceUnavailable",
+  "ExpiredProviderToken",
 ]);
 
 /**

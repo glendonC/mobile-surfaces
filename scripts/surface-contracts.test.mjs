@@ -1,17 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { z } from "zod";
 import {
   assertSnapshot,
-  IncompleteProjectionError,
+  assertSnapshotKind,
   liveSurfaceActivityContentState,
   liveSurfaceControlValueProvider,
   liveSurfaceLockAccessoryEntry,
   liveSurfaceNotificationContentPayload,
   liveSurfaceSnapshot,
-  liveSurfaceSnapshotV2,
+  liveSurfaceSnapshotV3,
+  liveSurfaceSnapshotV4,
   liveSurfaceStandbyEntry,
   liveSurfaceWidgetTimelineEntry,
-  migrateV2ToV3,
+  migrateV3ToV4,
+  migrateV4ToV5,
   safeParseAnyVersion,
   safeParseSnapshot,
   surfaceFixtureSnapshots,
@@ -25,44 +28,56 @@ import {
 
 const queued = surfaceFixtureSnapshots.queued;
 
-// `queued` is a liveActivity-kind snapshot. Tests that build a different
-// kind by spreading queued need to strip the liveActivity slice first; the
-// strict per-kind objects reject unknown sibling slices.
+// `queued` is a liveActivity-kind snapshot. Tests that build a different kind
+// by spreading queued must strip the liveActivity slice first; the strict
+// per-kind objects reject unknown sibling slices.
 function withoutLiveActivity(snapshot) {
   const { liveActivity: _drop, ...rest } = snapshot;
   return rest;
 }
 
-test("live activity fixtures project to ActivityKit content state", () => {
-  assert.equal(queued.kind, "liveActivity");
-  assert.deepEqual(toLiveActivityContentState(queued), {
-    headline: queued.primaryText,
-    subhead: queued.secondaryText,
-    progress: queued.progress,
-    stage: queued.liveActivity.stage,
-  });
-});
-
-test("live activity projections reject non-live snapshots", () => {
-  const widget = assertSnapshot({
-    ...withoutLiveActivity(queued),
-    id: "fixture-widget",
-    kind: "widget",
-    widget: { family: "systemSmall" },
-  });
-
-  assert.throws(() => toLiveActivityContentState(widget), /Cannot project widget/);
-});
-
-test("widget projection accepts widget snapshots and rejects mismatches", () => {
-  const widget = assertSnapshot({
+// In v4 every kind carries its own rendering inside its slice; widgets,
+// controls, lock accessories, standby, and notifications no longer share
+// base-shape fields with liveActivity. Helper to author a non-liveActivity
+// fixture from `queued` quickly.
+function widgetSnapshot(overrides = {}) {
+  return assertSnapshot({
     ...withoutLiveActivity(queued),
     id: "fixture-widget",
     surfaceId: "surface-widget",
     kind: "widget",
-    widget: { family: "systemMedium", reloadPolicy: "manual" },
+    widget: {
+      title: queued.liveActivity.title,
+      body: queued.liveActivity.body,
+      progress: queued.liveActivity.progress,
+      deepLink: queued.liveActivity.deepLink,
+      family: "systemMedium",
+      reloadPolicy: "manual",
+      ...overrides,
+    },
   });
+}
 
+test("live activity fixtures project to ActivityKit content state", () => {
+  assert.equal(queued.kind, "liveActivity");
+  assert.deepEqual(toLiveActivityContentState(queued), {
+    headline: queued.liveActivity.title,
+    subhead: queued.liveActivity.body,
+    progress: queued.liveActivity.progress,
+    stage: queued.liveActivity.stage,
+  });
+});
+
+test("assertSnapshotKind throws when narrowing the wrong kind", () => {
+  const widget = widgetSnapshot();
+  assert.throws(
+    () => assertSnapshotKind(widget, "liveActivity"),
+    /Cannot project widget snapshot as liveActivity/,
+  );
+});
+
+test("widget projection reads from the widget slice", () => {
+  const widget = widgetSnapshot();
   assert.deepEqual(toWidgetTimelineEntry(widget), {
     kind: "widget",
     snapshotId: "fixture-widget",
@@ -70,21 +85,26 @@ test("widget projection accepts widget snapshots and rejects mismatches", () => 
     state: "queued",
     family: "systemMedium",
     reloadPolicy: "manual",
-    headline: queued.primaryText,
-    subhead: queued.secondaryText,
-    progress: queued.progress,
-    deepLink: queued.deepLink,
+    headline: queued.liveActivity.title,
+    subhead: queued.liveActivity.body,
+    progress: queued.liveActivity.progress,
+    deepLink: queued.liveActivity.deepLink,
   });
-  assert.throws(() => toWidgetTimelineEntry(queued), /Cannot project liveActivity/);
 });
 
-test("control projection accepts control snapshots and rejects mismatches", () => {
+test("control projection reads label and deepLink from the control slice", () => {
   const control = assertSnapshot({
     ...withoutLiveActivity(queued),
     id: "fixture-control",
     surfaceId: "surface-control",
     kind: "control",
-    control: { controlKind: "toggle", state: true, intent: "toggleSurface" },
+    control: {
+      label: "Surface toggle",
+      deepLink: queued.liveActivity.deepLink,
+      controlKind: "toggle",
+      state: true,
+      intent: "toggleSurface",
+    },
   });
 
   assert.deepEqual(toControlValueProvider(control), {
@@ -94,44 +114,49 @@ test("control projection accepts control snapshots and rejects mismatches", () =
     controlKind: "toggle",
     value: true,
     intent: "toggleSurface",
-    label: queued.actionLabel,
-    deepLink: queued.deepLink,
+    label: "Surface toggle",
+    deepLink: queued.liveActivity.deepLink,
   });
-  assert.throws(() => toControlValueProvider(queued), /Cannot project liveActivity/);
 });
 
-test("notification projection accepts notification snapshots and rejects mismatches", () => {
+test("notification projection maps slice title/body to aps.alert", () => {
   const notification = assertSnapshot({
     ...withoutLiveActivity(queued),
     id: "fixture-notification",
     surfaceId: "surface-notification",
     kind: "notification",
-    notification: { category: "surface-update", threadId: "surface-thread" },
+    notification: {
+      title: "Surface needs attention",
+      body: "Open the app to review the surface state.",
+      deepLink: queued.liveActivity.deepLink,
+      category: "surface-update",
+      threadId: "surface-thread",
+    },
   });
 
   assert.deepEqual(toNotificationContentPayload(notification), {
     aps: {
       alert: {
-        title: queued.primaryText,
-        body: queued.secondaryText,
+        title: "Surface needs attention",
+        body: "Open the app to review the surface state.",
       },
       sound: "default",
       category: "surface-update",
       "thread-id": "surface-thread",
     },
     liveSurface: {
-      kind: "surface_notification",
+      kind: "surface_snapshot",
       snapshotId: "fixture-notification",
       surfaceId: "surface-notification",
       state: "queued",
-      deepLink: queued.deepLink,
+      deepLink: queued.liveActivity.deepLink,
+      category: "surface-update",
     },
   });
-  assert.throws(() => toNotificationContentPayload(queued), /Cannot project liveActivity/);
 });
 
 // ---------------------------------------------------------------------------
-// Discriminated-union enforcement (Round 1A)
+// Discriminated-union enforcement
 // ---------------------------------------------------------------------------
 
 test("kind/slice mismatch is rejected: control kind without control slice fails safeParse", () => {
@@ -166,7 +191,12 @@ test("kind/slice mismatch is rejected: liveActivity kind with widget slice attac
     ...queued,
     id: "fixture-live-with-widget",
     kind: "liveActivity",
-    widget: { family: "systemSmall" },
+    widget: {
+      title: "x",
+      body: "",
+      progress: 0,
+      deepLink: "myapp://x",
+    },
   });
   assert.equal(result.success, false);
 });
@@ -180,13 +210,15 @@ test("kind/slice mismatch is rejected: liveActivity kind without liveActivity sl
   assert.equal(result.success, false);
 });
 
-test("v3 requires kind: payload without kind fails safeParse (no preprocess fallback)", () => {
+test("v5 requires kind: payload without kind fails safeParse (no preprocess fallback)", () => {
   const { kind: _omit, ...withoutKind } = queued;
   const result = safeParseSnapshot(withoutKind);
-  // v3 (and v2 before it) does not have a missing-kind preprocess.
-  // Producers must set kind explicitly; the v2->v3 codec sets it during
-  // migration. Bare snapshots
-  // without kind are no longer valid.
+  assert.equal(result.success, false);
+});
+
+test("v5 requires schemaVersion: payload without schemaVersion fails safeParse (no default)", () => {
+  const { schemaVersion: _omit, ...withoutVersion } = queued;
+  const result = safeParseSnapshot(withoutVersion);
   assert.equal(result.success, false);
 });
 
@@ -208,14 +240,15 @@ test("kind/slice mismatch is rejected: standby kind without standby slice fails 
   assert.equal(result.success, false);
 });
 
-test("lockAccessory projection accepts lockAccessory snapshots and rejects mismatches", () => {
+test("lockAccessory projection reads slice fields and propagates optional gauge/shortText", () => {
   const accessory = assertSnapshot({
     ...withoutLiveActivity(queued),
     id: "fixture-lock-accessory",
     surfaceId: "surface-lock-accessory",
     kind: "lockAccessory",
-    progress: 0.42,
     lockAccessory: {
+      title: "Surface 80%",
+      deepLink: queued.liveActivity.deepLink,
       family: "accessoryCircular",
       gaugeValue: 0.8,
       shortText: "80%",
@@ -228,50 +261,45 @@ test("lockAccessory projection accepts lockAccessory snapshots and rejects misma
     surfaceId: "surface-lock-accessory",
     state: "queued",
     family: "accessoryCircular",
-    headline: queued.primaryText,
+    headline: "Surface 80%",
     shortText: "80%",
     gaugeValue: 0.8,
-    deepLink: queued.deepLink,
+    deepLink: queued.liveActivity.deepLink,
   });
-  assert.throws(() => toLockAccessoryEntry(queued), /Cannot project liveActivity/);
 });
 
-test("toLockAccessoryEntry falls back to progress when gaugeValue is absent", () => {
+test("toLockAccessoryEntry omits gaugeValue and shortText when slice omits them", () => {
   const accessory = assertSnapshot({
     ...withoutLiveActivity(queued),
-    id: "fixture-lock-fallback",
+    id: "fixture-lock-bare",
+    surfaceId: "surface-lock-bare",
     kind: "lockAccessory",
-    progress: 0.33,
-    lockAccessory: { family: "accessoryRectangular" },
+    lockAccessory: {
+      title: "Surface",
+      deepLink: queued.liveActivity.deepLink,
+      family: "accessoryRectangular",
+    },
   });
-
-  assert.equal(toLockAccessoryEntry(accessory).gaugeValue, 0.33);
+  const projected = toLockAccessoryEntry(accessory);
+  assert.equal("gaugeValue" in projected, false);
+  assert.equal("shortText" in projected, false);
+  assert.equal(projected.headline, "Surface");
 });
 
-test("toLockAccessoryEntry falls back to primaryText when shortText is empty or absent", () => {
-  const empty = assertSnapshot({
-    ...withoutLiveActivity(queued),
-    id: "fixture-lock-empty",
-    kind: "lockAccessory",
-    lockAccessory: { family: "accessoryInline", shortText: "" },
-  });
-  const absent = assertSnapshot({
-    ...withoutLiveActivity(queued),
-    id: "fixture-lock-absent",
-    kind: "lockAccessory",
-    lockAccessory: { family: "accessoryInline" },
-  });
-  assert.equal(toLockAccessoryEntry(empty).shortText, queued.primaryText);
-  assert.equal(toLockAccessoryEntry(absent).shortText, queued.primaryText);
-});
-
-test("standby projection accepts standby snapshots and rejects mismatches", () => {
+test("standby projection reads slice fields and applies presentation default", () => {
   const standby = assertSnapshot({
     ...withoutLiveActivity(queued),
     id: "fixture-standby",
     surfaceId: "surface-standby",
     kind: "standby",
-    standby: { presentation: "night", tint: "monochrome" },
+    standby: {
+      title: "Standby surface",
+      body: "Mirrors the active surface.",
+      progress: 0.4,
+      deepLink: queued.liveActivity.deepLink,
+      presentation: "night",
+      tint: "monochrome",
+    },
   });
 
   assert.deepEqual(toStandbyEntry(standby), {
@@ -281,20 +309,25 @@ test("standby projection accepts standby snapshots and rejects mismatches", () =
     state: "queued",
     presentation: "night",
     tint: "monochrome",
-    headline: queued.primaryText,
-    subhead: queued.secondaryText,
-    progress: queued.progress,
-    deepLink: queued.deepLink,
+    headline: "Standby surface",
+    subhead: "Mirrors the active surface.",
+    progress: 0.4,
+    deepLink: queued.liveActivity.deepLink,
   });
-  assert.throws(() => toStandbyEntry(queued), /Cannot project liveActivity/);
 });
 
-test("toStandbyEntry applies presentation default and null tint when absent", () => {
+test("toStandbyEntry defaults presentation to card and null-tints when absent", () => {
   const standby = assertSnapshot({
     ...withoutLiveActivity(queued),
     id: "fixture-standby-default",
+    surfaceId: "surface-standby-default",
     kind: "standby",
-    standby: {},
+    standby: {
+      title: "Surface",
+      body: "",
+      progress: 0,
+      deepLink: queued.liveActivity.deepLink,
+    },
   });
   const entry = toStandbyEntry(standby);
   assert.equal(entry.presentation, "card");
@@ -302,107 +335,182 @@ test("toStandbyEntry applies presentation default and null tint when absent", ()
 });
 
 // ---------------------------------------------------------------------------
-// v2 -> v3 migration codec. v3 renamed liveSurfaceControlSlice's inner `kind`
-// field to `controlKind`; every other kind is pass-through with a bumped
-// schemaVersion literal. The v1 codec was sunset at 4.0 per the v2 RFC; the
-// frozen schema-v1.ts file is gone and only v2 payloads are migrated here.
+// v3 -> v4 migration codec. v4 lifts every rendering field out of the base
+// shape into a per-kind slice; the notification slice renames primaryText/
+// secondaryText to title/body. The v2 codec was sunset at 5.0 per the v3
+// RFC; only v3 payloads are migrated here.
 // ---------------------------------------------------------------------------
 
-const v2ControlSample = {
-  schemaVersion: "2",
+const v3LiveActivitySample = {
+  schemaVersion: "3",
+  kind: "liveActivity",
+  id: "fixture-v3-live",
+  surfaceId: "surface-v3-live",
+  updatedAt: "2026-05-12T18:00:00.000Z",
+  state: "active",
+  modeLabel: "active",
+  contextLabel: "queue",
+  statusLine: "active · 50%",
+  primaryText: "Surface in progress",
+  secondaryText: "Live Activity body copy from v3.",
+  actionLabel: "View",
+  progress: 0.5,
+  deepLink: "mobilesurfaces://surface/surface-v3-live",
+  liveActivity: {
+    stage: "inProgress",
+    estimatedSeconds: 90,
+    morePartsCount: 1,
+  },
+};
+
+const v3ControlSample = {
+  schemaVersion: "3",
   kind: "control",
-  id: "fixture-v2-control",
-  surfaceId: "surface-v2-control",
+  id: "fixture-v3-control",
+  surfaceId: "surface-v3-control",
   updatedAt: "2026-05-12T18:00:00.000Z",
   state: "active",
   modeLabel: "control",
   contextLabel: "toggle",
-  statusLine: "control",
-  primaryText: "Surface",
-  secondaryText: "v2 sample",
+  statusLine: "control · ready",
+  primaryText: "Control surface",
+  secondaryText: "v3 control sample",
   actionLabel: "Surface toggle",
   progress: 1,
-  deepLink: "mobilesurfaces://surface/surface-v2-control",
-  control: { kind: "toggle", state: true, intent: "toggleSurface" },
+  deepLink: "mobilesurfaces://surface/surface-v3-control",
+  control: { controlKind: "toggle", state: false, intent: "toggleSurface" },
 };
 
-const v2WidgetSample = {
-  schemaVersion: "2",
-  kind: "widget",
-  id: "fixture-v2-widget",
-  surfaceId: "surface-v2-widget",
+const v3NotificationSample = {
+  schemaVersion: "3",
+  kind: "notification",
+  id: "fixture-v3-notification",
+  surfaceId: "surface-v3-notification",
   updatedAt: "2026-05-12T18:00:00.000Z",
-  state: "active",
-  modeLabel: "widget",
-  contextLabel: "home",
-  statusLine: "widget",
-  primaryText: "Widget",
-  secondaryText: "v2 sample",
-  progress: 0.5,
-  deepLink: "mobilesurfaces://surface/surface-v2-widget",
-  widget: { family: "systemMedium" },
+  state: "attention",
+  modeLabel: "notification",
+  contextLabel: "alert",
+  statusLine: "needs attention",
+  primaryText: "Attention required",
+  secondaryText: "Open the app to review.",
+  progress: 0,
+  deepLink: "mobilesurfaces://surface/surface-v3-notification",
+  notification: { category: "surface-update", threadId: "thread-1" },
 };
 
-test("migrateV2ToV3 renames the control slice's inner kind field to controlKind", () => {
-  const v2 = liveSurfaceSnapshotV2.parse(v2ControlSample);
-  const v3 = migrateV2ToV3(v2);
-  assert.equal(v3.schemaVersion, "3");
-  assert.equal(v3.kind, "control");
-  if (v3.kind === "control") {
-    assert.equal(v3.control.controlKind, "toggle");
-    assert.equal("kind" in v3.control, false);
-    // state and intent are pass-through.
-    assert.equal(v3.control.state, true);
-    assert.equal(v3.control.intent, "toggleSurface");
+test("migrateV3ToV4 lifts liveActivity rendering fields into the slice", () => {
+  const v3 = liveSurfaceSnapshotV3.parse(v3LiveActivitySample);
+  const v4 = migrateV3ToV4(v3);
+  assert.equal(v4.schemaVersion, "4");
+  assert.equal(v4.kind, "liveActivity");
+  if (v4.kind === "liveActivity") {
+    assert.equal(v4.liveActivity.title, "Surface in progress");
+    assert.equal(v4.liveActivity.body, "Live Activity body copy from v3.");
+    assert.equal(v4.liveActivity.progress, 0.5);
+    assert.equal(v4.liveActivity.modeLabel, "active");
+    assert.equal(v4.liveActivity.contextLabel, "queue");
+    assert.equal(v4.liveActivity.statusLine, "active · 50%");
+    assert.equal(v4.liveActivity.actionLabel, "View");
+    assert.equal(v4.liveActivity.stage, "inProgress");
+    assert.equal(v4.liveActivity.estimatedSeconds, 90);
+    assert.equal(v4.liveActivity.morePartsCount, 1);
   }
-  // Round-trip through v3 parse to prove the migration result is valid.
-  const reparsed = liveSurfaceSnapshot.parse(v3);
-  assert.equal(reparsed.schemaVersion, "3");
+  // Round-trip through the frozen v4 parse to prove the migration result is
+  // valid against the v4 union (the live v5 union rejects schemaVersion "4").
+  const reparsedV4 = liveSurfaceSnapshotV4.parse(v4);
+  assert.equal(reparsedV4.schemaVersion, "4");
+  // And confirm the chained v4->v5 migration produces a valid v5 snapshot.
+  const v5 = migrateV4ToV5(v4);
+  const reparsedV5 = liveSurfaceSnapshot.parse(v5);
+  assert.equal(reparsedV5.schemaVersion, "5");
 });
 
-test("migrateV2ToV3 is a pass-through (with version bump) for non-control kinds", () => {
-  const v2 = liveSurfaceSnapshotV2.parse(v2WidgetSample);
-  const v3 = migrateV2ToV3(v2);
-  assert.equal(v3.schemaVersion, "3");
-  assert.equal(v3.kind, "widget");
-  if (v3.kind === "widget") {
-    assert.equal(v3.widget.family, "systemMedium");
+test("migrateV3ToV4 sets the control label to actionLabel when non-empty, falls back to primaryText", () => {
+  const v3 = liveSurfaceSnapshotV3.parse(v3ControlSample);
+  const v4 = migrateV3ToV4(v3);
+  assert.equal(v4.kind, "control");
+  if (v4.kind === "control") {
+    assert.equal(v4.control.label, "Surface toggle");
+    assert.equal(v4.control.controlKind, "toggle");
+    assert.equal(v4.control.state, false);
+    assert.equal(v4.control.intent, "toggleSurface");
+    // v3 progress on control is dropped from the wire shape.
+    assert.equal("progress" in v4.control, false);
   }
-  const reparsed = liveSurfaceSnapshot.parse(v3);
-  assert.equal(reparsed.schemaVersion, "3");
+
+  const fallback = liveSurfaceSnapshotV3.parse({
+    ...v3ControlSample,
+    actionLabel: "",
+  });
+  const v4Fallback = migrateV3ToV4(fallback);
+  if (v4Fallback.kind === "control") {
+    assert.equal(v4Fallback.control.label, "Control surface");
+  }
+});
+
+test("migrateV3ToV4 renames notification primaryText/secondaryText into title/body", () => {
+  const v3 = liveSurfaceSnapshotV3.parse(v3NotificationSample);
+  const v4 = migrateV3ToV4(v3);
+  assert.equal(v4.kind, "notification");
+  if (v4.kind === "notification") {
+    assert.equal(v4.notification.title, "Attention required");
+    assert.equal(v4.notification.body, "Open the app to review.");
+    assert.equal(v4.notification.category, "surface-update");
+    assert.equal(v4.notification.threadId, "thread-1");
+  }
+});
+
+test("migrateV3ToV4 drops v3 modeLabel/contextLabel/statusLine on non-liveActivity kinds", () => {
+  const v3 = liveSurfaceSnapshotV3.parse(v3ControlSample);
+  const v4 = migrateV3ToV4(v3);
+  if (v4.kind === "control") {
+    assert.equal("modeLabel" in v4.control, false);
+    assert.equal("contextLabel" in v4.control, false);
+    assert.equal("statusLine" in v4.control, false);
+  }
 });
 
 // ---------------------------------------------------------------------------
-// safeParseAnyVersion: v3 (strict) -> v2 (codec, deprecated, removed in 5.0)
+// safeParseAnyVersion: v5 (strict) -> v4 (codec, deprecated, removed in 7.0)
+// -> v3 (codec, deprecated, removed in 6.0)
 // ---------------------------------------------------------------------------
 
-test("safeParseAnyVersion accepts a v3 payload with no deprecation warning", () => {
+test("safeParseAnyVersion accepts a v5 payload with no deprecation warning", () => {
   const result = safeParseAnyVersion(queued);
   assert.equal(result.success, true);
   if (result.success) {
     assert.equal(result.data.kind, "liveActivity");
-    assert.equal(result.data.schemaVersion, "3");
+    assert.equal(result.data.schemaVersion, "5");
     assert.equal(result.deprecationWarning, undefined);
   }
 });
 
-test("safeParseAnyVersion accepts a v2 control payload and surfaces a v2 deprecation warning", () => {
-  const result = safeParseAnyVersion(v2ControlSample);
+test("safeParseAnyVersion accepts a v4 payload and surfaces a v4 deprecation warning", () => {
+  // Build a valid v4 snapshot by spreading a v5 fixture and downgrading the
+  // schemaVersion literal. v4's wire shape is otherwise identical to v5 for
+  // liveActivity-kind snapshots (the v5 additions live on the notification
+  // slice), so this is a faithful v4 input.
+  const v4Payload = { ...queued, schemaVersion: "4" };
+  const result = safeParseAnyVersion(v4Payload);
   assert.equal(result.success, true);
   if (result.success) {
-    assert.equal(result.data.schemaVersion, "3");
-    assert.equal(result.data.kind, "control");
-    if (result.data.kind === "control") {
-      assert.equal(result.data.control.controlKind, "toggle");
-    }
-    assert.match(
-      result.deprecationWarning ?? "",
-      /v2 is deprecated/i,
-    );
+    assert.equal(result.data.kind, "liveActivity");
+    assert.equal(result.data.schemaVersion, "5");
+    assert.match(result.deprecationWarning ?? "", /v4 is deprecated/i);
   }
 });
 
-test("safeParseAnyVersion fails with v3 error when no version parses", () => {
+test("safeParseAnyVersion accepts a v3 payload and surfaces a v3 deprecation warning", () => {
+  const result = safeParseAnyVersion(v3LiveActivitySample);
+  assert.equal(result.success, true);
+  if (result.success) {
+    assert.equal(result.data.schemaVersion, "5");
+    assert.equal(result.data.kind, "liveActivity");
+    assert.match(result.deprecationWarning ?? "", /v3 is deprecated/i);
+  }
+});
+
+test("safeParseAnyVersion fails when no version parses", () => {
   const result = safeParseAnyVersion({ schemaVersion: "999", nonsense: true });
   assert.equal(result.success, false);
   if (!result.success) {
@@ -410,12 +518,12 @@ test("safeParseAnyVersion fails with v3 error when no version parses", () => {
   }
 });
 
-test("strict assertSnapshot does NOT auto-migrate v2 payloads", () => {
-  assert.throws(() => assertSnapshot(v2ControlSample));
+test("strict assertSnapshot does NOT auto-migrate v3 payloads", () => {
+  assert.throws(() => assertSnapshot(v3LiveActivitySample));
 });
 
 // ---------------------------------------------------------------------------
-// Deep-link regex edge cases
+// Deep-link regex edge cases. The slice's deepLink schema mirrors v3's.
 // ---------------------------------------------------------------------------
 
 const deepLinkPositiveCases = [
@@ -427,7 +535,10 @@ const deepLinkPositiveCases = [
 
 for (const link of deepLinkPositiveCases) {
   test(`deepLink accepts ${JSON.stringify(link)}`, () => {
-    const result = safeParseSnapshot({ ...queued, deepLink: link });
+    const result = safeParseSnapshot({
+      ...queued,
+      liveActivity: { ...queued.liveActivity, deepLink: link },
+    });
     assert.equal(result.success, true);
   });
 }
@@ -443,7 +554,10 @@ const deepLinkNegativeCases = [
 
 for (const link of deepLinkNegativeCases) {
   test(`deepLink rejects ${JSON.stringify(link)}`, () => {
-    const result = safeParseSnapshot({ ...queued, deepLink: link });
+    const result = safeParseSnapshot({
+      ...queued,
+      liveActivity: { ...queued.liveActivity, deepLink: link },
+    });
     assert.equal(result.success, false);
   });
 }
@@ -540,126 +654,31 @@ test("updatedAt rejects a non-string value", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Projection validation (Part 1 contracts)
+// .describe() propagation into the generated JSON Schema.
 // ---------------------------------------------------------------------------
 
-test("toControlValueProvider falls back to primaryText when actionLabel is absent", () => {
-  const control = assertSnapshot({
-    ...withoutLiveActivity(queued),
-    id: "fixture-control-no-action-label",
-    surfaceId: "surface-control",
-    actionLabel: undefined,
-    kind: "control",
-    control: { controlKind: "toggle", state: true, intent: "toggleSurface" },
+test("Zod .describe() strings propagate into the generated JSON Schema", () => {
+  const json = z.toJSONSchema(liveSurfaceSnapshot, {
+    target: "draft-2020-12",
   });
-  const projected = toControlValueProvider(control);
-  assert.equal(projected.label, queued.primaryText);
-});
-
-test("toControlValueProvider falls back to primaryText when actionLabel is empty string", () => {
-  const control = assertSnapshot({
-    ...withoutLiveActivity(queued),
-    id: "fixture-control-empty-action-label",
-    surfaceId: "surface-control",
-    actionLabel: "",
-    kind: "control",
-    control: { controlKind: "button", intent: "openSurface" },
-  });
-  const projected = toControlValueProvider(control);
-  // Empty-string actionLabel must NOT be passed through. The fix-site coerces
-  // empty-string to "absent" so primaryText (which is .min(1) in the schema)
-  // wins. This pins the silent-empty-label bug closed.
-  assert.equal(projected.label, queued.primaryText);
-  assert.notEqual(projected.label, "");
-});
-
-test("IncompleteProjectionError class is exported and named correctly", () => {
-  const err = new IncompleteProjectionError("toX", "fieldY", "detail");
-  assert.equal(err.name, "IncompleteProjectionError");
-  assert.equal(err.projection, "toX");
-  assert.equal(err.field, "fieldY");
-  assert.match(err.message, /toX/);
-  assert.match(err.message, /fieldY/);
-  assert.ok(err instanceof Error);
-});
-
-test("toControlValueProvider preserves null when control.state and control.intent are absent", () => {
-  const control = assertSnapshot({
-    ...withoutLiveActivity(queued),
-    id: "fixture-control-bare",
-    surfaceId: "surface-control",
-    kind: "control",
-    control: { controlKind: "deepLink" },
-  });
-  const projected = toControlValueProvider(control);
-  assert.equal(projected.value, null);
-  assert.equal(projected.intent, null);
+  // The base shape's schemaVersion description should ride into every
+  // discriminated-union branch.
+  const flat = JSON.stringify(json);
+  assert.match(
+    flat,
+    /Wire-format generation\. Required; producers MUST set this explicitly\./,
+  );
+  // Per-kind slice rendering field description.
+  assert.match(flat, /Lock-Screen \/ Dynamic-Island headline/);
+  // Enum description on liveSurfaceState.
+  assert.match(flat, /Lifecycle states\./);
 });
 
 // ---------------------------------------------------------------------------
-// Optional-field pass-through pins (decided NOT to throw)
+// Round-trip: every fixture projects through its helper and parses against
+// its output schema. This pins the helper ↔ projection-output schema link.
 // ---------------------------------------------------------------------------
 
-test("toWidgetTimelineEntry passes through undefined family and reloadPolicy", () => {
-  const widget = assertSnapshot({
-    ...withoutLiveActivity(queued),
-    id: "fixture-widget-bare",
-    surfaceId: "surface-widget",
-    kind: "widget",
-    widget: {},
-  });
-  const projected = toWidgetTimelineEntry(widget);
-  assert.equal(projected.family, undefined);
-  assert.equal(projected.reloadPolicy, undefined);
-  assert.equal(projected.headline, queued.primaryText);
-});
-
-test("toNotificationContentPayload omits category and threadId when absent", () => {
-  const note = assertSnapshot({
-    ...withoutLiveActivity(queued),
-    id: "fixture-notification-bare",
-    surfaceId: "surface-notification",
-    kind: "notification",
-    notification: {},
-  });
-  const projected = toNotificationContentPayload(note);
-  assert.equal("category" in projected.aps, false);
-  assert.equal("thread-id" in projected.aps, false);
-  assert.equal(projected.aps.alert.title, queued.primaryText);
-  assert.equal(projected.aps.alert.body, queued.secondaryText);
-});
-
-test("toNotificationContentPayload drops empty-string category and threadId", () => {
-  const note = assertSnapshot({
-    ...withoutLiveActivity(queued),
-    id: "fixture-notification-empty-meta",
-    surfaceId: "surface-notification",
-    kind: "notification",
-    notification: { category: "", threadId: "" },
-  });
-  const projected = toNotificationContentPayload(note);
-  assert.equal("category" in projected.aps, false);
-  assert.equal("thread-id" in projected.aps, false);
-});
-
-test("toLiveActivityContentState accepts empty secondaryText (schema permits empty string)", () => {
-  const live = assertSnapshot({
-    ...queued,
-    id: "fixture-live-empty-secondary",
-    secondaryText: "",
-  });
-  const projected = toLiveActivityContentState(live);
-  assert.equal(projected.subhead, "");
-  assert.equal(projected.headline, queued.primaryText);
-});
-
-// --- Projection output-schema drift tests --------------------------------
-
-// Each helper has both a runtime helper and a Zod output schema. If a helper
-// edit silently widens the returned shape (or a fixture edit pushes the
-// helper down an untyped branch), the schema parse fails here — closing the
-// gap between "TypeScript says it works" and "the wire format actually
-// validates."
 const PROJECTION_BY_KIND = {
   liveActivity: {
     project: toLiveActivityContentState,
@@ -701,18 +720,15 @@ test("every fixture projects to a payload that parses via its output schema", ()
         `Fixture "${name}" (kind=${snapshot.kind}) projected output fails its schema: ${issues}`,
       );
     }
-    // Parsed result should be structurally identical to the helper output.
-    // .strict() schemas mean any helper-introduced excess key would have
-    // already failed safeParse; deepEqual here pins the value-level shape.
-    assert.deepEqual(result.data, projected, `kind=${snapshot.kind} fixture=${name}`);
+    assert.deepEqual(
+      result.data,
+      projected,
+      `kind=${snapshot.kind} fixture=${name}`,
+    );
   }
 });
 
 test("output schemas reject helper drift: widget entry without snapshotId", () => {
-  // Negative case to ensure the schemas would actually catch drift if a helper
-  // started omitting a required field. Constructed by hand rather than
-  // patching the helper — patching the helper would also break the positive
-  // test above and leave us with two failing tests for one issue.
   const widget = surfaceFixtureSnapshots.widgetDashboard ??
     Object.values(surfaceFixtureSnapshots).find((s) => s.kind === "widget");
   assert.ok(widget, "expected at least one widget fixture");
@@ -738,13 +754,10 @@ test("liveSurfaceSnapshot exposes a Standard Schema (~standard) interface", () =
   assert.equal(std.version, 1);
   assert.equal(typeof std.validate, "function");
 
-  // Validate a known-good fixture through the Standard Schema interface.
   const result = std.validate(queued);
-  // Standard Schema returns { value } on success, { issues } on failure.
   assert.ok("value" in result, "expected success result with `value`");
   assert.equal(result.value.kind, "liveActivity");
 
-  // And it rejects malformed payloads through the same interface.
   const bad = std.validate({ ...queued, kind: "control" });
   assert.ok(
     "issues" in bad && Array.isArray(bad.issues) && bad.issues.length > 0,

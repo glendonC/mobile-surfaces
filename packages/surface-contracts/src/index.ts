@@ -6,14 +6,17 @@ export {
   liveSurfaceSnapshotNotification,
   liveSurfaceSnapshotLockAccessory,
   liveSurfaceSnapshotStandby,
-  liveSurfaceSnapshotV2,
+  liveSurfaceSnapshotV3,
+  liveSurfaceSnapshotV4,
   liveSurfaceLiveActivitySlice,
   liveSurfaceState,
   liveSurfaceStage,
   liveSurfaceKind,
+  liveSurfaceInterruptionLevel,
   liveSurfaceWidgetSlice,
   liveSurfaceControlSlice,
   liveSurfaceNotificationSlice,
+  liveSurfaceNotificationSliceForExtension,
   liveSurfaceLockAccessoryFamily,
   liveSurfaceLockAccessorySlice,
   liveSurfaceStandbyPresentation,
@@ -23,13 +26,15 @@ export {
   liveSurfaceControlValueProvider,
   liveSurfaceLockAccessoryEntry,
   liveSurfaceStandbyEntry,
+  liveSurfaceNotificationContentEntry,
   liveSurfaceNotificationContentPayload,
   liveSurfaceStates,
   liveSurfaceStages,
   liveSurfaceKinds,
   assertSnapshot,
   safeParseSnapshot,
-  migrateV2ToV3,
+  migrateV3ToV4,
+  migrateV4ToV5,
   safeParseAnyVersion,
 } from "./schema.ts";
 export type {
@@ -40,27 +45,39 @@ export type {
   LiveSurfaceSnapshotNotification,
   LiveSurfaceSnapshotLockAccessory,
   LiveSurfaceSnapshotStandby,
-  LiveSurfaceSnapshotV2,
+  LiveSurfaceSnapshotV3,
+  LiveSurfaceSnapshotV4,
   LiveSurfaceLiveActivitySlice,
   LiveSurfaceState,
   LiveSurfaceStage,
   LiveSurfaceKind,
+  LiveSurfaceInterruptionLevel,
   LiveSurfaceWidgetSlice,
   LiveSurfaceControlSlice,
   LiveSurfaceNotificationSlice,
+  LiveSurfaceNotificationSliceForExtension,
   LiveSurfaceLockAccessoryFamily,
   LiveSurfaceLockAccessorySlice,
   LiveSurfaceStandbyPresentation,
   LiveSurfaceStandbySlice,
   LiveSurfaceActivityContentState,
-  LiveSurfaceWidgetTimelineEntryOutput,
-  LiveSurfaceControlValueProviderOutput,
-  LiveSurfaceLockAccessoryEntryOutput,
-  LiveSurfaceStandbyEntryOutput,
-  LiveSurfaceNotificationContentPayloadOutput,
   SafeParseAnyVersionResult,
   SafeParseAnyVersionSuccess,
   SafeParseAnyVersionFailure,
+} from "./schema.ts";
+
+// Public projection-output types are inferred from the Zod schemas in
+// schema.ts. The hand-written shadow interfaces that previously lived here
+// were deleted in v5 because they duplicated the Zod-inferred shape and
+// drifted independently. The Output suffix is dropped from the public
+// surface; the *Output identifier remains the convention inside schema.ts.
+export type {
+  LiveSurfaceWidgetTimelineEntryOutput as LiveSurfaceWidgetTimelineEntry,
+  LiveSurfaceControlValueProviderOutput as LiveSurfaceControlValueProvider,
+  LiveSurfaceLockAccessoryEntryOutput as LiveSurfaceLockAccessoryEntry,
+  LiveSurfaceStandbyEntryOutput as LiveSurfaceStandbyEntry,
+  LiveSurfaceNotificationContentEntryOutput as LiveSurfaceNotificationContentEntry,
+  LiveSurfaceNotificationContentPayloadOutput as LiveSurfaceNotificationContentPayload,
 } from "./schema.ts";
 
 import type {
@@ -72,247 +89,148 @@ import type {
   LiveSurfaceSnapshotLockAccessory,
   LiveSurfaceSnapshotStandby,
   LiveSurfaceKind,
-  LiveSurfaceWidgetSlice,
-  LiveSurfaceLockAccessoryFamily,
-  LiveSurfaceStandbyPresentation,
   LiveSurfaceActivityContentState,
+  LiveSurfaceWidgetTimelineEntryOutput,
+  LiveSurfaceControlValueProviderOutput,
+  LiveSurfaceLockAccessoryEntryOutput,
+  LiveSurfaceStandbyEntryOutput,
+  LiveSurfaceNotificationContentPayloadOutput,
 } from "./schema.ts";
 
-export interface LiveSurfaceWidgetTimelineEntry {
-  kind: "widget";
-  snapshotId: string;
-  surfaceId: string;
-  state: LiveSurfaceSnapshot["state"];
-  family: LiveSurfaceWidgetSlice["family"];
-  reloadPolicy: LiveSurfaceWidgetSlice["reloadPolicy"];
-  headline: string;
-  subhead: string;
-  progress: number;
-  deepLink: string;
-}
-
-export interface LiveSurfaceControlValueProvider {
-  kind: "control";
-  snapshotId: string;
-  surfaceId: string;
-  controlKind: LiveSurfaceSnapshotControl["control"]["controlKind"];
-  value: boolean | null;
-  intent: string | null;
-  label: string;
-  deepLink: string;
-}
-
-export interface LiveSurfaceLockAccessoryEntry {
-  kind: "lockAccessory";
-  snapshotId: string;
-  surfaceId: string;
-  state: LiveSurfaceSnapshot["state"];
-  family: LiveSurfaceLockAccessoryFamily;
-  headline: string;
-  shortText: string;
-  gaugeValue: number;
-  deepLink: string;
-}
-
-export interface LiveSurfaceStandbyEntry {
-  kind: "standby";
-  snapshotId: string;
-  surfaceId: string;
-  state: LiveSurfaceSnapshot["state"];
-  presentation: LiveSurfaceStandbyPresentation;
-  tint: "default" | "monochrome" | null;
-  headline: string;
-  subhead: string;
-  progress: number;
-  deepLink: string;
-}
-
-export interface LiveSurfaceNotificationContentPayload {
-  aps: {
-    alert: {
-      title: string;
-      body: string;
-    };
-    sound?: "default";
-    category?: string;
-    "thread-id"?: string;
-  };
-  liveSurface: {
-    kind: "surface_notification";
-    snapshotId: string;
-    surfaceId: string;
-    state: LiveSurfaceSnapshot["state"];
-    deepLink: string;
-  };
-}
-
-/**
- * Thrown when a projection helper receives a snapshot that parses against the
- * schema but is missing a field the target wire format requires. The schema
- * accepts the input (so producers see no Zod error), but the projection would
- * otherwise emit a silently-broken downstream payload.
- */
-export class IncompleteProjectionError extends Error {
-  readonly projection: string;
-  readonly field: string;
-  constructor(projection: string, field: string, detail: string) {
-    super(`${projection}: ${detail} (missing: ${field})`);
-    this.name = "IncompleteProjectionError";
-    this.projection = projection;
-    this.field = field;
-  }
-}
+// Projection helpers take narrowed snapshot types, not the union. In v5 each
+// kind has required slice fields (title.min(1), progress.min(0).max(1), etc.)
+// so a snapshot that parses against e.g. liveSurfaceSnapshotWidget is
+// guaranteed to carry every field its projection needs. The Zod parser is
+// the gate; the projection cannot see an "incomplete" valid snapshot, so
+// IncompleteProjectionError (previously exported here) was deleted.
+//
+// Callers holding a LiveSurfaceSnapshot (the union) narrow with
+// snapshot.kind === "<kind>" before calling, or use assertSnapshotKind to
+// turn a runtime check into a typed projection. assertSnapshotKind is kept
+// for callers that have an already-parsed union value and want to skip
+// re-validation.
 
 export function toLiveActivityContentState(
-  snapshot: LiveSurfaceSnapshot,
+  snapshot: LiveSurfaceSnapshotLiveActivity,
 ): LiveSurfaceActivityContentState {
-  const live: LiveSurfaceSnapshotLiveActivity = assertSnapshotKind(
-    snapshot,
-    "liveActivity",
-  );
   return {
-    headline: live.primaryText,
-    subhead: live.secondaryText,
-    progress: live.progress,
-    stage: live.liveActivity.stage,
+    headline: snapshot.liveActivity.title,
+    subhead: snapshot.liveActivity.body,
+    progress: snapshot.liveActivity.progress,
+    stage: snapshot.liveActivity.stage,
   };
 }
 
 export function toWidgetTimelineEntry(
-  snapshot: LiveSurfaceSnapshot,
-): LiveSurfaceWidgetTimelineEntry {
-  const widgetSnap: LiveSurfaceSnapshotWidget = assertSnapshotKind(
-    snapshot,
-    "widget",
-  );
+  snapshot: LiveSurfaceSnapshotWidget,
+): LiveSurfaceWidgetTimelineEntryOutput {
   return {
     kind: "widget",
-    snapshotId: widgetSnap.id,
-    surfaceId: widgetSnap.surfaceId,
-    state: widgetSnap.state,
-    family: widgetSnap.widget.family,
-    reloadPolicy: widgetSnap.widget.reloadPolicy,
-    headline: widgetSnap.primaryText,
-    subhead: widgetSnap.secondaryText,
-    progress: widgetSnap.progress,
-    deepLink: widgetSnap.deepLink,
+    snapshotId: snapshot.id,
+    surfaceId: snapshot.surfaceId,
+    state: snapshot.state,
+    family: snapshot.widget.family,
+    reloadPolicy: snapshot.widget.reloadPolicy,
+    headline: snapshot.widget.title,
+    subhead: snapshot.widget.body,
+    progress: snapshot.widget.progress,
+    deepLink: snapshot.widget.deepLink,
   };
 }
 
 export function toControlValueProvider(
-  snapshot: LiveSurfaceSnapshot,
-): LiveSurfaceControlValueProvider {
-  const controlSnap: LiveSurfaceSnapshotControl = assertSnapshotKind(
-    snapshot,
-    "control",
-  );
-  const control = controlSnap.control;
-  // `actionLabel` is optional and `z.string().optional()` accepts the empty
-  // string, but `??` only triggers on null/undefined. An empty actionLabel
-  // would silently produce an empty button label downstream, so coerce
-  // empty-string to "absent" before falling back to primaryText. The fallback
-  // is guaranteed non-empty because the base shape pins `primaryText.min(1)`.
-  const label = controlSnap.actionLabel?.length
-    ? controlSnap.actionLabel
-    : controlSnap.primaryText;
+  snapshot: LiveSurfaceSnapshotControl,
+): LiveSurfaceControlValueProviderOutput {
+  const control = snapshot.control;
   return {
     kind: "control",
-    snapshotId: controlSnap.id,
-    surfaceId: controlSnap.surfaceId,
+    snapshotId: snapshot.id,
+    surfaceId: snapshot.surfaceId,
     controlKind: control.controlKind,
     value: control.state ?? null,
     intent: control.intent ?? null,
-    label,
-    deepLink: controlSnap.deepLink,
+    label: control.label,
+    deepLink: control.deepLink,
   };
 }
 
 export function toLockAccessoryEntry(
-  snapshot: LiveSurfaceSnapshot,
-): LiveSurfaceLockAccessoryEntry {
-  const accessory: LiveSurfaceSnapshotLockAccessory = assertSnapshotKind(
-    snapshot,
-    "lockAccessory",
-  );
-  // shortText is the constrained-length label families like accessoryInline
-  // and accessoryRectangular render. Coerce empty string to "absent" so the
-  // primaryText fallback fires (same pattern as toControlValueProvider).
-  const shortTextCandidate = accessory.lockAccessory.shortText?.length
-    ? accessory.lockAccessory.shortText
-    : accessory.primaryText;
-  // gaugeValue drives the circular ring and rectangular progress fill. Falls
-  // back to the snapshot's overall `progress` so callers don't have to repeat
-  // themselves when the gauge mirrors progress.
-  const gaugeValue = accessory.lockAccessory.gaugeValue ?? accessory.progress;
+  snapshot: LiveSurfaceSnapshotLockAccessory,
+): LiveSurfaceLockAccessoryEntryOutput {
+  const accessory = snapshot.lockAccessory;
   return {
     kind: "lockAccessory",
-    snapshotId: accessory.id,
-    surfaceId: accessory.surfaceId,
-    state: accessory.state,
-    family: accessory.lockAccessory.family,
-    headline: accessory.primaryText,
-    shortText: shortTextCandidate,
-    gaugeValue,
+    snapshotId: snapshot.id,
+    surfaceId: snapshot.surfaceId,
+    state: snapshot.state,
+    family: accessory.family,
+    headline: accessory.title,
+    ...(accessory.shortText !== undefined
+      ? { shortText: accessory.shortText }
+      : {}),
+    ...(accessory.gaugeValue !== undefined
+      ? { gaugeValue: accessory.gaugeValue }
+      : {}),
     deepLink: accessory.deepLink,
   };
 }
 
 export function toStandbyEntry(
-  snapshot: LiveSurfaceSnapshot,
-): LiveSurfaceStandbyEntry {
-  const standbySnap: LiveSurfaceSnapshotStandby = assertSnapshotKind(
-    snapshot,
-    "standby",
-  );
+  snapshot: LiveSurfaceSnapshotStandby,
+): LiveSurfaceStandbyEntryOutput {
   return {
     kind: "standby",
-    snapshotId: standbySnap.id,
-    surfaceId: standbySnap.surfaceId,
-    state: standbySnap.state,
-    presentation: standbySnap.standby.presentation,
-    tint: standbySnap.standby.tint ?? null,
-    headline: standbySnap.primaryText,
-    subhead: standbySnap.secondaryText,
-    progress: standbySnap.progress,
-    deepLink: standbySnap.deepLink,
+    snapshotId: snapshot.id,
+    surfaceId: snapshot.surfaceId,
+    state: snapshot.state,
+    presentation: snapshot.standby.presentation,
+    tint: snapshot.standby.tint ?? null,
+    headline: snapshot.standby.title,
+    subhead: snapshot.standby.body,
+    progress: snapshot.standby.progress,
+    deepLink: snapshot.standby.deepLink,
   };
 }
 
 export function toNotificationContentPayload(
-  snapshot: LiveSurfaceSnapshot,
-): LiveSurfaceNotificationContentPayload {
-  const note: LiveSurfaceSnapshotNotification = assertSnapshotKind(
-    snapshot,
-    "notification",
-  );
+  snapshot: LiveSurfaceSnapshotNotification,
+): LiveSurfaceNotificationContentPayloadOutput {
+  const note = snapshot.notification;
   return {
     aps: {
       alert: {
-        title: note.primaryText,
-        body: note.secondaryText,
+        title: note.title,
+        ...(note.subtitle ? { subtitle: note.subtitle } : {}),
+        body: note.body,
       },
       sound: "default",
-      ...(note.notification.category
-        ? { category: note.notification.category }
+      ...(note.category ? { category: note.category } : {}),
+      ...(note.threadId ? { "thread-id": note.threadId } : {}),
+      ...(note.interruptionLevel
+        ? { "interruption-level": note.interruptionLevel }
         : {}),
-      ...(note.notification.threadId
-        ? { "thread-id": note.notification.threadId }
+      ...(note.relevanceScore !== undefined
+        ? { "relevance-score": note.relevanceScore }
+        : {}),
+      ...(note.targetContentId
+        ? { "target-content-id": note.targetContentId }
         : {}),
     },
     liveSurface: {
-      kind: "surface_notification",
-      snapshotId: note.id,
-      surfaceId: note.surfaceId,
-      state: note.state,
+      kind: "surface_snapshot",
+      snapshotId: snapshot.id,
+      surfaceId: snapshot.surfaceId,
+      state: snapshot.state,
       deepLink: note.deepLink,
+      ...(note.category ? { category: note.category } : {}),
     },
   };
 }
 
-// Defense-in-depth runtime narrowing utility. The discriminated union now
-// makes invalid-kind payloads unparseable up front, so this function should
-// rarely throw — but we keep it so callers that receive an already-parsed
-// LiveSurfaceSnapshot can narrow the union without re-validating.
+// Defense-in-depth runtime narrowing utility. The discriminated union makes
+// invalid-kind payloads unparseable up front, so this rarely throws — but we
+// keep it so callers that hold a LiveSurfaceSnapshot (the union) can narrow
+// without re-validating.
 type SnapshotByKind = {
   liveActivity: Extract<LiveSurfaceSnapshot, { kind: "liveActivity" }>;
   widget: Extract<LiveSurfaceSnapshot, { kind: "widget" }>;
@@ -328,7 +246,9 @@ export function assertSnapshotKind<K extends LiveSurfaceKind>(
 ): SnapshotByKind[K] {
   if (snapshot.kind !== expected) {
     throw new Error(
-      `Cannot project ${snapshot.kind} snapshot as ${expected}.`,
+      `Cannot project ${snapshot.kind} snapshot as ${expected}. Use ` +
+        `safeParseSnapshot to widen back to the union, or narrow with ` +
+        `snapshot.kind === "${expected}" before calling.`,
     );
   }
   return snapshot as SnapshotByKind[K];
@@ -376,3 +296,18 @@ export type {
   DiagnosticConfig,
   DiagnosticBundle,
 } from "./diagnostics.ts";
+
+export {
+  NOTIFICATION_CATEGORIES,
+  NOTIFICATION_CATEGORY_IDS,
+  notificationCategoryId,
+  notificationCategoryAction,
+  notificationCategory,
+  notificationCategoryRegistry,
+} from "./notificationCategories.ts";
+export type {
+  NotificationCategoryId,
+  NotificationCategoryAction,
+  NotificationCategory,
+  NotificationCategoryRegistry,
+} from "./notificationCategories.ts";

@@ -1,18 +1,15 @@
 {
-  "schemaVersion": "3",
+  "schemaVersion": "5",
   "kind": "widget",
   "id": "fixture-widget",
   "surfaceId": "surface-widget",
   "updatedAt": "2026-05-12T18:34:00.000Z",
   "state": "active",
-  "modeLabel": "active",
-  "contextLabel": "progress",
-  "statusLine": "active 50%",
-  "primaryText": "Widget headline",
-  "secondaryText": "Widget subhead",
-  "progress": 0.5,
-  "deepLink": "mobilesurfaces://surface/surface-widget",
   "widget": {
+    "title": "Widget headline",
+    "body": "Widget subhead",
+    "progress": 0.5,
+    "deepLink": "mobilesurfaces://surface/surface-widget",
     "family": "systemMedium",
     "reloadPolicy": "afterDate"
   }

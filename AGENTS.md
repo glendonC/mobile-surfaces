@@ -7,13 +7,13 @@
 
 # Mobile Surfaces: Invariants for AI Coding Assistants
 
-This document is the load-bearing summary of every silent-failure trap, contract invariant, and platform constraint that AI coding assistants need to respect when working in a Mobile Surfaces project. It is generated from `data/traps.json`. Edits go to the catalog, not to this file.
+This document lists the mandatory invariants enforced by Mobile Surfaces' test suite. AI coding assistants working in a Mobile Surfaces project must respect these rules; `pnpm surface:check` enforces them in CI. The same rules apply to human engineers; the catalog makes them explicit. It is generated from `data/traps.json` — edits go to the catalog, not to this file.
 
-Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynamic Island, home-screen widgets, and iOS 18 control widgets. The pitch: iOS Live Activities silently fail. Your code compiles, your push returns 200, and nothing appears on the Lock Screen. This catalog is the working baseline past the traps that cost most teams a week of debugging.
+Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynamic Island, home-screen widgets, and iOS 18 control widgets. iOS Live Activities silently fail: your code compiles, your push returns 200, and nothing appears on the Lock Screen. This catalog enumerates the failure modes that produce that silence and the static, config, and runtime checks the repo uses to surface them at PR time instead of on a customer device.
 
 ## Index
 
-33 rules total: 28 error, 4 warning, 1 info.
+37 rules total: 29 error, 4 warning, 4 info.
 
 | ID | Severity | Detection | Title |
 | --- | --- | --- | --- |
@@ -45,23 +45,28 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 | [MS034](#ms034-broadcast-capability-must-be-enabled-on-the-apns-auth-key) | error | runtime | Broadcast capability must be enabled on the APNs auth key |
 | [MS035](#ms035-apns-topic-header-missing-or-bundleid-misconfigured) | error | runtime | apns-topic header missing or bundleId misconfigured |
 | [MS036](#ms036-surface-snapshot-swift-structs-match-their-zod-projection-output-schemas) | error | static | Surface snapshot Swift structs match their Zod projection-output schemas |
+| [MS037](#ms037-notification-category-outputs-in-sync-with-canonical-registry) | error | static | Notification category outputs in sync with canonical registry |
 | [MS010](#ms010-toolchain-preflight-node-24-pnpm-xcode-26) | warning | config | Toolchain preflight (Node 24, pnpm, Xcode 26+) |
 | [MS015](#ms015-push-priority-5-vs-10-budget-rules) | warning | runtime | Push priority 5 vs 10 budget rules |
 | [MS021](#ms021-discard-per-activity-tokens-when-the-activity-ends) | warning | runtime | Discard per-activity tokens when the activity ends |
 | [MS023](#ms023-per-activity-tokens-are-bound-to-a-single-activity-instance) | warning | runtime | Per-activity tokens are bound to a single Activity instance |
+| [MS005](#ms005-retired-rule-id-reserved) | info | advisory | Retired rule (id reserved) |
 | [MS019](#ms019-fb21158660-push-to-start-tokens-silent-after-force-quit) | info | advisory | FB21158660: push-to-start tokens silent after force-quit |
+| [MS022](#ms022-retired-rule-merged-into-ms003) | info | advisory | Retired rule (merged into MS003) |
+| [MS033](#ms033-retired-rule-id-reserved) | info | advisory | Retired rule (id reserved) |
 
 ## Rules by tag
 
 - `app-group`: MS013, MS025
 - `channels`: MS031, MS034
 - `cng`: MS017, MS029
-- `config`: MS012, MS013, MS017, MS018, MS025, MS027, MS029, MS034, MS035
-- `contract`: MS001, MS003, MS004, MS006, MS007, MS008, MS009, MS024, MS036
+- `config`: MS012, MS013, MS017, MS018, MS025, MS027, MS029, MS034, MS035, MS037
+- `contract`: MS001, MS003, MS004, MS005, MS006, MS007, MS008, MS009, MS022, MS024, MS033, MS036, MS037
 - `control`: MS013, MS026, MS036
 - `ios-version`: MS012, MS027
 - `ios18`: MS031, MS034
 - `live-activity`: MS001, MS002, MS003, MS004, MS011, MS015, MS016, MS019, MS021, MS032
+- `notification`: MS037
 - `push`: MS006, MS011, MS014, MS015, MS018, MS024, MS028, MS030, MS031, MS032, MS034, MS035
 - `swift`: MS002, MS003, MS004, MS036
 - `tokens`: MS014, MS016, MS019, MS020, MS021, MS023, MS028, MS030
@@ -83,7 +88,7 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 
 Application code under apps/*/src/ must import the live-activity adapter through the boundary re-export, never directly from @mobile-surfaces/live-activity.
 
-**Symptom.** Compile-time imports look fine, but the project loses the swap point for switching to expo-live-activity, expo-widgets, or a custom native module without touching call sites.
+**Symptom.** Compile-time imports look fine, but call sites bypass the centralized re-export typed against LiveActivityAdapter. A future swap to expo-live-activity, expo-widgets, or a custom native module then has to update every importer instead of one shim, and the tsc-enforced adapter surface stops catching drift.
 
 **Fix.** Import from apps/mobile/src/liveActivity (the boundary re-export) instead of @mobile-surfaces/live-activity directly. Add new methods to the adapter contract first, not at the call site.
 
@@ -93,11 +98,11 @@ Application code under apps/*/src/ must import the live-activity adapter through
 
 **severity:** error  •  **detection:** static (script-checkable)  •  **tags:** live-activity, swift  •  **enforced by:** `scripts/check-activity-attributes.mjs`
 
-MobileSurfacesActivityAttributes.swift in packages/live-activity/ios/ and apps/mobile/targets/widget/ must be byte-identical.
+MobileSurfacesActivityAttributes.swift in packages/live-activity/ios/ and apps/mobile/targets/widget/ must be byte-identical, and both must match the codegen output from packages/surface-contracts/src/schema.ts.
 
 **Symptom.** Activity starts on the device but never appears on the Lock Screen. No log, no error. ActivityKit silently drops updates whose decoded ContentState shape does not match the widget extension's struct.
 
-**Fix.** Edit one file and copy verbatim into the other; pnpm surface:check verifies byte-identity. Phase 5 will replace this duplication with a local Swift Package once @bacons/apple-targets and React Native lift the upstream blocks.
+**Fix.** Both files are generated from the Zod source of truth. Edit liveSurfaceActivityContentState or liveSurfaceStage in packages/surface-contracts/src/schema.ts, then run pnpm surface:codegen to regenerate both files. CI gates codegen drift at stage 2 and byte-identity + Zod parity at stage 3. The follow-up plan to consolidate this duplication into a local Swift Package is upstream-blocked on @bacons/apple-targets local-SPM support and RN 0.84 local-path spm_dependency landing in Expo SDK 56; codegen is the intermediate state until that unblocks.
 
 **See:** [https://mobile-surfaces.com/docs/architecture#native-constraints](https://mobile-surfaces.com/docs/architecture#native-constraints)
 
@@ -165,11 +170,11 @@ packages/surface-contracts/src/fixtures.ts is generated from data/surface-fixtur
 
 **severity:** error  •  **detection:** runtime (only at send/receive)  •  **tags:** live-activity, push  •  **ios min:** 16.2
 
-Per-activity Live Activity pushes are bounded at 4 KB; iOS 18 broadcast pushes at 5 KB.
+Per-activity Live Activity pushes are bounded at 4 KB; iOS 18 broadcast pushes at 5 KB. Standard notification alert pushes (push-type alert, kind notification) share the 4 KB ceiling; the 5 KB allowance is ActivityKit-broadcast-only and does not apply to sendNotification.
 
 **Symptom.** APNs returns 413 PayloadTooLarge, or accepts the payload but iOS silently drops the update. Long localized strings or accumulated morePartsCount details are common offenders.
 
-**Fix.** Trim the payload. Per-activity payloads are bounded at 4 KB; broadcast payloads at 5 KB. Shorten secondaryText, lower morePartsCount, or split a state into two smaller pushes. Validate by sending the projection through toLiveActivityContentState and measuring.
+**Fix.** Trim the payload. Per-activity payloads are bounded at 4 KB; broadcast payloads at 5 KB. Shorten the liveActivity slice's body, lower morePartsCount, or split a state into two smaller pushes. Validate by sending the projection through toLiveActivityContentState and measuring.
 
 **See:** [https://mobile-surfaces.com/docs/push#error-responses](https://mobile-surfaces.com/docs/push#error-responses)
 
@@ -191,11 +196,11 @@ Mobile Surfaces commits to push-to-start tokens (Activity<...>.pushToStartTokenU
 
 **severity:** error  •  **detection:** static (script-checkable)  •  **tags:** app-group, widget, control, config  •  **enforced by:** `scripts/check-app-group-identity.mjs`
 
-apps/mobile/app.json, apps/mobile/targets/widget/generated.entitlements, MobileSurfacesSharedState.swift, and the host-side TS constants in apps/mobile/src must all declare the same com.apple.security.application-groups identifier.
+apps/mobile/app.json is the single source of truth for the App Group identifier. The widget entitlements file at apps/mobile/targets/widget/generated.entitlements, the Swift constant at apps/mobile/targets/_shared/MobileSurfacesAppGroup.swift, and the TS constant at apps/mobile/src/generated/appGroup.ts are codegened from it and must not be hand-edited. check-app-group-identity is the defense-in-depth identity check across the four declaration sites; the primary enforcer is the generate-app-group-constants --check gate at stage 2.
 
 **Symptom.** Widget renders placeholder forever; control widget never reads the toggle state. No error: the entitlement mismatch makes both sides read separate App Group containers.
 
-**Fix.** Set the same group identifier on every side (default 'group.com.example.mobilesurfaces'; rename via pnpm surface:rename) and rerun prebuild. check-app-group-identity verifies parity across all five declaration sites.
+**Fix.** Edit app.json and run pnpm surface:codegen to regenerate the Swift constant, TS constant, and widget entitlements in lockstep. Rename across every site via pnpm surface:rename. Hand edits to the generated files revert on the next codegen and fail the stage-2 drift gate.
 
 **See:** [https://mobile-surfaces.com/docs/ios-environment](https://mobile-surfaces.com/docs/ios-environment)
 
@@ -395,11 +400,21 @@ APNs requires an apns-topic header on every request; the SDK derives it from APN
 
 **severity:** error  •  **detection:** static (script-checkable)  •  **tags:** widget, control, swift, contract  •  **enforced by:** `scripts/check-surface-snapshots.mjs`
 
-The four hand-maintained Codable structs in apps/mobile/targets/widget/_shared/MobileSurfacesSharedState.swift (MobileSurfacesWidgetSnapshot, MobileSurfacesControlSnapshot, MobileSurfacesLockAccessorySnapshot, MobileSurfacesStandbySnapshot) must declare the same fields, types, JSON keys, and optionality as their Zod projection-output schemas in packages/surface-contracts/src/schema.ts (liveSurfaceWidgetTimelineEntry, liveSurfaceControlValueProvider, liveSurfaceLockAccessoryEntry, liveSurfaceStandbyEntry). This extends the MS003 guarantee from the Lock Screen to the other four surfaces.
+Every hand-maintained Codable struct in apps/mobile/targets/_shared/MobileSurfacesSharedState.swift that decodes a Zod projection-output schema (today: MobileSurfacesWidgetSnapshot, MobileSurfacesControlSnapshot, MobileSurfacesLockAccessorySnapshot, MobileSurfacesStandbySnapshot, mapping to liveSurfaceWidgetTimelineEntry, liveSurfaceControlValueProvider, liveSurfaceLockAccessoryEntry, liveSurfaceStandbyEntry in packages/surface-contracts/src/schema.ts) must declare the same fields, types, JSON keys, and optionality as its schema. New surfaces register their struct + schema pair in scripts/check-surface-snapshots.mjs's SURFACES list. This extends the MS003 guarantee from the Lock Screen to every non-Live-Activity surface.
 
 **Symptom.** The widget, control, lock-accessory, or StandBy surface renders placeholder data forever. The host writes a snapshot into the App Group container, but JSONDecoder in the widget extension silently fails on a renamed key, a type mismatch, or an optionality mismatch and returns nil. No log, no error.
 
 **Fix.** Update the Zod projection-output schema first (and the projection helper that feeds it), then mirror the field, type, JSON key, and optionality change into the matching struct in MobileSurfacesSharedState.swift. Run pnpm surface:check; check-surface-snapshots.mjs verifies all four structs against their schemas.
+
+### MS037: Notification category outputs in sync with canonical registry
+
+**severity:** error  •  **detection:** static (script-checkable)  •  **tags:** notification, contract, config  •  **enforced by:** `scripts/generate-notification-categories.mjs`
+
+packages/surface-contracts/src/notificationCategories.ts is the single source of truth for every UNNotificationCategory identifier Mobile Surfaces ships. The generated TS constant at apps/mobile/src/generated/notificationCategories.ts (host registration), the Swift constant at apps/mobile/targets/_shared/MobileSurfacesNotificationCategories.swift (extension routing), and (when the file exists) the UNNotificationExtensionCategory array in apps/mobile/targets/notification-content/Info.plist are all codegened from it and must not be hand-edited. The schema enforces parity at the wire boundary by constraining liveSurfaceNotificationSlice.category to z.enum over the registry's ids.
+
+**Symptom.** Notification arrives at the device with aps.category set, but the UNNotificationContentExtension is never invoked: the user sees the default system chrome instead of the surface-aware custom view. No log, no error - iOS silently falls back when the payload category does not match any registered UNNotificationExtensionCategory in the extension Info.plist.
+
+**Fix.** Edit packages/surface-contracts/src/notificationCategories.ts and run pnpm surface:codegen to regenerate every consumer in lockstep. The schema-level z.enum constraint rejects payloads that name a category outside the registry, so the wire stays load-bearing for parity.
 
 ### MS010: Toolchain preflight (Node 24, pnpm, Xcode 26+)
 
@@ -447,6 +462,16 @@ A new Activity.request mints a fresh per-activity token; tokens from a previous 
 
 **See:** [https://mobile-surfaces.com/docs/push#token-taxonomy](https://mobile-surfaces.com/docs/push#token-taxonomy)
 
+### MS005: Retired rule (id reserved)
+
+**severity:** info  •  **detection:** advisory (no programmatic check)  •  **tags:** contract
+
+Reserved id. The original rule was removed before its prose was preserved in git history; the id is held back so external references (PR comments, log lines, blog posts citing MS005) keep resolving to a known marker rather than collide with a future rule.
+
+**Symptom.** n/a (retired).
+
+**Fix.** n/a (retired). Numbering policy: trap ids are monotonic forever; deletions reserve the id with deprecated: true.
+
 ### MS019: FB21158660: push-to-start tokens silent after force-quit
 
 **severity:** info  •  **detection:** advisory (no programmatic check)  •  **tags:** tokens, live-activity  •  **ios min:** 17.2
@@ -458,6 +483,26 @@ Apple-reported bug. After the user force-quits the app, pushToStartTokenUpdates 
 **Fix.** No client workaround. Document in customer-support runbooks: 'If the Lock Screen activity does not appear after a remote-start push, ask the user to open the app once.'
 
 **See:** [https://mobile-surfaces.com/docs/push#fb21158660-push-to-start-after-force-quit](https://mobile-surfaces.com/docs/push#fb21158660-push-to-start-after-force-quit)
+
+### MS022: Retired rule (merged into MS003)
+
+**severity:** info  •  **detection:** advisory (no programmatic check)  •  **tags:** contract
+
+Reserved id. The original rule was an early-draft duplicate of MS003 (Swift ContentState fields and JSON keys match Zod liveSurfaceActivityContentState) and was merged into it. See git commit d79ffb0.
+
+**Symptom.** See MS003.
+
+**Fix.** See MS003. Numbering policy: trap ids are monotonic forever; deletions reserve the id with deprecated: true.
+
+### MS033: Retired rule (id reserved)
+
+**severity:** info  •  **detection:** advisory (no programmatic check)  •  **tags:** contract
+
+Reserved id. The original rule was removed before its prose was preserved in git history; the id is held back so external references (PR comments, log lines, blog posts citing MS033) keep resolving to a known marker rather than collide with a future rule.
+
+**Symptom.** n/a (retired).
+
+**Fix.** n/a (retired). Numbering policy: trap ids are monotonic forever; deletions reserve the id with deprecated: true.
 
 ## Related local documentation
 

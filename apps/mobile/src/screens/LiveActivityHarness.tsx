@@ -1,3 +1,16 @@
+// Surface harness: a fixture-driven playground for every surface kind.
+//
+// This is NOT a template for a production app. It is a testing appliance:
+// every button fires a canonical LiveSurfaceSnapshot from data/surface-fixtures/
+// so you can verify that each surface kind (Lock Screen Live Activity,
+// Dynamic Island, home widget, control widget, lock accessory, StandBy)
+// renders correctly against the bridge.
+//
+// To build your real app on this foundation, keep src/liveActivity/,
+// src/surfaceStorage/, and src/theme.ts (the plumbing), replace this file
+// with your domain screen, and wire your backend to emit snapshots through
+// the same projection helpers. The walkthrough lives at
+// https://mobile-surfaces.com/docs/building-your-app.
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -29,6 +42,7 @@ import {
 import {
   canRequestPushToken,
   getDeviceApnsToken,
+  registerNotificationCategories,
   requestNotificationPermissions,
 } from "../notifications";
 // SURFACE-BEGIN: home-widget control-widget lock-accessory-widget standby-widget
@@ -93,6 +107,16 @@ export function LiveActivityHarness() {
   useEffect(() => {
     LiveActivity.areActivitiesEnabled().then(setSupported).catch(() => setSupported(false));
     refreshActive();
+    // Register notification categories before any APNs notification can be
+    // delivered. The bundled UNNotificationContentExtension's Info.plist
+    // routes on these same identifiers (codegen MS037); without this call
+    // iOS still delivers the alert but the extension never fires, and the
+    // host delegate has nothing to match actions against. Fire-and-forget
+    // is fine: the call is idempotent and a transient permission denial
+    // does not block the rest of the harness.
+    registerNotificationCategories().catch((e) => {
+      console.warn("registerNotificationCategories failed", e);
+    });
 
     const tokenSub = LiveActivity.addListener("onPushToken", ({ activityId: id, token }) => {
       if (id === activityIdRef.current) {
@@ -137,7 +161,7 @@ export function LiveActivityHarness() {
       const snapshot = surfaceFixtures[key];
       const result = await LiveActivity.start(
         snapshot.surfaceId,
-        snapshot.modeLabel,
+        snapshot.liveActivity.modeLabel,
         activityFixtureStates[key],
       );
       setActivityId(result.id);
@@ -325,7 +349,7 @@ export function LiveActivityHarness() {
           {fixtureKeys.map((key) => (
             <Btn
               key={`start-${String(key)}`}
-              label={surfaceFixtures[key].modeLabel}
+              label={surfaceFixtures[key].liveActivity.modeLabel}
               onPress={() => handleStart(key)}
               disabled={busy}
             />
@@ -338,7 +362,7 @@ export function LiveActivityHarness() {
           {fixtureKeys.map((key) => (
             <Btn
               key={`update-${String(key)}`}
-              label={`→ ${surfaceFixtures[key].modeLabel}`}
+              label={`→ ${surfaceFixtures[key].liveActivity.modeLabel}`}
               onPress={() => handleUpdate(key)}
               disabled={busy || !activityId}
             />

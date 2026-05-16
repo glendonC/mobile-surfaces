@@ -10,8 +10,7 @@
 
 import path from "node:path";
 import pc from "picocolors";
-import { cancelled, prompts as copy } from "./copy.mjs";
-import { EXIT_CODES } from "./exit-codes.mjs";
+import { prompts as copy } from "./copy.mjs";
 import * as defaultUi from "./ui.mjs";
 import { validateTeamId } from "./validators.mjs";
 
@@ -142,11 +141,13 @@ function renderPlanRecap(plan, ui) {
 
   // Echo the surface selections so the user sees their choices reflected
   // before "Apply these changes?". Live activity + dynamic island always
-  // ship; only home + control widgets are toggleable.
+  // ship; the four widget kinds are toggleable.
   lines.push("  " + pc.bold("surfaces"));
   lines.push(`    live activity + dynamic island  ${pc.dim("(always)")}`);
   lines.push(`    home widget                     ${plan.surfaces.homeWidget ? pc.bold("yes") : pc.dim("no")}`);
   lines.push(`    control widget                  ${plan.surfaces.controlWidget ? pc.bold("yes") : pc.dim("no")}`);
+  lines.push(`    lock screen accessory           ${plan.surfaces.lockAccessoryWidget ? pc.bold("yes") : pc.dim("no")}`);
+  lines.push(`    standby                         ${plan.surfaces.standbyWidget ? pc.bold("yes") : pc.dim("no")}`);
   lines.push("");
 
   if (plan.packagesToAdd.length > 0) {
@@ -196,6 +197,23 @@ function renderPlanRecap(plan, ui) {
     lines.push("");
   }
 
+  // When the user's config is app.config.js/ts we can't safely auto-edit it,
+  // so the apply phase will skip the patch and the user has to paste the
+  // snippet themselves. Surface that here so "Apply these changes?" doesn't
+  // imply the CLI will handle it. Without this, a user reads the recap, hits
+  // yes, and only finds out about the manual paste at the end.
+  if (plan.appConfigManual) {
+    const configFile = plan.appConfigKind === "missing"
+      ? "an app.json or app.config.*"
+      : `app.config.${plan.appConfigKind}`;
+    lines.push("  " + pc.bold("manual step required"));
+    lines.push(`    We can't safely auto-edit ${configFile}, so after we`);
+    lines.push("    apply the rest of the changes you'll need to:");
+    lines.push(`      1. paste the snippet above into ${configFile}`);
+    lines.push("      2. run yourself: npx expo prebuild --platform ios");
+    lines.push("");
+  }
+
   ui.rail.block(lines.join("\n"));
 }
 
@@ -224,10 +242,28 @@ export async function runExistingExpoPrompts({ evidence, manifest, overrides = {
           defaultValue: true,
         });
 
+  const lockAccessoryWidget = overrides.lockAccessoryWidget !== undefined
+    ? overrides.lockAccessoryWidget
+    : yes
+      ? true
+      : await ui.askConfirm({
+          message: copy.surfaces.lockAccessoryWidget.message,
+          defaultValue: true,
+        });
+
+  const standbyWidget = overrides.standbyWidget !== undefined
+    ? overrides.standbyWidget
+    : yes
+      ? true
+      : await ui.askConfirm({
+          message: copy.surfaces.standbyWidget.message,
+          defaultValue: true,
+        });
+
   const plan = planChanges({
     evidence,
     manifest,
-    surfaces: { homeWidget, controlWidget },
+    surfaces: { homeWidget, controlWidget, lockAccessoryWidget, standbyWidget },
   });
 
   ui.rail.step(4, 5, "Plan");
@@ -281,8 +317,12 @@ export async function runExistingExpoPrompts({ evidence, manifest, overrides = {
     });
 
     if (!proceed) {
-      ui.log.message(pc.dim(cancelled));
-      process.exit(EXIT_CODES.SUCCESS);
+      // Mirror greenfield prompts.mjs: cancelling the recap restarts the
+      // prompt loop rather than hard-exiting. The user picked surfaces and a
+      // team id; if those were wrong they can correct without re-launching
+      // create-mobile-surfaces.
+      ui.log.info("Starting over.");
+      return runExistingExpoPrompts({ evidence, manifest, overrides, yes, ui });
     }
   }
 

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@6.0/schema.json",
+  "schemaVersion": "5",
+  "kind": "standby",
+  "id": "fixture-standby-night",
+  "surfaceId": "surface-standby-night",
+  "updatedAt": "2026-05-15T12:01:30.000Z",
+  "state": "active",
+  "standby": {
+    "title": "Surface overnight",
+    "body": "Red-shifted rendering for ambient low-light viewing.",
+    "progress": 0.78,
+    "deepLink": "mobilesurfaces://surface/surface-standby-night",
+    "presentation": "night",
+    "tint": "monochrome"
+  }
+}

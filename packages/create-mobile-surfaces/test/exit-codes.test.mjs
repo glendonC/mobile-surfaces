@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -112,4 +112,118 @@ describe("CLI exit codes (subprocess)", () => {
     const result = runCli([], { cwd: tmp });
     assert.equal(result.status, EXIT_CODES.USER_ERROR);
   });
+});
+
+// SIGINT propagation. The CLI's apply phase catches a task throw and exits 130
+// when `interrupted` is true (the SIGINT handler in bin/index.mjs flips the
+// flag). Verifying this end-to-end requires a real subprocess: spawn the CLI
+// in --yes greenfield mode with the test-only CMS_TEST_SCAFFOLD_DELAY_MS hook
+// inserted before the "Copying template" task, wait for the spinner to start,
+// send SIGINT, and assert the exit status. Skipped on non-macOS because
+// preflight will hard-fail at "macOS required" before any task runs.
+describe("CLI propagates SIGINT as exit 130 during a task", () => {
+  let tmp;
+
+  beforeEach(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cms-sigint-"));
+  });
+
+  afterEach(() => {
+    if (tmp && fs.existsSync(tmp)) fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  // Mirrors the runCli helper above, but stays detached so we can signal it.
+  // Returns a Promise that resolves with { code, signal, stdout, stderr } when
+  // the child exits, plus a `ready` Promise that resolves as soon as the first
+  // task spinner output lands on stdout — i.e. we're past preflight and into
+  // the scaffold pipeline.
+  function spawnCli(args, { cwd, env }) {
+    const child = spawn("node", [cliBin, ...args], {
+      cwd,
+      env: { ...process.env, FORCE_COLOR: "0", ...env },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+    let resolveReady;
+    const ready = new Promise((r) => {
+      resolveReady = r;
+    });
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+      // The "Copying template" label is emitted by ui.task() the moment the
+      // first scaffold task starts. CMS_TEST_SCAFFOLD_DELAY_MS holds the task
+      // open for the duration we configure, so SIGINT lands mid-task.
+      if (stdout.includes("Copying template")) resolveReady();
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    const exited = new Promise((resolve) => {
+      child.on("exit", (code, signal) => resolve({ code, signal, stdout, stderr }));
+    });
+
+    return { child, ready, exited };
+  }
+
+  it(
+    "exits 130 when SIGINT lands during the scaffold task pipeline",
+    { skip: process.platform !== "darwin" ? "SIGINT propagation test is macOS-only (preflight rejects other platforms)" : false },
+    async () => {
+      // 15s ceiling on overall test duration; the delay we inject is 3s which
+      // leaves 12s for spawn + SIGINT delivery + child exit. Locally this
+      // path finishes in under a second, but a cold GitHub macos-26 runner
+      // doing its first child-process spawn can blow past 2s on its own —
+      // the previous 5s ceiling left only 2s of headroom and tripped a
+      // benign timeout on PR #73. We're testing exit-code propagation, not
+      // spawn latency; pick a ceiling that keeps the test useful (still
+      // fails if the CLI hangs forever) without ratcheting on runner noise.
+      const result = await new Promise((resolve, reject) => {
+        const timer = setTimeout(
+          () => reject(new Error("SIGINT test timed out")),
+          15000,
+        );
+        const { child, ready, exited } = spawnCli(
+          [
+            "--yes",
+            "--name=sigint-fixture",
+            "--bundle-id=com.acme.sigintfixture",
+            "--no-install",
+          ],
+          {
+            cwd: tmp,
+            env: { CMS_TEST_SCAFFOLD_DELAY_MS: "3000" },
+          },
+        );
+        ready
+          .then(() => {
+            child.kill("SIGINT");
+            return exited;
+          })
+          .then((res) => {
+            clearTimeout(timer);
+            resolve(res);
+          })
+          .catch((err) => {
+            clearTimeout(timer);
+            reject(err);
+          });
+      });
+
+      // POSIX 128 + signal: SIGINT (2) → 130. Node sometimes reports the exit
+      // as `code=null, signal='SIGINT'` when the process was killed before any
+      // explicit process.exit() ran. Accept either path: both shapes mean
+      // "the CLI was interrupted by SIGINT", and the public contract is that a
+      // user piping the CLI's status into a shell sees 130.
+      const status =
+        result.code !== null ? result.code : result.signal === "SIGINT" ? 130 : null;
+      assert.equal(
+        status,
+        EXIT_CODES.INTERRUPTED,
+        `expected exit 130, got code=${result.code} signal=${result.signal}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
+      );
+    },
+  );
 });

@@ -424,6 +424,12 @@ export async function applyMonorepo({
     return summary;
   } catch (err) {
     summary.rolledBack = true;
+    // Capture manifest size before rollback() consumes it so the CLI top level
+    // can name how many files were restored. Mirrors applyToExisting; see the
+    // matching comment there.
+    const restoredCount = session.manifest.filter((e) => e.kind === "file").length;
+    err.rolledBack = true;
+    err.restoredCount = restoredCount;
     try {
       await session.rollback();
     } catch (rollbackErr) {

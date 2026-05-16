@@ -308,12 +308,18 @@ test("runPrompts: each text prompt receives the validator that matches its ident
     { kind: "text", answer: "" },                // teamId      -> validateTeamId
     { kind: "confirm", answer: true },           // homeWidget
     { kind: "confirm", answer: true },           // controlWidget
+    { kind: "confirm", answer: true },           // lockAccessoryWidget
+    { kind: "confirm", answer: true },           // standbyWidget
     { kind: "select", answer: true },            // installNow
     { kind: "confirm", answer: true },           // recap confirm
   ]);
   const result = await runPrompts({ overrides: {}, yes: false, ui });
   assert.equal(result.projectName, "myproj");
   assert.equal(result.bundleId, "com.acme.myproj");
+  // v5 surfaced lockAccessoryWidget and standbyWidget in the interactive
+  // picker. The defaults are `true` so the happy-path result includes them.
+  assert.equal(result.surfaces.lockAccessoryWidget, true);
+  assert.equal(result.surfaces.standbyWidget, true);
 
   // Validators are independent: the bundle-id prompt's validator must reject
   // a project-slug-shaped value, and the project-slug prompt's validator
@@ -338,6 +344,8 @@ test("runPrompts: --yes mode skips every interactive prompt", async () => {
       teamId: "",
       homeWidget: true,
       controlWidget: true,
+      lockAccessoryWidget: true,
+      standbyWidget: true,
       installNow: true,
     },
     yes: true,
@@ -349,11 +357,16 @@ test("runPrompts: --yes mode skips every interactive prompt", async () => {
 
 test("runPrompts: rejected recap confirm restarts the flow; second confirm returns the answer", async () => {
   const ui = makeFakeUi([
-    // First pass — user answers, then declines the recap.
+    // First pass — user answers, then declines the recap. Each pass now has
+    // four confirm prompts (home, control, lockAccessory, standby) plus the
+    // recap confirm; that's six confirms per pass, plus four text and one
+    // select. Two passes = 22 scripted answers below.
     { kind: "text", answer: "first" },
     { kind: "text", answer: "first" },
     { kind: "text", answer: "com.first.app" },
     { kind: "text", answer: "" },
+    { kind: "confirm", answer: true },
+    { kind: "confirm", answer: true },
     { kind: "confirm", answer: true },
     { kind: "confirm", answer: true },
     { kind: "select", answer: true },
@@ -365,13 +378,15 @@ test("runPrompts: rejected recap confirm restarts the flow; second confirm retur
     { kind: "text", answer: "" },
     { kind: "confirm", answer: true },
     { kind: "confirm", answer: true },
+    { kind: "confirm", answer: true },
+    { kind: "confirm", answer: true },
     { kind: "select", answer: true },
     { kind: "confirm", answer: true },
   ]);
   const result = await runPrompts({ overrides: {}, yes: false, ui });
   assert.equal(result.projectName, "second");
   assert.equal(result.bundleId, "com.second.app");
-  assert.equal(ui.calls.length, 16);
+  assert.equal(ui.calls.length, 20);
 });
 
 // --- live inquirer retry loop --------------------------------------------
@@ -489,12 +504,17 @@ test("runPrompts: recap rejected twice restarts twice, then resolves on the thir
   // Extends the single-rejection coverage above. Pinning multi-pass restart
   // protects against a regression where the recursion only triggers once
   // (e.g. accidentally consuming the rejection state on the first restart).
+  // v5 adds two more confirms per pass (lockAccessory + standby), so each
+  // pass is 10 prompts (4 text, 4 confirm, 1 select, 1 recap-confirm). Three
+  // passes = 30 scripted answers.
   const ui = makeFakeUi([
     // Pass 1 — declined.
     { kind: "text", answer: "one" },
     { kind: "text", answer: "one" },
     { kind: "text", answer: "com.one.app" },
     { kind: "text", answer: "" },
+    { kind: "confirm", answer: true },
+    { kind: "confirm", answer: true },
     { kind: "confirm", answer: true },
     { kind: "confirm", answer: true },
     { kind: "select", answer: true },
@@ -506,6 +526,8 @@ test("runPrompts: recap rejected twice restarts twice, then resolves on the thir
     { kind: "text", answer: "" },
     { kind: "confirm", answer: true },
     { kind: "confirm", answer: true },
+    { kind: "confirm", answer: true },
+    { kind: "confirm", answer: true },
     { kind: "select", answer: true },
     { kind: "confirm", answer: false },
     // Pass 3 — accepted.
@@ -515,13 +537,15 @@ test("runPrompts: recap rejected twice restarts twice, then resolves on the thir
     { kind: "text", answer: "" },
     { kind: "confirm", answer: true },
     { kind: "confirm", answer: true },
+    { kind: "confirm", answer: true },
+    { kind: "confirm", answer: true },
     { kind: "select", answer: true },
     { kind: "confirm", answer: true },
   ]);
   const result = await runPrompts({ overrides: {}, yes: false, ui });
   assert.equal(result.projectName, "three");
   assert.equal(result.bundleId, "com.three.app");
-  assert.equal(ui.calls.length, 24);
+  assert.equal(ui.calls.length, 30);
 });
 
 // --- orchestrator-level cancellation through the live ui --------------------
@@ -563,6 +587,8 @@ test("runExistingExpoPrompts: happy path returns mode + teamId + plan", async ()
   const ui = makeFakeUi([
     { kind: "confirm", answer: true },  // homeWidget
     { kind: "confirm", answer: true },  // controlWidget
+    { kind: "confirm", answer: true },  // lockAccessoryWidget
+    { kind: "confirm", answer: true },  // standbyWidget
     { kind: "text", answer: "ABCDE12345" }, // teamId (app.json has no real one in this fixture)
     { kind: "select", answer: true },   // installNow
     { kind: "confirm", answer: true },  // recap confirm
@@ -579,35 +605,43 @@ test("runExistingExpoPrompts: happy path returns mode + teamId + plan", async ()
   assert.equal(result.installNow, true);
   assert.equal(result.plan.surfaces.homeWidget, true);
   assert.equal(result.plan.surfaces.controlWidget, true);
+  assert.equal(result.plan.surfaces.lockAccessoryWidget, true);
+  assert.equal(result.plan.surfaces.standbyWidget, true);
 });
 
-test("runExistingExpoPrompts: declining the recap exits SUCCESS without restarting", async () => {
-  // Asymmetry with greenfield: existing-expo treats recap-decline as
-  // cancellation, not a restart, because the user already has a project and
-  // the prompt sequence does not produce a fresh identity worth re-collecting.
-  // If a future change makes this path restart instead, the exit assertion
-  // below fails and surfaces the divergence.
-  await withCapturedExit(async (getExited) => {
-    const ui = makeFakeUi([
-      { kind: "confirm", answer: true },
-      { kind: "confirm", answer: true },
-      { kind: "text", answer: "" },
-      { kind: "select", answer: true },
-      { kind: "confirm", answer: false }, // recap declined
-    ]);
-    await assert.rejects(
-      () =>
-        runExistingExpoPrompts({
-          evidence: EXPO_EVIDENCE,
-          manifest: FAKE_MANIFEST,
-          overrides: {},
-          yes: false,
-          ui,
-        }),
-      /__exit__/,
-    );
-    assert.equal(getExited(), EXIT_CODES.SUCCESS);
+test("runExistingExpoPrompts: declining the recap restarts the prompt loop", async () => {
+  // v5 alignment: existing-expo now mirrors greenfield. Cancelling at the
+  // recap restarts the prompt loop instead of hard-exiting, so a user who
+  // mis-clicked a surface can correct without re-launching the CLI.
+  const ui = makeFakeUi([
+    // Pass 1 — declined at the recap.
+    { kind: "confirm", answer: true },  // homeWidget
+    { kind: "confirm", answer: true },  // controlWidget
+    { kind: "confirm", answer: true },  // lockAccessoryWidget
+    { kind: "confirm", answer: true },  // standbyWidget
+    { kind: "text", answer: "" },       // teamId
+    { kind: "select", answer: true },   // installNow
+    { kind: "confirm", answer: false }, // recap declined -> restart
+    // Pass 2 — user flips control off, accepts the recap.
+    { kind: "confirm", answer: true },
+    { kind: "confirm", answer: false }, // controlWidget off this time
+    { kind: "confirm", answer: true },
+    { kind: "confirm", answer: true },
+    { kind: "text", answer: "" },
+    { kind: "select", answer: true },
+    { kind: "confirm", answer: true },
+  ]);
+  const result = await runExistingExpoPrompts({
+    evidence: EXPO_EVIDENCE,
+    manifest: FAKE_MANIFEST,
+    overrides: {},
+    yes: false,
+    ui,
   });
+  assert.equal(result.mode, "existing-expo");
+  assert.equal(result.plan.surfaces.controlWidget, false);
+  // 7 prompts per pass × 2 passes = 14.
+  assert.equal(ui.calls.length, 14);
 });
 
 test("runExistingExpoPrompts: ExitPromptError mid-flow exits SUCCESS through guard", async () => {
@@ -647,6 +681,8 @@ test("runMonorepoPrompts: happy path returns mode + config + plan", async () => 
     { kind: "text", answer: "" },                // teamId
     { kind: "confirm", answer: true },           // homeWidget
     { kind: "confirm", answer: true },           // controlWidget
+    { kind: "confirm", answer: true },           // lockAccessoryWidget
+    { kind: "confirm", answer: true },           // standbyWidget
     { kind: "select", answer: true },            // installNow
     { kind: "confirm", answer: true },           // recap confirm
   ]);
@@ -661,33 +697,47 @@ test("runMonorepoPrompts: happy path returns mode + config + plan", async () => 
   assert.equal(result.config.projectName, "lockscreen-demo");
   assert.equal(result.config.teamId, null);
   assert.equal(result.plan.appsMobileDest.endsWith("apps/mobile"), true);
+  assert.equal(result.plan.surfaces.lockAccessoryWidget, true);
+  assert.equal(result.plan.surfaces.standbyWidget, true);
   // Workspace already declares apps/*, so the plan should not propose to add it.
   assert.deepEqual(result.plan.workspaceGlobsToAdd, []);
 });
 
-test("runMonorepoPrompts: declining the recap exits SUCCESS without restarting", async () => {
-  await withCapturedExit(async (getExited) => {
-    const ui = makeFakeUi([
-      { kind: "text", answer: "lockscreen-demo" },
-      { kind: "text", answer: "lockscreendemo" },
-      { kind: "text", answer: "com.acme.lockscreendemo" },
-      { kind: "text", answer: "" },
-      { kind: "confirm", answer: true },
-      { kind: "confirm", answer: true },
-      { kind: "select", answer: true },
-      { kind: "confirm", answer: false }, // recap declined
-    ]);
-    await assert.rejects(
-      () =>
-        runMonorepoPrompts({
-          evidence: MONOREPO_EVIDENCE,
-          manifest: FAKE_MANIFEST,
-          overrides: {},
-          yes: false,
-          ui,
-        }),
-      /__exit__/,
-    );
-    assert.equal(getExited(), EXIT_CODES.SUCCESS);
+test("runMonorepoPrompts: declining the recap restarts the prompt loop", async () => {
+  // v5 alignment: existing-monorepo now mirrors greenfield and existing-expo.
+  // Cancelling at the recap restarts the loop instead of hard-exiting.
+  const ui = makeFakeUi([
+    // Pass 1 — declined.
+    { kind: "text", answer: "lockscreen-demo" },
+    { kind: "text", answer: "lockscreendemo" },
+    { kind: "text", answer: "com.acme.lockscreendemo" },
+    { kind: "text", answer: "" },
+    { kind: "confirm", answer: true },
+    { kind: "confirm", answer: true },
+    { kind: "confirm", answer: true },
+    { kind: "confirm", answer: true },
+    { kind: "select", answer: true },
+    { kind: "confirm", answer: false }, // recap declined -> restart
+    // Pass 2 — different project name, accept recap.
+    { kind: "text", answer: "redo-demo" },
+    { kind: "text", answer: "redodemo" },
+    { kind: "text", answer: "com.acme.redodemo" },
+    { kind: "text", answer: "" },
+    { kind: "confirm", answer: true },
+    { kind: "confirm", answer: true },
+    { kind: "confirm", answer: true },
+    { kind: "confirm", answer: true },
+    { kind: "select", answer: true },
+    { kind: "confirm", answer: true },
+  ]);
+  const result = await runMonorepoPrompts({
+    evidence: MONOREPO_EVIDENCE,
+    manifest: FAKE_MANIFEST,
+    overrides: {},
+    yes: false,
+    ui,
   });
+  assert.equal(result.config.projectName, "redo-demo");
+  // 10 prompts per pass × 2 passes = 20.
+  assert.equal(ui.calls.length, 20);
 });

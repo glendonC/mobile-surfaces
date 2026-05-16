@@ -2,6 +2,7 @@
 title: "Release"
 description: "Changesets release PRs, npm trusted publishing, release verification."
 order: 110
+group: "Operate"
 ---
 # Release
 

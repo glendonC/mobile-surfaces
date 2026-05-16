@@ -7,24 +7,34 @@ import crypto from "node:crypto";
 import {
   liveSurfaceSnapshot,
   toLiveActivityContentState,
+  toNotificationContentPayload,
 } from "@mobile-surfaces/surface-contracts";
 import type {
   LiveSurfaceSnapshot,
   LiveSurfaceSnapshotLiveActivity,
+  LiveSurfaceSnapshotNotification,
 } from "@mobile-surfaces/surface-contracts";
-import { liveActivityAlertPayloadFromSnapshot } from "./payloads.ts";
+import { toApnsAlertPayload } from "./payloads.ts";
 
 import {
+  AbortError,
   ApnsError,
-  BadDateError,
-  BadExpirationDateError,
   ClientClosedError,
+  CreateChannelResponseError,
+  ExpiredProviderTokenError,
   InvalidSnapshotError,
   MissingApnsConfigError,
-  PayloadTooLargeError,
   TooManyRequestsError,
   reasonToError,
 } from "./errors.ts";
+import {
+  MAX_PAYLOAD_BYTES_BROADCAST,
+  MAX_PAYLOAD_BYTES_DEFAULT,
+  assertActivityTimestampOptions,
+  assertPayloadWithinLimit,
+  resolveBroadcastExpiration,
+} from "./preflight.ts";
+import type { PayloadKind } from "./preflight.ts";
 import type { Http2ConnectFactory } from "./http.ts";
 import { Http2Client } from "./http.ts";
 import { JwtCache, resolveKeyPem } from "./jwt.ts";
@@ -46,171 +56,9 @@ import type { ChannelInfo } from "./channels.ts";
 
 export type { ChannelInfo } from "./channels.ts";
 
-// APNs payload ceilings per MS011. Per-activity and alert sends are bounded at
-// 4 KB; iOS 18 broadcast pushes get an extra 1 KB. The SDK enforces these
-// client-side so callers see PayloadTooLargeError before the round-trip.
-const MAX_PAYLOAD_BYTES_DEFAULT = 4096;
-const MAX_PAYLOAD_BYTES_BROADCAST = 5120;
-
-type PayloadKind = "alert" | "update" | "start" | "end" | "broadcast";
-
-function assertPayloadWithinLimit(
-  payload: string,
-  kind: PayloadKind,
-): void {
-  const limit =
-    kind === "broadcast" ? MAX_PAYLOAD_BYTES_BROADCAST : MAX_PAYLOAD_BYTES_DEFAULT;
-  const size = Buffer.byteLength(payload, "utf8");
-  if (size > limit) {
-    throw new PayloadTooLargeError({
-      status: 413,
-      message: `Client-side pre-flight: payload size ${size} bytes exceeds limit ${limit} for ${kind}; rejected before APNs round-trip. See MS011.`,
-    });
-  }
-}
-
-/**
- * Lower bound below which a value is treated as a millisecond-magnitude
- * timestamp rather than unix seconds. Unix-seconds values for any realistic
- * date stay well under 1e11 (year 2286 is ~9.9e9 seconds); a millisecond
- * timestamp for any date past 1973 is already above it. Date.now() returns
- * ~1.7e12, the single most common MS032 offender, so any field at or above
- * this boundary is rejected as a millisecond value passed where seconds were
- * expected.
- */
-const MILLISECOND_MAGNITUDE_FLOOR = 1e11;
-
-/**
- * Client-side pre-flight for MS032: every Live Activity timestamp field
- * (`staleDateSeconds`, `dismissalDateSeconds`, and the `expirationSeconds`
- * that derives `apns-expiration`) must be a positive unix-seconds integer.
- * APNs rejects non-integer, negative, zero, NaN, and millisecond-magnitude
- * values with 400 BadDate / 400 BadExpirationDate; we surface that before the
- * round-trip the same way `assertPayloadWithinLimit` handles MS011 — reusing
- * the typed error class with `status: 400` so observability hooks bucket the
- * client-caught and server-returned variants together.
- *
- * Rules match scripts/send-apns.mjs's `parseUnixSeconds` (not finite, not an
- * integer, or <= 0 is rejected) and additionally reject millisecond-magnitude
- * values, which `parseUnixSeconds` would accept but APNs would not.
- *
- * `undefined` passes through untouched: the field is optional and the caller
- * (or a downstream default) supplies it later. `errorClass` selects BadDate
- * for stale/dismissal fields and BadExpirationDate for the expiration field,
- * matching the reason APNs returns for each; both classes carry trapId
- * "MS032" through the generated trap-bindings table.
- */
-function assertValidActivityTimestamp(
-  value: number | undefined,
-  field: "staleDateSeconds" | "dismissalDateSeconds" | "expirationSeconds",
-  errorClass: typeof BadDateError | typeof BadExpirationDateError,
-): void {
-  if (value === undefined) return;
-  let problem: string | undefined;
-  if (!Number.isFinite(value)) {
-    problem = "must be a finite number";
-  } else if (!Number.isInteger(value)) {
-    problem = "must be an integer (no fractional seconds)";
-  } else if (value <= 0) {
-    problem = "must be a positive unix-seconds value (got zero or negative)";
-  } else if (value >= MILLISECOND_MAGNITUDE_FLOOR) {
-    problem =
-      "looks like a millisecond timestamp; pass unix seconds " +
-      "(divide a Date.now() value by 1000)";
-  }
-  if (problem === undefined) return;
-  throw new errorClass({
-    status: 400,
-    message:
-      `Client-side pre-flight: ${field} ${problem} (received ${JSON.stringify(value)}); ` +
-      `rejected before APNs round-trip. See MS032.`,
-  });
-}
-
-/**
- * MS032 pre-flight for the timestamp options shared by device sends and
- * broadcasts. `staleDateSeconds` and `dismissalDateSeconds` are absolute
- * unix-seconds dates with no special-case values. `expirationSeconds` is
- * different: 0 is a documented, valid `apns-expiration` value ("attempt
- * delivery once, do not store") and is policy-required for a no-storage
- * broadcast channel, so a zero passes through untouched here; only a defined,
- * nonzero value is checked for malformed magnitude. #sendDevice, broadcast(),
- * and describeSend() all route through this so the three paths cannot drift.
- */
-function assertActivityTimestampOptions(options: {
-  staleDateSeconds?: number;
-  dismissalDateSeconds?: number;
-  expirationSeconds?: number;
-}): void {
-  assertValidActivityTimestamp(
-    options.staleDateSeconds,
-    "staleDateSeconds",
-    BadDateError,
-  );
-  assertValidActivityTimestamp(
-    options.dismissalDateSeconds,
-    "dismissalDateSeconds",
-    BadDateError,
-  );
-  if (
-    options.expirationSeconds !== undefined &&
-    options.expirationSeconds !== 0
-  ) {
-    assertValidActivityTimestamp(
-      options.expirationSeconds,
-      "expirationSeconds",
-      BadExpirationDateError,
-    );
-  }
-}
-
-const BROADCAST_DEFAULT_TTL_SECONDS = 3600;
-
-/**
- * Resolve `apns-expiration` for a broadcast send. The two channel storage
- * policies have opposite semantics — no-storage requires 0, most-recent-message
- * requires nonzero — and Apple rejects the wrong combination with 400
- * BadExpirationDate (MS032). We surface that as a client-side pre-flight
- * the same way `assertPayloadWithinLimit` handles MS011: reuse the typed
- * error class with `status: 400` so observability hooks bucket the
- * client-caught and server-returned variants together.
- *
- * The matrix:
- *
- *   storagePolicy           expirationSeconds   resolved expiration
- *   --------------------   ------------------   --------------------
- *   "no-storage" (default)  unset or 0           0
- *   "no-storage"            nonzero              throw (no-storage cannot defer)
- *   "most-recent-message"   unset                now + 3600
- *   "most-recent-message"   0                    throw (defeats the policy)
- *   "most-recent-message"   nonzero              expirationSeconds
- */
-function resolveBroadcastExpiration(options: BroadcastOptions): number {
-  const policy = options.storagePolicy ?? "no-storage";
-  const requested = options.expirationSeconds;
-  if (policy === "no-storage") {
-    if (requested !== undefined && requested !== 0) {
-      throw new BadExpirationDateError({
-        status: 400,
-        message:
-          `Client-side pre-flight: broadcast() with storagePolicy "no-storage" must send apns-expiration: 0 ` +
-          `(received expirationSeconds: ${requested}). No-storage channels cannot defer delivery; ` +
-          `if you need a TTL, create the channel with storagePolicy: "most-recent-message". See MS032.`,
-      });
-    }
-    return 0;
-  }
-  if (requested === 0) {
-    throw new BadExpirationDateError({
-      status: 400,
-      message:
-        `Client-side pre-flight: broadcast() with storagePolicy "most-recent-message" requires a nonzero apns-expiration ` +
-        `(received 0). A TTL of 0 defeats the channel's storage policy; pass expirationSeconds as a unix-seconds value ` +
-        `or omit it to default to now + ${BROADCAST_DEFAULT_TTL_SECONDS}s. See MS032.`,
-    });
-  }
-  return requested ?? Math.floor(Date.now() / 1000) + BROADCAST_DEFAULT_TTL_SECONDS;
-}
+// MS011 payload ceilings and MS032 timestamp pre-flight live in
+// ./preflight.ts so they are independently testable and so the post-split
+// operations/*.ts modules can compose them without re-importing client.ts.
 
 export interface CreatePushClientOptions {
   /** 10-character APNs Auth Key ID from the Apple Developer portal. */
@@ -244,6 +92,14 @@ export interface CreatePushClientOptions {
   /** ms with no in-flight requests before the HTTP/2 session is closed. Default 60_000. */
   idleTimeoutMs?: number;
   /**
+   * Upper bound in ms that `close()` waits for the underlying HTTP/2 sessions
+   * to drain gracefully before force-destroying them. APNs healthy peers drain
+   * in milliseconds; the default exists so a stuck peer cannot hang process
+   * teardown. Set to 0 or negative to disable the bound (graceful close with
+   * no timeout — the pre-5.x behavior). Default 5_000.
+   */
+  closeTimeoutMs?: number;
+  /**
    * Optional observability hooks fired per-attempt for every send and channel
    * management operation. Use these to wire your own Sentry / PostHog / log
    * aggregator without re-implementing APNs error parsing. The SDK never
@@ -258,6 +114,18 @@ export interface CreatePushClientOptions {
    * secrets but they are the only credential needed to send to a device.
    */
   hooks?: PushHooks;
+  /**
+   * Optional TLS certificate-authority override. Forwarded to `http2.connect`
+   * as the `ca` field on its session options. Production callers never set
+   * this — the Apple root certificate is in Node's default CA store. The
+   * field exists so the package's TLS regression test (`test/tls.test.mjs`)
+   * can point the client at an in-process h2 server whose self-signed cert
+   * the default store would otherwise reject. The same effect was previously
+   * available only through `TEST_TRANSPORT_OVERRIDE.sessionOptions`; the
+   * surfaced option makes the TLS test path readable without exposing the
+   * full session-options surface to production callers.
+   */
+  caOverride?: string | Buffer;
 }
 
 /**
@@ -323,6 +191,31 @@ export interface SendOptions {
   staleDateSeconds?: number;
   /** ActivityKit `dismissal-date` in unix seconds. */
   dismissalDateSeconds?: number;
+  /**
+   * Optional ActivityKit `relevance-score` in [0, 1]. The OS uses it to
+   * decide which Live Activity wins the Dynamic Island compact slot when
+   * multiple activities are active for the same app. Higher score wins;
+   * undefined leaves the field out (matching Apple's default). Has no
+   * effect on alert-type pushes; APNs ignores it there.
+   */
+  relevanceScore?: number;
+  /**
+   * Optional `apns-collapse-id` header. APNs coalesces multiple alert
+   * notifications with the same collapse-id into a single Notification
+   * Center entry. Has no effect on Live Activity sends (Apple ignores it
+   * there) so the SDK only sets the header when pushType === "alert".
+   * Max 64 bytes; the SDK does not validate length — APNs returns 400
+   * BadCollapseId when malformed.
+   */
+  collapseId?: string;
+  /**
+   * Caller-supplied abort signal. When aborted, an in-flight request is
+   * cancelled via `NGHTTP2_CANCEL`; a request waiting in a retry-backoff
+   * sleep wakes immediately. The promise rejects with the signal's `reason`
+   * (or a generic `AbortError` when no reason was provided). An already-
+   * aborted signal rejects synchronously without dialing.
+   */
+  signal?: AbortSignal;
 }
 
 export interface BroadcastOptions extends SendOptions {
@@ -696,6 +589,18 @@ function snapshotMustBeLiveActivity(
   return snapshot;
 }
 
+function snapshotMustBeNotification(
+  snapshot: LiveSurfaceSnapshot,
+  method: string,
+): LiveSurfaceSnapshotNotification {
+  if (snapshot.kind !== "notification") {
+    throw new InvalidSnapshotError(
+      `${method} requires a notification-kind snapshot; got kind=${snapshot.kind}.`,
+    );
+  }
+  return snapshot;
+}
+
 function validateSnapshot(input: unknown): LiveSurfaceSnapshot {
   const result = liveSurfaceSnapshot.safeParse(input);
   if (!result.success) {
@@ -740,6 +645,7 @@ export class PushClient {
     this.#hooks = options.hooks ?? {};
 
     const idleTimeoutMs = options.idleTimeoutMs ?? 60_000;
+    const closeTimeoutMs = options.closeTimeoutMs ?? 5_000;
     const override = (options as unknown as Record<symbol, unknown>)[
       TEST_TRANSPORT_OVERRIDE
     ] as TestTransportOverride | undefined;
@@ -758,22 +664,35 @@ export class PushClient {
       },
     );
 
+    // Merge caOverride into sessionOptions when set. The test-only
+    // sessionOptions override (TEST_TRANSPORT_OVERRIDE.sessionOptions) wins
+    // on field conflict — its callers know exactly what shape they want.
+    const sessionOptions = mergeSessionOptions(
+      options.caOverride,
+      override?.sessionOptions,
+    );
     this.#send = new Http2Client({
       origin: override?.sendOrigin ?? sendOriginFor(options.environment),
       idleTimeoutMs,
+      closeTimeoutMs,
       connect: override?.connect,
-      sessionOptions: override?.sessionOptions,
+      sessionOptions,
     });
     this.#manage = new Http2Client({
       origin: override?.manageOrigin ?? manageOriginFor(options.environment),
       idleTimeoutMs,
+      closeTimeoutMs,
       connect: override?.connect,
-      sessionOptions: override?.sessionOptions,
+      sessionOptions,
     });
   }
 
   /**
-   * Send a regular alert push. Snapshot must be `liveActivity`-kind.
+   * Send a regular alert push derived from a liveActivity-kind snapshot
+   * (the alert-fallback path: same content as the Live Activity but
+   * rendered as a standard notification). Snapshot must be
+   * `liveActivity`-kind. Use `sendNotification()` for a notification-kind
+   * snapshot (the contract's dedicated notification slice).
    */
   async alert(
     deviceToken: string,
@@ -783,10 +702,45 @@ export class PushClient {
     this.#assertOpen();
     const validated = validateSnapshot(snapshot);
     const live = snapshotMustBeLiveActivity(validated, "alert()");
-    const payload = JSON.stringify(liveActivityAlertPayloadFromSnapshot(live));
+    const payload = JSON.stringify(toApnsAlertPayload(live));
     return this.#sendDevice({
       operation: "alert",
       snapshotId: live.id,
+      token: deviceToken,
+      payload,
+      pushType: "alert",
+      defaultPriority: 10,
+      apnsTopic: this.#options.bundleId,
+      options,
+    });
+  }
+
+  /**
+   * Send a notification push derived from a notification-kind snapshot.
+   * Payload is built via `toNotificationContentPayload` from
+   * `@mobile-surfaces/surface-contracts`; the wire shape carries the
+   * notification slice's title/body/category/threadId plus a
+   * `kind: "surface_snapshot"` sidecar. The OS renders a standard alert
+   * — no `UNNotificationContentExtension` required — so this surface ships
+   * end-to-end without an extension target. A future rich-notification
+   * renderer would layer custom UI on top of the same payload.
+   *
+   * Same APNs `push-type: alert` and bare-bundle-id `apns-topic` as
+   * `alert()`; the two methods differ only in input kind (and therefore
+   * payload shape).
+   */
+  async sendNotification(
+    deviceToken: string,
+    snapshot: LiveSurfaceSnapshot,
+    options: SendOptions = {},
+  ): Promise<PushResult> {
+    this.#assertOpen();
+    const validated = validateSnapshot(snapshot);
+    const note = snapshotMustBeNotification(validated, "sendNotification()");
+    const payload = JSON.stringify(toNotificationContentPayload(note));
+    return this.#sendDevice({
+      operation: "alert",
+      snapshotId: note.id,
       token: deviceToken,
       payload,
       pushType: "alert",
@@ -924,6 +878,7 @@ export class PushClient {
       snapshotId: live.id,
       token: channelId,
       priority,
+      signal: options.signal,
     });
   }
 
@@ -931,7 +886,12 @@ export class PushClient {
    * Create a new broadcast channel. Apple returns the channel-id in the
    * `apns-channel-id` response header.
    */
-  async createChannel(options: { storagePolicy?: "no-storage" | "most-recent-message" } = {}): Promise<ChannelInfo> {
+  async createChannel(
+    options: {
+      storagePolicy?: "no-storage" | "most-recent-message";
+      signal?: AbortSignal;
+    } = {},
+  ): Promise<ChannelInfo> {
     this.#assertOpen();
     const storagePolicy = options.storagePolicy ?? "no-storage";
     const body = JSON.stringify({
@@ -946,23 +906,29 @@ export class PushClient {
     };
     const res = await this.#performManage(headers, body, {
       operation: "createChannel",
+      signal: options.signal,
     });
     const channelId =
       pickHeader(res.headers, "apns-channel-id") ??
       tryParseChannelIdFromBody(res.body);
     if (!channelId) {
-      throw new Error(
-        `createChannel: APNs returned ${res.status} but no apns-channel-id was found in headers or body.`,
-      );
+      throw new CreateChannelResponseError(res.status, res.body);
     }
-    return { channelId, storagePolicy, raw: tryParseJson(res.body) };
+    return {
+      channelId,
+      storagePolicy,
+      environment: this.#options.environment,
+      raw: tryParseJson(res.body),
+    };
   }
 
   /**
    * List all broadcast channels for this bundle id (in this environment).
    * Apple returns a JSON body with a `channels` array.
    */
-  async listChannels(): Promise<ChannelInfo[]> {
+  async listChannels(
+    options: { signal?: AbortSignal } = {},
+  ): Promise<ChannelInfo[]> {
     this.#assertOpen();
     const headers: Record<string, string> = {
       ":method": "GET",
@@ -971,17 +937,23 @@ export class PushClient {
     };
     const res = await this.#performManage(headers, undefined, {
       operation: "listChannels",
+      signal: options.signal,
     });
     const parsed = tryParseJson(res.body);
     const channels = extractChannelList(parsed);
-    return channels.map((entry) => normalizeChannelEntry(entry));
+    return channels.map((entry) =>
+      normalizeChannelEntry(entry, this.#options.environment),
+    );
   }
 
   /**
    * Delete a broadcast channel by id. Apple's documented shape: the channel
    * id travels in the `apns-channel-id` header, NOT as a path parameter.
    */
-  async deleteChannel(channelId: string): Promise<void> {
+  async deleteChannel(
+    channelId: string,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<void> {
     this.#assertOpen();
     const headers: Record<string, string> = {
       ":method": "DELETE",
@@ -992,6 +964,7 @@ export class PushClient {
     await this.#performManage(headers, undefined, {
       operation: "deleteChannel",
       token: channelId,
+      signal: options.signal,
     });
   }
 
@@ -1022,7 +995,7 @@ export class PushClient {
     assertActivityTimestampOptions(input.options ?? {});
     switch (input.operation) {
       case "alert": {
-        const payload = liveActivityAlertPayloadFromSnapshot(live);
+        const payload = toApnsAlertPayload(live);
         return this.#finishDescription({
           operation: "alert",
           path: `/3/device/${input.deviceToken}`,
@@ -1241,6 +1214,13 @@ export class PushClient {
     if (options.dismissalDateSeconds !== undefined) {
       aps["dismissal-date"] = options.dismissalDateSeconds;
     }
+    if (options.relevanceScore !== undefined) {
+      // ActivityKit reads this off the push payload as aps.relevance-score
+      // and uses it to pick the Dynamic Island slot when multiple
+      // activities are active. Range [0, 1] per Apple's docs; the SDK does
+      // not clamp — out-of-range values surface as the APNs reject.
+      aps["relevance-score"] = options.relevanceScore;
+    }
     return { aps };
   }
 
@@ -1253,6 +1233,7 @@ export class PushClient {
     defaultPriority: 5 | 10;
     apnsTopic: string;
     options: SendOptions;
+    signal?: AbortSignal;
   }): Promise<PushResult> {
     assertPayloadWithinLimit(args.payload, args.operation as PayloadKind);
     // MS032 pre-flight: reject malformed timestamp fields before the round-
@@ -1274,11 +1255,19 @@ export class PushClient {
       "apns-expiration": expiration,
       "content-type": "application/json",
     };
+    // apns-collapse-id is an alert-only mechanism (Apple's docs note that
+    // Live Activity push types ignore it). Setting it on a liveactivity send
+    // would be silent dead weight; setting it on an alert send dedupes
+    // Notification Center entries with the same id.
+    if (args.options.collapseId !== undefined && args.pushType === "alert") {
+      headers["apns-collapse-id"] = args.options.collapseId;
+    }
     return this.#performWithRetry(this.#send, headers, args.payload, apnsId, {
       operation: args.operation,
       snapshotId: args.snapshotId,
       token: args.token,
       priority,
+      signal: args.signal ?? args.options.signal,
     });
   }
 
@@ -1305,6 +1294,12 @@ export class PushClient {
        * to 5, which leaves the base policy unmodified.
        */
       priority?: 5 | 10;
+      /**
+       * Optional caller-supplied abort signal. Plumbed into transport.request
+       * for in-flight cancellation and into sleep() for backoff-window
+       * cancellation. Pre-aborted signals reject before the first dial.
+       */
+      signal?: AbortSignal;
     },
     mapSuccess: (
       res: {
@@ -1319,6 +1314,11 @@ export class PushClient {
     const retried: RetryAttempt[] = [];
     const policy = effectiveRetryPolicy(this.#retryPolicy, hookMeta.priority ?? 5);
     let attempt = 0;
+    // Already-aborted: synchronously reject before any work. The signal's
+    // reason (if set) is preserved; otherwise we surface a typed AbortError.
+    if (hookMeta.signal?.aborted) {
+      throw toAbortError(hookMeta.signal);
+    }
     while (true) {
       this.#assertOpen();
       const startedAt = Date.now();
@@ -1327,6 +1327,7 @@ export class PushClient {
           headers,
           body,
           timeoutMs: this.#requestTimeoutMs,
+          signal: hookMeta.signal,
         });
         const durationMs = Date.now() - startedAt;
         // For management ops the apns-id is only known after response;
@@ -1368,9 +1369,31 @@ export class PushClient {
             status: res.status,
             backoffMs,
           });
-          await sleep(backoffMs);
+          try {
+            await sleep(backoffMs, hookMeta.signal);
+          } catch (abortErr) {
+            // sleep() rejects with the signal's reason when aborted mid-
+            // backoff. Re-throw as a typed AbortError so callers can pattern-
+            // match on `err instanceof AbortError` regardless of which leg
+            // (in-flight stream vs. backoff window) the abort landed on.
+            if (hookMeta.signal?.aborted) {
+              throw toAbortError(hookMeta.signal);
+            }
+            throw abortErr;
+          }
           attempt += 1;
           // Refresh JWT in case the rejection was provider-token-related.
+          // ExpiredProviderToken means Apple decoded the bearer and found its
+          // iat older than the 60-minute window (typically clock skew, since
+          // the cache refreshes at 50 minutes). The JwtCache will not re-mint
+          // on its own when the local clock says the token is still fresh, so
+          // we must invalidate it explicitly before the next get() — otherwise
+          // every retry attempt would send the same already-rejected bearer.
+          // MS030 documents the operator-facing fix; this branch keeps the
+          // SDK self-healing for the transient clock-skew variant.
+          if (apnsError instanceof ExpiredProviderTokenError) {
+            this.#jwt.invalidate();
+          }
           headers.authorization = `bearer ${this.#jwt.get()}`;
           continue;
         }
@@ -1378,6 +1401,20 @@ export class PushClient {
       } catch (err) {
         if (err instanceof ApnsError) {
           throw err;
+        }
+        // Abort short-circuits the retry loop entirely; do not consult
+        // isTransportError. The thrown error is normalized to AbortError
+        // so the public contract is uniform across the in-flight, pre-dial,
+        // and mid-backoff abort paths.
+        if (hookMeta.signal?.aborted) {
+          this.#fireErrorHook(err, {
+            ...hookMeta,
+            attempt,
+            isFinalAttempt: true,
+            apnsId: hookMeta.apnsId,
+            durationMs: Date.now() - startedAt,
+          });
+          throw toAbortError(hookMeta.signal);
         }
         const willRetry =
           isTransportError(err) && attempt < policy.maxRetries;
@@ -1394,7 +1431,14 @@ export class PushClient {
             reason: transportErrorReason(err),
             backoffMs,
           });
-          await sleep(backoffMs);
+          try {
+            await sleep(backoffMs, hookMeta.signal);
+          } catch (abortErr) {
+            if (hookMeta.signal?.aborted) {
+              throw toAbortError(hookMeta.signal);
+            }
+            throw abortErr;
+          }
           attempt += 1;
           continue;
         }
@@ -1406,7 +1450,11 @@ export class PushClient {
   #performManage(
     headers: Record<string, string>,
     body: string | undefined,
-    hookMeta: { operation: PushHookOperation; token?: string },
+    hookMeta: {
+      operation: PushHookOperation;
+      token?: string;
+      signal?: AbortSignal;
+    },
   ): Promise<ChannelManageResponse> {
     // Channel-management callers don't read PushResult metadata today; drop
     // it on the floor to keep the ChannelInfo shape stable. If we ever
@@ -1429,6 +1477,7 @@ export class PushClient {
       snapshotId?: string;
       token?: string;
       priority?: 5 | 10;
+      signal?: AbortSignal;
     },
   ): Promise<PushResult> {
     return this.#executeWithRetry(
@@ -1475,6 +1524,16 @@ export class PushClient {
     // permanently-broken tokens (BadDeviceToken, Unregistered, etc.).
     if (TERMINAL_REASONS.has(err.reason)) return false;
     if (err instanceof TooManyRequestsError) return true;
+    // Audit fix (v5): a bare 5xx response with no parseable body yields
+    // UnknownApnsError(reason="Unknown", status>=500). The reason is not in
+    // DEFAULT_RETRYABLE_REASONS, so the previous code gave up after one
+    // attempt — which silently masked transient APNs outages that did not
+    // carry a JSON body. Any 5xx is retryable regardless of parsed reason,
+    // including "Unknown"; the terminal-reasons guard above still prevents
+    // a caller-customized policy from re-enabling retries on permanently-
+    // broken tokens that happen to be returned with a 5xx (which APNs
+    // does not do today, but the deny-list precedence is the right contract).
+    if (err.status >= 500 && err.status < 600) return true;
     return policy.retryableReasons.has(err.reason);
   }
 }
@@ -1511,6 +1570,42 @@ function transportErrorReason(err: unknown): string {
     if (typeof code === "string" && code.length > 0) return code;
   }
   return "TransportError";
+}
+
+/**
+ * Compose `http2.connect` session options from the public `caOverride` knob
+ * and the test-only `TEST_TRANSPORT_OVERRIDE.sessionOptions` escape hatch.
+ * Returns undefined when neither is set so production callers do not pay the
+ * cost of a custom session-options object on every dial.
+ */
+function mergeSessionOptions(
+  caOverride: string | Buffer | undefined,
+  testSessionOptions:
+    | import("node:http2").ClientSessionOptions
+    | import("node:http2").SecureClientSessionOptions
+    | undefined,
+):
+  | import("node:http2").ClientSessionOptions
+  | import("node:http2").SecureClientSessionOptions
+  | undefined {
+  if (caOverride === undefined && testSessionOptions === undefined) {
+    return undefined;
+  }
+  return {
+    ...(caOverride !== undefined ? { ca: caOverride } : {}),
+    ...(testSessionOptions ?? {}),
+  };
+}
+
+/**
+ * Normalize an aborted signal into the SDK's typed AbortError. The signal's
+ * `reason` is preserved as `cause` (matching the AbortController.abort(reason)
+ * convention) so callers can drill in when needed, but `err instanceof
+ * AbortError` is the recommended pattern-match because it covers every abort
+ * path uniformly (pre-dial, in-flight, mid-backoff).
+ */
+function toAbortError(signal: AbortSignal | undefined): AbortError {
+  return new AbortError(signal?.reason);
 }
 
 /**

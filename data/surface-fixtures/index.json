@@ -8,8 +8,20 @@
   "./completed.json",
   "./active-details.json",
   "./widget-dashboard.json",
+  "./widget-minimal.json",
   "./control-toggle.json",
+  "./control-button.json",
   "./lock-accessory-circular.json",
+  "./lock-accessory-rectangular.json",
+  "./lock-accessory-inline.json",
   "./standby-card.json",
-  "./notification-alert.json"
+  "./standby-night.json",
+  "./notification-alert.json",
+  "./notification-category-routed.json",
+  "./notification-thread-grouped.json",
+  "./notification-time-sensitive.json",
+  "./notification-relevance-summary.json",
+  "./notification-completed.json",
+  "./notification-subtitle.json",
+  "./notification-deep-link-window.json"
 ]
