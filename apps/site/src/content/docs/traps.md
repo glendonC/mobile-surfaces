@@ -96,5 +96,5 @@ A structured catalog gives every fact one home. When iOS 27 lands and the deploy
 ## See also
 
 - [`AGENTS.md`](/traps) and [`CLAUDE.md`](/traps): generated guides for AI coding assistants.
-- [`docs/architecture.md`](/docs/architecture): the contract, the surfaces, the adapter boundary.
+- [`docs/concepts.md`](/docs/concepts): the contract, the surfaces, the adapter boundary.
 - [`docs/troubleshooting.md`](/docs/troubleshooting): long-form symptom-to-fix recipes; the catalog summarizes what `troubleshooting.md` walks through.

@@ -2,7 +2,7 @@
 title: "Compatibility"
 description: "Pinned Expo SDK, React Native, iOS, Xcode, and @bacons/apple-targets row."
 order: 70
-group: "Start here"
+group: "Reference"
 ---
 # Compatibility
 

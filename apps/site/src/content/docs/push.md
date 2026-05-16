@@ -2,7 +2,7 @@
 title: "Push"
 description: "Wire-layer reference, SDK, smoke script, token taxonomy, error reasons, channel push."
 order: 40
-group: "Build"
+group: "Backend"
 ---
 # Push
 
@@ -10,7 +10,7 @@ In plain English: this page explains how bytes travel from your backend to Apple
 
 Deep reference for the wire layer: what `@mobile-surfaces/push` does, what tokens flow through it, where the APNs requests actually go, how to drive the iOS 18 broadcast/channel surface, and what every error reason means. The SDK is the recommended entry point; `scripts/send-apns.mjs` is the protocol-reference script kept self-contained so you can read the exact same wire shape top-to-bottom in a single file. Both target the same APNs endpoints and produce byte-equivalent payloads.
 
-For the high-level "domain event → snapshot → APNs" tour, see [`docs/backend-integration.md`](/docs/backend-integration). For the multi-kind contract and projection helpers, see [`docs/multi-surface.md`](/docs/multi-surface).
+For the high-level "domain event → snapshot → APNs" tour, see [`docs/backend.md`](/docs/backend). For the multi-kind contract and projection helpers, see [`docs/surfaces.md`](/docs/surfaces).
 
 ## Token taxonomy
 
@@ -25,7 +25,7 @@ ActivityKit and APNs use three distinct token kinds. They are not interchangeabl
 ### Where each token comes from in the harness
 
 - **Device APNs token**: registered by the Expo runtime once notifications are granted. The harness shows it in the bottom row labeled "Device APNs token".
-- **Push-to-start token**: the live-activity adapter (`apps/mobile/src/liveActivity/index.ts`) subscribes to `onPushToStartToken` at mount time and logs every value through. The contract for this event is documented in [`docs/architecture.md#adapter-contract`](/docs/architecture#adapter-contract). Apple does not expose a synchronous query, so `getPushToStartToken()` always resolves `null`; production code subscribes to the event stream.
+- **Push-to-start token**: the live-activity adapter (`apps/mobile/src/liveActivity/index.ts`) subscribes to `onPushToStartToken` at mount time and logs every value through. The contract for this event is documented in [`docs/architecture.md#adapter-contract`](/docs/concepts#adapter-contract). Apple does not expose a synchronous query, so `getPushToStartToken()` always resolves `null`; production code subscribes to the event stream.
 - **Per-activity push token**: emitted on `onPushToken` for each active `Activity` instance. The harness "All active activities" panel renders the token as it streams in.
 
 ### How a backend stores them

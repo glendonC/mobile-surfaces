@@ -2,7 +2,7 @@
 title: "Versioning Charter"
 description: "Linked release group, independent packages, deprecation timeline, schemaVersion policy."
 order: 75
-group: "Build"
+group: "Reference"
 ---
 
 # Versioning Charter
