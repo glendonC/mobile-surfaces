@@ -121,7 +121,11 @@ function snapshotKey(surfaceId: string) {
 
 // Decode-error breadcrumbs are written from the Swift side when JSONDecoder
 // fails to parse the snapshot payload (MS036's silent-fail mode). Shape:
-//   `{ at: <ISO8601>, error: <string> }`
+//   `{ at: <ISO8601>, error: <string>, trapId?: <string> }`
+// `trapId` was added in v7: the Swift writer defaults to "MS036" (the trap
+// the breadcrumb represents) and MSTrapBound errors override with their
+// own binding. Older builds (pre-v7) omit the field; readers tolerate
+// either shape and fall back to MS036.
 // Stored under `surface.snapshot.<id>.decodeError`. Cleared on the next
 // successful decode. Exposed here so the diagnostics layer can probe these
 // keys without reaching directly into the App Group bridge.
@@ -129,6 +133,7 @@ export interface SurfaceDecodeErrorBreadcrumb {
   readonly surfaceId: string;
   readonly at: string;
   readonly error: string;
+  readonly trapId: string;
 }
 
 function decodeErrorKey(surfaceId: string) {
@@ -165,7 +170,11 @@ export function readSurfaceDecodeError(
     }
   }
   if (!parsed || typeof parsed !== "object") return null;
-  const obj = parsed as { at?: unknown; error?: unknown };
+  const obj = parsed as { at?: unknown; error?: unknown; trapId?: unknown };
   if (typeof obj.at !== "string" || typeof obj.error !== "string") return null;
-  return { surfaceId, at: obj.at, error: obj.error };
+  // trapId is optional on the wire (pre-v7 writers omitted it). Default to
+  // MS036, the trap this breadcrumb represents at the host-side write
+  // boundary.
+  const trapId = typeof obj.trapId === "string" ? obj.trapId : "MS036";
+  return { surfaceId, at: obj.at, error: obj.error, trapId };
 }

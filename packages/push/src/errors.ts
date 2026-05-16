@@ -4,7 +4,7 @@
 // reasons should add an entry there and a class below in alphabetical order.
 
 import { APNS_REASON_GUIDE } from "./reasons.ts";
-import { docsUrlForErrorClass, trapIdForErrorClass } from "./trap-bindings.ts";
+import { MobileSurfacesError } from "@mobile-surfaces/traps";
 
 export interface ApnsErrorInit {
   reason: string;
@@ -25,14 +25,14 @@ export interface ApnsErrorInit {
  *   correlation).
  * - `timestamp`: when the error was observed (defaults to now).
  * - `trapId`: catalog entry id (MS\d{3}) for the trap this error surfaces, or
- *   undefined when the class has no catalog binding. Resolved from the live
- *   subclass `name` via the generated trap-bindings table; subclasses never
- *   hand-stamp it.
+ *   undefined when the class has no catalog binding. Resolved off `this.name`
+ *   by the `MobileSurfacesError` base class via @mobile-surfaces/traps;
+ *   subclasses never hand-stamp it.
  * - `docsUrl`: URL pointing at the rendered catalog entry for this error's
  *   trap, when bound. Operators paste this into a browser to read the fix.
  *   Same lazy lookup as `trapId`; returns undefined for unbound classes.
  */
-export class ApnsError extends Error {
+export class ApnsError extends MobileSurfacesError {
   readonly reason: string;
   readonly status: number;
   readonly apnsId?: string;
@@ -48,18 +48,6 @@ export class ApnsError extends Error {
     this.status = init.status;
     this.apnsId = init.apnsId;
     this.timestamp = init.timestamp ?? new Date();
-  }
-
-  // Resolved lazily off `this.name` so subclasses get the right trap id
-  // without each constructor having to stamp it. Subclasses set `name` after
-  // super() returns; the getter reads the post-assignment value on every
-  // access. trapIdForErrorClass returns undefined for unbound classes.
-  get trapId(): string | undefined {
-    return trapIdForErrorClass(this.name);
-  }
-
-  get docsUrl(): string | undefined {
-    return docsUrlForErrorClass(this.name);
   }
 }
 
@@ -270,7 +258,7 @@ export class UnknownApnsError extends ApnsError {
  * observability hooks can correlate, and a short snippet of the body for
  * post-hoc debugging without leaking arbitrarily large responses.
  */
-export class CreateChannelResponseError extends Error {
+export class CreateChannelResponseError extends MobileSurfacesError {
   readonly status: number;
   readonly bodySnippet: string;
 
@@ -292,7 +280,7 @@ export class CreateChannelResponseError extends Error {
  * passed in. The `cause` is the signal's reason (or a fallback Error when
  * the abort was raised without one).
  */
-export class AbortError extends Error {
+export class AbortError extends MobileSurfacesError {
   constructor(cause?: unknown) {
     super("Request aborted");
     this.name = "AbortError";
@@ -308,7 +296,7 @@ export class AbortError extends Error {
  * `widget`-kind snapshot). Carries the underlying issue as a string array so
  * callers don't need to depend on Zod to read it.
  */
-export class InvalidSnapshotError extends Error {
+export class InvalidSnapshotError extends MobileSurfacesError {
   readonly issues: readonly string[];
 
   constructor(message: string, issues: readonly string[] = []) {
@@ -321,7 +309,7 @@ export class InvalidSnapshotError extends Error {
 /**
  * Thrown when any send/manage method is called on a closed `PushClient`.
  */
-export class ClientClosedError extends Error {
+export class ClientClosedError extends MobileSurfacesError {
   constructor(message = "PushClient has been closed; refusing new requests.") {
     super(message);
     this.name = "ClientClosedError";
@@ -336,7 +324,7 @@ export class ClientClosedError extends Error {
  * were rejected; the binding to MS028 resolves through the same lazy getter
  * the APNs error classes use.
  */
-export class MissingApnsConfigError extends Error {
+export class MissingApnsConfigError extends MobileSurfacesError {
   readonly missing: readonly string[];
 
   constructor(missing: readonly string[]) {
@@ -346,14 +334,6 @@ export class MissingApnsConfigError extends Error {
     );
     this.name = "MissingApnsConfigError";
     this.missing = missing;
-  }
-
-  get trapId(): string | undefined {
-    return trapIdForErrorClass(this.name);
-  }
-
-  get docsUrl(): string | undefined {
-    return docsUrlForErrorClass(this.name);
   }
 }
 

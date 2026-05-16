@@ -112,7 +112,7 @@ const RESIDUE_FIXTURES = {
   "apps/mobile/src/components/SetupStatusRow.tsx":
     `import { liveActivityAdapter } from "@mobile-surfaces/live-activity";\nexport const a = liveActivityAdapter;\n`,
   "apps/mobile/src/diagnostics/checkSetup.ts":
-    `import { traps } from "@mobile-surfaces/surface-contracts";\nexport const t = traps;\n`,
+    `import { findTrap } from "@mobile-surfaces/surface-contracts";\nexport const t = findTrap;\n`,
   "packages/push/package.json":
     `{"name":"@mobile-surfaces/push","dependencies":{"@mobile-surfaces/surface-contracts":"workspace:*"}}\n`,
   "packages/push/src/client.ts":

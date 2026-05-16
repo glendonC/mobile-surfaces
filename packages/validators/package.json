@@ -32,5 +32,8 @@
   },
   "files": [
     "src"
-  ]
+  ],
+  "dependencies": {
+    "@mobile-surfaces/traps": "workspace:*"
+  }
 }

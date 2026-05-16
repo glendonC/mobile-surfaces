@@ -13,7 +13,7 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 
 ## Index
 
-37 rules total: 29 error, 4 warning, 4 info.
+35 live rules: 30 error, 4 warning, 1 info. 3 retired ids reserved (see footnote).
 
 | ID | Severity | Detection | Title |
 | --- | --- | --- | --- |
@@ -46,14 +46,12 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 | [MS035](#ms035-apns-topic-header-missing-or-bundleid-misconfigured) | error | runtime | apns-topic header missing or bundleId misconfigured |
 | [MS036](#ms036-surface-snapshot-swift-structs-match-their-zod-projection-output-schemas) | error | static | Surface snapshot Swift structs match their Zod projection-output schemas |
 | [MS037](#ms037-notification-category-outputs-in-sync-with-canonical-registry) | error | static | Notification category outputs in sync with canonical registry |
+| [MS040](#ms040-swift-trap-binding-file-byte-identity) | error | static | Swift trap-binding file byte-identity |
 | [MS010](#ms010-toolchain-preflight-node-24-pnpm-xcode-26) | warning | config | Toolchain preflight (Node 24, pnpm, Xcode 26+) |
 | [MS015](#ms015-push-priority-5-vs-10-budget-rules) | warning | runtime | Push priority 5 vs 10 budget rules |
 | [MS021](#ms021-discard-per-activity-tokens-when-the-activity-ends) | warning | runtime | Discard per-activity tokens when the activity ends |
 | [MS023](#ms023-per-activity-tokens-are-bound-to-a-single-activity-instance) | warning | runtime | Per-activity tokens are bound to a single Activity instance |
-| [MS005](#ms005-retired-rule-id-reserved) | info | advisory | Retired rule (id reserved) |
 | [MS019](#ms019-fb21158660-push-to-start-tokens-silent-after-force-quit) | info | advisory | FB21158660: push-to-start tokens silent after force-quit |
-| [MS022](#ms022-retired-rule-merged-into-ms003) | info | advisory | Retired rule (merged into MS003) |
-| [MS033](#ms033-retired-rule-id-reserved) | info | advisory | Retired rule (id reserved) |
 
 ## Rules by tag
 
@@ -61,17 +59,24 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 - `channels`: MS031, MS034
 - `cng`: MS017, MS029
 - `config`: MS012, MS013, MS017, MS018, MS025, MS027, MS029, MS034, MS035, MS037
-- `contract`: MS001, MS003, MS004, MS005, MS006, MS007, MS008, MS009, MS022, MS024, MS033, MS036, MS037
+- `contract`: MS001, MS003, MS004, MS006, MS007, MS008, MS009, MS024, MS036, MS037, MS040
 - `control`: MS013, MS026, MS036
 - `ios-version`: MS012, MS027
 - `ios18`: MS031, MS034
 - `live-activity`: MS001, MS002, MS003, MS004, MS011, MS015, MS016, MS019, MS021, MS032
 - `notification`: MS037
 - `push`: MS006, MS011, MS014, MS015, MS018, MS024, MS028, MS030, MS031, MS032, MS034, MS035
-- `swift`: MS002, MS003, MS004, MS036
+- `swift`: MS002, MS003, MS004, MS036, MS040
 - `tokens`: MS014, MS016, MS019, MS020, MS021, MS023, MS028, MS030
 - `toolchain`: MS010, MS026
 - `widget`: MS013, MS026, MS036
+
+## Cross-references
+
+Trap ids that describe the same constraint in two contexts, or the inverse failures of the same wire shape:
+
+- **MS012 ↔ MS027** — iOS deployment target must be 17.2 or higher; Foreign Expo project must target iOS 17.2 or higher.
+- **MS018 ↔ MS035** — APNS_BUNDLE_ID must not include the .push-type.liveactivity suffix; apns-topic header missing or bundleId misconfigured.
 
 ## How to use this document
 
@@ -416,6 +421,16 @@ packages/surface-contracts/src/notificationCategories.ts is the single source of
 
 **Fix.** Edit packages/surface-contracts/src/notificationCategories.ts and run pnpm surface:codegen to regenerate every consumer in lockstep. The schema-level z.enum constraint rejects payloads that name a category outside the registry, so the wire stays load-bearing for parity.
 
+### MS040: Swift trap-binding file byte-identity
+
+**severity:** error  •  **detection:** static (script-checkable)  •  **tags:** contract, swift  •  **enforced by:** `scripts/check-traps-swift-byte-identity.mjs`
+
+MobileSurfacesTraps.swift must be byte-identical at three sites: packages/traps/swift/, packages/live-activity/ios/, apps/mobile/targets/_shared/. The canonical copy is generated from data/traps.json by scripts/generate-traps-package.mjs; the other two are byte-identity replicas so the native module pod and the widget/notification-content extensions all resolve the same MSTrapBinding table.
+
+**Symptom.** Drift across the three copies means a native module rejection carries a different trapId than the host app expects, and the `[trap=MSXXX]` suffix protocol parses to inconsistent ids on the JS side. No crash; just diagnostic noise that points the operator at the wrong fix.
+
+**Fix.** Run pnpm surface:codegen (which calls generate-traps-package) to regenerate all three from the canonical data/traps.json source.
+
 ### MS010: Toolchain preflight (Node 24, pnpm, Xcode 26+)
 
 **severity:** warning  •  **detection:** config (declarative file)  •  **tags:** toolchain  •  **enforced by:** `scripts/doctor.mjs`
@@ -462,16 +477,6 @@ A new Activity.request mints a fresh per-activity token; tokens from a previous 
 
 **See:** [https://mobile-surfaces.com/docs/push#token-taxonomy](https://mobile-surfaces.com/docs/push#token-taxonomy)
 
-### MS005: Retired rule (id reserved)
-
-**severity:** info  •  **detection:** advisory (no programmatic check)  •  **tags:** contract
-
-Reserved id. The original rule was removed before its prose was preserved in git history; the id is held back so external references (PR comments, log lines, blog posts citing MS005) keep resolving to a known marker rather than collide with a future rule.
-
-**Symptom.** n/a (retired).
-
-**Fix.** n/a (retired). Numbering policy: trap ids are monotonic forever; deletions reserve the id with deprecated: true.
-
 ### MS019: FB21158660: push-to-start tokens silent after force-quit
 
 **severity:** info  •  **detection:** advisory (no programmatic check)  •  **tags:** tokens, live-activity  •  **ios min:** 17.2
@@ -484,25 +489,13 @@ Apple-reported bug. After the user force-quits the app, pushToStartTokenUpdates 
 
 **See:** [https://mobile-surfaces.com/docs/push#fb21158660-push-to-start-after-force-quit](https://mobile-surfaces.com/docs/push#fb21158660-push-to-start-after-force-quit)
 
-### MS022: Retired rule (merged into MS003)
+## Retired ids
 
-**severity:** info  •  **detection:** advisory (no programmatic check)  •  **tags:** contract
+Trap ids are monotonic forever; retired rules keep their id with a one-line tombstone here so external references (PR comments, log lines, blog posts) keep resolving to a known marker.
 
-Reserved id. The original rule was an early-draft duplicate of MS003 (Swift ContentState fields and JSON keys match Zod liveSurfaceActivityContentState) and was merged into it. See git commit d79ffb0.
-
-**Symptom.** See MS003.
-
-**Fix.** See MS003. Numbering policy: trap ids are monotonic forever; deletions reserve the id with deprecated: true.
-
-### MS033: Retired rule (id reserved)
-
-**severity:** info  •  **detection:** advisory (no programmatic check)  •  **tags:** contract
-
-Reserved id. The original rule was removed before its prose was preserved in git history; the id is held back so external references (PR comments, log lines, blog posts citing MS033) keep resolving to a known marker rather than collide with a future rule.
-
-**Symptom.** n/a (retired).
-
-**Fix.** n/a (retired). Numbering policy: trap ids are monotonic forever; deletions reserve the id with deprecated: true.
+- **MS005** — Reserved id. The original rule was removed before its prose was preserved in git history; the id is held back so external references (PR comments, log lines, blog posts citing MS005) keep resolving to a known marker rather than collide with a future rule.
+- **MS022** — Reserved id. The original rule was an early-draft duplicate of MS003 (Swift ContentState fields and JSON keys match Zod liveSurfaceActivityContentState) and was merged into it. See git commit d79ffb0.
+- **MS033** — Reserved id. The original rule was removed before its prose was preserved in git history; the id is held back so external references (PR comments, log lines, blog posts citing MS033) keep resolving to a known marker rather than collide with a future rule.
 
 ## Related local documentation
 

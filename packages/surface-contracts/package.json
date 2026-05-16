@@ -61,6 +61,7 @@
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
+    "@mobile-surfaces/traps": "workspace:*",
     "zod": "4.3.6"
   }
 }

@@ -97,7 +97,8 @@
       "symptom": "safeParse throws a discriminated-union error at the wire boundary; or worse, an old code path bypasses safeParse and a missing slice causes downstream surfaces to render placeholder data.",
       "fix": "Pair every kind change with its slice. Use the projection helper for the kind (toWidgetTimelineEntry, toControlValueProvider, toNotificationContentPayload) rather than reaching into the snapshot directly.",
       "enforcement": { "script": "scripts/surface-contracts.test.mjs" },
-      "since": "1.0.0"
+      "since": "1.0.0",
+      "errorClasses": ["InvalidSnapshotError"]
     },
     {
       "id": "MS009",
@@ -152,7 +153,8 @@
       "iosMin": "17.2",
       "enforcement": { "script": "scripts/probe-app-config.mjs" },
       "docs": ["https://mobile-surfaces.com/docs/compatibility"],
-      "since": "1.0.0"
+      "since": "1.0.0",
+      "siblings": ["MS027"]
     },
     {
       "id": "MS013",
@@ -229,7 +231,8 @@
       "fix": "Set APNS_BUNDLE_ID to the bare bundle id (e.g. com.example.mobilesurfaces). The SDK and scripts/send-apns.mjs both handle the suffix internally.",
       "docs": ["https://mobile-surfaces.com/docs/push#error-responses"],
       "since": "1.0.0",
-      "errorClasses": ["TopicDisallowedError"]
+      "errorClasses": ["TopicDisallowedError"],
+      "siblings": ["MS035"]
     },
     {
       "id": "MS019",
@@ -343,7 +346,8 @@
       "iosMin": "17.2",
       "enforcement": { "script": "scripts/probe-app-config.mjs" },
       "docs": ["https://mobile-surfaces.com/docs/compatibility"],
-      "since": "1.0.0"
+      "since": "1.0.0",
+      "siblings": ["MS012"]
     },
     {
       "id": "MS028",
@@ -466,7 +470,8 @@
       "fix": "Confirm APNS_BUNDLE_ID is set to the bare bundle identifier (e.g. com.example.app). Do not include the .push-type.liveactivity suffix; the SDK appends it internally. See MS018 for the inverse failure (suffix included by mistake).",
       "docs": ["https://mobile-surfaces.com/docs/push#error-responses"],
       "since": "3.1.0",
-      "errorClasses": ["MissingTopicError"]
+      "errorClasses": ["MissingTopicError"],
+      "siblings": ["MS018"]
     },
     {
       "id": "MS036",
@@ -479,6 +484,18 @@
       "fix": "Update the Zod projection-output schema first (and the projection helper that feeds it), then mirror the field, type, JSON key, and optionality change into the matching struct in MobileSurfacesSharedState.swift. Run pnpm surface:check; check-surface-snapshots.mjs verifies all four structs against their schemas.",
       "enforcement": { "script": "scripts/check-surface-snapshots.mjs" },
       "since": "3.3.0"
+    },
+    {
+      "id": "MS040",
+      "title": "Swift trap-binding file byte-identity",
+      "severity": "error",
+      "detection": "static",
+      "tags": ["contract", "swift"],
+      "summary": "MobileSurfacesTraps.swift must be byte-identical at three sites: packages/traps/swift/, packages/live-activity/ios/, apps/mobile/targets/_shared/. The canonical copy is generated from data/traps.json by scripts/generate-traps-package.mjs; the other two are byte-identity replicas so the native module pod and the widget/notification-content extensions all resolve the same MSTrapBinding table.",
+      "symptom": "Drift across the three copies means a native module rejection carries a different trapId than the host app expects, and the `[trap=MSXXX]` suffix protocol parses to inconsistent ids on the JS side. No crash; just diagnostic noise that points the operator at the wrong fix.",
+      "fix": "Run pnpm surface:codegen (which calls generate-traps-package) to regenerate all three from the canonical data/traps.json source.",
+      "enforcement": { "script": "scripts/check-traps-swift-byte-identity.mjs" },
+      "since": "7.0.0"
     }
   ]
 }

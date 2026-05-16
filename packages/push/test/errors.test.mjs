@@ -25,12 +25,17 @@ const {
   MissingApnsConfigError,
   ForbiddenError,
   trapIdForErrorClass,
-  TRAP_ID_BY_ERROR_CLASS,
   TRAP_BINDINGS,
   docsUrlForErrorClass,
   findTrap,
   findTrapByErrorClass,
 } = await import("../dist/index.js");
+
+// v7: ERROR_CLASS_TO_TRAP_ID is now exposed by @mobile-surfaces/traps
+// (the single home for the catalog). The push package re-exports the
+// helpers but not the raw object, so tests reach for it directly. The
+// shape (Record<className, MSXXX>) is unchanged.
+const { ERROR_CLASS_TO_TRAP_ID } = await import("@mobile-surfaces/traps");
 
 const { reasonToError } = await import("../dist/errors.js");
 
@@ -111,8 +116,8 @@ test("unbound error classes return undefined trapId", () => {
   assert.equal(err.trapId, undefined);
 });
 
-test("trapIdForErrorClass and TRAP_ID_BY_ERROR_CLASS agree", () => {
-  for (const [name, trapId] of Object.entries(TRAP_ID_BY_ERROR_CLASS)) {
+test("trapIdForErrorClass and ERROR_CLASS_TO_TRAP_ID agree", () => {
+  for (const [name, trapId] of Object.entries(ERROR_CLASS_TO_TRAP_ID)) {
     assert.equal(trapIdForErrorClass(name), trapId);
   }
   assert.equal(trapIdForErrorClass("DefinitelyNotAClass"), undefined);
@@ -156,19 +161,20 @@ test("findTrap and findTrapByErrorClass surface full bindings", () => {
 });
 
 test("TRAP_BINDINGS covers every bound error class", () => {
-  // Every id surfaced through TRAP_ID_BY_ERROR_CLASS must resolve to a full
+  // Every id surfaced through ERROR_CLASS_TO_TRAP_ID must resolve to a full
   // binding — otherwise an error's docsUrl getter would silently return
-  // undefined even though the trapId is known.
-  for (const trapId of new Set(Object.values(TRAP_ID_BY_ERROR_CLASS))) {
+  // undefined even though the trapId is known. TRAP_BINDINGS is a Map in
+  // v7 (was an object in v6); accessor is .get().
+  for (const trapId of new Set(Object.values(ERROR_CLASS_TO_TRAP_ID))) {
     assert.ok(
-      TRAP_BINDINGS[trapId],
+      TRAP_BINDINGS.get(trapId),
       `TRAP_BINDINGS missing entry for ${trapId}`,
     );
   }
 });
 
 test("docsUrlForErrorClass equals findTrapByErrorClass(name).docsUrl", () => {
-  for (const name of Object.keys(TRAP_ID_BY_ERROR_CLASS)) {
+  for (const name of Object.keys(ERROR_CLASS_TO_TRAP_ID)) {
     assert.equal(docsUrlForErrorClass(name), findTrapByErrorClass(name).docsUrl);
   }
   assert.equal(docsUrlForErrorClass("UnboundError"), undefined);

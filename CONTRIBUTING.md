@@ -10,7 +10,7 @@ The flow for every change, large or small:
 
 1. **Branch off `main`** — `git checkout -b <topic>`. No work happens on `main` ever, including doc fixes and changeset additions.
 2. **Make the change**, including any `changeset` entry that the change requires. Run `pnpm changeset` for any user-facing change to a published package. Doc-only edits and internal tooling do not need a changeset.
-3. **Run `pnpm release:dry-run` locally before pushing.** It runs every gate CI runs (`surface:check`, full test suite, scaffold snapshot, site build, typecheck) plus the regen-drift check. If anything fails, `pnpm release:fix` regenerates the derived files (`CLAUDE.md`/`AGENTS.md`, trap-bindings, traps-data, JSON schema, surface fixtures, scaffold snapshots). Commit the regen, re-run dry-run.
+3. **Run `pnpm release:dry-run` locally before pushing.** It runs every gate CI runs (`surface:check`, full test suite, scaffold snapshot, site build, typecheck) plus the regen-drift check. If anything fails, `pnpm release:fix` regenerates the derived files (`CLAUDE.md`/`AGENTS.md`, @mobile-surfaces/traps bindings, JSON schema, surface fixtures, scaffold snapshots). Commit the regen, re-run dry-run.
 4. **Open a PR** via `gh pr create` or the GitHub UI. CI runs the same chain dry-run did. Wait for green.
 5. **Merge the PR.** Squash-merge is fine for a single-commit change; merge-commit preserves more provenance for multi-commit work.
 6. **Wait for the Changesets `Version packages` PR** to appear (within ~1 minute of the merge to `main`). It rolls up every pending changeset into version bumps and CHANGELOG entries. Inspect the diff; if it looks right, merge it.

@@ -30,7 +30,7 @@ If this PR adds a new abstraction (helper, type, contract field, adapter slot, c
 - [ ] `pnpm dev:doctor` (only if scripts/ or toolchain assumptions changed)
 - [ ] `pnpm mobile:prebuild:ios` (only if native target / module behavior changed)
 
-If dry-run fails on a generated-file gate (CLAUDE.md, AGENTS.md, trap-bindings, traps-data, surface fixtures, scaffold snapshots), run `pnpm release:fix` to regenerate everything in the right order, then re-run dry-run. The full workflow lives in [`CONTRIBUTING.md`](../CONTRIBUTING.md#branch-and-release-workflow).
+If dry-run fails on a generated-file gate (CLAUDE.md, AGENTS.md, @mobile-surfaces/traps bindings, surface fixtures, scaffold snapshots), run `pnpm release:fix` to regenerate everything in the right order, then re-run dry-run. The full workflow lives in [`CONTRIBUTING.md`](../CONTRIBUTING.md#branch-and-release-workflow).
 
 ## Manual verification
 

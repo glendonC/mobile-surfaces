@@ -264,10 +264,18 @@ enum MobileSurfacesSharedState {
 
   private static func recordDecodeError(surfaceId: String, error: Error) {
     guard let defaults else { return }
+    // MS036 is the trap this breadcrumb represents: a host-side write that
+    // the widget extension's JSONDecoder rejects (renamed key / type
+    // mismatch / optionality drift). Default to that when the error type
+    // does not opt into MSTrapBound; an MSTrapBound error overrides with
+    // its own binding (e.g. a future widget-side LiveActivityError with
+    // decodingFailed → MS003).
+    let resolvedTrapId = (error as? MSTrapBound)?.trapId ?? "MS036"
     let payload: [String: Any] = [
       "at": iso8601Formatter.string(from: Date()),
       "error": (error as? LocalizedError)?.errorDescription ?? String(describing: error),
-      "type": String(describing: Swift.type(of: error))
+      "type": String(describing: Swift.type(of: error)),
+      "trapId": resolvedTrapId
     ]
     if let data = try? JSONSerialization.data(withJSONObject: payload),
        let raw = String(data: data, encoding: .utf8) {

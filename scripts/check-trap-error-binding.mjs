@@ -1,22 +1,28 @@
 #!/usr/bin/env node
-// Enforces the binding between data/traps.json `errorClasses` arrays and the
-// typed error classes exported from packages/push/src/errors.ts. The catalog
-// is the source of truth for which trap a runtime error surfaces; this script
-// guarantees that the citation actually points at a real class.
+// Enforces the binding between data/traps.json `errorClasses` arrays and
+// every typed error class across the Mobile Surfaces monorepo.
+//
+// Before v7 this script only scanned packages/push/src/errors.ts. The v7
+// refactor introduced `@mobile-surfaces/traps` as the single home for the
+// error base class (MobileSurfacesError); every package that throws now
+// derives from it. The scan widens to cover all source roots so a new
+// error class can never be added without either (a) appearing in the
+// catalog, (b) being on the explicit "intentionally unbound" allowlist,
+// or (c) coming with a corresponding traps.json entry.
 //
 // Forward direction (enforced): every name in any trap's `errorClasses`
-// array must be exported as a class from packages/push/src/errors.ts.
+// array must be exported as a class from one of the scanned source files.
 // Uniqueness (also enforced via Zod superRefine, re-checked here as
 // defense-in-depth): each error class is cited by at most one trap.
 //
-// Reverse direction is intentionally not strict. Many error classes
-// (BadPriority, MissingTopic, BadDate) are SDK self-correctness issues, not
-// silent-failure traps that warrant a catalog entry. Forcing a one-to-one
-// would inflate the catalog with noise. The script does report unbound
-// classes for visibility but does not fail on them.
+// Reverse direction: every concrete MobileSurfacesError subclass must
+// either be cited by a trap or live on the INTENTIONALLY_UNBOUND
+// allowlist. The push package's "self-correctness" classes (BadPriority,
+// MissingChannelId-on-construction, etc.) and the SDK lifecycle classes
+// (ClientClosedError, AbortError) sit on the allowlist because their
+// failure mode is the SDK refusing the call, not a silent runtime trap.
 //
-// --json mode emits a DiagnosticReport conforming to the Zod schema in
-// packages/surface-contracts/src/diagnostics.ts.
+// Apns-specific dispatch wiring (`reasonToError`) is also re-validated.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -32,7 +38,49 @@ const { values } = parseArgs({
 
 const TOOL = "check-trap-error-binding";
 const TRAPS_PATH = resolve("data/traps.json");
-const ERRORS_PATH = resolve("packages/push/src/errors.ts");
+
+// Manifest of every source file the scan reads. The push errors file is
+// load-bearing (drives the wire-level ApnsError taxonomy + reasonToError
+// dispatch); the others are scanned for class declarations only.
+//
+// `apnsTaxonomy: true` opts a file into the additional reasonToError
+// wiring check (ApnsError subclasses must be reachable through the
+// `reasonToError` switch, otherwise the runtime cannot dispatch into them
+// from an APNs response).
+const SOURCES = [
+  { path: "packages/push/src/errors.ts", apnsTaxonomy: true },
+  { path: "packages/live-activity/src/index.ts", apnsTaxonomy: false },
+];
+
+// Concrete subclasses of MobileSurfacesError that intentionally have no
+// catalog entry. These are SDK self-correctness errors (BadPriority,
+// MissingChannelId at the construction edge before APNs sees it) and SDK
+// lifecycle errors (ClientClosedError, AbortError) — the failure mode is
+// the SDK refusing the call, not a silent runtime trap that needs an
+// MS-rule to surface.
+const INTENTIONALLY_UNBOUND = new Set([
+  // base classes (never thrown directly with this name):
+  "ApnsError",
+  "UnknownApnsError",
+  // self-correctness — SDK rejects the call:
+  "BadPriorityError",
+  "BadExpirationDateError",
+  "BadDateError",
+  "MissingPushTypeError",
+  "InvalidPushTypeError",
+  "CannotCreateChannelConfigError",
+  // SDK lifecycle:
+  "ClientClosedError",
+  "AbortError",
+  "CreateChannelResponseError",
+  // transient / 5xx fallthroughs — observability bucket, not silent trap:
+  "InternalServerError",
+  "ServiceUnavailableError",
+  // live-activity JS-side wrapper class; the catalog binding flows through
+  // the native suffix on a per-case basis (set on LiveActivityNativeError
+  // instances), not through the class name.
+  "LiveActivityNativeError",
+]);
 
 function fail(checks) {
   emitDiagnosticReport(buildReport(TOOL, checks), { json: values.json });
@@ -78,49 +126,44 @@ const traps = (() => {
   return result.data;
 })();
 
-const errorsSource = (() => {
+// Per-source: exported classes; the union across all sources is the set
+// the cited-class check resolves against. apnsErrorSubclasses and
+// reasonDispatchClasses are scoped to the push errors file only.
+const exportedClasses = new Set();
+const exportedToSource = new Map();
+let apnsErrorSubclasses = new Set();
+let reasonDispatchClasses = new Set();
+
+for (const source of SOURCES) {
+  let text;
   try {
-    return readFileSync(ERRORS_PATH, "utf8");
+    text = readFileSync(resolve(source.path), "utf8");
   } catch (error) {
     fail([
       {
-        id: "load-errors",
+        id: "load-source",
         status: "fail",
-        summary: `Could not read ${ERRORS_PATH}.`,
+        summary: `Could not read ${source.path}.`,
         detail: { message: error.message ?? String(error) },
       },
     ]);
   }
-})();
-
-// Match `export class Foo` (with optional `extends ...`) at line start. Keeps
-// the script free of TS parser dependencies; the regex is safe because the
-// errors file contains only top-level class declarations and no embedded
-// strings or comments that resemble export statements at line start.
-const exportedClasses = new Set(
-  Array.from(errorsSource.matchAll(/^export class (\w+)/gm), (m) => m[1]),
-);
-
-// Subset of exported classes that derive from ApnsError. Those are the
-// wire-level error classes: they correspond to an APNs `reason` string and
-// must be reachable through `reasonToError`'s switch. Classes that extend
-// plain `Error` (MissingApnsConfigError, InvalidSnapshotError, etc.) are
-// thrown by the SDK itself, not in response to an APNs reason, so they are
-// excluded from the reasonToError-wiring check below.
-const apnsErrorSubclasses = new Set(
-  Array.from(
-    errorsSource.matchAll(/^export class (\w+) extends ApnsError/gm),
-    (m) => m[1],
-  ),
-);
-
-// Classes returned by the `reasonToError` switch. Cases look like
-// `return new FooError(init)` (with or without spread); the regex captures
-// every constructor invocation in the file, which for errors.ts is a clean
-// proxy for the switch arms.
-const reasonDispatchClasses = new Set(
-  Array.from(errorsSource.matchAll(/return new (\w+)\(/gm), (m) => m[1]),
-);
+  for (const m of text.matchAll(/^export class (\w+)/gm)) {
+    exportedClasses.add(m[1]);
+    exportedToSource.set(m[1], source.path);
+  }
+  if (source.apnsTaxonomy) {
+    apnsErrorSubclasses = new Set(
+      Array.from(
+        text.matchAll(/^export class (\w+) extends ApnsError/gm),
+        (m) => m[1],
+      ),
+    );
+    reasonDispatchClasses = new Set(
+      Array.from(text.matchAll(/return new (\w+)\(/gm), (m) => m[1]),
+    );
+  }
+}
 
 // Forward direction: every cited class must be a real export, and any
 // ApnsError subclass we cite must be reachable through reasonToError so a
@@ -135,7 +178,7 @@ for (const entry of traps.entries) {
     if (!exportedClasses.has(className)) {
       missingClassIssues.push({
         path: `${entry.id}.errorClasses`,
-        message: `${className} is not exported from packages/push/src/errors.ts`,
+        message: `${className} is not exported from any scanned source file.`,
       });
     } else if (
       apnsErrorSubclasses.has(className) &&
@@ -158,13 +201,20 @@ for (const entry of traps.entries) {
   }
 }
 
-// Reverse-direction visibility (informational only).
-const unboundClasses = Array.from(exportedClasses)
-  .filter((c) => !citedToTrap.has(c))
-  // ApnsError is the abstract base, never thrown directly with that name.
-  // UnknownApnsError is the explicit fallback. Neither warrants a binding.
-  .filter((c) => c !== "ApnsError" && c !== "UnknownApnsError")
-  .sort();
+// Reverse direction: every concrete exported class is either cited by a
+// trap or explicitly on the INTENTIONALLY_UNBOUND allowlist. Unlike v6,
+// this is now strict (a fail rather than informational) — the allowlist
+// is the single chokepoint for "self-correctness or lifecycle, not a
+// silent trap" classes.
+const unboundIssues = [];
+for (const className of [...exportedClasses].sort()) {
+  if (citedToTrap.has(className)) continue;
+  if (INTENTIONALLY_UNBOUND.has(className)) continue;
+  unboundIssues.push({
+    path: exportedToSource.get(className) ?? "(unknown)",
+    message: `${className} has no trap binding and is not on the INTENTIONALLY_UNBOUND allowlist.`,
+  });
+}
 
 const checks = [
   {
@@ -173,7 +223,7 @@ const checks = [
     summary:
       missingClassIssues.length === 0
         ? `All ${citedToTrap.size} cited error classes resolve to real exports.`
-        : `${missingClassIssues.length} cited error class${missingClassIssues.length === 1 ? " does" : "es do"} not exist in packages/push/src/errors.ts.`,
+        : `${missingClassIssues.length} cited error class${missingClassIssues.length === 1 ? " does" : "es do"} not exist in the scanned source files.`,
     ...(missingClassIssues.length > 0
       ? { detail: { issues: missingClassIssues } }
       : {}),
@@ -201,18 +251,18 @@ const checks = [
       : {}),
   },
   {
-    id: "unbound-classes",
-    status: "ok",
+    id: "unbound-classes-allowlisted",
+    status: unboundIssues.length === 0 ? "ok" : "fail",
     summary:
-      unboundClasses.length === 0
-        ? "Every concrete error class is bound to a trap."
-        : `${unboundClasses.length} error class${unboundClasses.length === 1 ? "" : "es"} have no trap binding (informational).`,
-    ...(unboundClasses.length > 0
+      unboundIssues.length === 0
+        ? "Every exported error class is bound to a trap or explicitly allowlisted."
+        : `${unboundIssues.length} exported error class${unboundIssues.length === 1 ? " is" : "es are"} unbound and not on the INTENTIONALLY_UNBOUND allowlist.`,
+    ...(unboundIssues.length > 0
       ? {
           detail: {
+            issues: unboundIssues,
             message:
-              "Reverse-direction binding is not strict; the catalog only covers silent-failure traps. These classes are documented but not cited:",
-            paths: unboundClasses,
+              "Either add an `errorClasses` entry to data/traps.json for the binding, or add the class name to INTENTIONALLY_UNBOUND in scripts/check-trap-error-binding.mjs with a one-line rationale.",
           },
         }
       : {}),

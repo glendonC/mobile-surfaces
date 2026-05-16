@@ -277,7 +277,16 @@ export type {
   TrapCatalog,
 } from "./traps.ts";
 
-export { traps, findTrap, findTrapByErrorClass } from "./traps-data.ts";
+// Traps catalog runtime helpers are now sourced from @mobile-surfaces/traps
+// (the single home for the catalog, error base, and Swift bindings as of
+// v7). surface-contracts re-exports the lookups so existing consumers
+// (the harness, TrapErrorCard, SetupStatusRow) keep their imports
+// working. The legacy `traps: readonly TrapEntry[]` array (a typed
+// catalog snapshot generated from the full Zod entry shape) is dropped:
+// the new package ships a TrapBinding map keyed by id, which is the
+// shape every consumer actually used. Reach for `TRAP_BINDINGS` from
+// `@mobile-surfaces/traps` if you need the full iterable.
+export { findTrap, findTrapByErrorClass } from "@mobile-surfaces/traps";
 
 export {
   diagnosticCheckStatus,

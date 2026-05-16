@@ -1,7 +1,7 @@
 {
-  "name": "@mobile-surfaces/push",
+  "name": "@mobile-surfaces/traps",
   "version": "7.0.0",
-  "description": "Node SDK for sending Mobile Surfaces snapshots to Apple Push Notification service (APNs) \u2014 Live Activities, Dynamic Island, broadcast channels, and channel management.",
+  "description": "Single home for the trap catalog, MobileSurfacesError base, URL builder, and generated TS/Swift bindings. Imported by every package that throws or reports diagnostics; not user-facing.",
   "publishConfig": {
     "access": "public",
     "main": "./dist/index.js",
@@ -12,6 +12,7 @@
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
       },
+      "./swift": "./swift/MobileSurfacesTraps.swift",
       "./package.json": "./package.json"
     }
   },
@@ -20,22 +21,20 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/glendonC/mobile-surfaces.git",
-    "directory": "packages/push"
+    "directory": "packages/traps"
   },
   "bugs": {
     "url": "https://github.com/glendonC/mobile-surfaces/issues"
   },
   "keywords": [
     "mobile-surfaces",
-    "apns",
-    "live-activity",
-    "activitykit",
-    "push",
-    "broadcast"
+    "traps",
+    "errors",
+    "catalog"
   ],
   "author": "Glendon Chin <glendonchin@gmail.com>",
   "engines": {
-    "node": ">=20"
+    "node": ">=18"
   },
   "sideEffects": false,
   "type": "module",
@@ -47,23 +46,20 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./swift": "./swift/MobileSurfacesTraps.swift",
     "./package.json": "./package.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "swift"
   ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
     "clean": "rm -rf dist",
-    "test": "node --test test/*.test.mjs",
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "@mobile-surfaces/surface-contracts": "workspace:*",
-    "@mobile-surfaces/traps": "workspace:*"
-  },
-  "peerDependencies": {
     "zod": "4.3.6"
   }
 }
