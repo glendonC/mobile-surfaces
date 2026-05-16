@@ -1,0 +1,23 @@
+{
+  "name": "mobile-surfaces-example-backend",
+  "version": "0.1.0",
+  "description": "Single-file Node server that demonstrates the production shape of a Mobile Surfaces backend: receive a domain event, project to a LiveSurfaceSnapshot, drive APNs via @mobile-surfaces/push. Paired with apps/mobile/src/screens/DeliveryExampleScreen.tsx to close the loop end-to-end.",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "src/server.mjs",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@mobile-surfaces/example-domain": "workspace:*",
+    "@mobile-surfaces/push": "workspace:*",
+    "@mobile-surfaces/surface-contracts": "workspace:*",
+    "@mobile-surfaces/tokens": "workspace:*",
+    "zod": "4.3.6"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

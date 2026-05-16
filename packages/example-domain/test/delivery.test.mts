@@ -24,7 +24,7 @@ import {
   mockTickOrder,
   stageToProgress,
   type DeliveryStage,
-} from "../src/example/delivery.ts";
+} from "../src/index.ts";
 
 const KINDS: ReadonlyArray<LiveSurfaceKind> = [
   "liveActivity",

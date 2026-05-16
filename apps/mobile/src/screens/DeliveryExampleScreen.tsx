@@ -38,7 +38,7 @@ import {
   mockTickOrder,
   type DeliveryOrder,
   type DeliveryStage,
-} from "../example/delivery";
+} from "@mobile-surfaces/example-domain";
 import {
   refreshLockAccessorySurface,
   refreshStandbySurface,

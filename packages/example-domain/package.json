@@ -1,0 +1,63 @@
+{
+  "name": "@mobile-surfaces/example-domain",
+  "version": "0.1.0",
+  "description": "Reference domain (DeliveryOrder) and projection family (deliveryToSnapshot) for the Mobile Surfaces example backend and the mobile app's DeliveryExampleScreen. Demonstrates the wire-boundary parse pattern that's load-bearing for every Mobile Surfaces project: domain state -> projection -> safeParseSnapshot -> adapter / App Group / APNs.",
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/glendonC/mobile-surfaces#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/glendonC/mobile-surfaces.git",
+    "directory": "packages/example-domain"
+  },
+  "bugs": {
+    "url": "https://github.com/glendonC/mobile-surfaces/issues"
+  },
+  "keywords": [
+    "mobile-surfaces",
+    "example",
+    "live-activity",
+    "reference"
+  ],
+  "author": "Glendon Chin <glendonchin@gmail.com>",
+  "engines": {
+    "node": ">=18"
+  },
+  "sideEffects": false,
+  "type": "module",
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "clean": "rm -rf dist",
+    "test": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test test/*.test.mts",
+    "prepublishOnly": "pnpm build"
+  },
+  "dependencies": {
+    "@mobile-surfaces/surface-contracts": "workspace:^"
+  }
+}

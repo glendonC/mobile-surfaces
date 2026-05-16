@@ -12,6 +12,8 @@ In plain English: your backend describes what is happening once, validates that 
 
 For the full push surface (token taxonomy, channel management, error responses, retry policy, smoke-script flag combinations), see [`docs/push.md`](/docs/push). This page is the high-level "how does it work end-to-end" piece; the push doc is the "how do I drive the wire layer" piece.
 
+For a single runnable file that wires every piece below together — token forwarder ingress, domain event ingress, projection, APNs dispatch — see [`apps/example-backend/`](https://github.com/glendonC/mobile-surfaces/tree/main/apps/example-backend). It is a reference, not a deployable (in-memory storage, no auth, no deploy config); the wire-boundary parse pattern is the part that ports to production unchanged.
+
 ## Mental Model
 
 The contract is one type with kind-gated derived shapes.

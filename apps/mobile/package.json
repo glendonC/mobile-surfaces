@@ -25,6 +25,7 @@
     "build:ios": "eas build --platform ios"
   },
   "dependencies": {
+    "@mobile-surfaces/example-domain": "workspace:*",
     "@mobile-surfaces/surface-contracts": "workspace:*",
     "expo": "~55.0.18",
     "expo-application": "~55.0.14",
