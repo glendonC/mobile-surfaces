@@ -17,7 +17,7 @@ host-app compile in `.github/workflows/ios-build.yml`.
 ## Run locally
 
 ```
-swift test --package-path packages/live-activity/ios/Tests
+swift test --package-path packages/live-activity/ios
 ```
 
 Requires Swift 5.9+ (Xcode 26 ships 6.0; SPM treats 5.9 as the floor

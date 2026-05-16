@@ -79,10 +79,11 @@ private struct StagePill: View {
       .padding(.horizontal, 8)
       .padding(.vertical, 2)
       .background(
-        Capsule().fill(Color("AccentColor").opacity(0.15))
+        Capsule().fill(tint.opacity(0.15))
       )
-      .foregroundStyle(Color("AccentColor"))
+      .foregroundStyle(tint)
   }
 
   private var label: String { stage.displayLabel }
+  private var tint: Color { stage.tintColor }
 }

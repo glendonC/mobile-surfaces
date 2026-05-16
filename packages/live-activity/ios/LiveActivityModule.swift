@@ -189,6 +189,18 @@ public class LiveActivityModule: Module {
     // every listener (component unmount with no other subscribers) Expo
     // invokes this; without it, the drain Tasks keep iterating against the
     // AsyncSequences forever and re-attach stacks new ones on next mount.
+    //
+    // Contract with OnStartObserving (MS020 / MS016): `clearAll()` cancels
+    // every per-activity drain in flight, which on its own would drop future
+    // token rotations on existing activities across a bridge teardown. The
+    // recovery path lives in OnStartObserving above: it iterates
+    // `Activity<MobileSurfacesActivityAttributes>.activities` and calls
+    // `observe(activity:isChannelMode:)` for each one, re-attaching fresh
+    // drains. If you change OnStartObserving's startup loop (for example,
+    // gating it behind a flag or moving it out of the cold-start path), update
+    // this site too — otherwise per-activity push-token rotation goes silent
+    // after the first bridge teardown and the failure is invisible until a
+    // backend `pushTokenUpdates` stream stops emitting.
     OnStopObserving {
       if #available(iOS 16.2, *) {
         let registry = self.registry

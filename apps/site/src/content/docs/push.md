@@ -291,6 +291,12 @@ For incidents, set the env var `MOBILE_SURFACES_PUSH_DISABLE_RETRY=1` (or any no
 
 `computeBackoffMs` lives in `packages/push/src/retry.ts` if you want to reuse the same backoff math elsewhere; the default formula is `min(base * 2^attempt, max) + random(0, base)` with jitter.
 
+### Idempotency and retries
+
+The SDK generates an `apns-id` (UUID v4) once per send call and reuses the same value across every retry attempt within that call's retry budget. APNs treats requests carrying the same `apns-id` as the same logical send and deduplicates them, so a retry triggered by a transient `TooManyRequests` or transport reset does not enqueue a second update on the device.
+
+Callers wanting end-to-end at-least-once semantics across higher-level retries (process restart, queue replay) can pass their own `apnsId` via the send options; the SDK honors it as-is and reuses it for every retry in the same call. The returned `SendResult.apnsId` echoes whichever value was used so the caller can persist it for correlation with APNs server logs.
+
 ### Priority-aware retry stretch
 
 Per [MS015](/traps#ms015-push-priority-5-vs-10-budget-rules), priority 10 Live Activity sends are heavily budgeted by iOS. Sustained retries against an already-throttled token only deepen the throttle. The SDK applies a `effectiveRetryPolicy` stretch transparently for any send issued at priority 10:

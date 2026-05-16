@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import WidgetKit
 
 /// Schema version this widget binary was compiled against. Host snapshots
@@ -44,9 +45,32 @@ enum MobileSurfacesSharedState {
   static let lockAccessoryStaleAfter: TimeInterval = 24 * 60 * 60
   static let standbyStaleAfter: TimeInterval = 24 * 60 * 60
 
-  static var defaults: UserDefaults? {
-    UserDefaults(suiteName: appGroup)
-  }
+  // Cache the suite handle once per process. UserDefaults caches internally by
+  // suiteName, but binding the handle to a `static let` also makes the failure
+  // mode reproducible: if the App Group entitlement is missing or misconfigured
+  // (MS013/MS025), every read sees the same nil rather than a flaky-looking
+  // transient. The one-shot logger below fires the first time any caller
+  // observes the nil so the misconfiguration surfaces in Console.app without
+  // requiring a JS round-trip.
+  static let defaults: UserDefaults? = {
+    let suite = UserDefaults(suiteName: appGroup)
+    if suite == nil {
+      _ = appGroupMissingLogOnce
+    }
+    return suite
+  }()
+
+  // Lazy global: the closure runs at most once on first access, regardless of
+  // which call site triggers it. Stored as `Void` since we only care about the
+  // side effect.
+  private static let appGroupMissingLogOnce: Void = {
+    let message = "[MobileSurfaces] App Group container not available (suite: \(appGroup)). App Group entitlement missing or misconfigured — see MS013/MS025."
+    if #available(iOS 14.0, *) {
+      Logger(subsystem: "com.mobilesurfaces.widget", category: "appGroup").error("\(message, privacy: .public)")
+    } else {
+      print(message)
+    }
+  }()
 
   static func snapshotKey(surfaceId: String) -> String {
     "surface.snapshot.\(surfaceId)"

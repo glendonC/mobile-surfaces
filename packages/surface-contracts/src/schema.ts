@@ -382,10 +382,14 @@ export type LiveSurfaceNotificationSlice = z.infer<
  * Use at the producer boundary, never at the consumer boundary. Consumers
  * still parse the loose schema and decide routing at runtime.
  */
+// Use `.required({ category: true })` rather than `.extend({ category: ... })`
+// so the underlying `z.enum(NOTIFICATION_CATEGORY_IDS)` constraint on
+// `category` stays load-bearing at the producer boundary. The earlier
+// `.extend({ category: z.string().min(1) })` widened the type back to any
+// non-empty string, defeating the registry parity guarantee MS037 is built
+// on. `.required` flips optional -> required while preserving the enum.
 export const liveSurfaceNotificationSliceForExtension =
-  liveSurfaceNotificationSlice.extend({
-    category: z.string().min(1),
-  });
+  liveSurfaceNotificationSlice.required({ category: true });
 export type LiveSurfaceNotificationSliceForExtension = z.infer<
   typeof liveSurfaceNotificationSliceForExtension
 >;
