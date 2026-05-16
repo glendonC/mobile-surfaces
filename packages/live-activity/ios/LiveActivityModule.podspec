@@ -29,4 +29,15 @@ Pod::Spec.new do |s|
   }
 
   s.source_files = "**/*.{h,m,mm,swift,hpp,cpp}"
+
+  # SwiftTests/ holds XCTest cases that `@testable import LiveActivityTestable`,
+  # the SwiftPM-only library product defined in Package.swift at the package
+  # root. Neither symbol exists in the CocoaPods consumer (host app + widget
+  # extension compile) — that path links against ExpoModulesCore, not the
+  # SwiftPM module. Without these exclusions the `**/*.swift` glob would
+  # vacuum them into the LiveActivityModule pod target, where the
+  # `@testable import LiveActivityTestable` and `import PackageDescription`
+  # statements both fail to resolve. The standalone Swift Package
+  # (swift-tests CI job) still sees these files via its own target globbing.
+  s.exclude_files = ["SwiftTests/**/*", "Package.swift"]
 end
