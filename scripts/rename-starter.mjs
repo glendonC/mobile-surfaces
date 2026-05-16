@@ -444,6 +444,17 @@ function main() {
   console.log("regenerating app-group constants ...");
   execSync("node scripts/generate-app-group-constants.mjs", { stdio: "inherit" });
 
+  // Regen the @mobile-surfaces/traps package TS bindings + three Swift
+  // replicas. The generator embeds docsUrl strings derived from the
+  // canonical CLAUDE.md anchor format; the rename-starter's text rewrite
+  // pass touches the file bodies but cannot guarantee byte-for-byte parity
+  // with what the generator would emit fresh. Running the generator here
+  // settles the difference before the user's first `pnpm surface:check`.
+  // The generator is deps-free (reads data/traps.json directly, no zod) so
+  // it runs in the pre-install scaffold context.
+  console.log("regenerating traps package bindings ...");
+  execSync("node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/generate-traps-package.mjs", { stdio: "inherit" });
+
   // The verify pass imports from packages/surface-contracts, which depends on
   // zod. In a freshly-scaffolded project (where rename runs before install),
   // those imports fail. Callers who pass --skip-verify are responsible for

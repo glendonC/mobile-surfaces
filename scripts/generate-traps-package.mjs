@@ -25,10 +25,16 @@
 //
 // Run plain: regenerate. Run with --check: verify the four committed
 // files match the generator output. CI guard wired into surface-check.
+// Deliberately deps-free at the module level: no zod, no surface-contracts.
+// This generator must run pre-install (rename-starter invokes it in a freshly
+// extracted scaffold tarball before `pnpm install`), so importing anything
+// from a workspace package would crash because the symlink chain isn't there
+// yet. data/traps.json's shape is validated separately by validate-trap
+// -catalog.mjs (which DOES import the Zod schema). The generator trusts the
+// catalog format; a malformed catalog would fail that gate, not this one.
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, relative } from "node:path";
 import { parseArgs } from "node:util";
-import { trapCatalog } from "../packages/surface-contracts/src/traps.ts";
 import { buildReport, emitDiagnosticReport } from "./lib/diagnostics.mjs";
 
 const { values } = parseArgs({
@@ -55,24 +61,10 @@ const DOCS_BASE_URL =
 
 const raw = readFileSync(TRAPS_PATH, "utf8");
 const parsed = JSON.parse(raw);
-const result = trapCatalog.safeParse(parsed);
-if (!result.success) {
-  emitDiagnosticReport(
-    buildReport(TOOL, [
-      {
-        id: "validate-traps",
-        status: "fail",
-        summary:
-          "data/traps.json failed Zod validation; run pnpm traps:check for details.",
-      },
-    ]),
-    { json: values.json },
-  );
-}
-
-const entries = [...result.data.entries].sort((a, b) =>
-  a.id.localeCompare(b.id),
-);
+// Shape validation lives in validate-trap-catalog.mjs (the surface:check
+// gate that imports the Zod schema). Here we trust the catalog format so
+// the generator can run pre-install in a freshly extracted scaffold.
+const entries = [...parsed.entries].sort((a, b) => a.id.localeCompare(b.id));
 
 // Forward map: every cited error class -> trap id. Uniqueness is enforced
 // by the Zod superRefine in traps.ts; the iteration is order-stable
