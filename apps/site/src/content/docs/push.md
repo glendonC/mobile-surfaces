@@ -470,6 +470,6 @@ Knobs the SDK intentionally does not surface, with the reason in each row. Open 
 
 ## Anti-goals
 
-- **No production-shaped backend example.** That belongs in [`packages/push/README.md`](https://github.com/glendonC/mobile-surfaces/blob/main/packages/push/README.md). This page is the reference for what the SDK and the script *do*; wiring the SDK into a queue, retry queue, or CDC pipeline is application-specific.
+- **No production-shaped backend service.** For the architecture in one runnable file, see [`apps/example-backend/`](https://github.com/glendonC/mobile-surfaces/tree/main/apps/example-backend) — a single-file Node server that receives the token forwarder payload, holds domain state in-memory, projects to a `LiveSurfaceSnapshot`, and drives APNs via this SDK. Wiring the SDK into a real queue, retry queue, or CDC pipeline (auth, persistence, observability, deploy) is application-specific; this page documents the SDK and script, not the deploy story.
 - **No restating ActivityKit concepts the SDK already abstracts.** The SDK builds correct `aps` blocks, picks topics and priorities, sets `apns-expiration`, and chooses dismissal defaults; the doc does not relitigate those.
 - **No paraphrasing of Apple's docs.** Every reason string and endpoint here is verified against current Apple documentation; the reason text is consistent with `packages/push/src/reasons.ts` (the canonical local copy).
