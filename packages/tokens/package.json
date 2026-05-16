@@ -1,0 +1,131 @@
+{
+  "name": "@mobile-surfaces/tokens",
+  "version": "7.0.0",
+  "description": "Token store and forwarder for Mobile Surfaces. Owns MS020/MS021 semantics (latest-write-wins on rotation, terminal lifecycle on activity end) for ActivityKit push, push-to-start, and APNs device tokens.",
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "./react": {
+        "types": "./dist/react.d.ts",
+        "default": "./dist/react.js"
+      },
+      "./forwarder": {
+        "types": "./dist/forwarder.d.ts",
+        "default": "./dist/forwarder.js"
+      },
+      "./wire": {
+        "types": "./dist/wire.d.ts",
+        "default": "./dist/wire.js"
+      },
+      "./storage/memory": {
+        "types": "./dist/storage/memory.d.ts",
+        "default": "./dist/storage/memory.js"
+      },
+      "./storage/async-storage": {
+        "types": "./dist/storage/async-storage.d.ts",
+        "default": "./dist/storage/async-storage.js"
+      },
+      "./storage/secure-store": {
+        "types": "./dist/storage/secure-store.d.ts",
+        "default": "./dist/storage/secure-store.js"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/glendonC/mobile-surfaces#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/glendonC/mobile-surfaces.git",
+    "directory": "packages/tokens"
+  },
+  "bugs": {
+    "url": "https://github.com/glendonC/mobile-surfaces/issues"
+  },
+  "keywords": [
+    "mobile-surfaces",
+    "live-activity",
+    "tokens",
+    "activitykit",
+    "push"
+  ],
+  "author": "Glendon Chin <glendonchin@gmail.com>",
+  "engines": {
+    "node": ">=18"
+  },
+  "sideEffects": false,
+  "type": "module",
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./react": {
+      "types": "./src/react.ts",
+      "default": "./src/react.ts"
+    },
+    "./forwarder": {
+      "types": "./src/forwarder.ts",
+      "default": "./src/forwarder.ts"
+    },
+    "./wire": {
+      "types": "./src/wire.ts",
+      "default": "./src/wire.ts"
+    },
+    "./storage/memory": {
+      "types": "./src/storage/memory.ts",
+      "default": "./src/storage/memory.ts"
+    },
+    "./storage/async-storage": {
+      "types": "./src/storage/async-storage.ts",
+      "default": "./src/storage/async-storage.ts"
+    },
+    "./storage/secure-store": {
+      "types": "./src/storage/secure-store.ts",
+      "default": "./src/storage/secure-store.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "clean": "rm -rf dist",
+    "test": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test test/*.test.mts",
+    "prepublishOnly": "pnpm build"
+  },
+  "dependencies": {
+    "@mobile-surfaces/live-activity": "workspace:^",
+    "@mobile-surfaces/surface-contracts": "workspace:^",
+    "@mobile-surfaces/traps": "workspace:^",
+    "zod": "4.3.6"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "@react-native-async-storage/async-storage": ">=1.0.0",
+    "expo-secure-store": ">=12.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "@react-native-async-storage/async-storage": {
+      "optional": true
+    },
+    "expo-secure-store": {
+      "optional": true
+    }
+  }
+}

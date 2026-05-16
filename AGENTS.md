@@ -13,7 +13,7 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 
 ## Index
 
-35 live rules: 30 error, 4 warning, 1 info. 3 retired ids reserved (see footnote).
+37 live rules: 32 error, 4 warning, 1 info. 3 retired ids reserved (see footnote).
 
 | ID | Severity | Detection | Title |
 | --- | --- | --- | --- |
@@ -46,6 +46,8 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 | [MS035](#ms035-apns-topic-header-missing-or-bundleid-misconfigured) | error | runtime | apns-topic header missing or bundleId misconfigured |
 | [MS036](#ms036-surface-snapshot-swift-structs-match-their-zod-projection-output-schemas) | error | static | Surface snapshot Swift structs match their Zod projection-output schemas |
 | [MS037](#ms037-notification-category-outputs-in-sync-with-canonical-registry) | error | static | Notification category outputs in sync with canonical registry |
+| [MS038](#ms038-live-activity-adapter-inputs-must-be-zod-parsed-before-crossing-the-bridge) | error | static | Live Activity adapter inputs must be Zod-parsed before crossing the bridge |
+| [MS039](#ms039-token-store-discipline-subscribe-to-activitykit-token-events-through-mobile-surfaces-tokens) | error | static | Token store discipline: subscribe to ActivityKit token events through @mobile-surfaces/tokens |
 | [MS040](#ms040-swift-trap-binding-file-byte-identity) | error | static | Swift trap-binding file byte-identity |
 | [MS010](#ms010-toolchain-preflight-node-24-pnpm-xcode-26) | warning | config | Toolchain preflight (Node 24, pnpm, Xcode 26+) |
 | [MS015](#ms015-push-priority-5-vs-10-budget-rules) | warning | runtime | Push priority 5 vs 10 budget rules |
@@ -59,15 +61,15 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 - `channels`: MS031, MS034
 - `cng`: MS017, MS029
 - `config`: MS012, MS013, MS017, MS018, MS025, MS027, MS029, MS034, MS035, MS037
-- `contract`: MS001, MS003, MS004, MS006, MS007, MS008, MS009, MS024, MS036, MS037, MS040
+- `contract`: MS001, MS003, MS004, MS006, MS007, MS008, MS009, MS024, MS036, MS037, MS038, MS039, MS040
 - `control`: MS013, MS026, MS036
 - `ios-version`: MS012, MS027
 - `ios18`: MS031, MS034
-- `live-activity`: MS001, MS002, MS003, MS004, MS011, MS015, MS016, MS019, MS021, MS032
+- `live-activity`: MS001, MS002, MS003, MS004, MS011, MS015, MS016, MS019, MS021, MS032, MS038, MS039
 - `notification`: MS037
 - `push`: MS006, MS011, MS014, MS015, MS018, MS024, MS028, MS030, MS031, MS032, MS034, MS035
 - `swift`: MS002, MS003, MS004, MS036, MS040
-- `tokens`: MS014, MS016, MS019, MS020, MS021, MS023, MS028, MS030
+- `tokens`: MS014, MS016, MS019, MS020, MS021, MS023, MS028, MS030, MS039
 - `toolchain`: MS010, MS026
 - `widget`: MS013, MS026, MS036
 
@@ -420,6 +422,26 @@ packages/surface-contracts/src/notificationCategories.ts is the single source of
 **Symptom.** Notification arrives at the device with aps.category set, but the UNNotificationContentExtension is never invoked: the user sees the default system chrome instead of the surface-aware custom view. No log, no error - iOS silently falls back when the payload category does not match any registered UNNotificationExtensionCategory in the extension Info.plist.
 
 **Fix.** Edit packages/surface-contracts/src/notificationCategories.ts and run pnpm surface:codegen to regenerate every consumer in lockstep. The schema-level z.enum constraint rejects payloads that name a category outside the registry, so the wire stays load-bearing for parity.
+
+### MS038: Live Activity adapter inputs must be Zod-parsed before crossing the bridge
+
+**severity:** error  •  **detection:** static (script-checkable)  •  **tags:** live-activity, contract  •  **enforced by:** `scripts/check-adapter-parses.mjs`
+
+Every adapter method that hands a LiveSurfaceActivityContentState to the native module (start, update) must safeParse the input against liveSurfaceActivityContentState before the call, and reject malformed inputs with InvalidContentStateError extends MobileSurfacesError. The adapter is the single chokepoint between hand-written JS and the ActivityKit Codable decoder; parse-on-entry is what turns a silent Lock Screen failure into a typed, trap-bound error at the call site.
+
+**Symptom.** Push lands at APNs (200) but the Lock Screen view never updates; or start() resolves with an activity id but the Lock Screen renders placeholder data. ActivityKit's JSONDecoder silently rejects payloads whose shape diverges from the Swift ContentState struct, and without parse-on-entry the JS-side `state` argument can drift from the contract without anyone noticing until a user-facing surface stops moving.
+
+**Fix.** Use the boundary re-export at apps/*/src/liveActivity, which routes through the wrapped adapter in packages/live-activity/src/index.ts. The wrapper calls liveSurfaceActivityContentState.safeParse(state) before each native call and throws InvalidContentStateError on failure. Do not call requireNativeModule("LiveActivity") or the bare NativeLiveActivity export directly. scripts/check-adapter-parses.mjs asserts the wrapper file references safeParse and InvalidContentStateError.
+
+### MS039: Token store discipline: subscribe to ActivityKit token events through @mobile-surfaces/tokens
+
+**severity:** error  •  **detection:** static (script-checkable)  •  **tags:** live-activity, tokens, contract  •  **enforced by:** `scripts/check-token-discipline.mjs`
+
+Application code under apps/*/src/ must subscribe to onPushToken, onPushToStartToken, and onActivityStateChange through @mobile-surfaces/tokens (or its /react sub-path), never via direct adapter.addListener calls. The token-store package owns MS020/MS021 semantics — latest-write-wins on rotation, terminal lifecycle on activity end — and hand-rolled subscriptions in app code reliably re-introduce the silent token-drift failure mode the package exists to prevent.
+
+**Symptom.** Backend send to a stored token returns 410 Unregistered or 400 BadDeviceToken after a working session, or the host accumulates dead tokens for a since-ended activity and never marks them terminal. The failure mode is the app forgetting it has stale state; the diagnostic surface is the backend logs, not the device.
+
+**Fix.** Replace local addListener subscriptions with the useTokenStore hook from @mobile-surfaces/tokens/react, or createTokenStore + the adapter event subscriptions from @mobile-surfaces/tokens directly. Both encode the MS020 upsert-on-rotation and MS021 markDead-on-terminal semantics. The check allows direct addListener inside packages/live-activity/src/ and packages/tokens/src/ (the implementations themselves).
 
 ### MS040: Swift trap-binding file byte-identity
 
