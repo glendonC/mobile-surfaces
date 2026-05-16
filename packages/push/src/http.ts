@@ -58,6 +58,25 @@ export interface Http2ClientOptions {
    */
   closeTimeoutMs?: number;
   /**
+   * Maximum number of concurrent streams the client will dispatch on the
+   * underlying HTTP/2 session. Requests beyond the cap wait in a FIFO queue
+   * and dispatch as in-flight streams complete.
+   *
+   * The effective cap is `min(userOption ?? Infinity, peerSetting ?? floor,
+   * floor)` where `floor` is `900` — a defensive ceiling chosen below APNs's
+   * typical `SETTINGS_MAX_CONCURRENT_STREAMS=1000` to leave headroom against
+   * peer-side enforcement variance and Node's stream-bookkeeping limits.
+   * Setting this option is normally unnecessary; the floor and the peer's
+   * advertised SETTINGS frame already cover Apple's documented behavior.
+   *
+   * Pass `0` or a negative value to disable the queue (the pre-cap behavior:
+   * unbounded multiplexing onto the session, with overflow surfacing as
+   * `NGHTTP2_REFUSED_STREAM` from the wire which `client.ts` retries).
+   *
+   * Default: `900`.
+   */
+  maxConcurrentStreams?: number;
+  /**
    * Fires exactly once when `close()` had to force-destroy the session
    * because the graceful close exceeded `closeTimeoutMs`. Receives the
    * elapsed wait time in ms. Hook errors are swallowed so an observability
@@ -72,6 +91,22 @@ export interface Http2ClientOptions {
 }
 
 /**
+ * Defensive ceiling on the effective concurrent-stream cap. APNs advertises
+ * `SETTINGS_MAX_CONCURRENT_STREAMS=1000` in typical conditions; 900 leaves
+ * headroom against peer-side enforcement variance and Node's bookkeeping.
+ * Exported only so the public {@link Http2ClientOptions.maxConcurrentStreams}
+ * docstring can stay accurate; not part of the runtime contract.
+ */
+const STREAM_CAP_FLOOR = 900;
+
+interface QueueWaiter {
+  resolve: () => void;
+  reject: (err: unknown) => void;
+  signal: AbortSignal | undefined;
+  abortHandler: (() => void) | undefined;
+}
+
+/**
  * Manages a single HTTP/2 session lifecycle. Lazy connect on first request,
  * automatic reconnect when the session ends or receives GOAWAY, idle close
  * after `idleTimeoutMs`.
@@ -80,6 +115,7 @@ export class Http2Client {
   readonly #origin: string;
   readonly #idleTimeoutMs: number;
   readonly #closeTimeoutMs: number;
+  readonly #userMaxConcurrentStreams: number;
   readonly #onForcedDestroy: ((info: { elapsedMs: number }) => void) | undefined;
   readonly #connect: Http2ConnectFactory;
   readonly #sessionOptions: http2.ClientSessionOptions | http2.SecureClientSessionOptions | undefined;
@@ -89,7 +125,18 @@ export class Http2Client {
   // GOAWAY) produces ONE TLS handshake instead of N. Cleared in resolve and
   // reject paths so a failed dial doesn't poison subsequent attempts.
   #sessionPromise: Promise<ClientHttp2Session> | undefined;
+  // Reservation counter: covers both currently-dispatched streams and
+  // not-yet-released slots a queued waiter has acquired but not finished.
+  // The cap math compares this against the effective cap before issuing a
+  // new reservation; a slot is released either by handing it to the head
+  // queue waiter or by decrementing on completion.
   #inFlight = 0;
+  // FIFO of requests that hit the cap. Each waiter resolves when a slot
+  // becomes available (the prior in-flight stream released) or rejects on
+  // abort / close. Slot ownership transfers to the waiter at release time;
+  // `#inFlight` is NOT decremented when handing off, only when the queue
+  // is empty.
+  readonly #waiters: QueueWaiter[] = [];
   #idleTimer: NodeJS.Timeout | undefined;
   #closed = false;
   // Memoized close() promise. close() is documented as idempotent — concurrent
@@ -105,9 +152,66 @@ export class Http2Client {
     this.#origin = options.origin;
     this.#idleTimeoutMs = options.idleTimeoutMs ?? 60_000;
     this.#closeTimeoutMs = options.closeTimeoutMs ?? 5_000;
+    const userCap = options.maxConcurrentStreams ?? STREAM_CAP_FLOOR;
+    // <= 0 disables the cap entirely (Infinity), matching the documented
+    // opt-out behavior. The min(...) in #effectiveCap then becomes
+    // min(Infinity, peerSetting, FLOOR) = min(peerSetting, FLOOR), which
+    // is the "let the peer's SETTINGS frame and our defensive floor decide"
+    // semantics callers asking for "unbounded" actually want.
+    this.#userMaxConcurrentStreams = userCap <= 0 ? Infinity : userCap;
     this.#onForcedDestroy = options.onForcedDestroy;
     this.#connect = options.connect ?? DEFAULT_CONNECT;
     this.#sessionOptions = options.sessionOptions;
+  }
+
+  #effectiveCap(): number {
+    // Read the peer's most recent SETTINGS frame each call so a mid-burst
+    // tighten (peer sends a new SETTINGS lowering the value) is honored
+    // on the next acquireSlot. The Node http2 type for remoteSettings is
+    // documented but optional; treat missing as Infinity and let the
+    // STREAM_CAP_FLOOR be the binding constraint.
+    const peer = this.#session?.remoteSettings?.maxConcurrentStreams ?? Infinity;
+    return Math.min(this.#userMaxConcurrentStreams, peer, STREAM_CAP_FLOOR);
+  }
+
+  #acquireSlot(signal: AbortSignal | undefined): Promise<void> {
+    if (this.#inFlight < this.#effectiveCap()) {
+      this.#inFlight += 1;
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve, reject) => {
+      const waiter: QueueWaiter = {
+        resolve,
+        reject,
+        signal,
+        abortHandler: undefined,
+      };
+      if (signal) {
+        waiter.abortHandler = () => {
+          const idx = this.#waiters.indexOf(waiter);
+          if (idx >= 0) this.#waiters.splice(idx, 1);
+          reject(abortReason(signal));
+        };
+        signal.addEventListener("abort", waiter.abortHandler, { once: true });
+      }
+      this.#waiters.push(waiter);
+    });
+  }
+
+  #releaseSlot(): void {
+    // Hand the reservation to the head waiter when one exists; otherwise
+    // decrement so the idle timer can fire. The head waiter's reservation
+    // is logically the same slot the completing request held — `#inFlight`
+    // is unchanged in that branch.
+    const next = this.#waiters.shift();
+    if (next) {
+      if (next.abortHandler && next.signal) {
+        next.signal.removeEventListener("abort", next.abortHandler);
+      }
+      next.resolve();
+      return;
+    }
+    this.#inFlight -= 1;
   }
 
   get origin(): string {
@@ -124,28 +228,42 @@ export class Http2Client {
     if (this.#closed) {
       throw new Error("Http2Client is closed");
     }
-    // Already-aborted signals short-circuit before any dial work. The
-    // #executeRequest path also handles the aborted-before-stream-open case;
-    // checking here saves the round-trip cost of ensureSession() too.
+    // Already-aborted signals short-circuit before any dial or queue work.
+    // The #executeRequest path also handles the aborted-before-stream-open
+    // case; checking here saves the round-trip cost of ensureSession() and
+    // an unnecessary FIFO entry.
     if (init.signal?.aborted) {
       throw abortReason(init.signal);
     }
-    // Race window: GOAWAY can fire between ensureSession resolving and
-    // executeRequest dispatching, in which case dropSession() has already
-    // cleared #session but the local reference still points at a closing
-    // session. Re-dial once if the session is no longer healthy or was
-    // replaced. Bounded to one retry so a flapping connection still surfaces
-    // as a transport error to client.ts retry, rather than looping here.
-    let session = await this.#ensureSession();
-    if (this.#session !== session || session.closed || session.destroyed) {
-      session = await this.#ensureSession();
+    // Reserve a stream slot. If the cap is full, this awaits until the head
+    // waiter is shifted out by a releasing in-flight request (or rejects on
+    // abort / close). On resolve, `#inFlight` already accounts for this
+    // reservation, so the cap math stays consistent across the queue handoff.
+    await this.#acquireSlot(init.signal);
+    // close() may have fired while we were queued; the slot we just acquired
+    // is now stale. The drain path also rejects waiters, but a race here
+    // (release-then-close) can still resolve us before the closed check
+    // catches it. Bail out cleanly.
+    if (this.#closed) {
+      this.#releaseSlot();
+      throw new Error("Http2Client is closed");
     }
-    this.#inFlight += 1;
     this.#cancelIdleTimer();
     try {
+      // Race window: GOAWAY can fire between ensureSession resolving and
+      // executeRequest dispatching, in which case dropSession() has already
+      // cleared #session but the local reference still points at a closing
+      // session. Re-dial once if the session is no longer healthy or was
+      // replaced. Bounded to one retry so a flapping connection still
+      // surfaces as a transport error to client.ts retry, rather than
+      // looping here.
+      let session = await this.#ensureSession();
+      if (this.#session !== session || session.closed || session.destroyed) {
+        session = await this.#ensureSession();
+      }
       return await this.#executeRequest(session, init);
     } finally {
-      this.#inFlight -= 1;
+      this.#releaseSlot();
       this.#scheduleIdleTimer();
     }
   }
@@ -329,6 +447,20 @@ export class Http2Client {
     if (this.#closePromise) return this.#closePromise;
     this.#closed = true;
     this.#cancelIdleTimer();
+    // Drain any waiters that were queued behind the cap. close() is the
+    // teardown path; the alternative (let them dispatch through close) lets
+    // a misbehaving caller hang teardown via a long queue. Reject with the
+    // same shape as the closed-pre-request check so the caller's catch
+    // branch is uniform.
+    if (this.#waiters.length > 0) {
+      const drained = this.#waiters.splice(0, this.#waiters.length);
+      for (const w of drained) {
+        if (w.abortHandler && w.signal) {
+          w.signal.removeEventListener("abort", w.abortHandler);
+        }
+        w.reject(new Error("Http2Client is closed"));
+      }
+    }
     const session = this.#session;
     this.#session = undefined;
     if (!session || session.closed || session.destroyed) {

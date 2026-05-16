@@ -5,9 +5,19 @@
 
 import http2 from "node:http2";
 
-export function startMockApns(handler) {
+/**
+ * Spin up an in-process h2c stand-in for APNs.
+ *
+ * @param {(req: any, index: number) => any} handler
+ * @param {{ settings?: import("node:http2").Settings }} [options]
+ *   `settings` is forwarded verbatim into `http2.createServer({ settings })`.
+ *   Tests use it to advertise a small `maxConcurrentStreams` so the cap-and-
+ *   queue path is reachable without dispatching thousands of streams.
+ */
+export function startMockApns(handler, options = {}) {
   return new Promise((resolve, reject) => {
-    const server = http2.createServer();
+    const serverOpts = options.settings ? { settings: options.settings } : undefined;
+    const server = http2.createServer(serverOpts);
     const requests = [];
     // Track each accepted h2 session so tests can verify reconnect behavior
     // (one new session after a GOAWAY) versus connection reuse (one session

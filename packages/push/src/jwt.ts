@@ -109,22 +109,50 @@ export function resolveKeyPem(keyPathOrBuffer: string | Buffer): string {
 }
 
 /**
+ * Strategy interface every JWT cache implementation conforms to. The default
+ * {@link JwtCache} is the in-memory single-process implementation; pass a
+ * custom implementation to `createPushClient({ jwtCache })` when you need to
+ * coordinate JWT minting across worker_threads, cluster workers, or
+ * multi-replica deployments.
+ *
+ * The contract is intentionally minimal:
+ *
+ *   - `get()` returns a JWT that authenticates against APNs *right now*. It
+ *     MAY be async (Redis-backed, IPC-coordinated, etc.); the SDK awaits
+ *     every call. Implementations are responsible for their own dedup under
+ *     contention (e.g. via a refresh-in-flight promise, SETNX in Redis, or
+ *     a leader-elected mint).
+ *   - `invalidate()` drops any cached entry so the next `get()` re-mints.
+ *     The SDK calls it after an `ExpiredProviderTokenError` to recover from
+ *     clock skew between this host and Apple's edge.
+ *
+ * Both methods MAY return `void` / `string` synchronously (the default cache
+ * does) or return a Promise (Redis-backed, etc.). The SDK never inspects the
+ * return type at runtime; it just awaits.
+ */
+export interface JwtCacheLike {
+  get(): string | Promise<string>;
+  invalidate(): void | Promise<void>;
+}
+
+/**
  * Lazy JWT cache. Mints on first `get()`, re-mints when the cached token is
  * older than `refreshIntervalMs`.
  *
  * Concurrency model: safe for any number of concurrent in-flight requests on
- * a single Node event loop, which is the only environment Apple's HTTP/2
- * APNs client targets. Two `get()` calls scheduled in the same tick share the
- * cached entry without re-minting.
+ * a single Node event loop. Two `get()` calls scheduled in the same tick
+ * share the cached entry without re-minting.
  *
  * NOT safe across worker_threads or cluster workers. Each worker keeps its
- * own #entry, so multiple workers may mint independently — that's wasted
- * compute (ES256 signing) but functionally correct, since each JWT is
- * independently valid against APNs. If you require a single mint across
- * workers, sign once in the main thread and pass the token in via your own
- * synchronization (BroadcastChannel, shared cache, etc.).
+ * own #entry, so multiple workers mint independently — that's wasted compute
+ * (ES256 signing) but functionally correct, since each JWT is independently
+ * valid against APNs. For coordinated minting across realms, implement
+ * {@link JwtCacheLike} (e.g. Redis-backed read-through, or a BroadcastChannel
+ * leader-elected pattern in worker_threads) and pass it via
+ * `createPushClient({ jwtCache })`. See packages/push/README.md for a worked
+ * BroadcastChannel example.
  */
-export class JwtCache {
+export class JwtCache implements JwtCacheLike {
   readonly #config: JwtConfig;
   readonly #refreshIntervalMs: number;
   readonly #now: () => number;

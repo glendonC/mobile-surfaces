@@ -23,6 +23,9 @@ export type {
   SendDescription,
 } from "./client.ts";
 
+export { JwtCache } from "./jwt.ts";
+export type { JwtCacheLike, JwtCacheEntry, JwtConfig } from "./jwt.ts";
+
 export type { RetryPolicy } from "./retry.ts";
 export {
   DEFAULT_RETRY_POLICY,
