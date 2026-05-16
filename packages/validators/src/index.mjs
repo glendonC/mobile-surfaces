@@ -68,9 +68,24 @@ export function toBundleId(projectName) {
 }
 
 export function toSwiftPrefix(projectName) {
-  return projectName
+  const camelCase = projectName
     .split(/[^A-Za-z0-9]+/)
     .filter(Boolean)
     .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
     .join("");
+  // Swift identifiers cannot start with a digit. Strip leading digits so
+  // "1password" -> "Password", "123-app" -> "App", "5-and-dime" -> "AndDime".
+  // validateProjectSlug intentionally allows a leading digit (npm package
+  // names like "1password" are legal); the Swift-side constraint is enforced
+  // here so the slug can stay permissive.
+  const stripped = camelCase.replace(/^[0-9]+/, "");
+  if (stripped.length === 0) {
+    throw new Error(
+      `Cannot derive a Swift identifier from "${projectName}": the project name must contain at least one letter so the iOS bundle has a valid Swift type prefix.`,
+    );
+  }
+  // After stripping the leading digits, the new first character was the
+  // remainder of an interior segment (could be lowercase). Uppercase it so
+  // the result is UpperCamelCase, matching validateSwiftIdentifier's contract.
+  return stripped.charAt(0).toUpperCase() + stripped.slice(1);
 }

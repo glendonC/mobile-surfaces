@@ -21,6 +21,7 @@ import {
   ApnsError,
   ClientClosedError,
   CreateChannelResponseError,
+  ExpiredProviderTokenError,
   InvalidSnapshotError,
   MissingApnsConfigError,
   TooManyRequestsError,
@@ -1382,6 +1383,17 @@ export class PushClient {
           }
           attempt += 1;
           // Refresh JWT in case the rejection was provider-token-related.
+          // ExpiredProviderToken means Apple decoded the bearer and found its
+          // iat older than the 60-minute window (typically clock skew, since
+          // the cache refreshes at 50 minutes). The JwtCache will not re-mint
+          // on its own when the local clock says the token is still fresh, so
+          // we must invalidate it explicitly before the next get() — otherwise
+          // every retry attempt would send the same already-rejected bearer.
+          // MS030 documents the operator-facing fix; this branch keeps the
+          // SDK self-healing for the transient clock-skew variant.
+          if (apnsError instanceof ExpiredProviderTokenError) {
+            this.#jwt.invalidate();
+          }
           headers.authorization = `bearer ${this.#jwt.get()}`;
           continue;
         }

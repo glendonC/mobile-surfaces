@@ -74,10 +74,11 @@ try {
     summary: "Ajv could not compile the committed JSON Schema.",
     detail: { message: String(err?.message ?? err) },
   });
+  // emit() calls process.exit(1) because we pushed a fail check above, so
+  // control never returns. Nothing else to do here.
   emitDiagnosticReport(buildReport("check-ajv-zod-parity", checks), {
     json: values.json,
   });
-  process.exit(0); // emitDiagnosticReport exits on fail
 }
 
 function stripEditorTooling(raw) {

@@ -332,6 +332,22 @@ export function copyWidgetTarget({ sourceRoot, manifest, destAppRoot }) {
   if (!fs.existsSync(srcDir)) {
     throw new Error(`Widget source missing at ${srcDir}.`);
   }
+  // Defense against a packaging error: the manifest lists every widget-file
+  // we promise the user in the recap, but the actual copy is a whole-dir
+  // cpSync. If a file is in the manifest but absent from the staged tarball,
+  // the recap will silently lie. Verify each promised path exists in the
+  // staged source before the copy commits.
+  const missing = (manifest.widgetFiles ?? []).filter(
+    (rel) => !fs.existsSync(path.join(sourceRoot, rel)),
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `Template is missing widget files the manifest promised:\n` +
+        missing.map((m) => `  - ${m}`).join("\n") +
+        `\nThis is a packaging error in the published create-mobile-surfaces tarball. ` +
+        `Please file an issue: https://github.com/glendonC/mobile-surfaces/issues`,
+    );
+  }
   fs.mkdirSync(path.dirname(destDir), { recursive: true });
   fs.cpSync(srcDir, destDir, { recursive: true });
   logger.header(`copy widget target → ${destDir}`);

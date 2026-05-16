@@ -96,17 +96,17 @@ This roadmap rewrite is part of Phase 7. Shipped docs now cover the multi-surfac
 
 ### Phase 5: SPM-shared Swift
 
-**Status: deferred upstream-blocked.** The byte-identical Swift duplication is still present today:
+**Status: deferred upstream-blocked, mitigated by codegen.** The Swift duplication is still present:
 
 - `packages/live-activity/ios/MobileSurfacesActivityAttributes.swift`
 - `apps/mobile/targets/widget/MobileSurfacesActivityAttributes.swift`
 
-`scripts/check-activity-attributes.mjs` runs in `pnpm surface:check` to enforce byte-identity. Removing the duplication requires a local Swift Package consumed by both the Expo native module and the WidgetKit target, which needs:
+Both files are now generated from `liveSurfaceActivityContentState` and `liveSurfaceStage` in `packages/surface-contracts/src/schema.ts` via `scripts/codegen-activity-attributes.mjs`. `surface:check` gates codegen drift at stage 2 and byte-identity + Zod parity at stage 3. There is one source of truth (the Zod schema) and two files derived from it, so the previous "edit one and copy verbatim" workflow is gone. Removing the duplication entirely still requires a local Swift Package consumed by both the Expo native module and the WidgetKit target, which needs:
 
 - `@bacons/apple-targets` local-SPM-package configuration. PR #122 was closed; replacement PR #177 is open but unmerged. We are at exact-pin 4.0.6.
 - React Native `spm_dependency` for local paths, which lands in RN 0.84. We are on 0.83.6.
 
-Revisit when Expo SDK 56 ships. Until then, the duplication and the byte-identity guard stay in place.
+Revisit when Expo SDK 56 ships. The codegen path is deletable in one commit when SPM lands — the script goes, the Swift files become one file in the shared package, and the byte-identity check retires with them.
 
 ### Notification content extension
 

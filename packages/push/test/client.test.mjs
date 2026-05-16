@@ -10,6 +10,7 @@ const {
   BadDeviceTokenError,
   BadExpirationDateError,
   BadDateError,
+  ExpiredProviderTokenError,
   TooManyRequestsError,
   InvalidSnapshotError,
   ClientClosedError,
@@ -2073,6 +2074,103 @@ test("JwtCache returns the cached token across retries when the window has not e
   const auth1 = mock.requests[0].headers.authorization;
   const auth2 = mock.requests[1].headers.authorization;
   assert.equal(auth1, auth2, "bearer must be identical when window has not elapsed");
+});
+
+// End-to-end ExpiredProviderToken recovery with the production defaults.
+// The two tests above exercise the JWT-refresh seam via TEST_TRANSPORT_OVERRIDE
+// knobs (custom refreshIntervalMs, virtual now()); this one pins the path a
+// real deployment actually walks: APNs rejects a still-fresh bearer with 403
+// ExpiredProviderToken (the clock-skew variant of MS030), the SDK must
+// invalidate the cache and re-mint regardless of whether the 50-minute window
+// has elapsed locally, and the retry succeeds on the same client.alert()
+// call. No retryableReasons widening, no jwtRefreshIntervalMs override — the
+// behavior must hold with the default policy because that's what production
+// callers run.
+test("ExpiredProviderToken on first attempt invalidates JWT cache and recovers via retry", async (t) => {
+  let calls = 0;
+  const mock = await startMockApns(() => {
+    calls += 1;
+    if (calls === 1) {
+      return {
+        status: 403,
+        headers: { "apns-id": "expired-default" },
+        body: { reason: "ExpiredProviderToken" },
+      };
+    }
+    return { status: 200, headers: { "apns-id": "ok-after-mint" } };
+  });
+  // Production-default policy: no retryableReasons override. baseDelayMs is
+  // tightened so the test finishes quickly, but ExpiredProviderToken must be
+  // retried purely on the strength of being in DEFAULT_RETRYABLE_REASONS.
+  const client = makeClient({
+    sendOrigin: mock.origin,
+    retryPolicy: { baseDelayMs: 1, maxDelayMs: 2, jitter: false },
+  });
+  teardown(t, client, mock);
+
+  const res = await client.alert("a".repeat(64), SNAPSHOT, {
+    apnsId: "ok-after-mint",
+  });
+
+  // PushResult contract: attempts counts the successful send too, so a single
+  // retry-then-succeed lands at attempts=2 with one entry in retried[].
+  assert.equal(res.status, 200);
+  assert.equal(res.attempts, 2);
+  assert.equal(res.retried.length, 1);
+  assert.equal(res.retried[0].reason, "ExpiredProviderToken");
+  assert.equal(res.retried[0].status, 403);
+  assert.equal(res.retried[0].trapId, "MS030");
+  // ExpiredProviderTokenError carries the MS030 binding; trapHits dedupes
+  // across retries so a single hit lands as one entry.
+  assert.deepEqual(res.trapHits, ["MS030"]);
+
+  // Wire-level proof of the re-mint: the mock observed two distinct
+  // authorization headers across the two attempts. Without the JwtCache
+  // invalidation in client.ts, get() returns the same cached token on the
+  // retry (because the 50-minute window has not elapsed locally) and the
+  // bearer on attempt 2 would equal the bearer on attempt 1.
+  assert.equal(mock.requests.length, 2);
+  const auth1 = String(mock.requests[0].headers.authorization);
+  const auth2 = String(mock.requests[1].headers.authorization);
+  assert.match(auth1, /^bearer /);
+  assert.match(auth2, /^bearer /);
+  assert.notEqual(
+    auth1,
+    auth2,
+    "JwtCache must re-mint after ExpiredProviderToken; same bearer on attempt 2 means the cache was not invalidated",
+  );
+});
+
+test("ExpiredProviderToken exhausts retries and surfaces ExpiredProviderTokenError to the caller", async (t) => {
+  // Counter-test: if every attempt fails with ExpiredProviderToken (Apple
+  // still rejecting the freshly-minted bearer — e.g. host clock badly skewed,
+  // not just a one-off mid-flight expiry), the SDK must surface the typed
+  // error rather than looping forever. Pins that the retry path is bounded by
+  // maxRetries and the final error carries the MS030 binding for operator
+  // dashboards.
+  const mock = await startMockApns(() => ({
+    status: 403,
+    headers: { "apns-id": "expired-loop" },
+    body: { reason: "ExpiredProviderToken" },
+  }));
+  const client = makeClient({
+    sendOrigin: mock.origin,
+    retryPolicy: { maxRetries: 2, baseDelayMs: 1, maxDelayMs: 2, jitter: false },
+  });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.alert("a".repeat(64), SNAPSHOT),
+    (err) => {
+      assert.ok(err instanceof ExpiredProviderTokenError);
+      assert.equal(err.reason, "ExpiredProviderToken");
+      assert.equal(err.status, 403);
+      assert.equal(err.trapId, "MS030");
+      return true;
+    },
+  );
+  // 1 initial + 2 retries = 3 calls.
+  assert.equal(mock.requests.length, 3);
 });
 
 // --- broadcast / channel-admin failure modes (MS031, MS034) --------------

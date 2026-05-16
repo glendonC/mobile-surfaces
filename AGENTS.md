@@ -7,9 +7,9 @@
 
 # Mobile Surfaces: Invariants for AI Coding Assistants
 
-This document is the load-bearing summary of every silent-failure trap, contract invariant, and platform constraint that AI coding assistants need to respect when working in a Mobile Surfaces project. It is generated from `data/traps.json`. Edits go to the catalog, not to this file.
+This document lists the mandatory invariants enforced by Mobile Surfaces' test suite. AI coding assistants working in a Mobile Surfaces project must respect these rules; `pnpm surface:check` enforces them in CI. The same rules apply to human engineers; the catalog makes them explicit. It is generated from `data/traps.json` — edits go to the catalog, not to this file.
 
-Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynamic Island, home-screen widgets, and iOS 18 control widgets. The pitch: iOS Live Activities silently fail. Your code compiles, your push returns 200, and nothing appears on the Lock Screen. This catalog is the working baseline past the traps that cost most teams a week of debugging.
+Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynamic Island, home-screen widgets, and iOS 18 control widgets. iOS Live Activities silently fail: your code compiles, your push returns 200, and nothing appears on the Lock Screen. This catalog enumerates the failure modes that produce that silence and the static, config, and runtime checks the repo uses to surface them at PR time instead of on a customer device.
 
 ## Index
 
@@ -93,11 +93,11 @@ Application code under apps/*/src/ must import the live-activity adapter through
 
 **severity:** error  •  **detection:** static (script-checkable)  •  **tags:** live-activity, swift  •  **enforced by:** `scripts/check-activity-attributes.mjs`
 
-MobileSurfacesActivityAttributes.swift in packages/live-activity/ios/ and apps/mobile/targets/widget/ must be byte-identical.
+MobileSurfacesActivityAttributes.swift in packages/live-activity/ios/ and apps/mobile/targets/widget/ must be byte-identical, and both must match the codegen output from packages/surface-contracts/src/schema.ts.
 
 **Symptom.** Activity starts on the device but never appears on the Lock Screen. No log, no error. ActivityKit silently drops updates whose decoded ContentState shape does not match the widget extension's struct.
 
-**Fix.** Edit one file and copy verbatim into the other; pnpm surface:check verifies byte-identity. The follow-up plan to consolidate this duplication into a local Swift Package is upstream-blocked on @bacons/apple-targets and React Native; the byte-identity check is the long-term enforcement.
+**Fix.** Both files are generated from the Zod source of truth. Edit liveSurfaceActivityContentState or liveSurfaceStage in packages/surface-contracts/src/schema.ts, then run pnpm codegen:activity-attributes to regenerate both files. CI gates codegen drift at stage 2 and byte-identity + Zod parity at stage 3. The follow-up plan to consolidate this duplication into a local Swift Package is upstream-blocked on @bacons/apple-targets local-SPM support and RN 0.84 local-path spm_dependency landing in Expo SDK 56; codegen is the intermediate state until that unblocks.
 
 **See:** [https://mobile-surfaces.com/docs/architecture#native-constraints](https://mobile-surfaces.com/docs/architecture#native-constraints)
 

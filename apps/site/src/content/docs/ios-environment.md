@@ -16,12 +16,12 @@ In plain English: Expo Go is not enough because these surfaces need real native 
 2. Widget extension: `apps/mobile/targets/widget/`, generated into Xcode by `@bacons/apple-targets`; it contains the Live Activity, home-screen widget, and iOS 18 control widget.
 3. Expo native module: `packages/live-activity/` (`@mobile-surfaces/live-activity`), wrapping `Activity<MobileSurfacesActivityAttributes>.request`, update, list, end, push token events, and activity state events.
 
-The Swift attribute type is intentionally duplicated in the module and widget target. Keep these files byte-identical:
+The Swift attribute type is intentionally duplicated in the module and widget target. Both files are now generated from the Zod source of truth (`liveSurfaceActivityContentState` and `liveSurfaceStage` in `packages/surface-contracts/src/schema.ts`) and must not be edited by hand:
 
 - `packages/live-activity/ios/MobileSurfacesActivityAttributes.swift`
 - `apps/mobile/targets/widget/MobileSurfacesActivityAttributes.swift`
 
-`pnpm surface:check` verifies this.
+To change a ContentState field or a Stage case, edit the Zod schema and run `pnpm codegen:activity-attributes`. `pnpm surface:check` gates codegen drift at stage 2 and byte-identity + Zod parity at stage 3, so a missed codegen step fails CI loudly. The duplication itself remains until `@bacons/apple-targets` local SPM support and RN 0.84 `spm_dependency` local-path support land in Expo SDK 56; codegen is the intermediate state that gives us a single source of truth without waiting on upstream.
 
 Widget and control snapshots are shared through the App Group in `apps/mobile/app.json`:
 

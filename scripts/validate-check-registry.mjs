@@ -61,10 +61,11 @@ try {
     summary: "scripts/lib/check-registry.mjs failed import-time validation.",
     detail: { message: String(err?.message ?? err) },
   });
+  // emit() calls process.exit(1) because we pushed a fail check above, so
+  // control never returns. Nothing else to do here.
   emitDiagnosticReport(buildReport("validate-check-registry", checks), {
     json: values.json,
   });
-  process.exit(0); // emitDiagnosticReport exits on fail
 }
 
 // Load the trap catalog once.

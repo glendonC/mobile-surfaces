@@ -146,6 +146,21 @@ export const checkRegistry = Object.freeze([
     diagnose: false,
     mode: "check-mode",
   },
+  // codegen for both MobileSurfacesActivityAttributes.swift copies. Source
+  // of truth is liveSurfaceActivityContentState + liveSurfaceStage. Runs at
+  // stage 2 so drift fails before the stage-3 byte-identity + Zod parity
+  // gate; when this passes, the two committed files are byte-identical to
+  // the codegen output, which means byte-identical to each other and in
+  // sync with the Zod source.
+  {
+    id: "codegen-activity-attributes",
+    label: "MobileSurfacesActivityAttributes.swift in sync with Zod source",
+    stage: 2,
+    script: "scripts/codegen-activity-attributes.mjs",
+    args: ["--check"],
+    diagnose: false,
+    mode: "check-mode",
+  },
   // Ajv ↔ Zod parity belongs in stage 3 because it depends on build-schema
   // having already passed its --check (stage 2): the gate reads the
   // committed schema.json and asserts every fixture validates identically
@@ -171,7 +186,7 @@ export const checkRegistry = Object.freeze([
     id: "check-activity-attributes",
     label: "ActivityKit Swift attributes match Zod",
     stage: 3,
-    dependsOn: ["build-schema"],
+    dependsOn: ["build-schema", "codegen-activity-attributes"],
     script: "scripts/check-activity-attributes.mjs",
     diagnose: true,
     mode: "single-mode",

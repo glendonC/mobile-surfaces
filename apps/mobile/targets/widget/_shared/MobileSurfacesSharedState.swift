@@ -86,21 +86,57 @@ enum MobileSurfacesSharedState {
   }
 
   static func writeControlValue(_ value: Bool) {
+    // Route the read through decodeSnapshot so a schema-drift failure here
+    // surfaces the same breadcrumb the regular reader uses (an old TestFlight
+    // binary toggling a control widget against a new host's snapshot has a
+    // recoverable failure path; silent swallow used to hide it).
     guard
       let defaults,
       let surfaceId = defaults.string(forKey: controlCurrentSurfaceIdKey),
-      let raw = defaults.string(forKey: snapshotKey(surfaceId: surfaceId)),
-      let data = raw.data(using: .utf8),
-      var snapshot = try? JSONDecoder().decode(MobileSurfacesControlSnapshot.self, from: data)
+      var snapshot: MobileSurfacesControlSnapshot = decodeSnapshot(currentSurfaceIdKey: controlCurrentSurfaceIdKey)
     else {
       return
     }
-
     snapshot.value = value
-    if let next = try? JSONEncoder().encode(snapshot),
-       let nextRaw = String(data: next, encoding: .utf8) {
-      defaults.set(nextRaw, forKey: snapshotKey(surfaceId: surfaceId))
+    let key = snapshotKey(surfaceId: surfaceId)
+    do {
+      let data = try JSONEncoder().encode(snapshot)
+      guard let raw = String(data: data, encoding: .utf8) else {
+        // Encoder produced non-UTF8 bytes, which Codable's JSONEncoder
+        // cannot in practice. Record a breadcrumb so the diagnostics
+        // surface anything that ever does land here, then bail.
+        recordEncodeError(
+          surfaceId: surfaceId,
+          message: "JSONEncoder output is not valid UTF-8",
+        )
+        return
+      }
+      defaults.set(raw, forKey: key)
+    } catch {
+      recordEncodeError(surfaceId: surfaceId, error: error)
     }
+  }
+
+  // Encode-side counterpart to recordDecodeError. Reuses the same breadcrumb
+  // key the reader checks, with a distinct `type` so host diagnostics can
+  // distinguish a stale read from a failed write.
+  private static func recordEncodeError(surfaceId: String, error: Error? = nil, message: String? = nil) {
+    guard let defaults else { return }
+    let payload: [String: Any] = [
+      "at": iso8601Formatter.string(from: Date()),
+      "error": message
+        ?? (error as? LocalizedError)?.errorDescription
+        ?? error.map { String(describing: $0) }
+        ?? "unknown encode failure",
+      "type": "encode:" + (error.map { String(describing: Swift.type(of: $0)) } ?? "message"),
+    ]
+    if let data = try? JSONSerialization.data(withJSONObject: payload),
+       let raw = String(data: data, encoding: .utf8) {
+      defaults.set(raw, forKey: decodeErrorKey(surfaceId: surfaceId))
+    }
+    #if DEBUG
+    print("[MobileSurfaces] encode failed for \(snapshotKey(surfaceId: surfaceId)): \(message ?? error.map(String.init(describing:)) ?? "unknown")")
+    #endif
   }
 
   // MARK: - Decode helper

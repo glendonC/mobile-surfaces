@@ -107,6 +107,10 @@ The activity dismisses.
 
 ## What to do next
 
+You've validated the harness end-to-end. Time to build your real app on top of it. The harness is a fixture-driven playground - your app is what you replace it with.
+
+- **[Building your app](/docs/building-your-app)** — concrete migration steps from the harness to a production screen, with a worked package-delivery example covering domain types, snapshot derivation, state management, token forwarding, and backend send.
+- [Scenarios](/docs/scenarios) — the canonical delivery flow rendered step by step across all five surfaces.
 - [Architecture](/docs/architecture) — the contract, the surfaces, the adapter boundary.
 - [Multi-surface](/docs/multi-surface) — what each `kind` actually drives.
 - [Backend integration](/docs/backend-integration) — domain event → snapshot → APNs walkthrough.

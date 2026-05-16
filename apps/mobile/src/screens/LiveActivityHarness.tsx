@@ -1,3 +1,16 @@
+// Surface harness: a fixture-driven playground for every surface kind.
+//
+// This is NOT a template for a production app. It is a testing appliance:
+// every button fires a canonical LiveSurfaceSnapshot from data/surface-fixtures/
+// so you can verify that each surface kind (Lock Screen Live Activity,
+// Dynamic Island, home widget, control widget, lock accessory, StandBy)
+// renders correctly against the bridge.
+//
+// To build your real app on this foundation, keep src/liveActivity/,
+// src/surfaceStorage/, and src/theme.ts (the plumbing), replace this file
+// with your domain screen, and wire your backend to emit snapshots through
+// the same projection helpers. The walkthrough lives at
+// https://mobile-surfaces.com/docs/building-your-app.
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,

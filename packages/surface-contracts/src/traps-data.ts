@@ -36,9 +36,9 @@ export const traps: readonly TrapEntry[] = [
       "live-activity",
       "swift"
     ],
-    "summary": "MobileSurfacesActivityAttributes.swift in packages/live-activity/ios/ and apps/mobile/targets/widget/ must be byte-identical.",
+    "summary": "MobileSurfacesActivityAttributes.swift in packages/live-activity/ios/ and apps/mobile/targets/widget/ must be byte-identical, and both must match the codegen output from packages/surface-contracts/src/schema.ts.",
     "symptom": "Activity starts on the device but never appears on the Lock Screen. No log, no error. ActivityKit silently drops updates whose decoded ContentState shape does not match the widget extension's struct.",
-    "fix": "Edit one file and copy verbatim into the other; pnpm surface:check verifies byte-identity. The follow-up plan to consolidate this duplication into a local Swift Package is upstream-blocked on @bacons/apple-targets and React Native; the byte-identity check is the long-term enforcement.",
+    "fix": "Both files are generated from the Zod source of truth. Edit liveSurfaceActivityContentState or liveSurfaceStage in packages/surface-contracts/src/schema.ts, then run pnpm codegen:activity-attributes to regenerate both files. CI gates codegen drift at stage 2 and byte-identity + Zod parity at stage 3. The follow-up plan to consolidate this duplication into a local Swift Package is upstream-blocked on @bacons/apple-targets local-SPM support and RN 0.84 local-path spm_dependency landing in Expo SDK 56; codegen is the intermediate state until that unblocks.",
     "enforcement": {
       "script": "scripts/check-activity-attributes.mjs"
     },
