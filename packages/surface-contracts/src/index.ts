@@ -125,6 +125,7 @@ export function toWidgetTimelineEntry(
   snapshot: LiveSurfaceSnapshotWidget,
 ): LiveSurfaceWidgetTimelineEntryOutput {
   return {
+    schemaVersion: "5",
     kind: "widget",
     snapshotId: snapshot.id,
     surfaceId: snapshot.surfaceId,
@@ -143,6 +144,7 @@ export function toControlValueProvider(
 ): LiveSurfaceControlValueProviderOutput {
   const control = snapshot.control;
   return {
+    schemaVersion: "5",
     kind: "control",
     snapshotId: snapshot.id,
     surfaceId: snapshot.surfaceId,
@@ -159,6 +161,7 @@ export function toLockAccessoryEntry(
 ): LiveSurfaceLockAccessoryEntryOutput {
   const accessory = snapshot.lockAccessory;
   return {
+    schemaVersion: "5",
     kind: "lockAccessory",
     snapshotId: snapshot.id,
     surfaceId: snapshot.surfaceId,
@@ -179,6 +182,7 @@ export function toStandbyEntry(
   snapshot: LiveSurfaceSnapshotStandby,
 ): LiveSurfaceStandbyEntryOutput {
   return {
+    schemaVersion: "5",
     kind: "standby",
     snapshotId: snapshot.id,
     surfaceId: snapshot.surfaceId,
@@ -197,6 +201,7 @@ export function toNotificationContentPayload(
 ): LiveSurfaceNotificationContentPayloadOutput {
   const note = snapshot.notification;
   return {
+    schemaVersion: "5",
     aps: {
       alert: {
         title: note.title,
@@ -217,6 +222,7 @@ export function toNotificationContentPayload(
         : {}),
     },
     liveSurface: {
+      schemaVersion: "5",
       kind: "surface_snapshot",
       snapshotId: snapshot.id,
       surfaceId: snapshot.surfaceId,

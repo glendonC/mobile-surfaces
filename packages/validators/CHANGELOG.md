@@ -1,5 +1,11 @@
 # @mobile-surfaces/validators
 
+## 6.0.0
+
+### Major Changes
+
+- Linked-group bump for the v5 schema release in `@mobile-surfaces/surface-contracts`. No validator API change.
+
 ## 4.0.0
 
 ### Major Changes

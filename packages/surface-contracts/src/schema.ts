@@ -563,6 +563,11 @@ export type LiveSurfaceActivityContentState = z.infer<
 
 export const liveSurfaceWidgetTimelineEntry = z
   .object({
+    schemaVersion: z
+      .literal("5")
+      .describe(
+        "Wire-format generation. Read by App Group consumers before full decode so a host on a newer schemaVersion than the widget binary expects renders 'needs app update' instead of failing silently (MS041).",
+      ),
     kind: z.literal("widget"),
     snapshotId: z.string(),
     surfaceId: z.string(),
@@ -583,6 +588,11 @@ export type LiveSurfaceWidgetTimelineEntryOutput = z.infer<
 
 export const liveSurfaceControlValueProvider = z
   .object({
+    schemaVersion: z
+      .literal("5")
+      .describe(
+        "Wire-format generation. Read by App Group consumers before full decode so a host on a newer schemaVersion than the widget binary expects renders 'needs app update' instead of failing silently (MS041).",
+      ),
     kind: z.literal("control"),
     snapshotId: z.string(),
     surfaceId: z.string(),
@@ -599,6 +609,11 @@ export type LiveSurfaceControlValueProviderOutput = z.infer<
 
 export const liveSurfaceLockAccessoryEntry = z
   .object({
+    schemaVersion: z
+      .literal("5")
+      .describe(
+        "Wire-format generation. Read by App Group consumers before full decode so a host on a newer schemaVersion than the widget binary expects renders 'needs app update' instead of failing silently (MS041).",
+      ),
     kind: z.literal("lockAccessory"),
     snapshotId: z.string(),
     surfaceId: z.string(),
@@ -616,6 +631,11 @@ export type LiveSurfaceLockAccessoryEntryOutput = z.infer<
 
 export const liveSurfaceStandbyEntry = z
   .object({
+    schemaVersion: z
+      .literal("5")
+      .describe(
+        "Wire-format generation. Read by App Group consumers before full decode so a host on a newer schemaVersion than the widget binary expects renders 'needs app update' instead of failing silently (MS041).",
+      ),
     kind: z.literal("standby"),
     snapshotId: z.string(),
     surfaceId: z.string(),
@@ -651,6 +671,11 @@ export type LiveSurfaceStandbyEntryOutput = z.infer<
  */
 export const liveSurfaceNotificationContentEntry = z
   .object({
+    schemaVersion: z
+      .literal("5")
+      .describe(
+        "Wire-format generation. Mirrors the envelope-level schemaVersion so the notification-content extension can gate on `userInfo.liveSurface.schemaVersion` directly without having to read a sibling key (MS041). The Codable mirror in the extension reads this field first; a mismatch against EXPECTED_SCHEMA_VERSION renders a 'needs app update' placeholder instead of a half-decoded sidecar.",
+      ),
     kind: z.literal("surface_snapshot"),
     snapshotId: z.string(),
     surfaceId: z.string(),
@@ -665,6 +690,11 @@ export type LiveSurfaceNotificationContentEntryOutput = z.infer<
 
 export const liveSurfaceNotificationContentPayload = z
   .object({
+    schemaVersion: z
+      .literal("5")
+      .describe(
+        "Wire-format generation. Read by the notification-content extension before sidecar decode so a payload emitted by a newer host than the extension binary expects renders default system chrome instead of a half-decoded custom view (MS041).",
+      ),
     aps: z
       .object({
         alert: z
@@ -767,14 +797,14 @@ export function migrateV4ToV5(
 
 const V4_DEPRECATION_WARNING =
   "liveSurfaceSnapshot v4 is deprecated and will be removed in " +
-  "@mobile-surfaces/surface-contracts@7.0. Migrate producers to " +
+  "@mobile-surfaces/surface-contracts@8.0. Migrate producers to " +
   'schemaVersion "5"; the snapshot wire shape is unchanged but the ' +
   "notification projection-output sidecar's kind discriminator " +
   'aligned to "surface_snapshot" (see schema-migration docs).';
 
 const V3_DEPRECATION_WARNING =
   "liveSurfaceSnapshot v3 is deprecated and will be removed in " +
-  "@mobile-surfaces/surface-contracts@6.0. Migrate producers to " +
+  "@mobile-surfaces/surface-contracts@8.0. Migrate producers to " +
   'schemaVersion "5"; the rendering fields moved from the base shape ' +
   "into per-kind slices in v4 and the notification slice gained " +
   "optional subtitle/interruptionLevel/relevanceScore/targetContentId " +

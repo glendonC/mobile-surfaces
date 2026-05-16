@@ -27,7 +27,7 @@ See [`compatibility.md`](/docs/compatibility) for the canonical pinned row.
 
 - The published JSON Schema is `oneOf` with `const`-discriminated branches, proper kind ↔ slice enforcement, not a loose union.
 - Migration codec ships in `packages/surface-contracts`. Through 4.x: `liveSurfaceSnapshotV2`, `migrateV2ToV3`, `safeParseAnyVersion` chained v2 -> v3. From 5.0 forward: `liveSurfaceSnapshotV3`, `migrateV3ToV4`, `safeParseAnyVersion` chains v3 -> v4; the v2 codec is retired. See [`schema-migration.md`](/docs/schema-migration).
-- `$id` pins to `https://unpkg.com/@mobile-surfaces/surface-contracts@<major.minor>/schema.json` so a future minor that adds a discriminated-union variant can publish a new URL without yanking what consumers reference. The current URL is `@6.0/schema.json`; `@5.0`, `@4.0`, `@3.2`, `@3.0` etc. stay resolvable on unpkg.
+- `$id` pins to `https://unpkg.com/@mobile-surfaces/surface-contracts@<major.minor>/schema.json` so a future minor that adds a discriminated-union variant can publish a new URL without yanking what consumers reference. The current URL is `@7.0/schema.json`; `@6.0`, `@5.0`, `@4.0`, `@3.2`, `@3.0` etc. stay resolvable on unpkg.
 - Standard Schema interop is live: Zod 4.x implements `~standard` (`{ vendor: "zod", version: 1, validate, jsonSchema }`) on every exported schema. A fixture-validation test pins this so it cannot regress.
 
 ### Phase 3: Home widget + iOS 18 control widget
@@ -79,7 +79,7 @@ Finished the slice-per-kind transition that v2 started:
 - Control slice gained a required `label` field (v3 had been falling back through `actionLabel` -> `primaryText`).
 - v2 codec retired at the 5.0 cutover per the v3 RFC commitment; `safeParseAnyVersion` now chains v3 -> v4.
 
-The v3->v4 migration codec lives for the entire 5.x release line and is removed in 6.0.0. See [`schema-migration.md`](/docs/schema-migration) for the codec timeline and the per-kind field-mapping table.
+The v3 and v4 migration codecs are scheduled for removal at 8.0 under the stability charter (one full major of warning between deprecation and codec removal). See [`schema-migration.md`](/docs/schema-migration) for the codec timeline and the per-kind field-mapping table.
 
 ### CLI
 

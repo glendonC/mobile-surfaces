@@ -34,6 +34,7 @@ import Foundation
 import WidgetKit
 
 struct MobileSurfacesWidgetSnapshot: Codable, Hashable {
+  var schemaVersion: String
   var kind: String
   var snapshotId: String
   var surfaceId: String
@@ -47,6 +48,7 @@ struct MobileSurfacesWidgetSnapshot: Codable, Hashable {
 }
 
 struct MobileSurfacesControlSnapshot: Codable, Hashable {
+  var schemaVersion: String
   var kind: String
   var snapshotId: String
   var surfaceId: String
@@ -58,6 +60,7 @@ struct MobileSurfacesControlSnapshot: Codable, Hashable {
 }
 
 struct MobileSurfacesLockAccessorySnapshot: Codable, Hashable {
+  var schemaVersion: String
   var kind: String
   var snapshotId: String
   var surfaceId: String
@@ -70,6 +73,7 @@ struct MobileSurfacesLockAccessorySnapshot: Codable, Hashable {
 }
 
 struct MobileSurfacesStandbySnapshot: Codable, Hashable {
+  var schemaVersion: String
   var kind: String
   var snapshotId: String
   var surfaceId: String
@@ -91,6 +95,7 @@ const REAL_NOTIFICATION_VIEW_CONTROLLER = `// Auto-generated for tests.
 import Foundation
 
 struct MobileSurfacesNotificationContentEntry: Codable, Hashable {
+  let schemaVersion: String
   let kind: String
   let snapshotId: String
   let surfaceId: String
@@ -185,8 +190,9 @@ test("renamed JSON key: a CodingKeys remap decoupling property from wire key fai
   // Add an explicit CodingKeys enum to the widget struct that remaps
   // `headline` to the JSON key "title". Zod still expects "headline".
   const drifted = REAL_SHARED_STATE.replace(
-    "struct MobileSurfacesWidgetSnapshot: Codable, Hashable {\n  var kind: String\n  var snapshotId: String\n  var surfaceId: String\n  var state: String\n  var family: String?\n  var reloadPolicy: String?\n  var headline: String\n  var subhead: String\n  var progress: Double\n  var deepLink: String\n}",
+    "struct MobileSurfacesWidgetSnapshot: Codable, Hashable {\n  var schemaVersion: String\n  var kind: String\n  var snapshotId: String\n  var surfaceId: String\n  var state: String\n  var family: String?\n  var reloadPolicy: String?\n  var headline: String\n  var subhead: String\n  var progress: Double\n  var deepLink: String\n}",
     `struct MobileSurfacesWidgetSnapshot: Codable, Hashable {
+  var schemaVersion: String
   var kind: String
   var snapshotId: String
   var surfaceId: String
@@ -199,6 +205,7 @@ test("renamed JSON key: a CodingKeys remap decoupling property from wire key fai
   var deepLink: String
 
   enum CodingKeys: String, CodingKey {
+    case schemaVersion
     case kind
     case snapshotId
     case surfaceId
@@ -228,8 +235,8 @@ test("type mismatch: a Double field declared as String fails", () => {
   // `progress` is z.number() -> Double; declare it as String in the standby
   // struct.
   const drifted = REAL_SHARED_STATE.replace(
-    "struct MobileSurfacesStandbySnapshot: Codable, Hashable {\n  var kind: String\n  var snapshotId: String\n  var surfaceId: String\n  var state: String\n  var presentation: String\n  var tint: String?\n  var headline: String\n  var subhead: String\n  var progress: Double",
-    "struct MobileSurfacesStandbySnapshot: Codable, Hashable {\n  var kind: String\n  var snapshotId: String\n  var surfaceId: String\n  var state: String\n  var presentation: String\n  var tint: String?\n  var headline: String\n  var subhead: String\n  var progress: String",
+    "struct MobileSurfacesStandbySnapshot: Codable, Hashable {\n  var schemaVersion: String\n  var kind: String\n  var snapshotId: String\n  var surfaceId: String\n  var state: String\n  var presentation: String\n  var tint: String?\n  var headline: String\n  var subhead: String\n  var progress: Double",
+    "struct MobileSurfacesStandbySnapshot: Codable, Hashable {\n  var schemaVersion: String\n  var kind: String\n  var snapshotId: String\n  var surfaceId: String\n  var state: String\n  var presentation: String\n  var tint: String?\n  var headline: String\n  var subhead: String\n  var progress: String",
   );
   const ws = withWorkspace(drifted);
   try {
@@ -266,8 +273,8 @@ test("optionality mismatch: a required Zod field declared optional in Swift fail
   // standby `headline` is z.string() (required) -> String; declare it as
   // String?. Decoding tolerates the optional but the contract does not.
   const drifted = REAL_SHARED_STATE.replace(
-    "struct MobileSurfacesStandbySnapshot: Codable, Hashable {\n  var kind: String\n  var snapshotId: String\n  var surfaceId: String\n  var state: String\n  var presentation: String\n  var tint: String?\n  var headline: String\n",
-    "struct MobileSurfacesStandbySnapshot: Codable, Hashable {\n  var kind: String\n  var snapshotId: String\n  var surfaceId: String\n  var state: String\n  var presentation: String\n  var tint: String?\n  var headline: String?\n",
+    "struct MobileSurfacesStandbySnapshot: Codable, Hashable {\n  var schemaVersion: String\n  var kind: String\n  var snapshotId: String\n  var surfaceId: String\n  var state: String\n  var presentation: String\n  var tint: String?\n  var headline: String\n",
+    "struct MobileSurfacesStandbySnapshot: Codable, Hashable {\n  var schemaVersion: String\n  var kind: String\n  var snapshotId: String\n  var surfaceId: String\n  var state: String\n  var presentation: String\n  var tint: String?\n  var headline: String?\n",
   );
   const ws = withWorkspace(drifted);
   try {

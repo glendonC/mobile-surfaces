@@ -6,7 +6,11 @@ struct MobileSurfacesLockAccessoryWidget: Widget {
 
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: Self.kind, provider: MobileSurfacesLockAccessoryProvider()) { entry in
-      MobileSurfacesLockAccessoryView(entry: entry)
+      if entry.versionMismatch {
+        MobileSurfacesVersionMismatchView(kindLabel: "accessory")
+      } else {
+        MobileSurfacesLockAccessoryView(entry: entry)
+      }
     }
     .configurationDisplayName("Mobile Surfaces Accessory")
     .description("Mirror the latest surface progress on the Lock Screen.")
@@ -22,11 +26,19 @@ struct MobileSurfacesLockAccessoryEntry: TimelineEntry {
   // staleness hint when the host process has been killed and the timeline is
   // pinned to `.never`. `nil` means "no breadcrumb yet" - treat as fresh.
   let writtenAt: Date?
+  // True when the App Group snapshot's schemaVersion does not match the
+  // EXPECTED_SCHEMA_VERSION this binary was compiled against (MS041).
+  let versionMismatch: Bool
 }
 
 struct MobileSurfacesLockAccessoryProvider: TimelineProvider {
   func placeholder(in context: Context) -> MobileSurfacesLockAccessoryEntry {
-    MobileSurfacesLockAccessoryEntry(date: Date(), snapshot: .placeholder, writtenAt: nil)
+    MobileSurfacesLockAccessoryEntry(
+      date: Date(),
+      snapshot: .placeholder,
+      writtenAt: nil,
+      versionMismatch: false
+    )
   }
 
   func getSnapshot(
@@ -39,15 +51,12 @@ struct MobileSurfacesLockAccessoryProvider: TimelineProvider {
       completion(MobileSurfacesLockAccessoryEntry(
         date: Date(),
         snapshot: .marketing,
-        writtenAt: nil
+        writtenAt: nil,
+        versionMismatch: false
       ))
       return
     }
-    completion(MobileSurfacesLockAccessoryEntry(
-      date: Date(),
-      snapshot: currentSnapshot(),
-      writtenAt: currentWrittenAt()
-    ))
+    completion(currentEntry())
   }
 
   func getTimeline(
@@ -58,17 +67,38 @@ struct MobileSurfacesLockAccessoryProvider: TimelineProvider {
     // refreshes only when the host calls reloadTimelines. The staleness hint
     // in the view layer covers the "host killed, snapshot never updated" case
     // so the lock screen does not show pinned-forever data without signal.
-    completion(Timeline(entries: [
-      MobileSurfacesLockAccessoryEntry(
-        date: Date(),
-        snapshot: currentSnapshot(),
-        writtenAt: currentWrittenAt()
-      )
-    ], policy: .never))
+    completion(Timeline(entries: [currentEntry()], policy: .never))
   }
 
-  private func currentSnapshot() -> MobileSurfacesLockAccessorySnapshot {
-    MobileSurfacesSharedState.lockAccessorySnapshot() ?? .placeholder
+  private func currentEntry() -> MobileSurfacesLockAccessoryEntry {
+    let result: SnapshotReadResult<MobileSurfacesLockAccessorySnapshot> =
+      MobileSurfacesSharedState.readSnapshot(
+        currentSurfaceIdKey: MobileSurfacesSharedState.lockAccessoryCurrentSurfaceIdKey
+      )
+    let writtenAt = currentWrittenAt()
+    switch result {
+    case .ok(let snapshot):
+      return MobileSurfacesLockAccessoryEntry(
+        date: Date(),
+        snapshot: snapshot,
+        writtenAt: writtenAt,
+        versionMismatch: false
+      )
+    case .versionMismatch:
+      return MobileSurfacesLockAccessoryEntry(
+        date: Date(),
+        snapshot: nil,
+        writtenAt: writtenAt,
+        versionMismatch: true
+      )
+    case .empty, .decodeError:
+      return MobileSurfacesLockAccessoryEntry(
+        date: Date(),
+        snapshot: .placeholder,
+        writtenAt: writtenAt,
+        versionMismatch: false
+      )
+    }
   }
 
   private func currentWrittenAt() -> Date? {
@@ -150,6 +180,7 @@ private struct MobileSurfacesLockAccessoryView: View {
 
 private extension MobileSurfacesLockAccessorySnapshot {
   static let placeholder = MobileSurfacesLockAccessorySnapshot(
+    schemaVersion: EXPECTED_SCHEMA_VERSION,
     kind: "lockAccessory",
     snapshotId: "placeholder",
     surfaceId: "surface-placeholder",
@@ -165,6 +196,7 @@ private extension MobileSurfacesLockAccessorySnapshot {
   // preview. Deterministic and curated rather than whatever the device's App
   // Group container happens to hold when Apple takes the screenshot.
   static let marketing = MobileSurfacesLockAccessorySnapshot(
+    schemaVersion: EXPECTED_SCHEMA_VERSION,
     kind: "lockAccessory",
     snapshotId: "marketing",
     surfaceId: "surface-marketing",

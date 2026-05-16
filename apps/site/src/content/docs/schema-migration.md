@@ -6,7 +6,7 @@ group: "Build"
 ---
 # Schema Migration
 
-`LiveSurfaceSnapshot` is at `schemaVersion: "5"`. Version 5 is additive on the snapshot wire shape (four new optional fields on the notification slice — `subtitle`, `interruptionLevel`, `relevanceScore`, `targetContentId`) and realigns the projection-output sidecar's discriminator from `"surface_notification"` to `"surface_snapshot"` so on-device routing code can switch on one literal regardless of which Mobile Surfaces wrapper produced the userInfo. `safeParseAnyVersion` chains v5 -> v4 -> v3; the v3 codec is removed at 6.0 (still in 5.x scope; see below for the v6→v7 timeline). The v2 codec was sunset at 5.0 per the v3 RFC commitment. This page covers what changed at v5, how to migrate stored payloads from earlier versions, how to handle in-flight payloads at the edge, and the policy for future evolution.
+`LiveSurfaceSnapshot` is at `schemaVersion: "5"`. Version 5 is additive on the snapshot wire shape (four new optional fields on the notification slice — `subtitle`, `interruptionLevel`, `relevanceScore`, `targetContentId`) and realigns the projection-output sidecar's discriminator from `"surface_notification"` to `"surface_snapshot"` so on-device routing code can switch on one literal regardless of which Mobile Surfaces wrapper produced the userInfo. `safeParseAnyVersion` chains v5 -> v4 -> v3; the v3 and v4 codecs are removed at 8.0 (see the deprecation timeline below). The v2 codec was sunset at 5.0 per the v3 RFC commitment. This page covers what changed at v5, how to migrate stored payloads from earlier versions, how to handle in-flight payloads at the edge, and the policy for future evolution.
 
 ## What changed in v5
 
@@ -17,8 +17,8 @@ group: "Build"
 | `notification.category` typing | `z.string().optional()` | `z.enum([...NOTIFICATION_CATEGORY_IDS]).optional()` — values come from `packages/surface-contracts/src/notificationCategories.ts`, enforced by MS037 codegen |
 | Notification projection sidecar | `kind: "surface_notification"` | `kind: "surface_snapshot"` (aligned with `liveActivityAlertPayload`'s sidecar) |
 | `liveSurfaceNotificationContentEntry` | inline anonymous object | hoisted, named, MS036-parity-checked |
-| `$id` | `https://unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json` | `https://unpkg.com/@mobile-surfaces/surface-contracts@6.0/schema.json` |
-| v3 codec | live; sunset at 6.0 | live; sunset at 6.0 (unchanged) |
+| `$id` | `https://unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json` | `https://unpkg.com/@mobile-surfaces/surface-contracts@7.0/schema.json` |
+| v3 codec | live; retirement deferred to 8.0 per the stability charter | live; retirement deferred to 8.0 per the stability charter (unchanged) |
 
 The breaking change v5 carries lives in the projection-output sidecar, not the snapshot. A v4 snapshot promotes to v5 by bumping the literal; no field renames, no slice restructure. Producers that hand-wrote APNs envelopes against `kind: "surface_notification"` will need to update; everyone projecting through `toNotificationContentPayload` gets the new shape for free.
 
@@ -95,15 +95,16 @@ The codec is the only blessed migration entry point. Do not write your own `if (
 
 ## Deprecation timeline
 
-The v3 codec lives for the entire 5.x major release line.
+Both the v3 and v4 codecs are scheduled for retirement at 8.0. The original v3 RFC named 6.0 as the v3 sunset; the stability charter (see [`stability`](/docs/stability) when it lands) supersedes that with a single rule: a codec gets at least one full major between deprecation announcement and removal. v3 was first announced as deprecated at 5.0, so the earliest retirement is 7.0; carrying both v3 and v4 through one more major lines them up at 8.0.
 
 | Release | Codec state | Producer guidance |
 | --- | --- | --- |
 | 5.0.0 | v3 codec on. `safeParseAnyVersion` emits a `deprecationWarning` on every v3 parse. | Start migrating producers to v4. |
-| 5.x.y | v3 codec on for every release in the 5.x line. Same warning. | Migrate at any point during 5.x. |
-| 6.0.0 | v3 codec removed. v3 payloads fail with a v4 `ZodError`. | Must be on v4 before bumping past 5.x. |
+| 6.0.0 | v5 schema cuts over. v4 codec joins v3 with a `deprecationWarning`. Both remain on. | Start migrating producers to v5. |
+| 7.0.0 | v3 and v4 codecs remain on with `deprecationWarning`. Final warning major. | Producers still on v3 or v4 must migrate before 8.0. |
+| 8.0.0 | v3 and v4 codecs removed. v3 / v4 payloads fail with a v5 `ZodError`. | Must be on v5 before bumping past 7.x. |
 
-The cost of carrying the codec for an entire major (one frozen Zod schema, one pure transform, one branch in `safeParseAnyVersion`) is roughly 200 lines. The benefit is that downstream installs pinned to `^5.0.0` keep parsing v3 payloads through every 5.x minor without any required producer-side change.
+The cost of carrying a codec for an entire major (one frozen Zod schema, one pure transform, one branch in `safeParseAnyVersion`) is roughly 200 lines per version. The benefit is that downstream installs pinned to `^N.0.0` keep parsing older payloads through every N.x minor without any required producer-side change.
 
 ## v2 is no longer supported
 
@@ -122,17 +123,19 @@ The package can publish many releases while `schemaVersion` stays `"4"`. Only a 
 `scripts/build-schema.mjs` pins `$id` to the current package **major.minor**:
 
 ```text
-https://unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json
+https://unpkg.com/@mobile-surfaces/surface-contracts@7.0/schema.json
 ```
 
-Pinning to `5.0` rather than `5` lets a future minor that adds a discriminated-union variant publish at `@5.1/schema.json` without invalidating the URL existing consumers reference. Backends that want to track the latest minor automatically can pin to `@5/schema.json` (unpkg resolves the major), but the canonical `$id` stamped into the schema is the major.minor URL. Older URLs (`@4.0/schema.json`, `@3.2/schema.json`, `@3.0/schema.json`) stay resolvable forever; unpkg never deletes a published artifact.
+Pinning to `7.0` rather than `7` lets a future minor that adds a discriminated-union variant publish at `@7.1/schema.json` without invalidating the URL existing consumers reference. Backends that want to track the latest minor automatically can pin to `@7/schema.json` (unpkg resolves the major), but the canonical `$id` stamped into the schema is the major.minor URL. Older URLs (`@6.0/schema.json`, `@5.0/schema.json`, `@4.0/schema.json`, `@3.0/schema.json`) stay resolvable forever; unpkg never deletes a published artifact.
+
+The URL channel is keyed off the package major; the wire-format `schemaVersion` lags by one (package 7.x ships `schemaVersion: "5"`, package 6.x shipped the same). This is self-consistent and intentional: a coordinated linked-group bump can be driven by changes elsewhere in the family without forcing a wire-format major.
 
 ## Future evolution policy
 
 - **Bump `schemaVersion`** only on a breaking change: renaming or removing a field, changing a type, tightening a constraint (e.g. an enum drops a value, a string gains a regex it did not have before), or anything that makes a previously valid payload fail to parse.
 - **Additive optional fields are non-breaking.** Adding a new `actionLabel`-style optional field, or a new `kind` branch with its own optional slice, does not require a bump.
 - **A new `kind` value is a minor bump on the published JSON Schema** (new `oneOf` branch, new `$id` at `@5.N/schema.json`). The TypeScript union widens, but no existing payload becomes invalid.
-- **When v5 lands**, the migration story extends naturally: add `liveSurfaceSnapshotV4` (frozen at the v5 cutover), `migrateV4ToV5`, and update `safeParseAnyVersion` to chain v4 -> v5. Consumers using the codec do not need to change call sites; the v3 codec ages out at the 6.0 boundary regardless of when v5 lands.
+- **When v6 lands**, the migration story extends naturally: add `liveSurfaceSnapshotV5` (frozen at the v6 cutover), `migrateV5ToV6`, and update `safeParseAnyVersion` to chain v5 -> v6. Consumers using the codec do not need to change call sites; the v3 and v4 codecs age out at the 8.0 boundary regardless of when v6 lands.
 
 ## Standard Schema interop
 

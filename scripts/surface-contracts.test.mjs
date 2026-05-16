@@ -79,6 +79,7 @@ test("assertSnapshotKind throws when narrowing the wrong kind", () => {
 test("widget projection reads from the widget slice", () => {
   const widget = widgetSnapshot();
   assert.deepEqual(toWidgetTimelineEntry(widget), {
+    schemaVersion: "5",
     kind: "widget",
     snapshotId: "fixture-widget",
     surfaceId: "surface-widget",
@@ -108,6 +109,7 @@ test("control projection reads label and deepLink from the control slice", () =>
   });
 
   assert.deepEqual(toControlValueProvider(control), {
+    schemaVersion: "5",
     kind: "control",
     snapshotId: "fixture-control",
     surfaceId: "surface-control",
@@ -135,6 +137,7 @@ test("notification projection maps slice title/body to aps.alert", () => {
   });
 
   assert.deepEqual(toNotificationContentPayload(notification), {
+    schemaVersion: "5",
     aps: {
       alert: {
         title: "Surface needs attention",
@@ -145,6 +148,7 @@ test("notification projection maps slice title/body to aps.alert", () => {
       "thread-id": "surface-thread",
     },
     liveSurface: {
+      schemaVersion: "5",
       kind: "surface_snapshot",
       snapshotId: "fixture-notification",
       surfaceId: "surface-notification",
@@ -256,6 +260,7 @@ test("lockAccessory projection reads slice fields and propagates optional gauge/
   });
 
   assert.deepEqual(toLockAccessoryEntry(accessory), {
+    schemaVersion: "5",
     kind: "lockAccessory",
     snapshotId: "fixture-lock-accessory",
     surfaceId: "surface-lock-accessory",
@@ -303,6 +308,7 @@ test("standby projection reads slice fields and applies presentation default", (
   });
 
   assert.deepEqual(toStandbyEntry(standby), {
+    schemaVersion: "5",
     kind: "standby",
     snapshotId: "fixture-standby",
     surfaceId: "surface-standby",

@@ -1,6 +1,30 @@
 import Foundation
 import WidgetKit
 
+/// Schema version this widget binary was compiled against. Host snapshots
+/// emitting a different schemaVersion render a placeholder instead of decoding,
+/// preventing silent rendering of incompatible shapes (MS041). Bumped in
+/// lockstep with the Zod `schemaVersion` literal on the projection-output
+/// schemas in `packages/surface-contracts/src/schema.ts`.
+public let EXPECTED_SCHEMA_VERSION = "5"
+
+/// Result of a two-stage snapshot read. The reader decodes
+/// `{ "schemaVersion": String }` first and compares against
+/// `EXPECTED_SCHEMA_VERSION` before attempting the full struct decode. A
+/// mismatch is loud rather than silent: the widget switches on `.versionMismatch`
+/// and renders `MobileSurfacesVersionMismatchView` so the user sees "Update
+/// <surface>" instead of half-rendered or placeholder data.
+public enum SnapshotReadResult<T: Decodable> {
+  case empty
+  case versionMismatch(found: String, expected: String)
+  case decodeError(Error)
+  case ok(T)
+}
+
+private struct SchemaVersionProbe: Decodable {
+  let schemaVersion: String
+}
+
 enum MobileSurfacesSharedState {
   static let appGroup = MobileSurfacesAppGroup.identifier
   static let widgetCurrentSurfaceIdKey = "surface.widget.currentSurfaceId"
@@ -57,6 +81,46 @@ enum MobileSurfacesSharedState {
 
   static func standbySnapshot() -> MobileSurfacesStandbySnapshot? {
     decodeSnapshot(currentSurfaceIdKey: standbyCurrentSurfaceIdKey)
+  }
+
+  /// Version-aware snapshot read. Decodes `{ schemaVersion }` first and
+  /// compares against `EXPECTED_SCHEMA_VERSION` before decoding the full
+  /// struct. Callers switch on the result to render a version-mismatch
+  /// placeholder rather than falling back to a generic placeholder that
+  /// hides the cause (MS041).
+  static func readSnapshot<T: Decodable>(
+    currentSurfaceIdKey: String,
+    type: T.Type = T.self
+  ) -> SnapshotReadResult<T> {
+    guard
+      let defaults,
+      let surfaceId = defaults.string(forKey: currentSurfaceIdKey),
+      let raw = defaults.string(forKey: snapshotKey(surfaceId: surfaceId)),
+      let data = raw.data(using: .utf8)
+    else {
+      return .empty
+    }
+    let probe: SchemaVersionProbe
+    do {
+      probe = try JSONDecoder().decode(SchemaVersionProbe.self, from: data)
+    } catch {
+      recordDecodeError(surfaceId: surfaceId, error: error)
+      return .decodeError(error)
+    }
+    if probe.schemaVersion != EXPECTED_SCHEMA_VERSION {
+      return .versionMismatch(
+        found: probe.schemaVersion,
+        expected: EXPECTED_SCHEMA_VERSION
+      )
+    }
+    do {
+      let decoded = try JSONDecoder().decode(T.self, from: data)
+      defaults.removeObject(forKey: decodeErrorKey(surfaceId: surfaceId))
+      return .ok(decoded)
+    } catch {
+      recordDecodeError(surfaceId: surfaceId, error: error)
+      return .decodeError(error)
+    }
   }
 
   // Read the writtenAt breadcrumb for whatever surfaceId is currently bound
@@ -198,6 +262,7 @@ enum MobileSurfacesSharedState {
 }
 
 struct MobileSurfacesWidgetSnapshot: Codable, Hashable {
+  var schemaVersion: String
   var kind: String
   var snapshotId: String
   var surfaceId: String
@@ -211,6 +276,7 @@ struct MobileSurfacesWidgetSnapshot: Codable, Hashable {
 }
 
 struct MobileSurfacesControlSnapshot: Codable, Hashable {
+  var schemaVersion: String
   var kind: String
   var snapshotId: String
   var surfaceId: String
@@ -222,6 +288,7 @@ struct MobileSurfacesControlSnapshot: Codable, Hashable {
 }
 
 struct MobileSurfacesLockAccessorySnapshot: Codable, Hashable {
+  var schemaVersion: String
   var kind: String
   var snapshotId: String
   var surfaceId: String
@@ -234,6 +301,7 @@ struct MobileSurfacesLockAccessorySnapshot: Codable, Hashable {
 }
 
 struct MobileSurfacesStandbySnapshot: Codable, Hashable {
+  var schemaVersion: String
   var kind: String
   var snapshotId: String
   var surfaceId: String

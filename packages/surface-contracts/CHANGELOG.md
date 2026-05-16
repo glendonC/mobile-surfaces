@@ -1,5 +1,31 @@
 # @mobile-surfaces/surface-contracts
 
+## 6.0.0
+
+### Major Changes
+
+- v5 schema: additive notification fields, projection-output sidecar discriminator rename, notification category registry as single source of truth.
+
+  The snapshot wire shape is unchanged from v4 at the base level. `schemaVersion` bumps to `"5"`; `migrateV4ToV5` is a pure identity bump on the snapshot. The notification slice gains four optional fields (`routingId`, `threadId`, `interruptionLevel`, `relevanceScore`) that map to the corresponding iOS `aps` keys (`aps.thread-id`, `aps.interruption-level`, `aps.relevance-score`, and the new routingId for in-extension dispatch).
+
+  Breaking on the projection-output side: the notification content payload's inner sidecar discriminator on `liveSurfaceNotificationContentPayload` renames from `kind: "surface_notification"` to `kind: "surface_snapshot"`. The new literal aligns with the live-activity alert payload's sidecar (`liveActivityAlertPayload.liveSurface.kind`) so on-device routing code can switch on one literal regardless of which Mobile Surfaces wrapper produced the userInfo. Consumers projecting through `toNotificationContentPayload` get the new shape for free; producers that hand-rolled APNs envelopes against the old literal must update.
+
+  Migration: v4 producers continue to parse via `safeParseAnyVersion`, which surfaces a `deprecationWarning` on every v4 promotion. The producer-side schema bump is mechanical (literal `"4"` to `"5"`); no field renames in the snapshot.
+
+  Schema URL bumps to `https://unpkg.com/@mobile-surfaces/surface-contracts@6.0/schema.json`.
+
+- MS037 enforced: notification category registry becomes single source of truth.
+
+  `packages/surface-contracts/src/notificationCategories.ts` now exports a canonical `NOTIFICATION_CATEGORY_IDS` constant. `liveSurfaceNotificationSlice.category` narrows from `z.string().optional()` to `z.enum([...NOTIFICATION_CATEGORY_IDS]).optional()` so a payload naming a category outside the registry fails parse at the wire boundary. The TS host constant (`apps/mobile/src/generated/notificationCategories.ts`), the Swift extension constant (`apps/mobile/targets/_shared/MobileSurfacesNotificationCategories.swift`), and the `UNNotificationExtensionCategory` array in the notification-content `Info.plist` are codegened from the registry. Hand edits revert on the next `pnpm surface:codegen` and fail the codegen check gate.
+
+- Codegen orchestrator.
+
+  `scripts/codegen.mjs` consolidates the per-asset generators (App Group identity, notification categories, ActivityKit attributes, notification-content entitlements) behind one `pnpm surface:codegen` entry point. `scripts/lib/check-registry.mjs` carries the shared --check vs --write plumbing so the same scripts run in CI gate mode and writer mode without divergence.
+
+- Notification content extension.
+
+  Ships `apps/mobile/targets/notification-content/` as a sibling `@bacons/apple-targets` target. Renders the expanded notification view iOS shows on long-press for any notification whose `aps.category` is in the registry. Decode source-of-truth is the push payload only; the extension does not read the App Group container. The Codable mirror of `liveSurfaceNotificationContentEntry` participates in MS036's check-surface-snapshots parity gate.
+
 ## 5.0.0
 
 ### Major Changes

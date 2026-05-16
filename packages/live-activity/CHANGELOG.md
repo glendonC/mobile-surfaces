@@ -1,5 +1,11 @@
 # @mobile-surfaces/live-activity
 
+## 6.0.0
+
+### Major Changes
+
+- Linked-group bump for the v5 schema release in `@mobile-surfaces/surface-contracts`. No bridge API change. `MobileSurfacesActivityAttributes.swift` is now codegened from the Zod `liveSurfaceActivityContentState` source via `pnpm surface:codegen`; the byte-identity gate (MS002) keeps the two copies (under `packages/live-activity/ios/` and `apps/mobile/targets/widget/`) in lockstep with the schema. Tests and `Package.swift` are excluded from the CocoaPods spec so the published pod no longer ships test sources.
+
 ## 4.0.0
 
 ### Major Changes

@@ -1,5 +1,11 @@
 # @mobile-surfaces/push
 
+## 6.0.0
+
+### Major Changes
+
+- Linked-group bump for the v5 schema release in `@mobile-surfaces/surface-contracts`. No SDK API change. The expired-JWT retry path now refreshes the provider token immediately on the first `ExpiredProviderTokenError` rather than waiting for the 50-minute scheduler tick, closing a window where a long-lived client held an expired JWT past the 60-minute boundary and saw the first send of the next minute fail. The notification-alert path is updated to match the v5 projection-output sidecar's `kind: "surface_snapshot"` literal so `liveActivityAlertPayload` and `toNotificationContentPayload` produce the same `liveSurface.kind` value.
+
 ## 4.0.0
 
 ### Major Changes

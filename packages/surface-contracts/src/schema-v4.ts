@@ -13,9 +13,12 @@
 // v5 edit changes a shared shape, the frozen v4 schema must keep the v4
 // behavior so a v4 payload continues to parse the same way it did at 5.x.
 //
-// The file will be removed in 7.0.0, when the v4 codec is dropped from
-// safeParseAnyVersion (same lifetime promise the v3 codec had through the
-// 5.x line). Do not extend it; if a future change to v4 parsing is needed,
+// The file will be removed in 8.0.0, when the v4 codec is dropped from
+// safeParseAnyVersion. The versioning charter (see
+// apps/site/src/content/docs/stability.md) guarantees one full major of
+// warning between deprecation announcement and codec removal; v4 ages out
+// alongside v3 at 8.0. Do not extend it; if a future change to v4 parsing
+// is needed,
 // the change is by definition a new schema version.
 //
 // What v5 changes vs v4 (so a future reader knows why the migration exists):

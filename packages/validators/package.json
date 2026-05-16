@@ -1,6 +1,6 @@
 {
   "name": "@mobile-surfaces/validators",
-  "version": "6.0.0",
+  "version": "7.0.0",
   "description": "Project-identity input validators (slug, scheme, bundle id, Team ID, Swift identifier) for the create-mobile-surfaces CLI and the in-template rename script. Not contract or wire-shape validation \u2014 see @mobile-surfaces/surface-contracts for that. Single source of truth across the pre-install (relative import) and post-install (bare specifier) consumer paths.",
   "publishConfig": {
     "access": "public"

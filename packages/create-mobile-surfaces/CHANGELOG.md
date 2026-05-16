@@ -1,5 +1,11 @@
 # create-mobile-surfaces
 
+## 6.0.0
+
+### Major Changes
+
+- Linked-group bump for the v5 schema release in `@mobile-surfaces/surface-contracts`. The bundled template tarball now ships the notification-content extension (`apps/mobile/targets/notification-content/`) and a `pnpm surface:codegen` script wired into the scaffold's package.json so a fresh project regenerates the App Group identity, ActivityKit attributes, and notification category constants from one entry point. The scaffold-e2e fixture is updated to assert the new codegen surfaces land in a freshly scaffolded project.
+
 ## 4.0.0
 
 ### Major Changes
