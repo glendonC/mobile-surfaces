@@ -321,6 +321,14 @@ export const checkRegistry = Object.freeze([
     mode: "single-mode",
     trapIds: ["MS043"],
   },
+  {
+    id: "check-doc-promises",
+    label: "no stale TODOs or unfulfilled promises in doc prose",
+    stage: 4,
+    script: "scripts/check-doc-promises.mjs",
+    diagnose: true,
+    mode: "single-mode",
+  },
 
   // Stage 5: full contract test suite. Broadest gate; exercises Zod
   // parsing, projections, migrations, and Standard Schema interop. Runs
