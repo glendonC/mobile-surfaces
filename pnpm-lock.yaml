@@ -35,6 +35,9 @@ importers:
       '@mobile-surfaces/surface-contracts':
         specifier: workspace:*
         version: link:../../packages/surface-contracts
+      '@mobile-surfaces/tokens':
+        specifier: workspace:*
+        version: link:../../packages/tokens
       expo:
         specifier: ~55.0.18
         version: 55.0.18(@babel/core@7.29.0)(@expo/dom-webview@55.0.5)(react-native@0.83.6(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)(typescript@5.9.3)
@@ -118,6 +121,9 @@ importers:
       '@inquirer/prompts':
         specifier: 8.4.2
         version: 8.4.2(@types/node@25.6.0)
+      '@mobile-surfaces/traps':
+        specifier: workspace:^
+        version: link:../traps
       '@mobile-surfaces/validators':
         specifier: workspace:^
         version: link:../validators

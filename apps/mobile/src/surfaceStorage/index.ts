@@ -178,3 +178,58 @@ export function readSurfaceDecodeError(
   const trapId = typeof obj.trapId === "string" ? obj.trapId : "MS036";
   return { surfaceId, at: obj.at, error: obj.error, trapId };
 }
+
+/**
+ * Read the raw snapshot payload the host last wrote into the App Group for
+ * a single surface, alongside its writtenAt timestamp and any active
+ * decode-error breadcrumb. Returns null when nothing has ever been written
+ * for that surface id this session.
+ *
+ * Used by PayloadInspectorScreen's "Live App Group dump" section to render
+ * the exact bytes the widget extension sees. Tolerates missing or
+ * malformed values: the inspector is read-only and the caller is expected
+ * to surface failures as displayable rows, not throws.
+ */
+export interface SurfaceAppGroupRecord {
+  readonly surfaceId: string;
+  readonly snapshot: unknown | null;
+  readonly writtenAt: number | null;
+  readonly decodeError: SurfaceDecodeErrorBreadcrumb | null;
+}
+
+export function readSurfaceAppGroupRecord(
+  surfaceId: string,
+): SurfaceAppGroupRecord {
+  let rawSnapshot: unknown = null;
+  try {
+    const raw = storage.get(snapshotKey(surfaceId));
+    if (typeof raw === "string") {
+      try {
+        rawSnapshot = JSON.parse(raw);
+      } catch {
+        rawSnapshot = raw;
+      }
+    } else if (raw != null) {
+      rawSnapshot = raw;
+    }
+  } catch {
+    rawSnapshot = null;
+  }
+  let writtenAt: number | null = null;
+  try {
+    const raw = storage.get(writtenAtKey(surfaceId));
+    if (typeof raw === "number" && Number.isFinite(raw)) writtenAt = raw;
+    else if (typeof raw === "string") {
+      const n = Number(raw);
+      if (Number.isFinite(n)) writtenAt = n;
+    }
+  } catch {
+    writtenAt = null;
+  }
+  return {
+    surfaceId,
+    snapshot: rawSnapshot,
+    writtenAt,
+    decodeError: readSurfaceDecodeError(surfaceId),
+  };
+}

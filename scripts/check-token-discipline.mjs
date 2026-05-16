@@ -36,15 +36,11 @@ const TOKEN_EVENTS = [
   "onActivityStateChange",
 ];
 
-// Files explicitly exempted from MS039 token-discipline. The harness
-// screen at apps/mobile/src/screens/LiveActivityHarness.tsx is the
-// only such file today: Phase 2 ships @mobile-surfaces/tokens but the
-// reference harness rewrite is Phase 3's job. Remove this entry when
-// Phase 3 lands DeliveryExampleScreen / DiagnosticsScreen and the
-// harness is replaced. Tracked in notes/refactor-v7.md.
-const EXEMPT_FILES = new Set([
-  path.resolve("apps/mobile/src/screens/LiveActivityHarness.tsx"),
-]);
+// Files explicitly exempted from MS039 token-discipline. Empty as of
+// Phase 3 — the Phase 2 LiveActivityHarness exemption was removed when
+// the harness was rewritten as DiagnosticsScreen and rewired through
+// @mobile-surfaces/tokens.
+const EXEMPT_FILES = new Set();
 
 // Match `addListener("onPushToken", ...)` and friends. Allow either
 // single or double quotes; allow whitespace between addListener and
