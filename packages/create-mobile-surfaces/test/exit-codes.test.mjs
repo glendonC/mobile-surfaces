@@ -172,12 +172,18 @@ describe("CLI propagates SIGINT as exit 130 during a task", () => {
     "exits 130 when SIGINT lands during the scaffold task pipeline",
     { skip: process.platform !== "darwin" ? "SIGINT propagation test is macOS-only (preflight rejects other platforms)" : false },
     async () => {
-      // 5s ceiling on overall test duration; the delay we inject is 3s which
-      // leaves 2s for spawn + SIGINT delivery + child exit.
+      // 15s ceiling on overall test duration; the delay we inject is 3s which
+      // leaves 12s for spawn + SIGINT delivery + child exit. Locally this
+      // path finishes in under a second, but a cold GitHub macos-26 runner
+      // doing its first child-process spawn can blow past 2s on its own —
+      // the previous 5s ceiling left only 2s of headroom and tripped a
+      // benign timeout on PR #73. We're testing exit-code propagation, not
+      // spawn latency; pick a ceiling that keeps the test useful (still
+      // fails if the CLI hangs forever) without ratcheting on runner noise.
       const result = await new Promise((resolve, reject) => {
         const timer = setTimeout(
           () => reject(new Error("SIGINT test timed out")),
-          5000,
+          15000,
         );
         const { child, ready, exited } = spawnCli(
           [
