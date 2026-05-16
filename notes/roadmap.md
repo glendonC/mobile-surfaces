@@ -130,6 +130,7 @@ Explicitly out of scope unless a real use case surfaces. Listed here so the opti
 - ScheduledActivity scheduling API.
 - AlarmKit countdown integration.
 - Liquid Glass / `levelOfDetail` rendering hints.
+- **MCP server consuming `@mobile-surfaces/traps`.** Would expose the trap catalog as MCP tools + resources for LLM agents in Claude Desktop, Cursor, etc. Deliberately deferred from v8 with no demand signal yet (the catalog reads cleanly as AGENTS.md / CLAUDE.md ambient context at ~6K tokens). Open an issue if a concrete workflow needs the interactivity story. The `@mobile-surfaces/traps` package already exposes the lookup surface (`findTrap`, `findTrapByErrorClass`, `TRAP_BINDINGS`) a server would wrap; the work is a single new published package, independent versioning.
 
 ## Out of scope
 

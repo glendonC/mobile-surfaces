@@ -150,7 +150,7 @@ packages/surface-contracts/schema.json must be regenerated whenever the Zod sour
 
 **severity:** error  •  **detection:** static (script-checkable)  •  **tags:** contract  •  **enforced by:** `scripts/validate-surface-fixtures.mjs`
 
-Every JSON file under data/surface-fixtures/ must parse via the v3 discriminated union (after $schema is stripped).
+Every JSON file under data/surface-fixtures/ must parse via the current schemaVersion discriminated union (after $schema is stripped).
 
 **Symptom.** Tests that exercise fixtures pass locally but fail in CI on a fixture nobody noticed was malformed; or fixture-driven previews silently render placeholder data.
 
@@ -472,7 +472,7 @@ Every projection-output Zod schema (liveSurfaceWidgetTimelineEntry, liveSurfaceC
 
 Source files and docs cannot ship a 'will be removed in X.0.0' (or 'removed in X.0') claim from a @mobile-surfaces/surface-contracts version at major X or higher. The deprecation promise is load-bearing for downstream consumers who plan migrations against it; shipping the major while the prose still says the removal is happening now silently breaks the contract.
 
-**Symptom.** Source comment in schema-v3.ts says the codec is gone at 6.0.0. Package ships at 6.0.0 with the codec still present in safeParseAnyVersion. Consumers reading the source comment believe v3 is gone and skip a migration window; consumers reading the runtime keep using v3 indefinitely. The deprecation promise was broken silently.
+**Symptom.** Source comment in schema-v4.ts says the codec is gone at 9.0.0. Package ships at 9.0.0 with the codec still present in safeParseAnyVersion. Consumers reading the source comment believe v4 is gone and skip a migration window; consumers reading the runtime keep using v4 indefinitely. The deprecation promise was broken silently.
 
 **Fix.** Update the deprecation prose to a future major (one major past the current is the charter minimum). If the codec really should be removed now, drop it in a coordinated release and remove the prose at the same time. To opt a specific prose line out of the check, prefix the preceding line with `// CHARTER: keep` (the allowlist marker is intentionally narrow).
 

@@ -1,18 +1,12 @@
 import { z } from "zod";
 import {
-  liveSurfaceSnapshotV3,
   liveSurfaceSnapshotV4,
-  migrateV3ToV4,
-  type LiveSurfaceSnapshotV3,
   type LiveSurfaceSnapshotV4,
 } from "./schema-v4.ts";
 import { NOTIFICATION_CATEGORY_IDS } from "./notificationCategories.ts";
 
 export {
-  liveSurfaceSnapshotV3,
   liveSurfaceSnapshotV4,
-  migrateV3ToV4,
-  type LiveSurfaceSnapshotV3,
   type LiveSurfaceSnapshotV4,
 };
 
@@ -395,21 +389,18 @@ export type LiveSurfaceNotificationSliceForExtension = z.infer<
 >;
 
 // ---------------------------------------------------------------------------
-// Minimal base shape: identification + state only.
-//
-// Every cross-kind rendering field that v3 carried in the base (primaryText,
-// secondaryText, modeLabel, contextLabel, statusLine, actionLabel, progress,
-// deepLink) moved into per-kind slices for v4. v5 keeps that base unchanged
-// and adds notification-only optional fields (subtitle / interruptionLevel /
-// relevanceScore / targetContentId) inside the notification slice; see the
-// slice definitions above.
+// Minimal base shape: identification + state only. Every rendering field
+// lives inside its per-kind slice (the move out of the base happened at
+// v4); v5 keeps that base unchanged and adds notification-only optional
+// fields (subtitle / interruptionLevel / relevanceScore / targetContentId)
+// inside the notification slice; see the slice definitions above.
 // ---------------------------------------------------------------------------
 const liveSurfaceSnapshotBaseShape = {
   schemaVersion: z.literal("5").describe(
     "Wire-format generation. Required; producers MUST set this explicitly. " +
       "Consumers parse against the version they understand; cross-version " +
-      "payloads are upgraded via migrateV4ToV5 (and transitively " +
-      "migrateV3ToV4) inside safeParseAnyVersion before parsing.",
+      "payloads are upgraded via migrateV4ToV5 inside safeParseAnyVersion " +
+      "before parsing.",
   ),
   id: z.string().min(1).describe(
     "Stable, idempotent snapshot identifier. The same logical state produced " +
@@ -750,7 +741,7 @@ export const liveSurfaceKinds = liveSurfaceKind.options as unknown as readonly [
 
 /**
  * Strict v5 parser. Throws on any payload that does not match the v5
- * discriminated union. Does NOT auto-migrate v3/v4 payloads — for that, use
+ * discriminated union. Does NOT auto-migrate v4 payloads — for that, use
  * {@link safeParseAnyVersion}.
  */
 export function assertSnapshot(value: unknown): LiveSurfaceSnapshot {
@@ -759,7 +750,7 @@ export function assertSnapshot(value: unknown): LiveSurfaceSnapshot {
 
 /**
  * Strict v5 safe-parse. Returns Zod's standard SafeParseReturnType. Does NOT
- * auto-migrate v3/v4 payloads — for that, use {@link safeParseAnyVersion}.
+ * auto-migrate v4 payloads — for that, use {@link safeParseAnyVersion}.
  */
 export function safeParseSnapshot(value: unknown) {
   return liveSurfaceSnapshot.safeParse(value);
@@ -768,7 +759,7 @@ export function safeParseSnapshot(value: unknown) {
 export type SafeParseAnyVersionSuccess = {
   success: true;
   data: LiveSurfaceSnapshot;
-  /** Set when the input parsed as v3 or v4 and was migrated to v5. */
+  /** Set when the input parsed as v4 and was migrated to v5. */
   deprecationWarning?: string;
 };
 
@@ -801,33 +792,24 @@ export function migrateV4ToV5(
 
 const V4_DEPRECATION_WARNING =
   "liveSurfaceSnapshot v4 is deprecated and will be removed in " +
-  "@mobile-surfaces/surface-contracts@8.0. Migrate producers to " +
+  "@mobile-surfaces/surface-contracts@9.0. Migrate producers to " +
   'schemaVersion "5"; the snapshot wire shape is unchanged but the ' +
   "notification projection-output sidecar's kind discriminator " +
-  'aligned to "surface_snapshot" (see schema-migration docs).';
-
-const V3_DEPRECATION_WARNING =
-  "liveSurfaceSnapshot v3 is deprecated and will be removed in " +
-  "@mobile-surfaces/surface-contracts@8.0. Migrate producers to " +
-  'schemaVersion "5"; the rendering fields moved from the base shape ' +
-  "into per-kind slices in v4 and the notification slice gained " +
-  "optional subtitle/interruptionLevel/relevanceScore/targetContentId " +
-  "fields in v5 (see schema-migration docs).";
+  'aligned to "surface_snapshot" (see schema docs).';
 
 /**
  * Multi-version safe-parse. Tries v5 (strict) first; on failure, tries v4
- * (frozen, migrates via migrateV4ToV5); on failure, tries v3 (frozen,
- * chains migrateV3ToV4 + migrateV4ToV5). Returns the v5 ZodError when every
+ * (frozen, migrates via migrateV4ToV5). Returns the v5 ZodError when every
  * attempt fails so callers see the most relevant message.
  *
- * On v3->v5 or v4->v5 migration, the result carries a `deprecationWarning`
- * so telemetry can surface producers still on the old shape; see
+ * On a v4->v5 migration, the result carries a `deprecationWarning` so
+ * telemetry can surface producers still on the old shape; see
  * https://mobile-surfaces.com/docs/observability for the recommended log.
  *
- * The v2 codec was dropped at 5.0.0 per the v3 RFC commitment. Consumers
- * still emitting v2 must run their payloads through
- * @mobile-surfaces/surface-contracts@4 to migrate to v3 first, then this
- * package to reach v5.
+ * The v3 codec was dropped at 8.0.0 per the charter's one-major-deprecation
+ * window. Consumers still emitting v3 must run their payloads through
+ * @mobile-surfaces/surface-contracts@7.x to promote v3 -> v5, store the
+ * result, then upgrade. The v2 codec was dropped earlier at 5.0.0.
  */
 export function safeParseAnyVersion(value: unknown): SafeParseAnyVersionResult {
   const v5 = liveSurfaceSnapshot.safeParse(value);
@@ -847,20 +829,6 @@ export function safeParseAnyVersion(value: unknown): SafeParseAnyVersionResult {
     return { success: false, error: recheck.error };
   }
 
-  const v3 = liveSurfaceSnapshotV3.safeParse(value);
-  if (v3.success) {
-    const migratedV4 = migrateV3ToV4(v3.data);
-    const migratedV5 = migrateV4ToV5(migratedV4);
-    const recheck = liveSurfaceSnapshot.safeParse(migratedV5);
-    if (recheck.success) {
-      return {
-        success: true,
-        data: recheck.data,
-        deprecationWarning: V3_DEPRECATION_WARNING,
-      };
-    }
-    return { success: false, error: recheck.error };
-  }
   // Return v5 error: most relevant to a producer targeting current.
   return { success: false, error: v5.error };
 }

@@ -6,7 +6,6 @@ export {
   liveSurfaceSnapshotNotification,
   liveSurfaceSnapshotLockAccessory,
   liveSurfaceSnapshotStandby,
-  liveSurfaceSnapshotV3,
   liveSurfaceSnapshotV4,
   liveSurfaceLiveActivitySlice,
   liveSurfaceState,
@@ -33,7 +32,6 @@ export {
   liveSurfaceKinds,
   assertSnapshot,
   safeParseSnapshot,
-  migrateV3ToV4,
   migrateV4ToV5,
   safeParseAnyVersion,
 } from "./schema.ts";
@@ -45,7 +43,6 @@ export type {
   LiveSurfaceSnapshotNotification,
   LiveSurfaceSnapshotLockAccessory,
   LiveSurfaceSnapshotStandby,
-  LiveSurfaceSnapshotV3,
   LiveSurfaceSnapshotV4,
   LiveSurfaceLiveActivitySlice,
   LiveSurfaceState,

@@ -200,7 +200,7 @@ Projection-output schemas (widget timeline entry, control value provider, lock-a
 
 ### Schema evolution
 
-`LiveSurfaceSnapshot` carries a `schemaVersion: "5"` literal and a top-level `kind` discriminator. The union is strict. The codec chain in `safeParseAnyVersion` covers v3 → v4 → v5 today; the deprecation schedule and migration policy live in [`schema.md`](/docs/schema).
+`LiveSurfaceSnapshot` carries a `schemaVersion: "5"` literal and a top-level `kind` discriminator. The union is strict. The codec chain in `safeParseAnyVersion` covers v4 → v5 today; the deprecation schedule and migration policy live in [`schema.md`](/docs/schema).
 
 - **The union is strict.** `z.discriminatedUnion("kind", [...])` over six branches; every branch carries its own `.strict()` slice, and unknown keys reject. Cross-kind projection fails at parse time and again at the `assertSnapshotKind` runtime narrow.
 - **`kind` must be set explicitly.** v1 had a `.preprocess()` shim that defaulted missing-kind payloads to `"liveActivity"`; v2 removed it and every later version keeps it removed.
