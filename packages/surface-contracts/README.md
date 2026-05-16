@@ -78,7 +78,7 @@ The validator runs once at the boundary; everything downstream consumes a typed 
 | `lockAccessory` | Lock Screen complication | `lockAccessory: { `**`title, deepLink, family`**`, gaugeValue?, shortText? }` |
 | `standby` | StandBy mode widget | `standby: { `**`title, body, progress, deepLink, presentation`**`, tint? }` |
 
-The base shape is identification + state only: `schemaVersion`, `id`, `surfaceId`, `kind`, `updatedAt`, `state`. Every rendering field lives inside its per-kind slice so a widget snapshot no longer pretends to have a Lock-Screen `modeLabel`, a control snapshot no longer carries a fictional `progress`, and the `notification` slice's `title`/`body` map directly to `aps.alert.title`/`aps.alert.body` (renamed from v3's `primaryText`/`secondaryText`).
+The base shape is identification + state only: `schemaVersion`, `id`, `surfaceId`, `kind`, `updatedAt`, `state`. Every rendering field lives inside its per-kind slice so a widget snapshot no longer pretends to have a Lock-Screen `modeLabel`, a control snapshot no longer carries a fictional `progress`, and the `notification` slice's `title`/`body` map directly to `aps.alert.title`/`aps.alert.body`.
 
 `kind`-aware narrowing is enforced at parse time (a `kind: "control"` snapshot without a `control` slice fails `safeParse`) and at the type system (projection helpers take narrowed snapshot types, not the union):
 
@@ -124,7 +124,7 @@ Backends that aren't on TypeScript can validate against the published JSON Schem
 The canonical URL is pinned to **major.minor** so a future minor that adds a `kind` branch publishes at a new URL without invalidating existing references:
 
 ```text
-https://unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json
+https://unpkg.com/@mobile-surfaces/surface-contracts@8.0/schema.json
 ```
 
 Ajv 2020 example:
@@ -134,7 +134,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 
 const ajv = new Ajv2020();
 const schema = await fetch(
-  "https://unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json",
+  "https://unpkg.com/@mobile-surfaces/surface-contracts@8.0/schema.json",
 ).then((r) => r.json());
 
 const validate = ajv.compile(schema);
@@ -149,11 +149,9 @@ The schema is also exported via the package's `./schema` subpath if you want to 
 import schema from "@mobile-surfaces/surface-contracts/schema";
 ```
 
-## v3 -> v4 migration
+## Migration codec
 
-`schemaVersion: "5"` rebases the snapshot shape: the v3 base lost its kind-specific rendering fields and every per-kind slice carries its own rendering set. The notification slice renames `primaryText`/`secondaryText` to `title`/`body` so they line up with `aps.alert.title`/`aps.alert.body` on the wire. The control slice gains a required `label`. v3's `progress: 1` on control (fictional) and v3's `progress` on lockAccessory (which was only a projection-fallback source) are dropped from the wire shape.
-
-Use `safeParseAnyVersion` at wire edges that may see either schema shape:
+Use `safeParseAnyVersion` at wire edges that may receive an older schema shape:
 
 ```ts
 import { safeParseAnyVersion } from "@mobile-surfaces/surface-contracts";
@@ -167,10 +165,10 @@ if (result.deprecationWarning) {
   log.warn(result.deprecationWarning, { snapshotId: result.data.id });
 }
 
-handle(result.data); // always v4
+handle(result.data); // always v5
 ```
 
-For stored payloads, `migrateV3ToV4` is a pure transform that lifts the v3 base's rendering fields into the per-kind slice and bumps `schemaVersion` to `"4"`. The v3 codec lives for the entire 5.x release line and is removed in 6.0.0. The v2 codec was sunset at 5.0 per the v3 RFC commitment; v2 producers must run their payloads through `@mobile-surfaces/surface-contracts@4` to reach v3 first. Full migration policy and a worked example live in [`https://mobile-surfaces.com/docs/schema-migration`](https://mobile-surfaces.com/docs/schema-migration).
+The current chain is v5 → v4. The v3 codec was retired at 8.0.0; consumers with v3 payloads at rest must pin `@mobile-surfaces/surface-contracts@7.x` once to promote v3 → v5, store the result, then upgrade. The v2 codec was retired earlier at 5.0.0. Full migration policy lives at [`https://mobile-surfaces.com/docs/schema`](https://mobile-surfaces.com/docs/schema).
 
 ## Pairing options
 

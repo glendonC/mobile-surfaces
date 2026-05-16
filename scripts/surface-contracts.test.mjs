@@ -10,11 +10,9 @@ import {
   liveSurfaceNotificationContentPayload,
   liveSurfaceNotificationSliceForExtension,
   liveSurfaceSnapshot,
-  liveSurfaceSnapshotV3,
   liveSurfaceSnapshotV4,
   liveSurfaceStandbyEntry,
   liveSurfaceWidgetTimelineEntry,
-  migrateV3ToV4,
   migrateV4ToV5,
   safeParseAnyVersion,
   safeParseSnapshot,
@@ -382,144 +380,9 @@ test("toStandbyEntry defaults presentation to card and null-tints when absent", 
 });
 
 // ---------------------------------------------------------------------------
-// v3 -> v4 migration codec. v4 lifts every rendering field out of the base
-// shape into a per-kind slice; the notification slice renames primaryText/
-// secondaryText to title/body. The v2 codec was sunset at 5.0 per the v3
-// RFC; only v3 payloads are migrated here.
-// ---------------------------------------------------------------------------
-
-const v3LiveActivitySample = {
-  schemaVersion: "3",
-  kind: "liveActivity",
-  id: "fixture-v3-live",
-  surfaceId: "surface-v3-live",
-  updatedAt: "2026-05-12T18:00:00.000Z",
-  state: "active",
-  modeLabel: "active",
-  contextLabel: "queue",
-  statusLine: "active · 50%",
-  primaryText: "Surface in progress",
-  secondaryText: "Live Activity body copy from v3.",
-  actionLabel: "View",
-  progress: 0.5,
-  deepLink: "mobilesurfaces://surface/surface-v3-live",
-  liveActivity: {
-    stage: "inProgress",
-    estimatedSeconds: 90,
-    morePartsCount: 1,
-  },
-};
-
-const v3ControlSample = {
-  schemaVersion: "3",
-  kind: "control",
-  id: "fixture-v3-control",
-  surfaceId: "surface-v3-control",
-  updatedAt: "2026-05-12T18:00:00.000Z",
-  state: "active",
-  modeLabel: "control",
-  contextLabel: "toggle",
-  statusLine: "control · ready",
-  primaryText: "Control surface",
-  secondaryText: "v3 control sample",
-  actionLabel: "Surface toggle",
-  progress: 1,
-  deepLink: "mobilesurfaces://surface/surface-v3-control",
-  control: { controlKind: "toggle", state: false, intent: "toggleSurface" },
-};
-
-const v3NotificationSample = {
-  schemaVersion: "3",
-  kind: "notification",
-  id: "fixture-v3-notification",
-  surfaceId: "surface-v3-notification",
-  updatedAt: "2026-05-12T18:00:00.000Z",
-  state: "attention",
-  modeLabel: "notification",
-  contextLabel: "alert",
-  statusLine: "needs attention",
-  primaryText: "Attention required",
-  secondaryText: "Open the app to review.",
-  progress: 0,
-  deepLink: "mobilesurfaces://surface/surface-v3-notification",
-  notification: { category: "surface-update", threadId: "thread-1" },
-};
-
-test("migrateV3ToV4 lifts liveActivity rendering fields into the slice", () => {
-  const v3 = liveSurfaceSnapshotV3.parse(v3LiveActivitySample);
-  const v4 = migrateV3ToV4(v3);
-  assert.equal(v4.schemaVersion, "4");
-  assert.equal(v4.kind, "liveActivity");
-  if (v4.kind === "liveActivity") {
-    assert.equal(v4.liveActivity.title, "Surface in progress");
-    assert.equal(v4.liveActivity.body, "Live Activity body copy from v3.");
-    assert.equal(v4.liveActivity.progress, 0.5);
-    assert.equal(v4.liveActivity.modeLabel, "active");
-    assert.equal(v4.liveActivity.contextLabel, "queue");
-    assert.equal(v4.liveActivity.statusLine, "active · 50%");
-    assert.equal(v4.liveActivity.actionLabel, "View");
-    assert.equal(v4.liveActivity.stage, "inProgress");
-    assert.equal(v4.liveActivity.estimatedSeconds, 90);
-    assert.equal(v4.liveActivity.morePartsCount, 1);
-  }
-  // Round-trip through the frozen v4 parse to prove the migration result is
-  // valid against the v4 union (the live v5 union rejects schemaVersion "4").
-  const reparsedV4 = liveSurfaceSnapshotV4.parse(v4);
-  assert.equal(reparsedV4.schemaVersion, "4");
-  // And confirm the chained v4->v5 migration produces a valid v5 snapshot.
-  const v5 = migrateV4ToV5(v4);
-  const reparsedV5 = liveSurfaceSnapshot.parse(v5);
-  assert.equal(reparsedV5.schemaVersion, "5");
-});
-
-test("migrateV3ToV4 sets the control label to actionLabel when non-empty, falls back to primaryText", () => {
-  const v3 = liveSurfaceSnapshotV3.parse(v3ControlSample);
-  const v4 = migrateV3ToV4(v3);
-  assert.equal(v4.kind, "control");
-  if (v4.kind === "control") {
-    assert.equal(v4.control.label, "Surface toggle");
-    assert.equal(v4.control.controlKind, "toggle");
-    assert.equal(v4.control.state, false);
-    assert.equal(v4.control.intent, "toggleSurface");
-    // v3 progress on control is dropped from the wire shape.
-    assert.equal("progress" in v4.control, false);
-  }
-
-  const fallback = liveSurfaceSnapshotV3.parse({
-    ...v3ControlSample,
-    actionLabel: "",
-  });
-  const v4Fallback = migrateV3ToV4(fallback);
-  if (v4Fallback.kind === "control") {
-    assert.equal(v4Fallback.control.label, "Control surface");
-  }
-});
-
-test("migrateV3ToV4 renames notification primaryText/secondaryText into title/body", () => {
-  const v3 = liveSurfaceSnapshotV3.parse(v3NotificationSample);
-  const v4 = migrateV3ToV4(v3);
-  assert.equal(v4.kind, "notification");
-  if (v4.kind === "notification") {
-    assert.equal(v4.notification.title, "Attention required");
-    assert.equal(v4.notification.body, "Open the app to review.");
-    assert.equal(v4.notification.category, "surface-update");
-    assert.equal(v4.notification.threadId, "thread-1");
-  }
-});
-
-test("migrateV3ToV4 drops v3 modeLabel/contextLabel/statusLine on non-liveActivity kinds", () => {
-  const v3 = liveSurfaceSnapshotV3.parse(v3ControlSample);
-  const v4 = migrateV3ToV4(v3);
-  if (v4.kind === "control") {
-    assert.equal("modeLabel" in v4.control, false);
-    assert.equal("contextLabel" in v4.control, false);
-    assert.equal("statusLine" in v4.control, false);
-  }
-});
-
-// ---------------------------------------------------------------------------
-// safeParseAnyVersion: v5 (strict) -> v4 (codec, deprecated, removed in 7.0)
-// -> v3 (codec, deprecated, removed in 6.0)
+// safeParseAnyVersion: v5 (strict) -> v4 (frozen codec, deprecated, removed
+// in 9.0). The v3 codec was dropped at 8.0; consumers still emitting v3 must
+// promote via @mobile-surfaces/surface-contracts@7.x once.
 // ---------------------------------------------------------------------------
 
 test("safeParseAnyVersion accepts a v5 payload with no deprecation warning", () => {
@@ -547,16 +410,6 @@ test("safeParseAnyVersion accepts a v4 payload and surfaces a v4 deprecation war
   }
 });
 
-test("safeParseAnyVersion accepts a v3 payload and surfaces a v3 deprecation warning", () => {
-  const result = safeParseAnyVersion(v3LiveActivitySample);
-  assert.equal(result.success, true);
-  if (result.success) {
-    assert.equal(result.data.schemaVersion, "5");
-    assert.equal(result.data.kind, "liveActivity");
-    assert.match(result.deprecationWarning ?? "", /v3 is deprecated/i);
-  }
-});
-
 test("safeParseAnyVersion fails when no version parses", () => {
   const result = safeParseAnyVersion({ schemaVersion: "999", nonsense: true });
   assert.equal(result.success, false);
@@ -565,12 +418,28 @@ test("safeParseAnyVersion fails when no version parses", () => {
   }
 });
 
-test("strict assertSnapshot does NOT auto-migrate v3 payloads", () => {
-  assert.throws(() => assertSnapshot(v3LiveActivitySample));
+test("safeParseAnyVersion rejects a v3-shaped payload (v3 codec retired at 8.0)", () => {
+  const v3Shaped = {
+    schemaVersion: "3",
+    kind: "liveActivity",
+    id: "fixture-v3-live",
+    surfaceId: "surface-v3-live",
+    updatedAt: "2026-05-12T18:00:00.000Z",
+    state: "active",
+    primaryText: "Surface in progress",
+    secondaryText: "v3 body copy.",
+    liveActivity: {
+      stage: "inProgress",
+      estimatedSeconds: 90,
+      morePartsCount: 1,
+    },
+  };
+  const result = safeParseAnyVersion(v3Shaped);
+  assert.equal(result.success, false);
 });
 
 // ---------------------------------------------------------------------------
-// Deep-link regex edge cases. The slice's deepLink schema mirrors v3's.
+// Deep-link regex edge cases.
 // ---------------------------------------------------------------------------
 
 const deepLinkPositiveCases = [

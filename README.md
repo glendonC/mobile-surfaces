@@ -11,7 +11,7 @@ Mobile Surfaces is not a Live Activity bridge. It is the layer above the bridge 
 
 Three pieces ship together:
 
-- **`@mobile-surfaces/surface-contracts`** — typed `LiveSurfaceSnapshot` plus six projection helpers, a published JSON Schema, Standard Schema interop, and a v3 → v4 → v5 migration codec.
+- **`@mobile-surfaces/surface-contracts`** — typed `LiveSurfaceSnapshot` plus six projection helpers, a published JSON Schema, Standard Schema interop, and a v4 → v5 migration codec.
 - **`@mobile-surfaces/push`** — Node APNs client. HTTP/2 connection pooling, JWT signing, push-to-start tokens, iOS 18 broadcast channels, typed errors for every documented APNs reason.
 - **Trap catalog** — 40 documented iOS silent-failure modes ([`data/traps.json`](./data/traps.json)) enforced as CI invariants and rendered as [`AGENTS.md`](./AGENTS.md) and [`CLAUDE.md`](./CLAUDE.md). Static rules fail at PR time; runtime rules surface as typed errors.
 

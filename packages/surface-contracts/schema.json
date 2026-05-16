@@ -7,7 +7,7 @@
         "schemaVersion": {
           "type": "string",
           "const": "5",
-          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV4ToV5 (and transitively migrateV3ToV4) inside safeParseAnyVersion before parsing."
+          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV4ToV5 inside safeParseAnyVersion before parsing."
         },
         "id": {
           "type": "string",
@@ -136,7 +136,7 @@
         "schemaVersion": {
           "type": "string",
           "const": "5",
-          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV4ToV5 (and transitively migrateV3ToV4) inside safeParseAnyVersion before parsing."
+          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV4ToV5 inside safeParseAnyVersion before parsing."
         },
         "id": {
           "type": "string",
@@ -237,7 +237,7 @@
         "schemaVersion": {
           "type": "string",
           "const": "5",
-          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV4ToV5 (and transitively migrateV3ToV4) inside safeParseAnyVersion before parsing."
+          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV4ToV5 inside safeParseAnyVersion before parsing."
         },
         "id": {
           "type": "string",
@@ -327,7 +327,7 @@
         "schemaVersion": {
           "type": "string",
           "const": "5",
-          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV4ToV5 (and transitively migrateV3ToV4) inside safeParseAnyVersion before parsing."
+          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV4ToV5 inside safeParseAnyVersion before parsing."
         },
         "id": {
           "type": "string",
@@ -439,7 +439,7 @@
         "schemaVersion": {
           "type": "string",
           "const": "5",
-          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV4ToV5 (and transitively migrateV3ToV4) inside safeParseAnyVersion before parsing."
+          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV4ToV5 inside safeParseAnyVersion before parsing."
         },
         "id": {
           "type": "string",
@@ -532,7 +532,7 @@
         "schemaVersion": {
           "type": "string",
           "const": "5",
-          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV4ToV5 (and transitively migrateV3ToV4) inside safeParseAnyVersion before parsing."
+          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV4ToV5 inside safeParseAnyVersion before parsing."
         },
         "id": {
           "type": "string",

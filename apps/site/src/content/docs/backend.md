@@ -118,28 +118,28 @@ import {
   safeParseAnyVersion,
 } from "@mobile-surfaces/surface-contracts";
 
-// Strict v4 only. Throws ZodError on anything that isn't a current-version
+// Strict v5 only. Throws ZodError on anything that isn't a current-version
 // snapshot. Use this on outbound code paths where you control the producer.
 const snapshot = assertSnapshot(snapshotFromJob(job));
 
-// Strict v4 safe-parse. Returns { success, data | error }.
+// Strict v5 safe-parse. Returns { success, data | error }.
 const result = safeParseSnapshot(input);
 
-// Wire-edge tolerant. Tries v4 first; falls back to v3 with auto-migration
+// Wire-edge tolerant. Tries v5 first; falls back to v4 with auto-migration
 // and emits a deprecationWarning on success. Use this on inbound code paths
 // (HTTP handlers, queue consumers) where producers may not have migrated to
-// v4 yet. The v3 codec lives for the entire 5.x release line; see
+// v5 yet. The v4 codec lives through the 8.x release line; see
 // docs/schema.md for the deprecation timeline.
 const versioned = safeParseAnyVersion(input);
 if (versioned.success) {
   if (versioned.deprecationWarning) {
     log.warn(versioned.deprecationWarning, { snapshotId: versioned.data.id });
   }
-  // versioned.data is a LiveSurfaceSnapshot in v4 shape.
+  // versioned.data is a LiveSurfaceSnapshot in v5 shape.
 }
 ```
 
-`safeParseAnyVersion` is the migration path documented in [`docs/schema.md`](/docs/schema). Use it whenever you read snapshots from a store that may still hold v3 payloads. The v3 -> v4 -> v5 codec chain runs in `safeParseAnyVersion`; the v2 codec was sunset in 5.0.0.
+`safeParseAnyVersion` is the migration path documented in [`docs/schema.md`](/docs/schema). Use it whenever you read snapshots from a store that may still hold v4 payloads. The v4 -> v5 codec runs in `safeParseAnyVersion`; the v3 codec was retired at 8.0.0 and the v2 codec earlier at 5.0.0.
 
 The published JSON Schema at [`unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json`](https://unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json) is generated from the same Zod source and pinned to `major.minor`. Use it for IDE tooling, OpenAPI components, or non-TypeScript validators (Ajv, jsonschema, etc.). Standard Schema interop is automatic, every exported Zod schema implements the `~standard` getter (`{ vendor: "zod", version: 1, validate, jsonSchema }`), so the contract drops directly into Standard-Schema-aware libraries (Valibot runners, ArkType, `@standard-schema/spec`) without depending on Zod at runtime.
 

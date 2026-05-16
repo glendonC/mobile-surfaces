@@ -9,6 +9,18 @@ group: "Reference"
 
 This page is the policy that decides when each Mobile Surfaces package cuts a major, when it cuts a minor, and what consumers can rely on across upgrades. The CI gates that enforce the charter (MS041, MS042, MS043) are listed inline.
 
+## At a glance
+
+These three axes advance independently. A consumer pinning a package version is pinning the API surface; pinning a wire `schemaVersion` is pinning the on-the-wire shape.
+
+| Axis | Current | Cadence |
+| --- | --- | --- |
+| Package major (linked group: `surface-contracts` + `validators` + `traps`) | `8.x` | Bumps on a breaking schema change, a trap-binding removal, or a coordinated release event. |
+| Wire `schemaVersion` literal | `"5"` | Bumps only on a breaking wire-format change. The literal can lag the package major by multiple releases. |
+| Deprecation window for retired codecs | one full major past the deprecation announcement | Enforced by the MS042 gate. Typical window is two majors. |
+
+The current state: package major `8.0` ships `schemaVersion: "5"` on the wire. The v3 codec was retired at 8.0 (one major past its 7.0 final-warning year); the v4 codec is on its final-warning major and retires at 9.0.
+
 ## Linked release group
 
 Three packages cut majors together:
@@ -80,7 +92,7 @@ A deprecated codec lives for at least one major past the release that deprecated
 - A codec deprecated in `surface-contracts@6` is removable in `@8` at the earliest.
 - A codec deprecated in `surface-contracts@5` is removable in `@7` at the earliest.
 
-The actual schedule sits inline with the codec source (`schema-v3.ts`, `schema-v4.ts`) and in the deprecation warning string the codec emits. The MS042 gate (`scripts/check-deprecation-prose.mjs`) catches the case where the prose says "will be removed in X.0.0" but the package has already shipped X.0.0 — that's a charter violation. The fix is to push the deprecation to a future major (charter minimum: one past the current) or to actually drop the codec.
+The actual schedule sits inline with the codec source (`schema-v4.ts`) and in the deprecation warning string the codec emits. The MS042 gate (`scripts/check-deprecation-prose.mjs`) catches the case where the prose says "will be removed in X.0.0" but the package has already shipped X.0.0 — that's a charter violation. The fix is to push the deprecation to a future major (charter minimum: one past the current) or to actually drop the codec.
 
 The check is opt-out only via an explicit `// CHARTER: keep` marker on the preceding line. Use sparingly; the marker exists for the rare case where the prose intentionally describes a historical promise.
 
