@@ -128,7 +128,7 @@ jobs:
 
   swift-tests:
     name: LiveActivity Swift Package tests
-    # The Swift Package at packages/live-activity/ios/Tests targets macOS
+    # Standalone Swift Package at packages/live-activity/ios targets macOS
     # so `swift test` runs natively — no simulator, no CocoaPods, no
     # ExpoModulesCore. It exercises the platform-agnostic surfaces
     # (LiveActivityError, ObserverRegistry, LiveActivityCodableBridge)
@@ -144,4 +144,4 @@ jobs:
           xcode-version: '26.2'
 
       - name: Run Swift tests
-        run: swift test --package-path packages/live-activity/ios/Tests
+        run: swift test --package-path packages/live-activity/ios

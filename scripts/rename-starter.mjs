@@ -356,9 +356,14 @@ function main() {
     `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}ControlWidget.swift`,
     `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}HomeWidget.swift`,
     `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}LiveActivity.swift`,
+    `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}LockAccessoryWidget.swift`,
+    `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}StageDisplay.swift`,
+    `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}StandbyWidget.swift`,
     `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}WidgetBundle.swift`,
     `apps/mobile/targets/_shared/${currentIdentity.swiftPrefix}ControlIntents.swift`,
+    `apps/mobile/targets/_shared/${currentIdentity.swiftPrefix}NotificationCategories.swift`,
     `apps/mobile/targets/_shared/${currentIdentity.swiftPrefix}SharedState.swift`,
+    `apps/mobile/targets/notification-content/${currentIdentity.swiftPrefix}NotificationViewController.swift`,
   ];
   for (const rel of renameTargets) {
     if (!fs.existsSync(rel)) continue;
@@ -425,11 +430,19 @@ function main() {
   // (group.com.example.<slug>) but skips the generated constant files;
   // codegen is the only writer for those, so we run it here to keep all
   // four App-Group declaration sites aligned.
-  console.log("regenerating App Group constants ...");
-  execSync(
-    "node --experimental-strip-types scripts/generate-app-group-constants.mjs",
-    { stdio: "inherit" },
-  );
+  //
+  // Why not the full `scripts/codegen.mjs` orchestrator here? Rename runs in
+  // a freshly-extracted scaffold tarball before `pnpm install`, so workspace
+  // packages have no node_modules. Orchestrator entries that import zod
+  // (build-schema, generate-activity-attributes, generate-notification-
+  // categories) cannot resolve their deps in that context, and several of
+  // them would also UNDO the rename's text substitution (they emit Swift
+  // files with the MobileSurfaces prefix hardcoded). Post-rename codegen is
+  // restricted to generators whose output genuinely depends on the rename-
+  // time identity AND can run with zero installed deps. The user's first
+  // `pnpm install && pnpm codegen` after the rename covers the rest.
+  console.log("regenerating app-group constants ...");
+  execSync("node scripts/generate-app-group-constants.mjs", { stdio: "inherit" });
 
   // The verify pass imports from packages/surface-contracts, which depends on
   // zod. In a freshly-scaffolded project (where rename runs before install),
