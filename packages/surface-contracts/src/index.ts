@@ -7,13 +7,16 @@ export {
   liveSurfaceSnapshotLockAccessory,
   liveSurfaceSnapshotStandby,
   liveSurfaceSnapshotV3,
+  liveSurfaceSnapshotV4,
   liveSurfaceLiveActivitySlice,
   liveSurfaceState,
   liveSurfaceStage,
   liveSurfaceKind,
+  liveSurfaceInterruptionLevel,
   liveSurfaceWidgetSlice,
   liveSurfaceControlSlice,
   liveSurfaceNotificationSlice,
+  liveSurfaceNotificationSliceForExtension,
   liveSurfaceLockAccessoryFamily,
   liveSurfaceLockAccessorySlice,
   liveSurfaceStandbyPresentation,
@@ -23,6 +26,7 @@ export {
   liveSurfaceControlValueProvider,
   liveSurfaceLockAccessoryEntry,
   liveSurfaceStandbyEntry,
+  liveSurfaceNotificationContentEntry,
   liveSurfaceNotificationContentPayload,
   liveSurfaceStates,
   liveSurfaceStages,
@@ -30,6 +34,7 @@ export {
   assertSnapshot,
   safeParseSnapshot,
   migrateV3ToV4,
+  migrateV4ToV5,
   safeParseAnyVersion,
 } from "./schema.ts";
 export type {
@@ -41,13 +46,16 @@ export type {
   LiveSurfaceSnapshotLockAccessory,
   LiveSurfaceSnapshotStandby,
   LiveSurfaceSnapshotV3,
+  LiveSurfaceSnapshotV4,
   LiveSurfaceLiveActivitySlice,
   LiveSurfaceState,
   LiveSurfaceStage,
   LiveSurfaceKind,
+  LiveSurfaceInterruptionLevel,
   LiveSurfaceWidgetSlice,
   LiveSurfaceControlSlice,
   LiveSurfaceNotificationSlice,
+  LiveSurfaceNotificationSliceForExtension,
   LiveSurfaceLockAccessoryFamily,
   LiveSurfaceLockAccessorySlice,
   LiveSurfaceStandbyPresentation,
@@ -68,6 +76,7 @@ export type {
   LiveSurfaceControlValueProviderOutput as LiveSurfaceControlValueProvider,
   LiveSurfaceLockAccessoryEntryOutput as LiveSurfaceLockAccessoryEntry,
   LiveSurfaceStandbyEntryOutput as LiveSurfaceStandbyEntry,
+  LiveSurfaceNotificationContentEntryOutput as LiveSurfaceNotificationContentEntry,
   LiveSurfaceNotificationContentPayloadOutput as LiveSurfaceNotificationContentPayload,
 } from "./schema.ts";
 
@@ -191,18 +200,29 @@ export function toNotificationContentPayload(
     aps: {
       alert: {
         title: note.title,
+        ...(note.subtitle ? { subtitle: note.subtitle } : {}),
         body: note.body,
       },
       sound: "default",
       ...(note.category ? { category: note.category } : {}),
       ...(note.threadId ? { "thread-id": note.threadId } : {}),
+      ...(note.interruptionLevel
+        ? { "interruption-level": note.interruptionLevel }
+        : {}),
+      ...(note.relevanceScore !== undefined
+        ? { "relevance-score": note.relevanceScore }
+        : {}),
+      ...(note.targetContentId
+        ? { "target-content-id": note.targetContentId }
+        : {}),
     },
     liveSurface: {
-      kind: "surface_notification",
+      kind: "surface_snapshot",
       snapshotId: snapshot.id,
       surfaceId: snapshot.surfaceId,
       state: snapshot.state,
       deepLink: note.deepLink,
+      ...(note.category ? { category: note.category } : {}),
     },
   };
 }
@@ -276,3 +296,18 @@ export type {
   DiagnosticConfig,
   DiagnosticBundle,
 } from "./diagnostics.ts";
+
+export {
+  NOTIFICATION_CATEGORIES,
+  NOTIFICATION_CATEGORY_IDS,
+  notificationCategoryId,
+  notificationCategoryAction,
+  notificationCategory,
+  notificationCategoryRegistry,
+} from "./notificationCategories.ts";
+export type {
+  NotificationCategoryId,
+  NotificationCategoryAction,
+  NotificationCategory,
+  NotificationCategoryRegistry,
+} from "./notificationCategories.ts";

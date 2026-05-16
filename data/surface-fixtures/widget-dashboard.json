@@ -1,6 +1,6 @@
 {
-  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json",
-  "schemaVersion": "4",
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@6.0/schema.json",
+  "schemaVersion": "5",
   "kind": "widget",
   "id": "fixture-widget-dashboard",
   "surfaceId": "surface-widget-dashboard",

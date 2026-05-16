@@ -5,7 +5,7 @@
 // guard and matched their Zod projection-output schemas only by coincidence.
 //
 // The hand-maintained Codable structs in
-//   apps/mobile/targets/widget/_shared/MobileSurfacesSharedState.swift
+//   apps/mobile/targets/_shared/MobileSurfacesSharedState.swift
 // are decoded with JSONDecoder from the App Group container. If a struct's
 // field set, JSON key (CodingKeys), Swift type, or optionality drifts from the
 // Zod projection-output schema the host writes, JSONDecoder silently fails and
@@ -29,6 +29,7 @@ import {
   liveSurfaceControlValueProvider,
   liveSurfaceLockAccessoryEntry,
   liveSurfaceStandbyEntry,
+  liveSurfaceNotificationContentEntry,
 } from "../packages/surface-contracts/src/schema.ts";
 import { buildReport, emitDiagnosticReport } from "./lib/diagnostics.mjs";
 import {
@@ -42,7 +43,10 @@ const { values } = parseArgs({
 
 const TOOL = "check-surface-snapshots";
 const sharedStatePath = path.resolve(
-  "apps/mobile/targets/widget/_shared/MobileSurfacesSharedState.swift",
+  "apps/mobile/targets/_shared/MobileSurfacesSharedState.swift",
+);
+const notificationViewControllerPath = path.resolve(
+  "apps/mobile/targets/notification-content/MobileSurfacesNotificationViewController.swift",
 );
 
 // Each entry pairs a Swift Codable struct with the Zod projection-output
@@ -78,6 +82,21 @@ const SURFACES = [
     schemaName: "liveSurfaceStandbyEntry",
     helper: "toStandbyEntry",
   },
+  // The notification-content extension's userInfo-decoder Codable. Lives in
+  // a different Swift file from the App-Group readers (it decodes the wire
+  // payload's `liveSurface` sidecar, not an App-Group write), but the
+  // parity concern is identical to MS036: the struct must match the Zod
+  // projection-output schema in fields, types, JSON keys, and optionality
+  // or JSONDecoder silently fails and the extension renders nothing
+  // sidecar-driven.
+  {
+    id: "notification-content-entry-parity",
+    struct: "MobileSurfacesNotificationContentEntry",
+    schema: liveSurfaceNotificationContentEntry,
+    schemaName: "liveSurfaceNotificationContentEntry",
+    helper: "toNotificationContentPayload",
+    swiftSource: notificationViewControllerPath,
+  },
 ];
 
 const checks = [];
@@ -97,10 +116,31 @@ if (!fs.existsSync(sharedStatePath)) {
 }
 
 const sharedStateRel = path.relative(process.cwd(), sharedStatePath);
-const swiftSource = fs.readFileSync(sharedStatePath, "utf8");
+const sharedStateSource = fs.readFileSync(sharedStatePath, "utf8");
+
+// Cache reads keyed by absolute path so surfaces that share a file do not
+// hit disk repeatedly. The notification-content extension's Codable lives in
+// a separate file from the four App-Group decoders, so the SURFACES list
+// can point at different Swift sources via `swiftSource`.
+const sourceCache = new Map();
+sourceCache.set(sharedStatePath, sharedStateSource);
 
 for (const surface of SURFACES) {
-  checks.push(checkSurface(surface, swiftSource, sharedStateRel));
+  const sourcePath = surface.swiftSource ?? sharedStatePath;
+  if (!fs.existsSync(sourcePath)) {
+    checks.push({
+      id: surface.id,
+      status: "fail",
+      trapId: "MS036",
+      summary: `Swift source for ${surface.struct} not found at ${path.relative(process.cwd(), sourcePath)}`,
+    });
+    continue;
+  }
+  if (!sourceCache.has(sourcePath)) {
+    sourceCache.set(sourcePath, fs.readFileSync(sourcePath, "utf8"));
+  }
+  const sourceRel = path.relative(process.cwd(), sourcePath);
+  checks.push(checkSurface(surface, sourceCache.get(sourcePath), sourceRel));
 }
 
 emitDiagnosticReport(buildReport(TOOL, checks), { json: values.json });

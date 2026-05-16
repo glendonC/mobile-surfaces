@@ -1,6 +1,6 @@
 {
   "name": "@mobile-surfaces/live-activity",
-  "version": "5.0.0",
+  "version": "6.0.0",
   "description": "Expo native module wrapping ActivityKit start/update/end and push token events for Mobile Surfaces.",
   "publishConfig": {
     "access": "public",

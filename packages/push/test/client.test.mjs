@@ -132,7 +132,7 @@ test("update() targets liveactivity push-type with priority 5 and projected cont
 
 // Phase 3 notification surface: contract has kind: "notification" and a
 // toNotificationContentPayload helper that produces a wire-correct APNs
-// alert payload (kind: "surface_notification" sidecar; aps.alert + optional
+// alert payload (kind: "surface_snapshot" sidecar; aps.alert + optional
 // category + thread-id). sendNotification() ships this end-to-end so the
 // contract surface stops being half-promised. Same push-type / topic /
 // priority as alert(); differs only in input kind and sidecar shape.
@@ -182,7 +182,7 @@ test("sendNotification() sends an alert push from a notification-kind snapshot",
   });
   assert.equal(body.aps.category, NOTIFICATION_SNAPSHOT.notification.category);
   assert.equal(body.aps["thread-id"], NOTIFICATION_SNAPSHOT.notification.threadId);
-  assert.equal(body.liveSurface.kind, "surface_notification");
+  assert.equal(body.liveSurface.kind, "surface_snapshot");
   assert.equal(body.liveSurface.snapshotId, NOTIFICATION_SNAPSHOT.id);
 });
 

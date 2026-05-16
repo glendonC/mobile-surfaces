@@ -153,13 +153,23 @@ export const checkRegistry = Object.freeze([
   // the codegen output, which means byte-identical to each other and in
   // sync with the Zod source.
   {
-    id: "codegen-activity-attributes",
+    id: "generate-activity-attributes",
     label: "MobileSurfacesActivityAttributes.swift in sync with Zod source",
     stage: 2,
-    script: "scripts/codegen-activity-attributes.mjs",
+    script: "scripts/generate-activity-attributes.mjs",
     args: ["--check"],
     diagnose: false,
     mode: "check-mode",
+  },
+  {
+    id: "generate-notification-categories",
+    label: "notification category outputs in sync with canonical registry",
+    stage: 2,
+    script: "scripts/generate-notification-categories.mjs",
+    args: ["--check"],
+    diagnose: true,
+    mode: "check-mode",
+    trapIds: ["MS037"],
   },
   // Ajv ↔ Zod parity belongs in stage 3 because it depends on build-schema
   // having already passed its --check (stage 2): the gate reads the
@@ -186,7 +196,7 @@ export const checkRegistry = Object.freeze([
     id: "check-activity-attributes",
     label: "ActivityKit Swift attributes match Zod",
     stage: 3,
-    dependsOn: ["build-schema", "codegen-activity-attributes"],
+    dependsOn: ["build-schema", "generate-activity-attributes"],
     script: "scripts/check-activity-attributes.mjs",
     diagnose: true,
     mode: "single-mode",

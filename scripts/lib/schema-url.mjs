@@ -15,7 +15,7 @@ export const UPSTREAM_PACKAGE_NAME = "@mobile-surfaces/surface-contracts";
 // appears in `schemaVersion: "<n>"` across fixtures, docs, README snippets,
 // and the CLI template tarball. Bumped together with the package major when
 // the schema's discriminator literal changes.
-export const CANONICAL_SCHEMA_VERSION = "4";
+export const CANONICAL_SCHEMA_VERSION = "5";
 
 export function readSurfaceContractsPackageJson() {
   return JSON.parse(

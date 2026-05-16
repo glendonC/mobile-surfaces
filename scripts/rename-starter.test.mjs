@@ -264,7 +264,7 @@ test("SKIP_PATH_PREFIXES excludes the App Group codegen output", () => {
   );
   assert.ok(
     SKIP_PATH_PREFIXES.includes(
-      "apps/mobile/targets/widget/_shared/MobileSurfacesAppGroup.swift",
+      "apps/mobile/targets/_shared/MobileSurfacesAppGroup.swift",
     ),
     "SKIP_PATH_PREFIXES must skip MobileSurfacesAppGroup.swift",
   );
@@ -274,7 +274,7 @@ test("walkTextFiles skips the App Group generated files", () => {
   const dir = makeFixtureRepo({
     "apps/mobile/src/generated/appGroup.ts":
       `export const APP_GROUP = "group.com.example.mobilesurfaces" as const;\n`,
-    "apps/mobile/targets/widget/_shared/MobileSurfacesAppGroup.swift":
+    "apps/mobile/targets/_shared/MobileSurfacesAppGroup.swift":
       `enum MobileSurfacesAppGroup { static let identifier = "group.com.example.mobilesurfaces" }\n`,
     "apps/mobile/src/index.ts":
       `export const x = "@mobile-surfaces/surface-contracts";\n`,
@@ -287,7 +287,7 @@ test("walkTextFiles skips the App Group generated files", () => {
     );
     assert.ok(
       !found.has(
-        "apps/mobile/targets/widget/_shared/MobileSurfacesAppGroup.swift",
+        "apps/mobile/targets/_shared/MobileSurfacesAppGroup.swift",
       ),
       "MobileSurfacesAppGroup.swift should be skipped",
     );

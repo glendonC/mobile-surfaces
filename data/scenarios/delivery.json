@@ -9,7 +9,7 @@
       "label": "1. Queued at depot",
       "snapshots": {
         "liveActivity": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "liveActivity",
           "id": "scenario-delivery-queued-la",
           "surfaceId": "scenario-delivery",
@@ -30,7 +30,7 @@
           }
         },
         "widget": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "widget",
           "id": "scenario-delivery-queued-w",
           "surfaceId": "scenario-delivery",
@@ -46,7 +46,7 @@
           }
         },
         "control": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "control",
           "id": "scenario-delivery-queued-c",
           "surfaceId": "scenario-delivery",
@@ -61,7 +61,7 @@
           }
         },
         "lockAccessory": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "lockAccessory",
           "id": "scenario-delivery-queued-la-acc",
           "surfaceId": "scenario-delivery",
@@ -76,7 +76,7 @@
           }
         },
         "standby": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "standby",
           "id": "scenario-delivery-queued-sb",
           "surfaceId": "scenario-delivery",
@@ -98,7 +98,7 @@
       "label": "2. Out for delivery",
       "snapshots": {
         "liveActivity": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "liveActivity",
           "id": "scenario-delivery-out-la",
           "surfaceId": "scenario-delivery",
@@ -119,7 +119,7 @@
           }
         },
         "widget": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "widget",
           "id": "scenario-delivery-out-w",
           "surfaceId": "scenario-delivery",
@@ -135,7 +135,7 @@
           }
         },
         "control": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "control",
           "id": "scenario-delivery-out-c",
           "surfaceId": "scenario-delivery",
@@ -150,7 +150,7 @@
           }
         },
         "lockAccessory": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "lockAccessory",
           "id": "scenario-delivery-out-la-acc",
           "surfaceId": "scenario-delivery",
@@ -165,7 +165,7 @@
           }
         },
         "standby": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "standby",
           "id": "scenario-delivery-out-sb",
           "surfaceId": "scenario-delivery",
@@ -187,7 +187,7 @@
       "label": "3. Arrived",
       "snapshots": {
         "liveActivity": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "liveActivity",
           "id": "scenario-delivery-arrived-la",
           "surfaceId": "scenario-delivery",
@@ -207,7 +207,7 @@
           }
         },
         "widget": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "widget",
           "id": "scenario-delivery-arrived-w",
           "surfaceId": "scenario-delivery",
@@ -223,7 +223,7 @@
           }
         },
         "control": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "control",
           "id": "scenario-delivery-arrived-c",
           "surfaceId": "scenario-delivery",
@@ -238,7 +238,7 @@
           }
         },
         "lockAccessory": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "lockAccessory",
           "id": "scenario-delivery-arrived-la-acc",
           "surfaceId": "scenario-delivery",
@@ -253,7 +253,7 @@
           }
         },
         "standby": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "standby",
           "id": "scenario-delivery-arrived-sb",
           "surfaceId": "scenario-delivery",

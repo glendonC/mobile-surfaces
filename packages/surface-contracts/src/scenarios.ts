@@ -41,7 +41,7 @@ export const surfaceScenarios = {
         "label": "1. Queued at depot",
         "snapshots": {
           "liveActivity": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "liveActivity",
             "id": "scenario-delivery-queued-la",
             "surfaceId": "scenario-delivery",
@@ -62,7 +62,7 @@ export const surfaceScenarios = {
             }
           },
           "widget": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "widget",
             "id": "scenario-delivery-queued-w",
             "surfaceId": "scenario-delivery",
@@ -78,7 +78,7 @@ export const surfaceScenarios = {
             }
           },
           "control": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "control",
             "id": "scenario-delivery-queued-c",
             "surfaceId": "scenario-delivery",
@@ -93,7 +93,7 @@ export const surfaceScenarios = {
             }
           },
           "lockAccessory": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "lockAccessory",
             "id": "scenario-delivery-queued-la-acc",
             "surfaceId": "scenario-delivery",
@@ -108,7 +108,7 @@ export const surfaceScenarios = {
             }
           },
           "standby": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "standby",
             "id": "scenario-delivery-queued-sb",
             "surfaceId": "scenario-delivery",
@@ -130,7 +130,7 @@ export const surfaceScenarios = {
         "label": "2. Out for delivery",
         "snapshots": {
           "liveActivity": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "liveActivity",
             "id": "scenario-delivery-out-la",
             "surfaceId": "scenario-delivery",
@@ -151,7 +151,7 @@ export const surfaceScenarios = {
             }
           },
           "widget": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "widget",
             "id": "scenario-delivery-out-w",
             "surfaceId": "scenario-delivery",
@@ -167,7 +167,7 @@ export const surfaceScenarios = {
             }
           },
           "control": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "control",
             "id": "scenario-delivery-out-c",
             "surfaceId": "scenario-delivery",
@@ -182,7 +182,7 @@ export const surfaceScenarios = {
             }
           },
           "lockAccessory": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "lockAccessory",
             "id": "scenario-delivery-out-la-acc",
             "surfaceId": "scenario-delivery",
@@ -197,7 +197,7 @@ export const surfaceScenarios = {
             }
           },
           "standby": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "standby",
             "id": "scenario-delivery-out-sb",
             "surfaceId": "scenario-delivery",
@@ -219,7 +219,7 @@ export const surfaceScenarios = {
         "label": "3. Arrived",
         "snapshots": {
           "liveActivity": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "liveActivity",
             "id": "scenario-delivery-arrived-la",
             "surfaceId": "scenario-delivery",
@@ -239,7 +239,7 @@ export const surfaceScenarios = {
             }
           },
           "widget": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "widget",
             "id": "scenario-delivery-arrived-w",
             "surfaceId": "scenario-delivery",
@@ -255,7 +255,7 @@ export const surfaceScenarios = {
             }
           },
           "control": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "control",
             "id": "scenario-delivery-arrived-c",
             "surfaceId": "scenario-delivery",
@@ -270,7 +270,7 @@ export const surfaceScenarios = {
             }
           },
           "lockAccessory": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "lockAccessory",
             "id": "scenario-delivery-arrived-la-acc",
             "surfaceId": "scenario-delivery",
@@ -285,7 +285,7 @@ export const surfaceScenarios = {
             }
           },
           "standby": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "standby",
             "id": "scenario-delivery-arrived-sb",
             "surfaceId": "scenario-delivery",
@@ -314,7 +314,7 @@ export const surfaceScenarios = {
         "label": "1. Tests running",
         "snapshots": {
           "liveActivity": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "liveActivity",
             "id": "scenario-build-running-la",
             "surfaceId": "scenario-build",
@@ -335,7 +335,7 @@ export const surfaceScenarios = {
             }
           },
           "widget": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "widget",
             "id": "scenario-build-running-w",
             "surfaceId": "scenario-build",
@@ -351,7 +351,7 @@ export const surfaceScenarios = {
             }
           },
           "control": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "control",
             "id": "scenario-build-running-c",
             "surfaceId": "scenario-build",
@@ -366,7 +366,7 @@ export const surfaceScenarios = {
             }
           },
           "lockAccessory": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "lockAccessory",
             "id": "scenario-build-running-la-acc",
             "surfaceId": "scenario-build",
@@ -381,7 +381,7 @@ export const surfaceScenarios = {
             }
           },
           "standby": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "standby",
             "id": "scenario-build-running-sb",
             "surfaceId": "scenario-build",
@@ -403,7 +403,7 @@ export const surfaceScenarios = {
         "label": "2. Tests failing",
         "snapshots": {
           "liveActivity": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "liveActivity",
             "id": "scenario-build-failing-la",
             "surfaceId": "scenario-build",
@@ -424,7 +424,7 @@ export const surfaceScenarios = {
             }
           },
           "widget": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "widget",
             "id": "scenario-build-failing-w",
             "surfaceId": "scenario-build",
@@ -440,7 +440,7 @@ export const surfaceScenarios = {
             }
           },
           "control": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "control",
             "id": "scenario-build-failing-c",
             "surfaceId": "scenario-build",
@@ -455,7 +455,7 @@ export const surfaceScenarios = {
             }
           },
           "lockAccessory": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "lockAccessory",
             "id": "scenario-build-failing-la-acc",
             "surfaceId": "scenario-build",
@@ -470,7 +470,7 @@ export const surfaceScenarios = {
             }
           },
           "standby": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "standby",
             "id": "scenario-build-failing-sb",
             "surfaceId": "scenario-build",
@@ -492,7 +492,7 @@ export const surfaceScenarios = {
         "label": "3. All green",
         "snapshots": {
           "liveActivity": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "liveActivity",
             "id": "scenario-build-green-la",
             "surfaceId": "scenario-build",
@@ -512,7 +512,7 @@ export const surfaceScenarios = {
             }
           },
           "widget": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "widget",
             "id": "scenario-build-green-w",
             "surfaceId": "scenario-build",
@@ -528,7 +528,7 @@ export const surfaceScenarios = {
             }
           },
           "control": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "control",
             "id": "scenario-build-green-c",
             "surfaceId": "scenario-build",
@@ -543,7 +543,7 @@ export const surfaceScenarios = {
             }
           },
           "lockAccessory": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "lockAccessory",
             "id": "scenario-build-green-la-acc",
             "surfaceId": "scenario-build",
@@ -558,7 +558,7 @@ export const surfaceScenarios = {
             }
           },
           "standby": {
-            "schemaVersion": "4",
+            "schemaVersion": "5",
             "kind": "standby",
             "id": "scenario-build-green-sb",
             "surfaceId": "scenario-build",

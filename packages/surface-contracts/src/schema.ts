@@ -1,16 +1,26 @@
 import { z } from "zod";
 import {
   liveSurfaceSnapshotV3,
+  liveSurfaceSnapshotV4,
+  migrateV3ToV4,
   type LiveSurfaceSnapshotV3,
-} from "./schema-v3.ts";
+  type LiveSurfaceSnapshotV4,
+} from "./schema-v4.ts";
+import { NOTIFICATION_CATEGORY_IDS } from "./notificationCategories.ts";
 
-export { liveSurfaceSnapshotV3, type LiveSurfaceSnapshotV3 };
+export {
+  liveSurfaceSnapshotV3,
+  liveSurfaceSnapshotV4,
+  migrateV3ToV4,
+  type LiveSurfaceSnapshotV3,
+  type LiveSurfaceSnapshotV4,
+};
 
 // ---------------------------------------------------------------------------
 // Enums (shared across base, slices, and projection-output schemas).
 // Each `.describe()` adds semantic intent beyond the value list, which is
 // what an LLM emitting structured output (or a human reading the published
-// JSON Schema at unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json)
+// JSON Schema at unpkg.com/@mobile-surfaces/surface-contracts@6.0/schema.json)
 // needs to use the value correctly.
 // ---------------------------------------------------------------------------
 
@@ -66,6 +76,19 @@ export type LiveSurfaceLockAccessoryFamily = z.infer<
 export const liveSurfaceStandbyPresentation = z.enum(["card", "night"]);
 export type LiveSurfaceStandbyPresentation = z.infer<
   typeof liveSurfaceStandbyPresentation
+>;
+
+export const liveSurfaceInterruptionLevel = z
+  .enum(["passive", "active", "timeSensitive", "critical"])
+  .describe(
+    "iOS aps.interruption-level (iOS 15+). passive = no sound, no banner; " +
+      "active (system default) = standard delivery; timeSensitive = breaks " +
+      "through Focus modes; critical = bypasses Do Not Disturb (requires " +
+      "an Apple-granted entitlement). Omit the field to inherit the system " +
+      "default rather than echoing 'active' on the wire.",
+  );
+export type LiveSurfaceInterruptionLevel = z.infer<
+  typeof liveSurfaceInterruptionLevel
 >;
 
 // ---------------------------------------------------------------------------
@@ -287,16 +310,31 @@ export const liveSurfaceNotificationSlice = z
         "Notification title. Maps directly to aps.alert.title in the APNs " +
           "envelope.",
       ),
+    subtitle: z
+      .string()
+      .optional()
+      .describe(
+        "Notification subtitle. Maps to aps.alert.subtitle. Renders between " +
+          "the title and body on iOS 10+.",
+      ),
     body: z
       .string()
       .describe("Notification body. Maps directly to aps.alert.body."),
     deepLink: deepLinkSchema,
     category: z
-      .string()
+      .enum(NOTIFICATION_CATEGORY_IDS)
       .optional()
       .describe(
         "UNNotificationCategory identifier. Selects which set of action " +
-          "buttons the system shows. Maps to aps.category.",
+          "buttons the system shows AND - when a UNNotificationContentExtension " +
+          "is registered - decides whether the extension's custom view renders. " +
+          "Maps to aps.category. The set of legal values is the registry in " +
+          "packages/surface-contracts/src/notificationCategories.ts; the " +
+          "schema rejects values not declared there so the wire stays in " +
+          "lockstep with the categories the host registers and the extension " +
+          "Info.plist routes on. Producers intending to route into a content " +
+          "extension SHOULD validate against liveSurfaceNotificationSliceForExtension " +
+          "(category required) instead of the base slice.",
       ),
     threadId: z
       .string()
@@ -304,10 +342,52 @@ export const liveSurfaceNotificationSlice = z
       .describe(
         "Thread identifier for notification grouping. Maps to aps.thread-id.",
       ),
+    interruptionLevel: liveSurfaceInterruptionLevel.optional().describe(
+      "iOS aps.interruption-level (iOS 15+). Omitted = system default " +
+        "(active). Use timeSensitive for notifications that must break " +
+        "through Focus modes (e.g. delivery-arrived alerts).",
+    ),
+    relevanceScore: z
+      .number()
+      .min(0)
+      .max(1)
+      .optional()
+      .describe(
+        "iOS aps.relevance-score (0..1, iOS 15+). Drives ranking inside the " +
+          "grouped-summary Notification Center view. Higher = more prominent.",
+      ),
+    targetContentId: z
+      .string()
+      .optional()
+      .describe(
+        "iOS aps.target-content-id. Routes the tap to a specific scene/" +
+          "window identifier the host app advertises via " +
+          "UISceneActivationConditions.",
+      ),
   })
   .strict();
 export type LiveSurfaceNotificationSlice = z.infer<
   typeof liveSurfaceNotificationSlice
+>;
+
+/**
+ * Producer-side refinement for the notification slice. The base slice keeps
+ * `category` optional because plain transactional alerts (no custom UI, no
+ * action buttons) do not require it. Producers intending to route into a
+ * UNNotificationContentExtension MUST validate outgoing snapshots against
+ * this refinement: iOS only invokes the extension when aps.category matches
+ * the extension's UNNotificationExtensionCategory Info.plist key, and
+ * omitting category silently falls back to the default system chrome.
+ *
+ * Use at the producer boundary, never at the consumer boundary. Consumers
+ * still parse the loose schema and decide routing at runtime.
+ */
+export const liveSurfaceNotificationSliceForExtension =
+  liveSurfaceNotificationSlice.extend({
+    category: z.string().min(1),
+  });
+export type LiveSurfaceNotificationSliceForExtension = z.infer<
+  typeof liveSurfaceNotificationSliceForExtension
 >;
 
 // ---------------------------------------------------------------------------
@@ -315,15 +395,17 @@ export type LiveSurfaceNotificationSlice = z.infer<
 //
 // Every cross-kind rendering field that v3 carried in the base (primaryText,
 // secondaryText, modeLabel, contextLabel, statusLine, actionLabel, progress,
-// deepLink) moved into per-kind slices for v4. The base only carries fields
-// every kind genuinely shares.
+// deepLink) moved into per-kind slices for v4. v5 keeps that base unchanged
+// and adds notification-only optional fields (subtitle / interruptionLevel /
+// relevanceScore / targetContentId) inside the notification slice; see the
+// slice definitions above.
 // ---------------------------------------------------------------------------
 const liveSurfaceSnapshotBaseShape = {
-  schemaVersion: z.literal("4").describe(
+  schemaVersion: z.literal("5").describe(
     "Wire-format generation. Required; producers MUST set this explicitly. " +
       "Consumers parse against the version they understand; cross-version " +
-      "payloads are upgraded via migrateV3ToV4 + safeParseAnyVersion before " +
-      "parsing.",
+      "payloads are upgraded via migrateV4ToV5 (and transitively " +
+      "migrateV3ToV4) inside safeParseAnyVersion before parsing.",
   ),
   id: z.string().min(1).describe(
     "Stable, idempotent snapshot identifier. The same logical state produced " +
@@ -550,6 +632,37 @@ export type LiveSurfaceStandbyEntryOutput = z.infer<
   typeof liveSurfaceStandbyEntry
 >;
 
+/**
+ * Sidecar block inside the notification APNs payload's `liveSurface` field.
+ * Hoisted out of the envelope so MS036's check-surface-snapshots gate can
+ * target it directly and so a Codable mirror on the on-device extension can
+ * decode `notification.request.content.userInfo.liveSurface` against the
+ * same shape the wire emits.
+ *
+ * The `kind: "surface_snapshot"` literal aligns with the liveActivity alert
+ * payload's sidecar discriminator (`liveActivityAlertPayload.liveSurface.kind`
+ * in `@mobile-surfaces/push`). v4 emitted `"surface_notification"`; v5
+ * realigns so on-device routing code can switch on one literal regardless of
+ * which Mobile Surfaces wrapper produced the userInfo. The sidecar
+ * intentionally carries minimal data; everything else the extension renders
+ * (title, body, subtitle, etc.) is available on `notification.request.content`
+ * via standard accessors. See `liveSurfaceNotificationContentPayload` for the
+ * full envelope.
+ */
+export const liveSurfaceNotificationContentEntry = z
+  .object({
+    kind: z.literal("surface_snapshot"),
+    snapshotId: z.string(),
+    surfaceId: z.string(),
+    state: liveSurfaceState,
+    deepLink: z.string(),
+    category: z.string().optional(),
+  })
+  .strict();
+export type LiveSurfaceNotificationContentEntryOutput = z.infer<
+  typeof liveSurfaceNotificationContentEntry
+>;
+
 export const liveSurfaceNotificationContentPayload = z
   .object({
     aps: z
@@ -557,23 +670,19 @@ export const liveSurfaceNotificationContentPayload = z
         alert: z
           .object({
             title: z.string(),
+            subtitle: z.string().optional(),
             body: z.string(),
           })
           .strict(),
         sound: z.literal("default"),
         category: z.string().optional(),
         "thread-id": z.string().optional(),
+        "interruption-level": liveSurfaceInterruptionLevel.optional(),
+        "relevance-score": z.number().min(0).max(1).optional(),
+        "target-content-id": z.string().optional(),
       })
       .strict(),
-    liveSurface: z
-      .object({
-        kind: z.literal("surface_notification"),
-        snapshotId: z.string(),
-        surfaceId: z.string(),
-        state: liveSurfaceState,
-        deepLink: z.string(),
-      })
-      .strict(),
+    liveSurface: liveSurfaceNotificationContentEntry,
   })
   .strict();
 export type LiveSurfaceNotificationContentPayloadOutput = z.infer<
@@ -606,8 +715,8 @@ export const liveSurfaceKinds = liveSurfaceKind.options as unknown as readonly [
 ];
 
 /**
- * Strict v4 parser. Throws on any payload that does not match the v4
- * discriminated union. Does NOT auto-migrate v3 payloads — for that, use
+ * Strict v5 parser. Throws on any payload that does not match the v5
+ * discriminated union. Does NOT auto-migrate v3/v4 payloads — for that, use
  * {@link safeParseAnyVersion}.
  */
 export function assertSnapshot(value: unknown): LiveSurfaceSnapshot {
@@ -615,8 +724,8 @@ export function assertSnapshot(value: unknown): LiveSurfaceSnapshot {
 }
 
 /**
- * Strict v4 safe-parse. Returns Zod's standard SafeParseReturnType. Does NOT
- * auto-migrate v3 payloads — for that, use {@link safeParseAnyVersion}.
+ * Strict v5 safe-parse. Returns Zod's standard SafeParseReturnType. Does NOT
+ * auto-migrate v3/v4 payloads — for that, use {@link safeParseAnyVersion}.
  */
 export function safeParseSnapshot(value: unknown) {
   return liveSurfaceSnapshot.safeParse(value);
@@ -625,7 +734,7 @@ export function safeParseSnapshot(value: unknown) {
 export type SafeParseAnyVersionSuccess = {
   success: true;
   data: LiveSurfaceSnapshot;
-  /** Set when the input parsed as v3 and was migrated to v4. */
+  /** Set when the input parsed as v3 or v4 and was migrated to v5. */
   deprecationWarning?: string;
 };
 
@@ -639,163 +748,85 @@ export type SafeParseAnyVersionResult =
   | SafeParseAnyVersionFailure;
 
 /**
- * Pure v3->v4 transform. Always succeeds for a parsed v3 payload.
+ * Pure v4->v5 transform. Always succeeds for a parsed v4 payload.
  *
- * The base shape's rendering fields (primaryText, secondaryText, modeLabel,
- * contextLabel, statusLine, actionLabel, progress, deepLink) move into the
- * per-kind slice. v3's modeLabel/contextLabel/statusLine on non-liveActivity
- * kinds are dropped because no consumer outside Lock-Screen rendering read
- * them. v3's actionLabel is preserved only as the control slice's `label`
- * (matching v3's projection behavior); on other kinds it is dropped.
- *
- * v3's `progress` on `control` is dropped (the fictional `1` that motivated
- * this refactor). v3's `progress` on `lockAccessory` is also dropped from the
- * wire shape; v4 sources the gauge only from `lockAccessory.gaugeValue`.
+ * v5's only wire-shape addition is four optional fields on the notification
+ * slice (subtitle, interruptionLevel, relevanceScore, targetContentId).
+ * Every other kind is unchanged. A v4 snapshot promotes to v5 by bumping the
+ * schemaVersion literal; no field renames, no slice restructure. The breaking
+ * change v5 carries lives in the projection-output sidecar
+ * (`kind: "surface_notification"` -> `"surface_snapshot"` in
+ * `liveSurfaceNotificationContentEntry`), which is consumed by
+ * `toNotificationContentPayload`, not the snapshot itself.
  */
-export function migrateV3ToV4(v3: LiveSurfaceSnapshotV3): LiveSurfaceSnapshot {
-  const base = {
-    schemaVersion: "4" as const,
-    id: v3.id,
-    surfaceId: v3.surfaceId,
-    updatedAt: v3.updatedAt,
-    state: v3.state,
-  };
-  switch (v3.kind) {
-    case "liveActivity":
-      return {
-        ...base,
-        kind: "liveActivity",
-        liveActivity: {
-          title: v3.primaryText,
-          body: v3.secondaryText,
-          progress: v3.progress,
-          deepLink: v3.deepLink,
-          modeLabel: v3.modeLabel,
-          contextLabel: v3.contextLabel,
-          statusLine: v3.statusLine,
-          ...(v3.actionLabel ? { actionLabel: v3.actionLabel } : {}),
-          stage: v3.liveActivity.stage,
-          estimatedSeconds: v3.liveActivity.estimatedSeconds,
-          morePartsCount: v3.liveActivity.morePartsCount,
-        },
-      };
-    case "widget":
-      return {
-        ...base,
-        kind: "widget",
-        widget: {
-          title: v3.primaryText,
-          body: v3.secondaryText,
-          progress: v3.progress,
-          deepLink: v3.deepLink,
-          ...(v3.widget.family ? { family: v3.widget.family } : {}),
-          ...(v3.widget.reloadPolicy
-            ? { reloadPolicy: v3.widget.reloadPolicy }
-            : {}),
-        },
-      };
-    case "control":
-      // primaryText becomes the label fallback; v3's actionLabel takes
-      // precedence when non-empty (matches v3 toControlValueProvider behavior).
-      return {
-        ...base,
-        kind: "control",
-        control: {
-          label: v3.actionLabel?.length ? v3.actionLabel : v3.primaryText,
-          deepLink: v3.deepLink,
-          controlKind: v3.control.controlKind,
-          ...(v3.control.state !== undefined
-            ? { state: v3.control.state }
-            : {}),
-          ...(v3.control.intent ? { intent: v3.control.intent } : {}),
-        },
-      };
-    case "lockAccessory":
-      return {
-        ...base,
-        kind: "lockAccessory",
-        lockAccessory: {
-          title: v3.primaryText,
-          deepLink: v3.deepLink,
-          family: v3.lockAccessory.family,
-          // v3 fallback from snapshot.progress was a projection-helper
-          // concern, not a wire shape. The migration preserves only what was
-          // on the wire.
-          ...(v3.lockAccessory.gaugeValue !== undefined
-            ? { gaugeValue: v3.lockAccessory.gaugeValue }
-            : {}),
-          ...(v3.lockAccessory.shortText
-            ? { shortText: v3.lockAccessory.shortText }
-            : {}),
-        },
-      };
-    case "standby":
-      return {
-        ...base,
-        kind: "standby",
-        standby: {
-          title: v3.primaryText,
-          body: v3.secondaryText,
-          progress: v3.progress,
-          deepLink: v3.deepLink,
-          presentation: v3.standby.presentation,
-          ...(v3.standby.tint ? { tint: v3.standby.tint } : {}),
-        },
-      };
-    case "notification":
-      return {
-        ...base,
-        kind: "notification",
-        notification: {
-          title: v3.primaryText,
-          body: v3.secondaryText,
-          deepLink: v3.deepLink,
-          ...(v3.notification.category
-            ? { category: v3.notification.category }
-            : {}),
-          ...(v3.notification.threadId
-            ? { threadId: v3.notification.threadId }
-            : {}),
-        },
-      };
-  }
+export function migrateV4ToV5(
+  v4: LiveSurfaceSnapshotV4,
+): LiveSurfaceSnapshot {
+  return { ...v4, schemaVersion: "5" as const };
 }
 
+const V4_DEPRECATION_WARNING =
+  "liveSurfaceSnapshot v4 is deprecated and will be removed in " +
+  "@mobile-surfaces/surface-contracts@7.0. Migrate producers to " +
+  'schemaVersion "5"; the snapshot wire shape is unchanged but the ' +
+  "notification projection-output sidecar's kind discriminator " +
+  'aligned to "surface_snapshot" (see schema-migration docs).';
+
+const V3_DEPRECATION_WARNING =
+  "liveSurfaceSnapshot v3 is deprecated and will be removed in " +
+  "@mobile-surfaces/surface-contracts@6.0. Migrate producers to " +
+  'schemaVersion "5"; the rendering fields moved from the base shape ' +
+  "into per-kind slices in v4 and the notification slice gained " +
+  "optional subtitle/interruptionLevel/relevanceScore/targetContentId " +
+  "fields in v5 (see schema-migration docs).";
+
 /**
- * Multi-version safe-parse. Tries v4 (strict) first; on failure, tries v3
- * (frozen) and migrates the result to v4. Returns the v4 ZodError when
- * both attempts fail so callers see the most relevant message.
+ * Multi-version safe-parse. Tries v5 (strict) first; on failure, tries v4
+ * (frozen, migrates via migrateV4ToV5); on failure, tries v3 (frozen,
+ * chains migrateV3ToV4 + migrateV4ToV5). Returns the v5 ZodError when every
+ * attempt fails so callers see the most relevant message.
  *
- * On v3->v4 migration, the result carries a `deprecationWarning` so
- * telemetry can surface producers still on the old shape; see
+ * On v3->v5 or v4->v5 migration, the result carries a `deprecationWarning`
+ * so telemetry can surface producers still on the old shape; see
  * https://mobile-surfaces.com/docs/observability for the recommended log.
  *
  * The v2 codec was dropped at 5.0.0 per the v3 RFC commitment. Consumers
  * still emitting v2 must run their payloads through
  * @mobile-surfaces/surface-contracts@4 to migrate to v3 first, then this
- * package to reach v4.
+ * package to reach v5.
  */
 export function safeParseAnyVersion(value: unknown): SafeParseAnyVersionResult {
-  const v4 = liveSurfaceSnapshot.safeParse(value);
-  if (v4.success) return { success: true, data: v4.data };
+  const v5 = liveSurfaceSnapshot.safeParse(value);
+  if (v5.success) return { success: true, data: v5.data };
 
-  const v3 = liveSurfaceSnapshotV3.safeParse(value);
-  if (v3.success) {
-    const migrated = migrateV3ToV4(v3.data);
+  const v4 = liveSurfaceSnapshotV4.safeParse(value);
+  if (v4.success) {
+    const migrated = migrateV4ToV5(v4.data);
     const recheck = liveSurfaceSnapshot.safeParse(migrated);
     if (recheck.success) {
       return {
         success: true,
         data: recheck.data,
-        deprecationWarning:
-          "liveSurfaceSnapshot v3 is deprecated and will be removed in " +
-          "@mobile-surfaces/surface-contracts@6.0. Migrate producers to " +
-          "schemaVersion \"4\"; the rendering fields moved from the base " +
-          "shape into per-kind slices (see schema-migration docs).",
+        deprecationWarning: V4_DEPRECATION_WARNING,
       };
     }
     return { success: false, error: recheck.error };
   }
-  // Return v4 error: most relevant to a producer targeting current.
-  return { success: false, error: v4.error };
+
+  const v3 = liveSurfaceSnapshotV3.safeParse(value);
+  if (v3.success) {
+    const migratedV4 = migrateV3ToV4(v3.data);
+    const migratedV5 = migrateV4ToV5(migratedV4);
+    const recheck = liveSurfaceSnapshot.safeParse(migratedV5);
+    if (recheck.success) {
+      return {
+        success: true,
+        data: recheck.data,
+        deprecationWarning: V3_DEPRECATION_WARNING,
+      };
+    }
+    return { success: false, error: recheck.error };
+  }
+  // Return v5 error: most relevant to a producer targeting current.
+  return { success: false, error: v5.error };
 }

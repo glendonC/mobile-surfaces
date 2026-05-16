@@ -1,14 +1,28 @@
 ---
 title: "Schema Migration"
-description: "v3 to v4 codec, deprecation timeline, JSON Schema $id, future evolution policy."
+description: "v3/v4 codec chain, deprecation timeline, JSON Schema $id, future evolution policy."
 order: 80
 group: "Build"
 ---
 # Schema Migration
 
-`LiveSurfaceSnapshot` is at `schemaVersion: "4"`. Version `4` collapses the base shape to identity-only (`id`, `surfaceId`, `kind`, `updatedAt`, `state`) and moves every rendering field into the per-kind slice that uses it. The notification slice renames `primaryText`/`secondaryText` to `title`/`body` to match the APNs alert shape it projects into; the control slice gains a required `label`. The v2 codec was sunset at 5.0 per the v3 RFC commitment; only v3 payloads migrate through `safeParseAnyVersion` now. This page covers what changed at v4, how to migrate stored payloads from v3, how to handle in-flight payloads at the edge, and the policy for future evolution.
+`LiveSurfaceSnapshot` is at `schemaVersion: "5"`. Version 5 is additive on the snapshot wire shape (four new optional fields on the notification slice — `subtitle`, `interruptionLevel`, `relevanceScore`, `targetContentId`) and realigns the projection-output sidecar's discriminator from `"surface_notification"` to `"surface_snapshot"` so on-device routing code can switch on one literal regardless of which Mobile Surfaces wrapper produced the userInfo. `safeParseAnyVersion` chains v5 -> v4 -> v3; the v3 codec is removed at 6.0 (still in 5.x scope; see below for the v6→v7 timeline). The v2 codec was sunset at 5.0 per the v3 RFC commitment. This page covers what changed at v5, how to migrate stored payloads from earlier versions, how to handle in-flight payloads at the edge, and the policy for future evolution.
 
-## What changed in v4
+## What changed in v5
+
+| Concern | v4 | v5 |
+| --- | --- | --- |
+| `schemaVersion` | `"4"` | `"5"` |
+| Notification slice | `title`, `body`, `deepLink`, `category?`, `threadId?` | adds optional `subtitle`, `interruptionLevel`, `relevanceScore`, `targetContentId` (all `aps`-mapped, iOS 17.2+) |
+| `notification.category` typing | `z.string().optional()` | `z.enum([...NOTIFICATION_CATEGORY_IDS]).optional()` — values come from `packages/surface-contracts/src/notificationCategories.ts`, enforced by MS037 codegen |
+| Notification projection sidecar | `kind: "surface_notification"` | `kind: "surface_snapshot"` (aligned with `liveActivityAlertPayload`'s sidecar) |
+| `liveSurfaceNotificationContentEntry` | inline anonymous object | hoisted, named, MS036-parity-checked |
+| `$id` | `https://unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json` | `https://unpkg.com/@mobile-surfaces/surface-contracts@6.0/schema.json` |
+| v3 codec | live; sunset at 6.0 | live; sunset at 6.0 (unchanged) |
+
+The breaking change v5 carries lives in the projection-output sidecar, not the snapshot. A v4 snapshot promotes to v5 by bumping the literal; no field renames, no slice restructure. Producers that hand-wrote APNs envelopes against `kind: "surface_notification"` will need to update; everyone projecting through `toNotificationContentPayload` gets the new shape for free.
+
+## What changed in v4 (historical)
 
 | Concern | v3 | v4 |
 | --- | --- | --- |

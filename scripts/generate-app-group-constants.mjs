@@ -5,7 +5,7 @@
 //
 // Three output files are written, each with a header pointing back at the
 // source and the regen command:
-//   - apps/mobile/targets/widget/_shared/MobileSurfacesAppGroup.swift
+//   - apps/mobile/targets/_shared/MobileSurfacesAppGroup.swift
 //   - apps/mobile/src/generated/appGroup.ts
 //   - apps/mobile/targets/widget/generated.entitlements
 //
@@ -35,7 +35,7 @@ const { values } = parseArgs({
 const TOOL = "generate-app-group-constants";
 const APP_JSON = path.resolve("apps/mobile/app.json");
 const SWIFT_OUT = path.resolve(
-  "apps/mobile/targets/widget/_shared/MobileSurfacesAppGroup.swift",
+  "apps/mobile/targets/_shared/MobileSurfacesAppGroup.swift",
 );
 const TS_OUT = path.resolve("apps/mobile/src/generated/appGroup.ts");
 const ENTITLEMENTS_OUT = path.resolve(

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@6.0/schema.json",
+  "schemaVersion": "5",
+  "kind": "notification",
+  "id": "fixture-notification-time-sensitive",
+  "surfaceId": "surface-notification-time-sensitive",
+  "updatedAt": "2026-05-13T11:30:00.000Z",
+  "state": "attention",
+  "notification": {
+    "title": "Driver is two minutes away",
+    "body": "Please be ready at the curb. We won't be able to wait.",
+    "deepLink": "mobilesurfaces://surface/surface-notification-time-sensitive",
+    "category": "surface-update",
+    "threadId": "delivery-3300",
+    "interruptionLevel": "timeSensitive"
+  }
+}

@@ -9,7 +9,7 @@
       "label": "1. Tests running",
       "snapshots": {
         "liveActivity": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "liveActivity",
           "id": "scenario-build-running-la",
           "surfaceId": "scenario-build",
@@ -30,7 +30,7 @@
           }
         },
         "widget": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "widget",
           "id": "scenario-build-running-w",
           "surfaceId": "scenario-build",
@@ -46,7 +46,7 @@
           }
         },
         "control": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "control",
           "id": "scenario-build-running-c",
           "surfaceId": "scenario-build",
@@ -61,7 +61,7 @@
           }
         },
         "lockAccessory": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "lockAccessory",
           "id": "scenario-build-running-la-acc",
           "surfaceId": "scenario-build",
@@ -76,7 +76,7 @@
           }
         },
         "standby": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "standby",
           "id": "scenario-build-running-sb",
           "surfaceId": "scenario-build",
@@ -98,7 +98,7 @@
       "label": "2. Tests failing",
       "snapshots": {
         "liveActivity": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "liveActivity",
           "id": "scenario-build-failing-la",
           "surfaceId": "scenario-build",
@@ -119,7 +119,7 @@
           }
         },
         "widget": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "widget",
           "id": "scenario-build-failing-w",
           "surfaceId": "scenario-build",
@@ -135,7 +135,7 @@
           }
         },
         "control": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "control",
           "id": "scenario-build-failing-c",
           "surfaceId": "scenario-build",
@@ -150,7 +150,7 @@
           }
         },
         "lockAccessory": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "lockAccessory",
           "id": "scenario-build-failing-la-acc",
           "surfaceId": "scenario-build",
@@ -165,7 +165,7 @@
           }
         },
         "standby": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "standby",
           "id": "scenario-build-failing-sb",
           "surfaceId": "scenario-build",
@@ -187,7 +187,7 @@
       "label": "3. All green",
       "snapshots": {
         "liveActivity": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "liveActivity",
           "id": "scenario-build-green-la",
           "surfaceId": "scenario-build",
@@ -207,7 +207,7 @@
           }
         },
         "widget": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "widget",
           "id": "scenario-build-green-w",
           "surfaceId": "scenario-build",
@@ -223,7 +223,7 @@
           }
         },
         "control": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "control",
           "id": "scenario-build-green-c",
           "surfaceId": "scenario-build",
@@ -238,7 +238,7 @@
           }
         },
         "lockAccessory": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "lockAccessory",
           "id": "scenario-build-green-la-acc",
           "surfaceId": "scenario-build",
@@ -253,7 +253,7 @@
           }
         },
         "standby": {
-          "schemaVersion": "4",
+          "schemaVersion": "5",
           "kind": "standby",
           "id": "scenario-build-green-sb",
           "surfaceId": "scenario-build",

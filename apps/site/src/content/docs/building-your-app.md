@@ -73,7 +73,7 @@ import type { Delivery } from "../../types/delivery";
 
 export function deliveryToLiveActivity(d: Delivery): LiveSurfaceSnapshot {
   return {
-    schemaVersion: "4",
+    schemaVersion: "5",
     kind: "liveActivity",
     id: `delivery-${d.id}-${d.step}`,
     surfaceId: `delivery-${d.id}`,

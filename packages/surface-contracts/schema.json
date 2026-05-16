@@ -6,8 +6,8 @@
       "properties": {
         "schemaVersion": {
           "type": "string",
-          "const": "4",
-          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV3ToV4 + safeParseAnyVersion before parsing."
+          "const": "5",
+          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV4ToV5 (and transitively migrateV3ToV4) inside safeParseAnyVersion before parsing."
         },
         "id": {
           "type": "string",
@@ -135,8 +135,8 @@
       "properties": {
         "schemaVersion": {
           "type": "string",
-          "const": "4",
-          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV3ToV4 + safeParseAnyVersion before parsing."
+          "const": "5",
+          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV4ToV5 (and transitively migrateV3ToV4) inside safeParseAnyVersion before parsing."
         },
         "id": {
           "type": "string",
@@ -236,8 +236,8 @@
       "properties": {
         "schemaVersion": {
           "type": "string",
-          "const": "4",
-          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV3ToV4 + safeParseAnyVersion before parsing."
+          "const": "5",
+          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV4ToV5 (and transitively migrateV3ToV4) inside safeParseAnyVersion before parsing."
         },
         "id": {
           "type": "string",
@@ -326,8 +326,8 @@
       "properties": {
         "schemaVersion": {
           "type": "string",
-          "const": "4",
-          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV3ToV4 + safeParseAnyVersion before parsing."
+          "const": "5",
+          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV4ToV5 (and transitively migrateV3ToV4) inside safeParseAnyVersion before parsing."
         },
         "id": {
           "type": "string",
@@ -369,6 +369,10 @@
               "minLength": 1,
               "description": "Notification title. Maps directly to aps.alert.title in the APNs envelope."
             },
+            "subtitle": {
+              "description": "Notification subtitle. Maps to aps.alert.subtitle. Renders between the title and body on iOS 10+.",
+              "type": "string"
+            },
             "body": {
               "type": "string",
               "description": "Notification body. Maps directly to aps.alert.body."
@@ -379,11 +383,34 @@
               "description": "Tapping the surface opens this URL. Validated as a scheme://… prefix."
             },
             "category": {
-              "description": "UNNotificationCategory identifier. Selects which set of action buttons the system shows. Maps to aps.category.",
-              "type": "string"
+              "description": "UNNotificationCategory identifier. Selects which set of action buttons the system shows AND - when a UNNotificationContentExtension is registered - decides whether the extension's custom view renders. Maps to aps.category. The set of legal values is the registry in packages/surface-contracts/src/notificationCategories.ts; the schema rejects values not declared there so the wire stays in lockstep with the categories the host registers and the extension Info.plist routes on. Producers intending to route into a content extension SHOULD validate against liveSurfaceNotificationSliceForExtension (category required) instead of the base slice.",
+              "type": "string",
+              "enum": [
+                "surface-update"
+              ]
             },
             "threadId": {
               "description": "Thread identifier for notification grouping. Maps to aps.thread-id.",
+              "type": "string"
+            },
+            "interruptionLevel": {
+              "description": "iOS aps.interruption-level (iOS 15+). Omitted = system default (active). Use timeSensitive for notifications that must break through Focus modes (e.g. delivery-arrived alerts).",
+              "type": "string",
+              "enum": [
+                "passive",
+                "active",
+                "timeSensitive",
+                "critical"
+              ]
+            },
+            "relevanceScore": {
+              "description": "iOS aps.relevance-score (0..1, iOS 15+). Drives ranking inside the grouped-summary Notification Center view. Higher = more prominent.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "targetContentId": {
+              "description": "iOS aps.target-content-id. Routes the tap to a specific scene/window identifier the host app advertises via UISceneActivationConditions.",
               "type": "string"
             }
           },
@@ -411,8 +438,8 @@
       "properties": {
         "schemaVersion": {
           "type": "string",
-          "const": "4",
-          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV3ToV4 + safeParseAnyVersion before parsing."
+          "const": "5",
+          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV4ToV5 (and transitively migrateV3ToV4) inside safeParseAnyVersion before parsing."
         },
         "id": {
           "type": "string",
@@ -504,8 +531,8 @@
       "properties": {
         "schemaVersion": {
           "type": "string",
-          "const": "4",
-          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV3ToV4 + safeParseAnyVersion before parsing."
+          "const": "5",
+          "description": "Wire-format generation. Required; producers MUST set this explicitly. Consumers parse against the version they understand; cross-version payloads are upgraded via migrateV4ToV5 (and transitively migrateV3ToV4) inside safeParseAnyVersion before parsing."
         },
         "id": {
           "type": "string",
@@ -602,6 +629,6 @@
       "additionalProperties": false
     }
   ],
-  "$id": "https://unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json",
+  "$id": "https://unpkg.com/@mobile-surfaces/surface-contracts@6.0/schema.json",
   "title": "LiveSurfaceSnapshot"
 }

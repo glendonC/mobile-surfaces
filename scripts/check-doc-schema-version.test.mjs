@@ -75,10 +75,10 @@ function writeMd(dir, rel, contents) {
 test("baseline: canonical literal in a doc passes", () => {
   const ws = makeWorkspace();
   try {
-    writeMd(ws, "docs/intro.md", '# Intro\n\nschemaVersion: "4" goes here.\n');
+    writeMd(ws, "docs/intro.md", '# Intro\n\nschemaVersion: "5" goes here.\n');
     const r = runCheck(ws);
     assert.equal(r.status, 0, r.stdout + r.stderr);
-    assert.match(r.stdout, /match "4"/);
+    assert.match(r.stdout, /match "5"/);
   } finally {
     rmSync(ws, { recursive: true, force: true });
   }
@@ -91,7 +91,7 @@ test("flags a stale literal in a top-level README", () => {
     const r = runCheck(ws);
     assert.notEqual(r.status, 0);
     assert.match(r.stdout + r.stderr, /README\.md:1/);
-    assert.match(r.stdout + r.stderr, /schemaVersion: "3" should be "4"/);
+    assert.match(r.stdout + r.stderr, /schemaVersion: "3" should be "5"/);
   } finally {
     rmSync(ws, { recursive: true, force: true });
   }
@@ -103,7 +103,7 @@ test("accepts both single and double quote styles", () => {
     writeMd(
       ws,
       "docs/quotes.md",
-      "double: schemaVersion: \"4\"\nsingle: schemaVersion: '4'\n",
+      "double: schemaVersion: \"5\"\nsingle: schemaVersion: '5'\n",
     );
     const r = runCheck(ws);
     assert.equal(r.status, 0, r.stdout + r.stderr);
@@ -122,8 +122,8 @@ test("flags both quote styles when stale", () => {
     );
     const r = runCheck(ws);
     assert.notEqual(r.status, 0);
-    assert.match(r.stdout + r.stderr, /schemaVersion: "2" should be "4"/);
-    assert.match(r.stdout + r.stderr, /schemaVersion: "1" should be "4"/);
+    assert.match(r.stdout + r.stderr, /schemaVersion: "2" should be "5"/);
+    assert.match(r.stdout + r.stderr, /schemaVersion: "1" should be "5"/);
   } finally {
     rmSync(ws, { recursive: true, force: true });
   }
@@ -142,7 +142,7 @@ test("scans apps/site/ doc pages", () => {
     );
     const r = runCheck(ws);
     assert.notEqual(r.status, 0, r.stdout + r.stderr);
-    assert.match(r.stdout + r.stderr, /schemaVersion: "3" should be "4"/);
+    assert.match(r.stdout + r.stderr, /schemaVersion: "3" should be "5"/);
   } finally {
     rmSync(ws, { recursive: true, force: true });
   }
@@ -197,7 +197,7 @@ test("reports the line number of an offending literal", () => {
 test("ignores non-md files even if they contain stale literals", () => {
   const ws = makeWorkspace();
   try {
-    writeMd(ws, "docs/keeper.md", 'schemaVersion: "4"\n');
+    writeMd(ws, "docs/keeper.md", 'schemaVersion: "5"\n');
     writeFileSync(join(ws, "decoy.txt"), 'schemaVersion: "2"\n');
     writeFileSync(join(ws, "decoy.json"), '{"schemaVersion":"2"}\n');
     const r = runCheck(ws);
@@ -213,7 +213,7 @@ test("skips node_modules, .git, and dist", () => {
     writeMd(ws, "node_modules/some-pkg/README.md", 'schemaVersion: "1"\n');
     writeMd(ws, ".git/notes.md", 'schemaVersion: "1"\n');
     writeMd(ws, "dist/index.md", 'schemaVersion: "1"\n');
-    writeMd(ws, "docs/real.md", 'schemaVersion: "4"\n');
+    writeMd(ws, "docs/real.md", 'schemaVersion: "5"\n');
     const r = runCheck(ws);
     assert.equal(r.status, 0, r.stdout + r.stderr);
   } finally {

@@ -136,7 +136,7 @@ export const SKIP_PATH_PREFIXES = [
   // regenerates the constants from there. Skipping the generated files
   // keeps codegen the only writer.
   "apps/mobile/src/generated",
-  "apps/mobile/targets/widget/_shared/MobileSurfacesAppGroup.swift",
+  "apps/mobile/targets/_shared/MobileSurfacesAppGroup.swift",
 ];
 
 // Generated/lock files that pnpm or another tool will regenerate post-rename.
@@ -357,8 +357,8 @@ function main() {
     `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}HomeWidget.swift`,
     `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}LiveActivity.swift`,
     `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}WidgetBundle.swift`,
-    `apps/mobile/targets/widget/_shared/${currentIdentity.swiftPrefix}ControlIntents.swift`,
-    `apps/mobile/targets/widget/_shared/${currentIdentity.swiftPrefix}SharedState.swift`,
+    `apps/mobile/targets/_shared/${currentIdentity.swiftPrefix}ControlIntents.swift`,
+    `apps/mobile/targets/_shared/${currentIdentity.swiftPrefix}SharedState.swift`,
   ];
   for (const rel of renameTargets) {
     if (!fs.existsSync(rel)) continue;

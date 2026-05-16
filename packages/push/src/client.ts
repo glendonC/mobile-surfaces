@@ -720,7 +720,7 @@ export class PushClient {
    * Payload is built via `toNotificationContentPayload` from
    * `@mobile-surfaces/surface-contracts`; the wire shape carries the
    * notification slice's title/body/category/threadId plus a
-   * `kind: "surface_notification"` sidecar. The OS renders a standard alert
+   * `kind: "surface_snapshot"` sidecar. The OS renders a standard alert
    * — no `UNNotificationContentExtension` required — so this surface ships
    * end-to-end without an extension target. A future rich-notification
    * renderer would layer custom UI on top of the same payload.

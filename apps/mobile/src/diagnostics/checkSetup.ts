@@ -237,7 +237,7 @@ function probeActiveActivity(activityId: string | null): DiagnosticCheck {
 
 // --- Surface snapshot decode-error breadcrumbs --------------------------
 //
-// Wave 2b's Swift side (apps/mobile/targets/widget/_shared/MobileSurfacesSharedState.swift)
+// Wave 2b's Swift side (apps/mobile/targets/_shared/MobileSurfacesSharedState.swift)
 // writes a breadcrumb to App Group key `surface.snapshot.<surfaceId>.decodeError`
 // whenever JSONDecoder rejects the snapshot payload. Shape:
 //   { at: <ISO8601>, error: <string> }

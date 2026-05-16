@@ -34,7 +34,7 @@ Simulator support for Live Activities is partial.
 
 - Confirm the simulator model is iPhone 14 Pro or newer (compact and minimal regions only render on Dynamic Island-capable hardware).
 - The expanded layout shows when the activity is invoked from a long press. Compact appears next to the camera; minimal shows when another activity is also active.
-- If only the Lock Screen presentation works, the widget bundle compiled but the `DynamicIsland` block in `apps/mobile/targets/widget/MobileSurfacesLiveActivity.swift` may be unreachable. Check `pnpm surface:check`, which verifies the `MobileSurfacesActivityAttributes.swift` files match the codegen output from the Zod source (and are therefore byte-identical to each other). The most common silent break here is editing one file by hand and forgetting `pnpm codegen:activity-attributes`.
+- If only the Lock Screen presentation works, the widget bundle compiled but the `DynamicIsland` block in `apps/mobile/targets/widget/MobileSurfacesLiveActivity.swift` may be unreachable. Check `pnpm surface:check`, which verifies the `MobileSurfacesActivityAttributes.swift` files match the codegen output from the Zod source (and are therefore byte-identical to each other). The most common silent break here is editing one file by hand and forgetting `pnpm surface:codegen`.
 
 ## Home widget or control widget shows placeholder state
 

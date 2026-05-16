@@ -42,6 +42,7 @@ import {
 import {
   canRequestPushToken,
   getDeviceApnsToken,
+  registerNotificationCategories,
   requestNotificationPermissions,
 } from "../notifications";
 // SURFACE-BEGIN: home-widget control-widget lock-accessory-widget standby-widget
@@ -106,6 +107,16 @@ export function LiveActivityHarness() {
   useEffect(() => {
     LiveActivity.areActivitiesEnabled().then(setSupported).catch(() => setSupported(false));
     refreshActive();
+    // Register notification categories before any APNs notification can be
+    // delivered. The bundled UNNotificationContentExtension's Info.plist
+    // routes on these same identifiers (codegen MS037); without this call
+    // iOS still delivers the alert but the extension never fires, and the
+    // host delegate has nothing to match actions against. Fire-and-forget
+    // is fine: the call is idempotent and a transient permission denial
+    // does not block the rest of the harness.
+    registerNotificationCategories().catch((e) => {
+      console.warn("registerNotificationCategories failed", e);
+    });
 
     const tokenSub = LiveActivity.addListener("onPushToken", ({ activityId: id, token }) => {
       if (id === activityIdRef.current) {

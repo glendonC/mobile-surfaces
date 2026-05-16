@@ -1,0 +1,17 @@
+{
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@6.0/schema.json",
+  "schemaVersion": "5",
+  "kind": "notification",
+  "id": "fixture-notification-deep-link-window",
+  "surfaceId": "surface-notification-deep-link-window",
+  "updatedAt": "2026-05-13T16:50:00.000Z",
+  "state": "active",
+  "notification": {
+    "title": "Document ready for review",
+    "body": "Sam shared \"Q3 plan\" with you. Tap to open in the document scene.",
+    "deepLink": "mobilesurfaces://surface/surface-notification-deep-link-window",
+    "category": "surface-update",
+    "threadId": "shared-docs",
+    "targetContentId": "scene.document.q3-plan"
+  }
+}

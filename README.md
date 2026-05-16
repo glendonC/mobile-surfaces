@@ -36,7 +36,8 @@ The contract package has its own walkthrough in [packages/surface-contracts/READ
 | Lock Screen accessory | Shipped | `MobileSurfacesLockAccessoryWidget.swift` |
 | StandBy widget | Shipped | `MobileSurfacesStandbyWidget.swift` |
 | Push notification (basic alert) | Shipped | `client.sendNotification(...)` projects through `toNotificationContentPayload` |
-| Notification content extension (rich layouts, images) | Pending | Contract slice ships; the `UNNotificationContentExtension` target is not in the scaffold yet |
+| Notification content extension (custom expanded layout) | Shipped | `MobileSurfacesNotificationViewController.swift` renders payload-only via the `liveSurface` sidecar; categories codegened from `notificationCategories.ts` (MS037) |
+| Notification service extension (enrichment, attachments) | Pending | The service extension target is the canonical Apple path when enrichment cannot fit in the 4 KB alert payload; deferred to a follow-up |
 
 Every shipped surface renders from the same `LiveSurfaceSnapshot`. They cannot drift, because they all project from one source. See [Multi-surface](https://mobile-surfaces.com/docs/multi-surface) for every `kind` value, its projection helper, and when to emit it.
 
@@ -87,7 +88,7 @@ You write one function:
 ```ts
 function snapshotFromJob(job: Job): LiveSurfaceSnapshot {
   return {
-    schemaVersion: "4",
+    schemaVersion: "5",
     kind: "liveActivity",            // discriminator that picks the projection
     id: `${job.id}@${job.revision}`,
     surfaceId: `job-${job.id}`,

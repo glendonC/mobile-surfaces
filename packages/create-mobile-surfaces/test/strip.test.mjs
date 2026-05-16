@@ -481,6 +481,13 @@ describe("applyStripGreenfield — integration against real source files", () =>
       "./standby-card.json",
       "./standby-night.json",
       "./notification-alert.json",
+      "./notification-category-routed.json",
+      "./notification-thread-grouped.json",
+      "./notification-time-sensitive.json",
+      "./notification-relevance-summary.json",
+      "./notification-completed.json",
+      "./notification-subtitle.json",
+      "./notification-deep-link-window.json",
     ]);
   });
 

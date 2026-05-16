@@ -24,7 +24,7 @@ import {
 } from "@mobile-surfaces/surface-contracts";
 ```
 
-`liveSurfaceSnapshot` is a true `z.discriminatedUnion("kind", […])` over six branches at `schemaVersion: "4"`. The base fields shared across every branch are deliberately minimal: `id`, `surfaceId`, `kind`, `updatedAt`, and `state`. Every rendering field (title/body, modeLabel, contextLabel, statusLine, progress, deepLink, actionLabel, control label) now lives inside the per-kind slice for the kind that actually uses it; the base only carries identity and lifecycle. Each branch carries its own slice: `liveActivity` adds `{ title, body, progress, deepLink, modeLabel, contextLabel, statusLine, actionLabel?, stage, estimatedSeconds, morePartsCount }`; `widget`, `control`, `notification`, `lockAccessory`, and `standby` each carry their own surface-specific shape documented per-kind below. Rendering fields were moved out of the base in v2 (3.0) for the liveActivity-only timing hints, and pushed entirely into per-kind slices in v4 (5.0) so each surface declares exactly what it renders; see [`schema-migration.md`](/docs/schema-migration).
+`liveSurfaceSnapshot` is a true `z.discriminatedUnion("kind", […])` over six branches at `schemaVersion: "5"`. The base fields shared across every branch are deliberately minimal: `id`, `surfaceId`, `kind`, `updatedAt`, and `state`. Every rendering field (title/body, modeLabel, contextLabel, statusLine, progress, deepLink, actionLabel, control label) now lives inside the per-kind slice for the kind that actually uses it; the base only carries identity and lifecycle. Each branch carries its own slice: `liveActivity` adds `{ title, body, progress, deepLink, modeLabel, contextLabel, statusLine, actionLabel?, stage, estimatedSeconds, morePartsCount }`; `widget`, `control`, `notification`, `lockAccessory`, and `standby` each carry their own surface-specific shape documented per-kind below. Rendering fields were moved out of the base in v2 (3.0) for the liveActivity-only timing hints, and pushed entirely into per-kind slices in v4 (5.0) so each surface declares exactly what it renders; see [`schema-migration.md`](/docs/schema-migration).
 
 ```mermaid
 flowchart LR
@@ -81,7 +81,7 @@ import { createPushClient } from "@mobile-surfaces/push";
 
 function snapshotFromJob(job: Job): LiveSurfaceSnapshot {
   return {
-    schemaVersion: "4",
+    schemaVersion: "5",
     kind: "liveActivity",
     id: `${job.id}@${job.revision}`,
     surfaceId: `job-${job.id}`,
@@ -167,7 +167,7 @@ Widget surfaces do not flow through APNs in this starter; they update via App Gr
 
 The iOS 18 control widget surface (Control Center / Lock Screen control). Renders a toggle, button, or deep-link control that calls back into the app via App Intents.
 
-**Status: shipped (iOS 18+).** One fixture: `data/surface-fixtures/control-toggle.json`. Projection helper: `toControlValueProvider` (returns `{ kind, snapshotId, surfaceId, controlKind, value, intent, label, deepLink }`). Native target: `apps/mobile/targets/widget/MobileSurfacesControlWidget.swift` plus the shared App Intents in `apps/mobile/targets/widget/_shared/MobileSurfacesControlIntents.swift`. The `control` slice supports `kind: "toggle" | "button" | "deepLink"`, `state?: boolean` (for toggles), and `intent?: string` (the App Intent identifier).
+**Status: shipped (iOS 18+).** One fixture: `data/surface-fixtures/control-toggle.json`. Projection helper: `toControlValueProvider` (returns `{ kind, snapshotId, surfaceId, controlKind, value, intent, label, deepLink }`). Native target: `apps/mobile/targets/widget/MobileSurfacesControlWidget.swift` plus the shared App Intents in `apps/mobile/targets/_shared/MobileSurfacesControlIntents.swift`. The `control` slice supports `kind: "toggle" | "button" | "deepLink"`, `state?: boolean` (for toggles), and `intent?: string` (the App Intent identifier).
 
 ### Storage path
 
@@ -207,15 +207,37 @@ Control surfaces, like widgets, do not flow through APNs directly. The host app 
 
 ## `kind: "notification"`
 
-A notification content payload. Drives the standard alert UI on the Lock Screen / Notification Center, with optional `category` and `threadId` slots.
+A notification content payload. Drives the standard alert UI on the Lock Screen / Notification Center, with optional `subtitle`, `category`, `threadId`, `interruptionLevel`, `relevanceScore`, and `targetContentId` slots.
 
-**Status: shipped for the basic alert path.** Fixture: `data/surface-fixtures/notification-alert.json`. Projection helper: `toNotificationContentPayload` (returns `{ aps: { alert, sound, category?, "thread-id"? }, liveSurface: { kind, snapshotId, surfaceId, state, deepLink } }`). The SDK sends via `client.sendNotification(deviceToken, snapshot)`; the OS renders a standard alert with no extension required. A future `UNNotificationContentExtension` target would add rich-notification rendering (images, custom layout) on top of the same payload; the basic alert case does not require it.
+**Status: shipped.** Eight fixtures cover the slice's expressive range:
+
+- `data/surface-fixtures/notification-alert.json`: plain transactional alert, `state: "attention"`.
+- `data/surface-fixtures/notification-category-routed.json`: routes to the bundled `UNNotificationContentExtension` via `category: "surface-update"`.
+- `data/surface-fixtures/notification-thread-grouped.json`: thread grouping via `threadId`, no category.
+- `data/surface-fixtures/notification-time-sensitive.json`: `interruptionLevel: "timeSensitive"` for Focus-mode-breaking delivery.
+- `data/surface-fixtures/notification-relevance-summary.json`: `relevanceScore` for grouped-summary ranking.
+- `data/surface-fixtures/notification-completed.json`: terminal `state: "completed"`.
+- `data/surface-fixtures/notification-subtitle.json`: `subtitle` between title and body.
+- `data/surface-fixtures/notification-deep-link-window.json`: `targetContentId` for window-scene routing.
+
+Projection helper: `toNotificationContentPayload` (returns the APNs envelope plus a `liveSurface` sidecar typed as `liveSurfaceNotificationContentEntry`). Sidecar discriminator: `kind: "surface_snapshot"`, aligned with the liveActivity alert payload's sidecar so on-device routing code can switch on one literal regardless of which Mobile Surfaces wrapper produced the userInfo.
+
+Native target: `apps/mobile/targets/notification-content/MobileSurfacesNotificationViewController.swift`. The extension renders payload-only: it decodes the `liveSurface` sidecar from `notification.request.content.userInfo` and shows a SwiftUI body next to the standard alert chrome. It does **not** read from the App Group container; that path would only be reliable behind a `UNNotificationServiceExtension` upstream (canonical Apple enrichment pattern), and that target is deferred — see [`docs/roadmap.md`](/docs/roadmap).
+
+The SDK sends via `client.sendNotification(deviceToken, snapshot)`; APNs push-type is `alert`, priority 10, bare-bundle-id `apns-topic`. The 4 KB alert ceiling applies (MS011); the 5 KB allowance is ActivityKit-broadcast-only.
+
+### Category routing
+
+`notification.category` is the iOS routing key. The schema constrains it to the registry in `packages/surface-contracts/src/notificationCategories.ts` (canonical source) via `z.enum`. The host registers every category at app launch through `registerNotificationCategories()` (calls `Notifications.setNotificationCategoryAsync`). The extension's `Info.plist` `UNNotificationExtensionCategory` array is codegened from the same source. All four sites stay in lockstep via `pnpm surface:codegen` (trapId MS037).
+
+The reference architecture ships **one** category — `surface-update` — with zero action buttons. Action-button wiring is purely additive: extend the registry, regenerate, and the host's response delegate gates on `action.identifier`.
 
 ### When to emit
 
 - A surface that should appear in Notification Center even when the user has Live Activities disabled.
 - A grouped notification thread (`threadId`) that should aggregate with related notifications from the same flow.
-- Category-routed notifications that need a particular set of action buttons.
+- Time-sensitive notifications that need to break through Focus (`interruptionLevel: "timeSensitive"`).
+- Category-routed notifications that need custom rendering via the bundled content extension.
 
 ### Code example
 
@@ -224,36 +246,41 @@ import {
   toNotificationContentPayload,
   type LiveSurfaceSnapshot,
 } from "@mobile-surfaces/surface-contracts";
+import { createPushClient } from "@mobile-surfaces/push";
 
 const snapshot: LiveSurfaceSnapshot = {
-  schemaVersion: "4",
+  schemaVersion: "5",
   kind: "notification",
-  id: "notif-1",
+  id: "notif-42",
   surfaceId: "surface-job-42",
   updatedAt: new Date().toISOString(),
-  state: "completed",
+  state: "attention",
   notification: {
     title: "Order ready",
-    body: "Pickup window opens at 5 PM.",
+    subtitle: "Pickup window closes at 6 PM",
+    body: "Tap to open the order.",
     deepLink: "mobilesurfaces://surface/surface-job-42",
-    category: "ORDER_READY",
+    category: "surface-update",
     threadId: "orders-42",
+    interruptionLevel: "timeSensitive",
   },
 };
 
 const payload = toNotificationContentPayload(snapshot);
 // → {
 //     aps: {
-//       alert: { title: "Order ready", body: "Pickup window opens at 5 PM." },
+//       alert: { title: "Order ready", subtitle: "Pickup window closes at 6 PM", body: "Tap to open the order." },
 //       sound: "default",
-//       category: "ORDER_READY",
+//       category: "surface-update",
 //       "thread-id": "orders-42",
+//       "interruption-level": "timeSensitive",
 //     },
-//     liveSurface: { kind: "surface_notification", snapshotId: "notif-1", surfaceId: "surface-job-42", state: "completed", deepLink: "..." },
+//     liveSurface: { kind: "surface_snapshot", snapshotId: "notif-42", surfaceId: "surface-job-42", state: "attention", deepLink: "...", category: "surface-update" },
 //   }
-```
 
-Until the notification content extension lands, you can ship a `kind: "liveActivity"` snapshot and project through `toApnsAlertPayload` (from `@mobile-surfaces/push`) instead; the `liveSurface` sidecar shape is similar (`kind: "surface_snapshot"` rather than `"surface_notification"`).
+const push = createPushClient({ /* ... */ });
+await push.sendNotification(deviceApnsToken, snapshot);
+```
 
 ## `kind: "lockAccessory"`
 
@@ -272,7 +299,7 @@ A lock-screen accessory widget (the inline / circular / rectangular Lock Screen 
 import { liveSurfaceSnapshotLockAccessory } from "@mobile-surfaces/surface-contracts";
 
 const parsed = liveSurfaceSnapshotLockAccessory.parse({
-  schemaVersion: "4",
+  schemaVersion: "5",
   kind: "lockAccessory",
   id: "accessory-1",
   surfaceId: "surface-status",
@@ -303,7 +330,7 @@ The iOS 17+ StandBy mode (large idle clock view when the phone is charging on it
 import { liveSurfaceSnapshotStandby } from "@mobile-surfaces/surface-contracts";
 
 const parsed = liveSurfaceSnapshotStandby.parse({
-  schemaVersion: "4",
+  schemaVersion: "5",
   kind: "standby",
   id: "standby-1",
   surfaceId: "surface-clock",

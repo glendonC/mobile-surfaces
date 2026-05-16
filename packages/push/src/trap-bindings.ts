@@ -48,7 +48,7 @@ export const TRAP_BINDINGS = {
     id: "MS011",
     title: "ActivityKit payload size ceiling (4 KB / 5 KB broadcast)",
     severity: "error",
-    summary: "Per-activity Live Activity pushes are bounded at 4 KB; iOS 18 broadcast pushes at 5 KB.",
+    summary: "Per-activity Live Activity pushes are bounded at 4 KB; iOS 18 broadcast pushes at 5 KB. Standard notification alert pushes (push-type alert, kind notification) share the 4 KB ceiling; the 5 KB allowance is ActivityKit-broadcast-only and does not apply to sendNotification.",
     symptom: "APNs returns 413 PayloadTooLarge, or accepts the payload but iOS silently drops the update. Long localized strings or accumulated morePartsCount details are common offenders.",
     fix: "Trim the payload. Per-activity payloads are bounded at 4 KB; broadcast payloads at 5 KB. Shorten the liveActivity slice's body, lower morePartsCount, or split a state into two smaller pushes. Validate by sending the projection through toLiveActivityContentState and measuring.",
     docsUrl: "https://github.com/glendonC/mobile-surfaces/blob/main/CLAUDE.md#ms011-activitykit-payload-size-ceiling-4-kb-5-kb-broadcast",

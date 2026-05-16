@@ -65,7 +65,7 @@ checks.push({
     : {
         detail: {
           message:
-            "Both files are generated from packages/surface-contracts/src/schema.ts. Edit the Zod source if a field changed; otherwise rerun: pnpm codegen:activity-attributes. (The codegen-drift gate at stage 2 normally catches this earlier; if you see this message, codegen was bypassed or one file was hand-edited.)",
+            "Both files are generated from packages/surface-contracts/src/schema.ts. Edit the Zod source if a field changed; otherwise rerun: pnpm surface:codegen. (The codegen-drift gate at stage 2 normally catches this earlier; if you see this message, codegen was bypassed or one file was hand-edited.)",
           paths: [
             path.relative(process.cwd(), modulePath),
             path.relative(process.cwd(), widgetPath),

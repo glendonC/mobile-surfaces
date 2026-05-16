@@ -8,7 +8,7 @@
 // As of v5 the layout is four sources (was five):
 //   - apps/mobile/app.json
 //   - apps/mobile/targets/widget/generated.entitlements
-//   - apps/mobile/targets/widget/_shared/MobileSurfacesAppGroup.swift (generated)
+//   - apps/mobile/targets/_shared/MobileSurfacesAppGroup.swift (generated)
 //   - apps/mobile/src/generated/appGroup.ts (generated)
 
 import test from "node:test";
@@ -86,7 +86,7 @@ function withWorkspace({
   const writes = {
     "apps/mobile/app.json": appJson(appGroupApp),
     "apps/mobile/targets/widget/generated.entitlements": widgetEntitlements(appGroupWidgetPlist),
-    "apps/mobile/targets/widget/_shared/MobileSurfacesAppGroup.swift": appGroupSwift(appGroupSwiftValue),
+    "apps/mobile/targets/_shared/MobileSurfacesAppGroup.swift": appGroupSwift(appGroupSwiftValue),
     "apps/mobile/src/generated/appGroup.ts": appGroupTs(appGroupTsValue),
   };
   for (const [relPath, contents] of Object.entries(writes)) {

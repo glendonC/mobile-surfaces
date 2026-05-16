@@ -1,0 +1,17 @@
+{
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@6.0/schema.json",
+  "schemaVersion": "5",
+  "kind": "notification",
+  "id": "fixture-notification-relevance-summary",
+  "surfaceId": "surface-notification-relevance-summary",
+  "updatedAt": "2026-05-13T12:00:00.000Z",
+  "state": "active",
+  "notification": {
+    "title": "Daily digest ready",
+    "body": "Five surfaces updated since you last opened the app.",
+    "deepLink": "mobilesurfaces://surface/surface-notification-relevance-summary",
+    "category": "surface-update",
+    "threadId": "digests",
+    "relevanceScore": 0.9
+  }
+}

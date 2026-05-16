@@ -4,7 +4,7 @@ import type { LiveSurfaceSnapshot } from "./index";
 // Edit the JSON fixtures, then run pnpm surface:check.
 export const surfaceFixtureSnapshots = {
   "queued": {
-    "schemaVersion": "4",
+    "schemaVersion": "5",
     "kind": "liveActivity",
     "id": "fixture-queued",
     "surfaceId": "surface-queued",
@@ -25,7 +25,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "attention": {
-    "schemaVersion": "4",
+    "schemaVersion": "5",
     "kind": "liveActivity",
     "id": "fixture-attention",
     "surfaceId": "surface-attention",
@@ -46,7 +46,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "activeProgress": {
-    "schemaVersion": "4",
+    "schemaVersion": "5",
     "kind": "liveActivity",
     "id": "fixture-active-progress",
     "surfaceId": "surface-active-progress",
@@ -67,7 +67,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "activeCountdown": {
-    "schemaVersion": "4",
+    "schemaVersion": "5",
     "kind": "liveActivity",
     "id": "fixture-active-countdown",
     "surfaceId": "surface-active-countdown",
@@ -88,7 +88,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "paused": {
-    "schemaVersion": "4",
+    "schemaVersion": "5",
     "kind": "liveActivity",
     "id": "fixture-paused",
     "surfaceId": "surface-paused",
@@ -109,7 +109,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "badTiming": {
-    "schemaVersion": "4",
+    "schemaVersion": "5",
     "kind": "liveActivity",
     "id": "fixture-bad-timing",
     "surfaceId": "surface-none-bad-timing",
@@ -130,7 +130,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "completed": {
-    "schemaVersion": "4",
+    "schemaVersion": "5",
     "kind": "liveActivity",
     "id": "fixture-completed",
     "surfaceId": "surface-completed",
@@ -151,7 +151,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "activeDetails": {
-    "schemaVersion": "4",
+    "schemaVersion": "5",
     "kind": "liveActivity",
     "id": "fixture-active-details",
     "surfaceId": "surface-active-details",
@@ -172,7 +172,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "widgetDashboard": {
-    "schemaVersion": "4",
+    "schemaVersion": "5",
     "kind": "widget",
     "id": "fixture-widget-dashboard",
     "surfaceId": "surface-widget-dashboard",
@@ -188,7 +188,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "widgetMinimal": {
-    "schemaVersion": "4",
+    "schemaVersion": "5",
     "kind": "widget",
     "id": "fixture-widget-minimal",
     "surfaceId": "surface-widget-minimal",
@@ -202,7 +202,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "controlToggle": {
-    "schemaVersion": "4",
+    "schemaVersion": "5",
     "kind": "control",
     "id": "fixture-control-toggle",
     "surfaceId": "surface-control-toggle",
@@ -217,7 +217,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "controlButton": {
-    "schemaVersion": "4",
+    "schemaVersion": "5",
     "kind": "control",
     "id": "fixture-control-button",
     "surfaceId": "surface-control-button",
@@ -231,7 +231,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "lockAccessoryCircular": {
-    "schemaVersion": "4",
+    "schemaVersion": "5",
     "kind": "lockAccessory",
     "id": "fixture-lock-accessory-circular",
     "surfaceId": "surface-lock-accessory-circular",
@@ -246,7 +246,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "lockAccessoryRectangular": {
-    "schemaVersion": "4",
+    "schemaVersion": "5",
     "kind": "lockAccessory",
     "id": "fixture-lock-accessory-rectangular",
     "surfaceId": "surface-lock-accessory-rectangular",
@@ -261,7 +261,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "lockAccessoryInline": {
-    "schemaVersion": "4",
+    "schemaVersion": "5",
     "kind": "lockAccessory",
     "id": "fixture-lock-accessory-inline",
     "surfaceId": "surface-lock-accessory-inline",
@@ -275,7 +275,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "standbyCard": {
-    "schemaVersion": "4",
+    "schemaVersion": "5",
     "kind": "standby",
     "id": "fixture-standby-card",
     "surfaceId": "surface-standby-card",
@@ -291,7 +291,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "standbyNight": {
-    "schemaVersion": "4",
+    "schemaVersion": "5",
     "kind": "standby",
     "id": "fixture-standby-night",
     "surfaceId": "surface-standby-night",
@@ -307,7 +307,7 @@ export const surfaceFixtureSnapshots = {
     }
   },
   "notificationAlert": {
-    "schemaVersion": "4",
+    "schemaVersion": "5",
     "kind": "notification",
     "id": "fixture-notification-alert",
     "surfaceId": "surface-notification-alert",
@@ -319,6 +319,114 @@ export const surfaceFixtureSnapshots = {
       "deepLink": "mobilesurfaces://surface/surface-notification-alert",
       "category": "surface-update",
       "threadId": "surface-notification-alert"
+    }
+  },
+  "notificationCategoryRouted": {
+    "schemaVersion": "5",
+    "kind": "notification",
+    "id": "fixture-notification-category-routed",
+    "surfaceId": "surface-notification-category-routed",
+    "updatedAt": "2026-05-13T09:15:00.000Z",
+    "state": "active",
+    "notification": {
+      "title": "Order ready for pickup",
+      "body": "Tap to open the order. Pickup window closes at 6 PM.",
+      "deepLink": "mobilesurfaces://surface/surface-notification-category-routed",
+      "category": "surface-update",
+      "threadId": "orders-2026-05-13"
+    }
+  },
+  "notificationThreadGrouped": {
+    "schemaVersion": "5",
+    "kind": "notification",
+    "id": "fixture-notification-thread-grouped",
+    "surfaceId": "surface-notification-thread-grouped",
+    "updatedAt": "2026-05-13T10:42:00.000Z",
+    "state": "queued",
+    "notification": {
+      "title": "Build queued",
+      "body": "Your build is waiting for a runner. We will notify you when it starts.",
+      "deepLink": "mobilesurfaces://surface/surface-notification-thread-grouped",
+      "threadId": "build-9821"
+    }
+  },
+  "notificationTimeSensitive": {
+    "schemaVersion": "5",
+    "kind": "notification",
+    "id": "fixture-notification-time-sensitive",
+    "surfaceId": "surface-notification-time-sensitive",
+    "updatedAt": "2026-05-13T11:30:00.000Z",
+    "state": "attention",
+    "notification": {
+      "title": "Driver is two minutes away",
+      "body": "Please be ready at the curb. We won't be able to wait.",
+      "deepLink": "mobilesurfaces://surface/surface-notification-time-sensitive",
+      "category": "surface-update",
+      "threadId": "delivery-3300",
+      "interruptionLevel": "timeSensitive"
+    }
+  },
+  "notificationRelevanceSummary": {
+    "schemaVersion": "5",
+    "kind": "notification",
+    "id": "fixture-notification-relevance-summary",
+    "surfaceId": "surface-notification-relevance-summary",
+    "updatedAt": "2026-05-13T12:00:00.000Z",
+    "state": "active",
+    "notification": {
+      "title": "Daily digest ready",
+      "body": "Five surfaces updated since you last opened the app.",
+      "deepLink": "mobilesurfaces://surface/surface-notification-relevance-summary",
+      "category": "surface-update",
+      "threadId": "digests",
+      "relevanceScore": 0.9
+    }
+  },
+  "notificationCompleted": {
+    "schemaVersion": "5",
+    "kind": "notification",
+    "id": "fixture-notification-completed",
+    "surfaceId": "surface-notification-completed",
+    "updatedAt": "2026-05-13T14:10:00.000Z",
+    "state": "completed",
+    "notification": {
+      "title": "Build #9821 completed",
+      "body": "Finished in 4 minutes. Tap to view the artifact.",
+      "deepLink": "mobilesurfaces://surface/surface-notification-completed",
+      "category": "surface-update",
+      "threadId": "build-9821"
+    }
+  },
+  "notificationSubtitle": {
+    "schemaVersion": "5",
+    "kind": "notification",
+    "id": "fixture-notification-subtitle",
+    "surfaceId": "surface-notification-subtitle",
+    "updatedAt": "2026-05-13T15:25:00.000Z",
+    "state": "active",
+    "notification": {
+      "title": "New comment on your draft",
+      "subtitle": "Project Atlas - design review",
+      "body": "Sam left a comment on \"Mobile Surfaces architecture review\".",
+      "deepLink": "mobilesurfaces://surface/surface-notification-subtitle",
+      "category": "surface-update",
+      "threadId": "project-atlas"
+    }
+  },
+  "notificationDeepLinkWindow": {
+    "schemaVersion": "5",
+    "kind": "notification",
+    "id": "fixture-notification-deep-link-window",
+    "surfaceId": "surface-notification-deep-link-window",
+    "updatedAt": "2026-05-13T16:50:00.000Z",
+    "state": "active",
+    "notification": {
+      "title": "Document ready for review",
+      "body": "Sam shared \"Q3 plan\" with you. Tap to open in the document scene.",
+      "deepLink": "mobilesurfaces://surface/surface-notification-deep-link-window",
+      "category": "surface-update",
+      "threadId": "shared-docs",
+      "targetContentId": "scene.document.q3-plan"
     }
   }
 } as const satisfies Record<string, LiveSurfaceSnapshot>;

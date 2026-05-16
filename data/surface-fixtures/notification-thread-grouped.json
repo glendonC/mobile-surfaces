@@ -1,0 +1,15 @@
+{
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@6.0/schema.json",
+  "schemaVersion": "5",
+  "kind": "notification",
+  "id": "fixture-notification-thread-grouped",
+  "surfaceId": "surface-notification-thread-grouped",
+  "updatedAt": "2026-05-13T10:42:00.000Z",
+  "state": "queued",
+  "notification": {
+    "title": "Build queued",
+    "body": "Your build is waiting for a runner. We will notify you when it starts.",
+    "deepLink": "mobilesurfaces://surface/surface-notification-thread-grouped",
+    "threadId": "build-9821"
+  }
+}

@@ -15,7 +15,7 @@
 //     @bacons/apple-targets at prebuild time, but committed for the CLI
 //     template ship and read directly by Xcode if prebuild is skipped.
 //
-//   apps/mobile/targets/widget/_shared/MobileSurfacesAppGroup.swift
+//   apps/mobile/targets/_shared/MobileSurfacesAppGroup.swift
 //     Generated. enum MobileSurfacesAppGroup { static let identifier = "..." }.
 //     The only Swift parse target; MobileSurfacesSharedState.swift now
 //     references this constant rather than inlining the literal.
@@ -45,14 +45,28 @@ const APP_JSON = path.resolve("apps/mobile/app.json");
 const WIDGET_ENTITLEMENTS = path.resolve(
   "apps/mobile/targets/widget/generated.entitlements",
 );
+const NOTIFICATION_CONTENT_ENTITLEMENTS = path.resolve(
+  "apps/mobile/targets/notification-content/generated.entitlements",
+);
 const APP_GROUP_SWIFT = path.resolve(
-  "apps/mobile/targets/widget/_shared/MobileSurfacesAppGroup.swift",
+  "apps/mobile/targets/_shared/MobileSurfacesAppGroup.swift",
 );
 const APP_GROUP_TS = path.resolve("apps/mobile/src/generated/appGroup.ts");
 
 const sources = [
   { label: "app.json (host entitlements)", file: APP_JSON, extract: extractFromAppJson },
   { label: "widget generated.entitlements", file: WIDGET_ENTITLEMENTS, extract: extractFromWidgetEntitlements },
+  // Notification-content extension entitlements file. Optional: when the
+  // target dir does not yet exist (older snapshot of the repo or a
+  // consumer that has not adopted the notification surface), skip the
+  // entry rather than fail-loud so MS013 stays usable on partial layouts.
+  ...(fs.existsSync(NOTIFICATION_CONTENT_ENTITLEMENTS)
+    ? [{
+        label: "notification-content generated.entitlements",
+        file: NOTIFICATION_CONTENT_ENTITLEMENTS,
+        extract: extractFromWidgetEntitlements,
+      }]
+    : []),
   { label: "MobileSurfacesAppGroup.swift", file: APP_GROUP_SWIFT, extract: extractFromAppGroupSwift },
   { label: "generated/appGroup.ts", file: APP_GROUP_TS, extract: extractFromTsConstant },
 ];

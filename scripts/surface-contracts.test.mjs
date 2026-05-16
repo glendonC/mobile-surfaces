@@ -10,9 +10,11 @@ import {
   liveSurfaceNotificationContentPayload,
   liveSurfaceSnapshot,
   liveSurfaceSnapshotV3,
+  liveSurfaceSnapshotV4,
   liveSurfaceStandbyEntry,
   liveSurfaceWidgetTimelineEntry,
   migrateV3ToV4,
+  migrateV4ToV5,
   safeParseAnyVersion,
   safeParseSnapshot,
   surfaceFixtureSnapshots,
@@ -143,11 +145,12 @@ test("notification projection maps slice title/body to aps.alert", () => {
       "thread-id": "surface-thread",
     },
     liveSurface: {
-      kind: "surface_notification",
+      kind: "surface_snapshot",
       snapshotId: "fixture-notification",
       surfaceId: "surface-notification",
       state: "queued",
       deepLink: queued.liveActivity.deepLink,
+      category: "surface-update",
     },
   });
 });
@@ -207,13 +210,13 @@ test("kind/slice mismatch is rejected: liveActivity kind without liveActivity sl
   assert.equal(result.success, false);
 });
 
-test("v4 requires kind: payload without kind fails safeParse (no preprocess fallback)", () => {
+test("v5 requires kind: payload without kind fails safeParse (no preprocess fallback)", () => {
   const { kind: _omit, ...withoutKind } = queued;
   const result = safeParseSnapshot(withoutKind);
   assert.equal(result.success, false);
 });
 
-test("v4 requires schemaVersion: payload without schemaVersion fails safeParse (no default)", () => {
+test("v5 requires schemaVersion: payload without schemaVersion fails safeParse (no default)", () => {
   const { schemaVersion: _omit, ...withoutVersion } = queued;
   const result = safeParseSnapshot(withoutVersion);
   assert.equal(result.success, false);
@@ -412,9 +415,14 @@ test("migrateV3ToV4 lifts liveActivity rendering fields into the slice", () => {
     assert.equal(v4.liveActivity.estimatedSeconds, 90);
     assert.equal(v4.liveActivity.morePartsCount, 1);
   }
-  // Round-trip through v4 parse to prove the migration result is valid.
-  const reparsed = liveSurfaceSnapshot.parse(v4);
-  assert.equal(reparsed.schemaVersion, "4");
+  // Round-trip through the frozen v4 parse to prove the migration result is
+  // valid against the v4 union (the live v5 union rejects schemaVersion "4").
+  const reparsedV4 = liveSurfaceSnapshotV4.parse(v4);
+  assert.equal(reparsedV4.schemaVersion, "4");
+  // And confirm the chained v4->v5 migration produces a valid v5 snapshot.
+  const v5 = migrateV4ToV5(v4);
+  const reparsedV5 = liveSurfaceSnapshot.parse(v5);
+  assert.equal(reparsedV5.schemaVersion, "5");
 });
 
 test("migrateV3ToV4 sets the control label to actionLabel when non-empty, falls back to primaryText", () => {
@@ -463,16 +471,32 @@ test("migrateV3ToV4 drops v3 modeLabel/contextLabel/statusLine on non-liveActivi
 });
 
 // ---------------------------------------------------------------------------
-// safeParseAnyVersion: v4 (strict) -> v3 (codec, deprecated, removed in 6.0)
+// safeParseAnyVersion: v5 (strict) -> v4 (codec, deprecated, removed in 7.0)
+// -> v3 (codec, deprecated, removed in 6.0)
 // ---------------------------------------------------------------------------
 
-test("safeParseAnyVersion accepts a v4 payload with no deprecation warning", () => {
+test("safeParseAnyVersion accepts a v5 payload with no deprecation warning", () => {
   const result = safeParseAnyVersion(queued);
   assert.equal(result.success, true);
   if (result.success) {
     assert.equal(result.data.kind, "liveActivity");
-    assert.equal(result.data.schemaVersion, "4");
+    assert.equal(result.data.schemaVersion, "5");
     assert.equal(result.deprecationWarning, undefined);
+  }
+});
+
+test("safeParseAnyVersion accepts a v4 payload and surfaces a v4 deprecation warning", () => {
+  // Build a valid v4 snapshot by spreading a v5 fixture and downgrading the
+  // schemaVersion literal. v4's wire shape is otherwise identical to v5 for
+  // liveActivity-kind snapshots (the v5 additions live on the notification
+  // slice), so this is a faithful v4 input.
+  const v4Payload = { ...queued, schemaVersion: "4" };
+  const result = safeParseAnyVersion(v4Payload);
+  assert.equal(result.success, true);
+  if (result.success) {
+    assert.equal(result.data.kind, "liveActivity");
+    assert.equal(result.data.schemaVersion, "5");
+    assert.match(result.deprecationWarning ?? "", /v4 is deprecated/i);
   }
 });
 
@@ -480,7 +504,7 @@ test("safeParseAnyVersion accepts a v3 payload and surfaces a v3 deprecation war
   const result = safeParseAnyVersion(v3LiveActivitySample);
   assert.equal(result.success, true);
   if (result.success) {
-    assert.equal(result.data.schemaVersion, "4");
+    assert.equal(result.data.schemaVersion, "5");
     assert.equal(result.data.kind, "liveActivity");
     assert.match(result.deprecationWarning ?? "", /v3 is deprecated/i);
   }

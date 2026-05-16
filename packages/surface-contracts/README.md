@@ -25,7 +25,7 @@ import {
 
 function snapshotFromJob(job: Job): LiveSurfaceSnapshot {
   return {
-    schemaVersion: "4",
+    schemaVersion: "5",
     kind: "liveActivity",
     id: `${job.id}@${job.revision}`,
     surfaceId: `job-${job.id}`,
@@ -67,7 +67,7 @@ The validator runs once at the boundary; everything downstream consumes a typed 
 
 ## The discriminated union
 
-`liveSurfaceSnapshot` is a discriminated union: `kind` picks which branch is valid, and the validator rejects fields that belong to the wrong branch. It covers six branches at `schemaVersion: "4"`:
+`liveSurfaceSnapshot` is a discriminated union: `kind` picks which branch is valid, and the validator rejects fields that belong to the wrong branch. It covers six branches at `schemaVersion: "5"`:
 
 | `kind` | Renders as | Slice (required fields in **bold**) |
 | --- | --- | --- |
@@ -151,7 +151,7 @@ import schema from "@mobile-surfaces/surface-contracts/schema";
 
 ## v3 -> v4 migration
 
-`schemaVersion: "4"` rebases the snapshot shape: the v3 base lost its kind-specific rendering fields and every per-kind slice carries its own rendering set. The notification slice renames `primaryText`/`secondaryText` to `title`/`body` so they line up with `aps.alert.title`/`aps.alert.body` on the wire. The control slice gains a required `label`. v3's `progress: 1` on control (fictional) and v3's `progress` on lockAccessory (which was only a projection-fallback source) are dropped from the wire shape.
+`schemaVersion: "5"` rebases the snapshot shape: the v3 base lost its kind-specific rendering fields and every per-kind slice carries its own rendering set. The notification slice renames `primaryText`/`secondaryText` to `title`/`body` so they line up with `aps.alert.title`/`aps.alert.body` on the wire. The control slice gains a required `label`. v3's `progress: 1` on control (fictional) and v3's `progress` on lockAccessory (which was only a projection-fallback source) are dropped from the wire shape.
 
 Use `safeParseAnyVersion` at wire edges that may see either schema shape:
 

@@ -21,7 +21,7 @@ The Swift attribute type is intentionally duplicated in the module and widget ta
 - `packages/live-activity/ios/MobileSurfacesActivityAttributes.swift`
 - `apps/mobile/targets/widget/MobileSurfacesActivityAttributes.swift`
 
-To change a ContentState field or a Stage case, edit the Zod schema and run `pnpm codegen:activity-attributes`. `pnpm surface:check` gates codegen drift at stage 2 and byte-identity + Zod parity at stage 3, so a missed codegen step fails CI loudly. The duplication itself remains until `@bacons/apple-targets` local SPM support and RN 0.84 `spm_dependency` local-path support land in Expo SDK 56; codegen is the intermediate state that gives us a single source of truth without waiting on upstream.
+To change a ContentState field or a Stage case, edit the Zod schema and run `pnpm surface:codegen`. `pnpm surface:check` gates codegen drift at stage 2 and byte-identity + Zod parity at stage 3, so a missed codegen step fails CI loudly. The duplication itself remains until `@bacons/apple-targets` local SPM support and RN 0.84 `spm_dependency` local-path support land in Expo SDK 56; codegen is the intermediate state that gives us a single source of truth without waiting on upstream.
 
 Widget and control snapshots are shared through the App Group in `apps/mobile/app.json`:
 

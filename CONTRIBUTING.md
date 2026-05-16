@@ -20,6 +20,18 @@ Cherry-picking commits between branches is forbidden in normal flow. Cherry-pick
 
 `pnpm setup:hooks` installs an opt-in `pre-push` hook that enforces the rules locally: refuses non-fast-forward pushes, refuses direct-to-`main` pushes, and runs `pnpm release:dry-run` before the push completes. Run it once on every clone you work from.
 
+## Trap Catalog Numbering
+
+Trap ids in `data/traps.json` (`MS001`, `MS002`, …) are monotonic forever. They leak into permanent artifacts — PR comments, log lines, AGENTS.md and CLAUDE.md, external blog posts — so reusing an id silently flips its meaning for every existing reference.
+
+Rules:
+
+1. New rules get the next free numeric id (highest existing `+ 1`). Do not fill gaps.
+2. Retiring a rule keeps its entry in the catalog with `deprecated: true`, `detection: "advisory"`, and prose that explains what happened (merged into another rule, removed without history). The id stays reserved.
+3. Hard-deleting an entry is forbidden. If a rule was deleted before this policy was written and its history is unrecoverable, leave a deprecated stub at the next regen with `summary: "Reserved id..."` so the rendered catalog shows the gap is intentional.
+
+The MS-numbered ids and their `since` versions are part of the contract package's public surface. Treat them with the same stability discipline as a Zod schema field.
+
 ## Two-Consumer Rule
 
 Do not add a new abstraction (helper, type, contract field, adapter slot, config knob) until two real call sites in this repo need it. One consumer is a special case; two is a pattern. This rule is the main way Mobile Surfaces resists starter rot — most "wouldn't it be cleaner if…" PRs should be deferred until a second consumer materializes.

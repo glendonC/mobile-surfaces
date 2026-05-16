@@ -36,7 +36,7 @@ flowchart LR
 
 ```ts
 interface LiveSurfaceSnapshotBase {
-  schemaVersion: "4";         // discriminator; bumped only on breaking changes
+  schemaVersion: "5";         // discriminator; bumped only on breaking changes
   kind: "liveActivity" | "widget" | "control" | "lockAccessory" | "standby" | "notification";
   id: string;                 // unique per snapshot revision (event-scoped)
   surfaceId: string;          // stable across snapshots for the same surface
@@ -82,7 +82,7 @@ function snapshotFromJob(job: Job): LiveSurfaceSnapshot {
     : "attention";
 
   return {
-    schemaVersion: "4",
+    schemaVersion: "5",
     kind: "liveActivity",
     id: `${job.id}@${job.revision}`,
     surfaceId: `job-${job.id}`,

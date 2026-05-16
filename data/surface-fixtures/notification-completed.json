@@ -1,0 +1,16 @@
+{
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@6.0/schema.json",
+  "schemaVersion": "5",
+  "kind": "notification",
+  "id": "fixture-notification-completed",
+  "surfaceId": "surface-notification-completed",
+  "updatedAt": "2026-05-13T14:10:00.000Z",
+  "state": "completed",
+  "notification": {
+    "title": "Build #9821 completed",
+    "body": "Finished in 4 minutes. Tap to view the artifact.",
+    "deepLink": "mobilesurfaces://surface/surface-notification-completed",
+    "category": "surface-update",
+    "threadId": "build-9821"
+  }
+}

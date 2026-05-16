@@ -22,7 +22,7 @@
       "tags": ["live-activity", "swift"],
       "summary": "MobileSurfacesActivityAttributes.swift in packages/live-activity/ios/ and apps/mobile/targets/widget/ must be byte-identical, and both must match the codegen output from packages/surface-contracts/src/schema.ts.",
       "symptom": "Activity starts on the device but never appears on the Lock Screen. No log, no error. ActivityKit silently drops updates whose decoded ContentState shape does not match the widget extension's struct.",
-      "fix": "Both files are generated from the Zod source of truth. Edit liveSurfaceActivityContentState or liveSurfaceStage in packages/surface-contracts/src/schema.ts, then run pnpm codegen:activity-attributes to regenerate both files. CI gates codegen drift at stage 2 and byte-identity + Zod parity at stage 3. The follow-up plan to consolidate this duplication into a local Swift Package is upstream-blocked on @bacons/apple-targets local-SPM support and RN 0.84 local-path spm_dependency landing in Expo SDK 56; codegen is the intermediate state until that unblocks.",
+      "fix": "Both files are generated from the Zod source of truth. Edit liveSurfaceActivityContentState or liveSurfaceStage in packages/surface-contracts/src/schema.ts, then run pnpm surface:codegen to regenerate both files. CI gates codegen drift at stage 2 and byte-identity + Zod parity at stage 3. The follow-up plan to consolidate this duplication into a local Swift Package is upstream-blocked on @bacons/apple-targets local-SPM support and RN 0.84 local-path spm_dependency landing in Expo SDK 56; codegen is the intermediate state until that unblocks.",
       "enforcement": { "script": "scripts/check-activity-attributes.mjs" },
       "docs": ["https://mobile-surfaces.com/docs/architecture#native-constraints"],
       "since": "1.0.0"
@@ -50,6 +50,18 @@
       "fix": "Add or remove cases in lockstep: Zod first, regenerate the schema, mirror into both Swift files.",
       "enforcement": { "script": "scripts/check-activity-attributes.mjs" },
       "since": "1.0.0"
+    },
+    {
+      "id": "MS005",
+      "title": "Retired rule (id reserved)",
+      "severity": "info",
+      "detection": "advisory",
+      "tags": ["contract"],
+      "summary": "Reserved id. The original rule was removed before its prose was preserved in git history; the id is held back so external references (PR comments, log lines, blog posts citing MS005) keep resolving to a known marker rather than collide with a future rule.",
+      "symptom": "n/a (retired).",
+      "fix": "n/a (retired). Numbering policy: trap ids are monotonic forever; deletions reserve the id with deprecated: true.",
+      "since": "1.0.0",
+      "deprecated": true
     },
     {
       "id": "MS006",
@@ -117,7 +129,7 @@
       "severity": "error",
       "detection": "runtime",
       "tags": ["live-activity", "push"],
-      "summary": "Per-activity Live Activity pushes are bounded at 4 KB; iOS 18 broadcast pushes at 5 KB.",
+      "summary": "Per-activity Live Activity pushes are bounded at 4 KB; iOS 18 broadcast pushes at 5 KB. Standard notification alert pushes (push-type alert, kind notification) share the 4 KB ceiling; the 5 KB allowance is ActivityKit-broadcast-only and does not apply to sendNotification.",
       "symptom": "APNs returns 413 PayloadTooLarge, or accepts the payload but iOS silently drops the update. Long localized strings or accumulated morePartsCount details are common offenders.",
       "fix": "Trim the payload. Per-activity payloads are bounded at 4 KB; broadcast payloads at 5 KB. Shorten the liveActivity slice's body, lower morePartsCount, or split a state into two smaller pushes. Validate by sending the projection through toLiveActivityContentState and measuring.",
       "iosMin": "16.2",
@@ -148,9 +160,9 @@
       "severity": "error",
       "detection": "static",
       "tags": ["app-group", "widget", "control", "config"],
-      "summary": "apps/mobile/app.json, apps/mobile/targets/widget/generated.entitlements, MobileSurfacesSharedState.swift, and the host-side TS constants in apps/mobile/src must all declare the same com.apple.security.application-groups identifier.",
+      "summary": "apps/mobile/app.json is the single source of truth for the App Group identifier. The widget entitlements file at apps/mobile/targets/widget/generated.entitlements, the Swift constant at apps/mobile/targets/_shared/MobileSurfacesAppGroup.swift, and the TS constant at apps/mobile/src/generated/appGroup.ts are codegened from it and must not be hand-edited. check-app-group-identity is the defense-in-depth identity check across the four declaration sites; the primary enforcer is the generate-app-group-constants --check gate at stage 2.",
       "symptom": "Widget renders placeholder forever; control widget never reads the toggle state. No error: the entitlement mismatch makes both sides read separate App Group containers.",
-      "fix": "Set the same group identifier on every side (default 'group.com.example.mobilesurfaces'; rename via pnpm surface:rename) and rerun prebuild. check-app-group-identity verifies parity across all five declaration sites.",
+      "fix": "Edit app.json and run pnpm surface:codegen to regenerate the Swift constant, TS constant, and widget entitlements in lockstep. Rename across every site via pnpm surface:rename. Hand edits to the generated files revert on the next codegen and fail the stage-2 drift gate.",
       "docs": ["https://mobile-surfaces.com/docs/ios-environment"],
       "since": "1.0.0",
       "enforcement": { "script": "scripts/check-app-group-identity.mjs" }
@@ -256,6 +268,18 @@
       "fix": "Wire onActivityStateChange to your token store; mark tokens for the activity as terminal and stop selecting them for sends.",
       "docs": ["https://mobile-surfaces.com/docs/push#token-taxonomy"],
       "since": "1.0.0"
+    },
+    {
+      "id": "MS022",
+      "title": "Retired rule (merged into MS003)",
+      "severity": "info",
+      "detection": "advisory",
+      "tags": ["contract"],
+      "summary": "Reserved id. The original rule was an early-draft duplicate of MS003 (Swift ContentState fields and JSON keys match Zod liveSurfaceActivityContentState) and was merged into it. See git commit d79ffb0.",
+      "symptom": "See MS003.",
+      "fix": "See MS003. Numbering policy: trap ids are monotonic forever; deletions reserve the id with deprecated: true.",
+      "since": "1.0.0",
+      "deprecated": true
     },
     {
       "id": "MS023",
@@ -395,6 +419,18 @@
       "errorClasses": ["BadDateError", "BadExpirationDateError"]
     },
     {
+      "id": "MS033",
+      "title": "Retired rule (id reserved)",
+      "severity": "info",
+      "detection": "advisory",
+      "tags": ["contract"],
+      "summary": "Reserved id. The original rule was removed before its prose was preserved in git history; the id is held back so external references (PR comments, log lines, blog posts citing MS033) keep resolving to a known marker rather than collide with a future rule.",
+      "symptom": "n/a (retired).",
+      "fix": "n/a (retired). Numbering policy: trap ids are monotonic forever; deletions reserve the id with deprecated: true.",
+      "since": "1.0.0",
+      "deprecated": true
+    },
+    {
       "id": "MS034",
       "title": "Broadcast capability must be enabled on the APNs auth key",
       "severity": "error",
@@ -406,6 +442,18 @@
       "docs": ["https://mobile-surfaces.com/docs/push#error-responses"],
       "since": "3.1.0",
       "errorClasses": ["FeatureNotEnabledError"]
+    },
+    {
+      "id": "MS037",
+      "title": "Notification category outputs in sync with canonical registry",
+      "severity": "error",
+      "detection": "static",
+      "tags": ["notification", "contract", "config"],
+      "summary": "packages/surface-contracts/src/notificationCategories.ts is the single source of truth for every UNNotificationCategory identifier Mobile Surfaces ships. The generated TS constant at apps/mobile/src/generated/notificationCategories.ts (host registration), the Swift constant at apps/mobile/targets/_shared/MobileSurfacesNotificationCategories.swift (extension routing), and (when the file exists) the UNNotificationExtensionCategory array in apps/mobile/targets/notification-content/Info.plist are all codegened from it and must not be hand-edited. The schema enforces parity at the wire boundary by constraining liveSurfaceNotificationSlice.category to z.enum over the registry's ids.",
+      "symptom": "Notification arrives at the device with aps.category set, but the UNNotificationContentExtension is never invoked: the user sees the default system chrome instead of the surface-aware custom view. No log, no error - iOS silently falls back when the payload category does not match any registered UNNotificationExtensionCategory in the extension Info.plist.",
+      "fix": "Edit packages/surface-contracts/src/notificationCategories.ts and run pnpm surface:codegen to regenerate every consumer in lockstep. The schema-level z.enum constraint rejects payloads that name a category outside the registry, so the wire stays load-bearing for parity.",
+      "enforcement": { "script": "scripts/generate-notification-categories.mjs" },
+      "since": "6.0.0"
     },
     {
       "id": "MS035",
@@ -426,7 +474,7 @@
       "severity": "error",
       "detection": "static",
       "tags": ["widget", "control", "swift", "contract"],
-      "summary": "The four hand-maintained Codable structs in apps/mobile/targets/widget/_shared/MobileSurfacesSharedState.swift (MobileSurfacesWidgetSnapshot, MobileSurfacesControlSnapshot, MobileSurfacesLockAccessorySnapshot, MobileSurfacesStandbySnapshot) must declare the same fields, types, JSON keys, and optionality as their Zod projection-output schemas in packages/surface-contracts/src/schema.ts (liveSurfaceWidgetTimelineEntry, liveSurfaceControlValueProvider, liveSurfaceLockAccessoryEntry, liveSurfaceStandbyEntry). This extends the MS003 guarantee from the Lock Screen to the other four surfaces.",
+      "summary": "Every hand-maintained Codable struct in apps/mobile/targets/_shared/MobileSurfacesSharedState.swift that decodes a Zod projection-output schema (today: MobileSurfacesWidgetSnapshot, MobileSurfacesControlSnapshot, MobileSurfacesLockAccessorySnapshot, MobileSurfacesStandbySnapshot, mapping to liveSurfaceWidgetTimelineEntry, liveSurfaceControlValueProvider, liveSurfaceLockAccessoryEntry, liveSurfaceStandbyEntry in packages/surface-contracts/src/schema.ts) must declare the same fields, types, JSON keys, and optionality as its schema. New surfaces register their struct + schema pair in scripts/check-surface-snapshots.mjs's SURFACES list. This extends the MS003 guarantee from the Lock Screen to every non-Live-Activity surface.",
       "symptom": "The widget, control, lock-accessory, or StandBy surface renders placeholder data forever. The host writes a snapshot into the App Group container, but JSONDecoder in the widget extension silently fails on a renamed key, a type mismatch, or an optionality mismatch and returns nil. No log, no error.",
       "fix": "Update the Zod projection-output schema first (and the projection helper that feeds it), then mirror the field, type, JSON key, and optionality change into the matching struct in MobileSurfacesSharedState.swift. Run pnpm surface:check; check-surface-snapshots.mjs verifies all four structs against their schemas.",
       "enforcement": { "script": "scripts/check-surface-snapshots.mjs" },
