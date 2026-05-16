@@ -6,6 +6,8 @@ group: "Build"
 ---
 # Schema Migration
 
+See [Versioning Charter](./stability) for the policy that decides when this changes.
+
 `LiveSurfaceSnapshot` is at `schemaVersion: "5"`. Version 5 is additive on the snapshot wire shape (four new optional fields on the notification slice — `subtitle`, `interruptionLevel`, `relevanceScore`, `targetContentId`) and realigns the projection-output sidecar's discriminator from `"surface_notification"` to `"surface_snapshot"` so on-device routing code can switch on one literal regardless of which Mobile Surfaces wrapper produced the userInfo. `safeParseAnyVersion` chains v5 -> v4 -> v3; the v3 and v4 codecs are removed at 8.0 (see the deprecation timeline below). The v2 codec was sunset at 5.0 per the v3 RFC commitment. This page covers what changed at v5, how to migrate stored payloads from earlier versions, how to handle in-flight payloads at the edge, and the policy for future evolution.
 
 ## What changed in v5

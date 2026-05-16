@@ -1,5 +1,23 @@
 # @mobile-surfaces/surface-contracts
 
+## 7.0.0
+
+### Major Changes
+
+- Coordinated v7 release across the Mobile Surfaces packages. The linked release group narrows to `surface-contracts` + `validators` + `traps` only; `push`, `live-activity`, `tokens`, and `create-mobile-surfaces` move to independent versioning with `workspace:^` dependencies. See `apps/site/src/content/docs/stability.md` for the full versioning charter.
+
+- `schemaVersion` is now declared as the first property of every projection-output schema: `liveSurfaceWidgetTimelineEntry`, `liveSurfaceControlValueProvider`, `liveSurfaceLockAccessoryEntry`, `liveSurfaceStandbyEntry`, `liveSurfaceNotificationContentEntry`, `liveSurfaceNotificationContentPayload`. The literal is `"5"` (the canonical wire-format generation, unchanged from v6). The first-property ordering is load-bearing: the on-device Codable mirror reads `{ schemaVersion: String }` first, so a widget binary on schemaVersion N can detect a host that has shipped schemaVersion N+1 before attempting full Codable decode, and render a version-mismatch placeholder instead of failing silently. Enforced by the new MS041 static gate (`scripts/check-projection-envelope-version.mjs`).
+
+- `InvalidSnapshotError` now extends `MobileSurfacesError` from `@mobile-surfaces/traps` and carries `trapId: "MS008"` + `docsUrl`. Consumers catching the error see strictly more diagnostic surface (trap id + docs link) on the same instance.
+
+- Deprecation prose tightened. Every "will be removed in X.0.0" claim in `schema-v3.ts`, `schema-v4.ts`, and inline schema-migration notes targets a future major (one major past the current is the charter minimum). v3 retirement is pushed to v8 per the charter; v4 retirement to v9. Enforced by the new MS042 static gate (`scripts/check-deprecation-prose.mjs`).
+
+### Minor Changes
+
+- The trap catalog (`data/traps.json`) gains MS041 (projection-output envelope schemaVersion), MS042 (deprecation prose consistency), and MS043 (CHANGELOG entry required on package major). All three are static gates; the matching scripts live under `scripts/check-*.mjs` and register in `scripts/lib/check-registry.mjs`.
+
+- `traps-data.ts` becomes a thin re-export of `@mobile-surfaces/traps` for backward compatibility through the v7 release; the standalone copy is scheduled for removal in v9.
+
 ## 6.0.0
 
 ### Major Changes

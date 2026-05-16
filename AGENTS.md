@@ -13,7 +13,7 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 
 ## Index
 
-37 live rules: 32 error, 4 warning, 1 info. 3 retired ids reserved (see footnote).
+40 live rules: 35 error, 4 warning, 1 info. 3 retired ids reserved (see footnote).
 
 | ID | Severity | Detection | Title |
 | --- | --- | --- | --- |
@@ -49,6 +49,9 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 | [MS038](#ms038-live-activity-adapter-inputs-must-be-zod-parsed-before-crossing-the-bridge) | error | static | Live Activity adapter inputs must be Zod-parsed before crossing the bridge |
 | [MS039](#ms039-token-store-discipline-subscribe-to-activitykit-token-events-through-mobile-surfaces-tokens) | error | static | Token store discipline: subscribe to ActivityKit token events through @mobile-surfaces/tokens |
 | [MS040](#ms040-swift-trap-binding-file-byte-identity) | error | static | Swift trap-binding file byte-identity |
+| [MS041](#ms041-projection-output-envelopes-must-declare-schemaversion) | error | static | Projection-output envelopes must declare schemaVersion |
+| [MS042](#ms042-deprecation-prose-must-not-promise-removal-in-the-current-or-a-past-major) | error | static | Deprecation prose must not promise removal in the current or a past major |
+| [MS043](#ms043-changelog-entry-required-on-package-major) | error | static | CHANGELOG entry required on package major |
 | [MS010](#ms010-toolchain-preflight-node-24-pnpm-xcode-26) | warning | config | Toolchain preflight (Node 24, pnpm, Xcode 26+) |
 | [MS015](#ms015-push-priority-5-vs-10-budget-rules) | warning | runtime | Push priority 5 vs 10 budget rules |
 | [MS021](#ms021-discard-per-activity-tokens-when-the-activity-ends) | warning | runtime | Discard per-activity tokens when the activity ends |
@@ -60,8 +63,8 @@ Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynam
 - `app-group`: MS013, MS025
 - `channels`: MS031, MS034
 - `cng`: MS017, MS029
-- `config`: MS012, MS013, MS017, MS018, MS025, MS027, MS029, MS034, MS035, MS037
-- `contract`: MS001, MS003, MS004, MS006, MS007, MS008, MS009, MS024, MS036, MS037, MS038, MS039, MS040
+- `config`: MS012, MS013, MS017, MS018, MS025, MS027, MS029, MS034, MS035, MS037, MS041, MS042, MS043
+- `contract`: MS001, MS003, MS004, MS006, MS007, MS008, MS009, MS024, MS036, MS037, MS038, MS039, MS040, MS041, MS042, MS043
 - `control`: MS013, MS026, MS036
 - `ios-version`: MS012, MS027
 - `ios18`: MS031, MS034
@@ -452,6 +455,36 @@ MobileSurfacesTraps.swift must be byte-identical at three sites: packages/traps/
 **Symptom.** Drift across the three copies means a native module rejection carries a different trapId than the host app expects, and the `[trap=MSXXX]` suffix protocol parses to inconsistent ids on the JS side. No crash; just diagnostic noise that points the operator at the wrong fix.
 
 **Fix.** Run pnpm surface:codegen (which calls generate-traps-package) to regenerate all three from the canonical data/traps.json source.
+
+### MS041: Projection-output envelopes must declare schemaVersion
+
+**severity:** error  •  **detection:** static (script-checkable)  •  **tags:** contract, config  •  **enforced by:** `scripts/check-projection-envelope-version.mjs`
+
+Every projection-output Zod schema (liveSurfaceWidgetTimelineEntry, liveSurfaceControlValueProvider, liveSurfaceLockAccessoryEntry, liveSurfaceStandbyEntry, liveSurfaceNotificationContentEntry, liveSurfaceNotificationContentPayload) must declare schemaVersion as a z.literal as its first property. All projection-output envelopes must agree on the same literal value (the canonical schemaVersion of the snapshot schema). The first-property ordering is load-bearing: the on-device Codable mirror reads {schemaVersion: String} first, so the JSONDecoder can detect a version mismatch before it attempts to decode the rest of the struct against an incompatible shape.
+
+**Symptom.** Widget binary on schemaVersion N reads a host snapshot at schemaVersion N+1; full Codable decode succeeds because the snapshot's shape happens to be a superset (additive minor) or fails silently (real schema break). Either way, the widget renders stale data or a placeholder without telling the user the host has shipped a schemaVersion the widget doesn't recognize.
+
+**Fix.** Add `schemaVersion: z.literal("<current>")` as the first property of every projection-output schema in packages/surface-contracts/src/schema.ts. The literal value must match the snapshot schema's `schemaVersion` literal (the canonical wire-format generation). Mirror the field in the matching Swift Codable struct in apps/mobile/targets/_shared/MobileSurfacesSharedState.swift (and apps/mobile/targets/notification-content/ for the notification mirror) so the widget's `readSnapshot` helper attempts the `{ schemaVersion: String }` probe first; a mismatch renders the version-mismatch placeholder view instead of failing silently.
+
+### MS042: Deprecation prose must not promise removal in the current or a past major
+
+**severity:** error  •  **detection:** static (script-checkable)  •  **tags:** contract, config  •  **enforced by:** `scripts/check-deprecation-prose.mjs`
+
+Source files and docs cannot ship a 'will be removed in X.0.0' (or 'removed in X.0') claim from a @mobile-surfaces/surface-contracts version at major X or higher. The deprecation promise is load-bearing for downstream consumers who plan migrations against it; shipping the major while the prose still says the removal is happening now silently breaks the contract.
+
+**Symptom.** Source comment in schema-v3.ts says the codec is gone at 6.0.0. Package ships at 6.0.0 with the codec still present in safeParseAnyVersion. Consumers reading the source comment believe v3 is gone and skip a migration window; consumers reading the runtime keep using v3 indefinitely. The deprecation promise was broken silently.
+
+**Fix.** Update the deprecation prose to a future major (one major past the current is the charter minimum). If the codec really should be removed now, drop it in a coordinated release and remove the prose at the same time. To opt a specific prose line out of the check, prefix the preceding line with `// CHARTER: keep` (the allowlist marker is intentionally narrow).
+
+### MS043: CHANGELOG entry required on package major
+
+**severity:** error  •  **detection:** static (script-checkable)  •  **tags:** contract, config  •  **enforced by:** `scripts/check-changelog-on-major.mjs`
+
+Every package under packages/* whose package.json declares version X.0.0 (for X >= 1) must have a matching `## X.0.0` heading in its CHANGELOG.md. The check looks for the heading; the body is up to the maintainer. The release workflow normally writes the entry on `changeset version`; this gate catches the case where a major was bumped manually or the changeset entry was missed.
+
+**Symptom.** Package silently bumps from 5.0.0 to 6.0.0 with no CHANGELOG entry. Downstream consumers reading the CHANGELOG to understand the bump find nothing; release notes lose the audit trail; the major version becomes meaningless. This was the actual failure mode that triggered the gate: push, live-activity, validators, and create-mobile-surfaces all shipped 5.0.0 against the linked group without their own CHANGELOG entries.
+
+**Fix.** Write the CHANGELOG entry. Use `pnpm changeset version` if it didn't run, or hand-write the `## X.0.0` heading with the major changes underneath. For packages bumped purely by the linked-release group with no API change of their own, the convention is: `Linked-group bump for the v<N> schema release in @mobile-surfaces/surface-contracts. No <package> API change.`
 
 ### MS010: Toolchain preflight (Node 24, pnpm, Xcode 26+)
 

@@ -1,10 +1,24 @@
 # @mobile-surfaces/validators
 
+## 7.0.0
+
+### Major Changes
+
+- Coordinated v7 release across the Mobile Surfaces packages. `@mobile-surfaces/validators` remains in the linked release group with `@mobile-surfaces/surface-contracts` and `@mobile-surfaces/traps`; the three packages cut a coordinated major when the wire-format contract or trap catalog shifts.
+
+- Validator error classes that map to a trap catalog entry now extend `MobileSurfacesError` from `@mobile-surfaces/traps` and carry `trapId` + `docsUrl` getters.
+
 ## 6.0.0
 
 ### Major Changes
 
 - Linked-group bump for the v5 schema release in `@mobile-surfaces/surface-contracts`. No validator API change.
+
+## 5.0.0
+
+### Major Changes
+
+- Linked-group bump for the v4 schema release in `@mobile-surfaces/surface-contracts`. `@mobile-surfaces/validators` has no API change in this release; the linked group cuts a coordinated major when `surface-contracts` ships a wire-format schema bump (here, v4: rendering fields move into per-kind slices, `schemaVersion` required without default, v2 codec dropped). Consumers can update lockfiles without code changes specific to this package; the new package README documents the validator surface for foreign auditors.
 
 ## 4.0.0
 

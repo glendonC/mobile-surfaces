@@ -1,10 +1,32 @@
 # create-mobile-surfaces
 
+## 7.0.0
+
+### Major Changes
+
+- `create-mobile-surfaces` moves to independent versioning. It is no longer co-versioned with the linked release group (`surface-contracts` + `validators` + `traps`); its dependency on `@mobile-surfaces/validators` is now declared as `workspace:^`. See `apps/site/src/content/docs/stability.md` for the versioning charter.
+
+- The bundled template tarball is regenerated against the v7 package versions and the workspace's narrowed linked group. A fresh scaffold ships with the new `@mobile-surfaces/traps` dependency and the `workspace:^` resolution against linked-group members.
+
 ## 6.0.0
 
 ### Major Changes
 
 - Linked-group bump for the v5 schema release in `@mobile-surfaces/surface-contracts`. The bundled template tarball now ships the notification-content extension (`apps/mobile/targets/notification-content/`) and a `pnpm surface:codegen` script wired into the scaffold's package.json so a fresh project regenerates the App Group identity, ActivityKit attributes, and notification category constants from one entry point. The scaffold-e2e fixture is updated to assert the new codegen surfaces land in a freshly scaffolded project.
+
+## 5.0.0
+
+### Major Changes
+
+- Linked-group bump for the v4 schema release in `@mobile-surfaces/surface-contracts`. The bundled template tarball is regenerated against the v4 wire shape; a fresh scaffold ships with per-kind rendering slices, the renamed `toApnsAlertPayload` helper, and `schemaVersion: "4"` stamped on every fixture.
+
+- Apply failure paths now distinguish three observable outcomes: rolled back successfully (`applyFailedRolledBack` with `restoredCount`), rolled back with rollback errors (`applyFailedRollbackErrored` carrying both the restore count and the rollback failure message), and post-commit failure where the backup is gone and the user's edits are intentional (`applyFailedPostCommit`). The interrupt path likewise reports the restored count instead of a bare message. Callers reading the CLI's stderr scripts must match against the new templates.
+
+### Minor Changes
+
+- New exported `parseXcodeVersion(output)` pure helper for unit-testing the Xcode version parse without spawning `xcodebuild`. The preflight step now degrades gracefully when `xcodebuild` is present but its output is unrecognized (treats as "version unknown" rather than failing the user out).
+
+- Preflight, prompts, and apply-existing tests pick up substantial coverage growth (`test/preflight.test.mjs`, `test/prompts.test.mjs`, `test/exit-codes.test.mjs`). Behavior under interrupted apply, missing pnpm, missing CocoaPods, and rollback paths is pinned by subprocess-driven tests.
 
 ## 4.0.0
 

@@ -240,6 +240,15 @@ export const checkRegistry = Object.freeze([
     trapIds: ["MS039"],
   },
   {
+    id: "check-projection-envelope-version",
+    label: "projection-output schemas declare schemaVersion first",
+    stage: 3,
+    script: "scripts/check-projection-envelope-version.mjs",
+    diagnose: true,
+    mode: "single-mode",
+    trapIds: ["MS041"],
+  },
+  {
     id: "check-validator-sync",
     label: "validator re-exports in sync with source",
     stage: 3,
@@ -293,6 +302,24 @@ export const checkRegistry = Object.freeze([
     script: "scripts/check-doc-schema-version.mjs",
     diagnose: true,
     mode: "single-mode",
+  },
+  {
+    id: "check-deprecation-prose",
+    label: "deprecation prose targets a future major",
+    stage: 4,
+    script: "scripts/check-deprecation-prose.mjs",
+    diagnose: true,
+    mode: "single-mode",
+    trapIds: ["MS042"],
+  },
+  {
+    id: "check-changelog-on-major",
+    label: "every package major has a matching CHANGELOG heading",
+    stage: 4,
+    script: "scripts/check-changelog-on-major.mjs",
+    diagnose: true,
+    mode: "single-mode",
+    trapIds: ["MS043"],
   },
 
   // Stage 5: full contract test suite. Broadest gate; exercises Zod

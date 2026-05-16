@@ -60,8 +60,8 @@
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
-    "@mobile-surfaces/surface-contracts": "workspace:*",
-    "@mobile-surfaces/traps": "workspace:*"
+    "@mobile-surfaces/surface-contracts": "workspace:^",
+    "@mobile-surfaces/traps": "workspace:^"
   },
   "peerDependencies": {
     "zod": "4.3.6"
