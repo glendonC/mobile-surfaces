@@ -98,7 +98,7 @@ export function isIdempotent(substitutions) {
 // added; we now walk the tree and accept anything whose extension or basename
 // is plausibly a text source.
 export const TEXT_EXTENSIONS = new Set([
-  ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
+  ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts",
   ".json", ".md", ".mdx",
   ".swift", ".m", ".h", ".mm",
   ".sh", ".bash",
