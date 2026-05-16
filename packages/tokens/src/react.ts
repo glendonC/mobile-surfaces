@@ -71,7 +71,7 @@ export function useTokenStore(opts: UseTokenStoreOptions): TokenStore {
   // just the re-render trigger.
   const [, setTick] = useState(0);
   useEffect(() => {
-    const unsub = store.subscribe(() => setTick((t) => (t + 1) % 1_000_000));
+    const unsub = store.subscribe(() => setTick((t: number) => (t + 1) % 1_000_000));
     return unsub;
   }, [store]);
 
