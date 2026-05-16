@@ -188,6 +188,55 @@ A single long-lived HTTP/2 session per (origin) is multiplexed across concurrent
 
 `client.close()` flushes in-flight requests, sets the client to closed, and tears down both sessions (send + management). Subsequent calls throw `ClientClosedError`. Graceful HTTP/2 close is bounded by `closeTimeoutMs` (default 5_000 ms); a stuck peer is force-destroyed rather than hanging teardown.
 
+### Concurrent-stream cap
+
+Each session multiplexes streams up to `maxConcurrentStreams` (default `900`). The effective cap is `min(maxConcurrentStreams, peer's SETTINGS frame, 900)` — Apple typically advertises 1000, and the 900 floor leaves headroom against peer-side enforcement variance. Excess requests wait in a FIFO queue and dispatch as in-flight streams complete; queue entries honor `AbortSignal` (an abort while queued short-circuits without opening a stream), and `client.close()` rejects every queued request with the closed error so teardown is never blocked by a long queue. Pass `0` to disable the queue entirely — the SDK then dispatches without a per-client cap and lets `NGHTTP2_REFUSED_STREAM` ride the normal retry loop.
+
+## Operational notes
+
+### Multi-worker JWT minting
+
+`JwtCache` is a process-local cache. In a cluster-mode or `worker_threads` deployment, each worker holds its own cache and re-mints independently every 50 minutes — that is wasted compute (a handful of ES256 signs per hour per worker) but functionally correct. If your operating model requires a single mint shared across workers — or a Redis-backed cache that fronts an external coordinator — pass a custom implementation via the `jwtCache` option. When set, `keyId`, `teamId`, and `keyPath` become optional; the injected implementation owns mint, refresh, and dedup.
+
+```ts
+import { createPushClient, type JwtCacheLike } from "@mobile-surfaces/push";
+import { BroadcastChannel } from "node:worker_threads";
+
+// Leader-elected: the first worker to mint broadcasts the result; others
+// await the next broadcast. Implementations are responsible for their own
+// freshness (timer, expiry, retry-on-error) and concurrency (one in-flight
+// mint at a time inside a single worker).
+function createBroadcastJwtCache(mint: () => Promise<string>): JwtCacheLike {
+  const channel = new BroadcastChannel("push-jwt");
+  let cached: { token: string; iatMs: number } | undefined;
+  let inflight: Promise<string> | undefined;
+  channel.onmessage = (event) => {
+    const data = event.data as { token: string; iatMs: number };
+    if (!cached || data.iatMs > cached.iatMs) cached = data;
+  };
+  return {
+    async get() {
+      if (cached && Date.now() - cached.iatMs < 50 * 60 * 1000) return cached.token;
+      if (inflight) return inflight;
+      inflight = (async () => {
+        const token = await mint();
+        cached = { token, iatMs: Date.now() };
+        channel.postMessage(cached);
+        return token;
+      })().finally(() => {
+        inflight = undefined;
+      });
+      return inflight;
+    },
+    invalidate() {
+      cached = undefined;
+    },
+  };
+}
+```
+
+The exported `JwtCache` class is itself a `JwtCacheLike` implementation, so you can compose it (wrap the default cache with a `BroadcastChannel` listener, or front it with Redis SETNX) rather than re-implement minting from scratch.
+
 ## Next steps
 
 - Read [`https://mobile-surfaces.com/docs/backend-integration`](https://mobile-surfaces.com/docs/backend-integration) for the full domain event to snapshot to APNs flow.

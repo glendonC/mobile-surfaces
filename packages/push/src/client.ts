@@ -37,7 +37,7 @@ import {
 import type { PayloadKind } from "./preflight.ts";
 import type { Http2ConnectFactory } from "./http.ts";
 import { Http2Client } from "./http.ts";
-import { JwtCache, resolveKeyPem } from "./jwt.ts";
+import { JwtCache, type JwtCacheLike, resolveKeyPem } from "./jwt.ts";
 import {
   DEFAULT_RETRY_POLICY,
   computeBackoffMs,
@@ -92,6 +92,27 @@ export interface CreatePushClientOptions {
   /** ms with no in-flight requests before the HTTP/2 session is closed. Default 60_000. */
   idleTimeoutMs?: number;
   /**
+   * Maximum number of concurrent streams the client will dispatch on each
+   * underlying HTTP/2 session (one for send traffic, one for channel
+   * management). Excess requests wait in a FIFO queue until in-flight
+   * streams complete.
+   *
+   * The effective cap is `min(this option, peer's SETTINGS frame, 900)`.
+   * Apple typically advertises `SETTINGS_MAX_CONCURRENT_STREAMS=1000`; the
+   * defensive 900 floor leaves headroom for peer-side enforcement variance.
+   * Production callers can omit this option — the default keeps high-volume
+   * senders from running into `NGHTTP2_REFUSED_STREAM` thrash without
+   * over-restricting healthy bursts.
+   *
+   * Pass `0` or a negative value to disable the queue (pre-cap behavior:
+   * unbounded multiplexing; overflow surfaces as `NGHTTP2_REFUSED_STREAM`
+   * and rides the normal retry loop). The cap applies independently to the
+   * send origin and the channel-management origin; both default the same.
+   *
+   * Default: `900`.
+   */
+  maxConcurrentStreams?: number;
+  /**
    * Upper bound in ms that `close()` waits for the underlying HTTP/2 sessions
    * to drain gracefully before force-destroying them. APNs healthy peers drain
    * in milliseconds; the default exists so a stuck peer cannot hang process
@@ -126,6 +147,24 @@ export interface CreatePushClientOptions {
    * full session-options surface to production callers.
    */
   caOverride?: string | Buffer;
+  /**
+   * Optional JWT cache override. When provided, the SDK skips the built-in
+   * {@link JwtCache} and uses this implementation for every provider-token
+   * mint and invalidate. The strategy boundary lets multi-worker or
+   * multi-replica deployments coordinate JWT minting externally (Redis-backed
+   * read-through, BroadcastChannel-elected leader, etc.) without paying for
+   * N independent ES256 signs every 50 minutes.
+   *
+   * When set, `keyId`, `teamId`, and `keyPath` become optional — the SDK
+   * does not mint anything itself and therefore does not need the auth-key
+   * material. The injected implementation owns mint, refresh, and dedup.
+   * `bundleId` and `environment` are still required because they drive
+   * APNs routing.
+   *
+   * See packages/push/README.md "Operational notes" for a worked example
+   * using Node's `BroadcastChannel` to share a single mint across workers.
+   */
+  jwtCache?: JwtCacheLike;
 }
 
 /**
@@ -541,18 +580,24 @@ function isRetryDisabledByEnv(): boolean {
 // "${MISSING_VAR}" or similar would otherwise pass a typeof check.
 function assertConfigComplete(options: CreatePushClientOptions): void {
   const missing: string[] = [];
-  if (!isNonEmpty(options.keyId)) missing.push("keyId");
-  if (!isNonEmpty(options.teamId)) missing.push("teamId");
   if (!isNonEmpty(options.bundleId)) missing.push("bundleId");
-  if (options.keyPath === undefined || options.keyPath === null) {
-    missing.push("keyPath");
-  } else if (typeof options.keyPath === "string" && !isNonEmpty(options.keyPath)) {
-    missing.push("keyPath");
-  } else if (Buffer.isBuffer(options.keyPath) && options.keyPath.length === 0) {
-    missing.push("keyPath");
-  }
   if (options.environment !== "development" && options.environment !== "production") {
     missing.push("environment");
+  }
+  // keyId / teamId / keyPath are only required for the default in-process
+  // JwtCache. When the caller injects their own JwtCacheLike (Redis-backed,
+  // BroadcastChannel-coordinated, etc.), the SDK never mints and therefore
+  // does not need the auth-key material.
+  if (options.jwtCache === undefined) {
+    if (!isNonEmpty(options.keyId)) missing.push("keyId");
+    if (!isNonEmpty(options.teamId)) missing.push("teamId");
+    if (options.keyPath === undefined || options.keyPath === null) {
+      missing.push("keyPath");
+    } else if (typeof options.keyPath === "string" && !isNonEmpty(options.keyPath)) {
+      missing.push("keyPath");
+    } else if (Buffer.isBuffer(options.keyPath) && options.keyPath.length === 0) {
+      missing.push("keyPath");
+    }
   }
   if (missing.length > 0) {
     throw new MissingApnsConfigError(missing);
@@ -624,9 +669,12 @@ function nowSec(): number {
 }
 
 export class PushClient {
-  readonly #options: Required<Pick<CreatePushClientOptions, "keyId" | "teamId" | "bundleId" | "environment">>;
+  readonly #options: Required<Pick<CreatePushClientOptions, "bundleId" | "environment">> & {
+    keyId: string | undefined;
+    teamId: string | undefined;
+  };
   readonly #retryPolicy: RetryPolicy;
-  readonly #jwt: JwtCache;
+  readonly #jwt: JwtCacheLike;
   readonly #send: Http2Client;
   readonly #manage: Http2Client;
   readonly #hooks: PushHooks;
@@ -651,18 +699,22 @@ export class PushClient {
     ] as TestTransportOverride | undefined;
     this.#requestTimeoutMs = override?.requestTimeoutMs;
 
-    const keyPem = resolveKeyPem(options.keyPath);
-    this.#jwt = new JwtCache(
-      {
-        keyPem,
-        keyId: options.keyId,
-        teamId: options.teamId,
-      },
-      {
-        refreshIntervalMs: override?.jwtRefreshIntervalMs,
-        now: override?.jwtNow,
-      },
-    );
+    if (options.jwtCache) {
+      this.#jwt = options.jwtCache;
+    } else {
+      const keyPem = resolveKeyPem(options.keyPath as string | Buffer);
+      this.#jwt = new JwtCache(
+        {
+          keyPem,
+          keyId: options.keyId as string,
+          teamId: options.teamId as string,
+        },
+        {
+          refreshIntervalMs: override?.jwtRefreshIntervalMs,
+          now: override?.jwtNow,
+        },
+      );
+    }
 
     // Merge caOverride into sessionOptions when set. The test-only
     // sessionOptions override (TEST_TRANSPORT_OVERRIDE.sessionOptions) wins
@@ -671,10 +723,12 @@ export class PushClient {
       options.caOverride,
       override?.sessionOptions,
     );
+    const maxConcurrentStreams = options.maxConcurrentStreams;
     this.#send = new Http2Client({
       origin: override?.sendOrigin ?? sendOriginFor(options.environment),
       idleTimeoutMs,
       closeTimeoutMs,
+      maxConcurrentStreams,
       connect: override?.connect,
       sessionOptions,
     });
@@ -682,6 +736,7 @@ export class PushClient {
       origin: override?.manageOrigin ?? manageOriginFor(options.environment),
       idleTimeoutMs,
       closeTimeoutMs,
+      maxConcurrentStreams,
       connect: override?.connect,
       sessionOptions,
     });
@@ -865,7 +920,7 @@ export class PushClient {
     const headers: Record<string, string> = {
       ":method": "POST",
       ":path": `/4/broadcasts/apps/${this.#options.bundleId}`,
-      authorization: `bearer ${this.#jwt.get()}`,
+      authorization: `bearer ${await this.#jwt.get()}`,
       "apns-channel-id": channelId,
       "apns-push-type": "liveactivity",
       "apns-priority": String(priority),
@@ -901,7 +956,7 @@ export class PushClient {
     const headers: Record<string, string> = {
       ":method": "POST",
       ":path": `/1/apps/${this.#options.bundleId}/channels`,
-      authorization: `bearer ${this.#jwt.get()}`,
+      authorization: `bearer ${await this.#jwt.get()}`,
       "content-type": "application/json",
     };
     const res = await this.#performManage(headers, body, {
@@ -933,7 +988,7 @@ export class PushClient {
     const headers: Record<string, string> = {
       ":method": "GET",
       ":path": `/1/apps/${this.#options.bundleId}/all-channels`,
-      authorization: `bearer ${this.#jwt.get()}`,
+      authorization: `bearer ${await this.#jwt.get()}`,
     };
     const res = await this.#performManage(headers, undefined, {
       operation: "listChannels",
@@ -958,7 +1013,7 @@ export class PushClient {
     const headers: Record<string, string> = {
       ":method": "DELETE",
       ":path": `/1/apps/${this.#options.bundleId}/channels`,
-      authorization: `bearer ${this.#jwt.get()}`,
+      authorization: `bearer ${await this.#jwt.get()}`,
       "apns-channel-id": channelId,
     };
     await this.#performManage(headers, undefined, {
@@ -1247,7 +1302,7 @@ export class PushClient {
     const headers: Record<string, string> = {
       ":method": "POST",
       ":path": `/3/device/${args.token}`,
-      authorization: `bearer ${this.#jwt.get()}`,
+      authorization: `bearer ${await this.#jwt.get()}`,
       "apns-topic": args.apnsTopic,
       "apns-push-type": args.pushType,
       "apns-priority": String(priority),
@@ -1392,9 +1447,9 @@ export class PushClient {
           // MS030 documents the operator-facing fix; this branch keeps the
           // SDK self-healing for the transient clock-skew variant.
           if (apnsError instanceof ExpiredProviderTokenError) {
-            this.#jwt.invalidate();
+            await this.#jwt.invalidate();
           }
-          headers.authorization = `bearer ${this.#jwt.get()}`;
+          headers.authorization = `bearer ${await this.#jwt.get()}`;
           continue;
         }
         throw apnsError;
