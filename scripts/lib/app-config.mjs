@@ -8,7 +8,68 @@
 // already-parsed appJson object. No process.exit, no console output — callers
 // emit DiagnosticReport rows from the returned structured results.
 
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
+import { join, resolve } from "node:path";
+
+/**
+ * Locate an Expo `app.json` (or `app.config.json`) inside `rootDir`. Used by
+ * the `mobile-surfaces audit` subcommand to handle the three common
+ * project layouts:
+ *
+ *   1. Root-shaped Expo project:  rootDir/app.json
+ *   2. Mobile Surfaces monorepo:  rootDir/apps/mobile/app.json
+ *   3. Other monorepo shape:      rootDir/<single-app-dir>/app.json
+ *
+ * Returns `{ found: true, appJsonPath, mobileRoot }` on success
+ * (`mobileRoot` is the directory containing app.json — the natural anchor
+ * for sibling files like package.json, targets/, etc.). Returns
+ * `{ found: false }` when no candidate can be located.
+ *
+ * @param {string} rootDir  Foreign-project root.
+ */
+export function discoverAppConfig(rootDir) {
+  const root = resolve(rootDir);
+  const candidates = [
+    join(root, "app.json"),
+    join(root, "app.config.json"),
+    join(root, "apps", "mobile", "app.json"),
+    join(root, "apps", "mobile", "app.config.json"),
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      const mobileRoot = candidate.slice(0, candidate.lastIndexOf("/"));
+      return { found: true, appJsonPath: candidate, mobileRoot };
+    }
+  }
+  // Fall back to scanning rootDir/apps/* for any directory containing app.json
+  // (covers third-shape monorepos with a non-conventional name).
+  const appsDir = join(root, "apps");
+  if (existsSync(appsDir)) {
+    let entries = [];
+    try {
+      entries = readdirSync(appsDir);
+    } catch {
+      entries = [];
+    }
+    for (const entry of entries) {
+      const candidate = join(appsDir, entry, "app.json");
+      if (existsSync(candidate)) {
+        try {
+          if (statSync(candidate).isFile()) {
+            return {
+              found: true,
+              appJsonPath: candidate,
+              mobileRoot: join(appsDir, entry),
+            };
+          }
+        } catch {
+          // ignore and continue
+        }
+      }
+    }
+  }
+  return { found: false };
+}
 
 /**
  * Load and parse apps/mobile/app.json (or any path the caller supplies).

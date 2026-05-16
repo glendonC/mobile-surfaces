@@ -26,7 +26,8 @@
   ],
   "type": "module",
   "bin": {
-    "create-mobile-surfaces": "./bin/index.mjs"
+    "create-mobile-surfaces": "./bin/index.mjs",
+    "mobile-surfaces": "./bin/mobile-surfaces.mjs"
   },
   "files": [
     "bin",
@@ -53,6 +54,7 @@
     "@inquirer/ansi": "2.0.5",
     "@inquirer/core": "11.1.9",
     "@inquirer/prompts": "8.4.2",
+    "@mobile-surfaces/traps": "workspace:^",
     "@mobile-surfaces/validators": "workspace:^",
     "ora": "9.4.0",
     "picocolors": "1.1.1"

@@ -6,6 +6,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { applyToExisting } from "./apply-existing.mjs";
 import { applyMonorepo } from "./apply-monorepo.mjs";
+import { CocoapodsMissingError, PnpmMissingError } from "./errors.mjs";
 import * as scaffold from "./scaffold.mjs";
 import { applyStripGreenfield } from "./strip.mjs";
 import { task } from "./ui.mjs";
@@ -22,15 +23,12 @@ const DEFAULT_SURFACES = Object.freeze({
 
 const execFileAsync = promisify(execFile);
 
-// Tag used by bin/index.mjs to swap the generic "install failed" copy for
-// a specific corepack pointer. The string lives in the error message itself
-// so the install log shows exactly what the user needs.
+// Back-compat tag values retained as re-exports so any external consumer
+// or test still pattern-matching on `err.tag === PNPM_MISSING_TAG` continues
+// to work. New call sites should instanceof-check against PnpmMissingError /
+// CocoapodsMissingError instead. The error classes also set `.tag` for the
+// same reason; see errors.mjs.
 export const PNPM_MISSING_TAG = "pnpm-missing";
-
-// Tag used by bin/index.mjs to swap the generic "install failed" copy for
-// a specific CocoaPods install pointer. expo prebuild calls pods internally
-// so the failure would otherwise show as a deep-in-prebuild error 60–90s
-// after the spinner starts.
 export const COCOAPODS_MISSING_TAG = "cocoapods-missing";
 
 // Greenfield always installs with pnpm because the template ships a
@@ -45,11 +43,11 @@ export async function ensurePnpmAvailable({ exec = execFileAsync } = {}) {
   try {
     await exec("pnpm", ["-v"], { timeout: 5000 });
   } catch (cause) {
-    const err = new Error(
-      "pnpm not found on PATH. The Mobile Surfaces template ships a pnpm-lock.yaml. Enable pnpm with: corepack enable pnpm",
-    );
+    const err = new PnpmMissingError(cause);
+    // Back-compat: external consumers (and our own bin/index.mjs prior to
+    // v7) still branch on err.tag. Keep the field populated until the v8
+    // cleanup removes the duck-typed catch arm.
     err.tag = PNPM_MISSING_TAG;
-    err.cause = cause;
     throw err;
   }
 }
@@ -58,17 +56,13 @@ export async function ensurePnpmAvailable({ exec = execFileAsync } = {}) {
 // when it's missing (so the user can pick installNow=false and proceed); this
 // guard hard-fails before prebuild starts when they did pick installNow,
 // turning a 60–90s in-the-weeds prebuild error into an immediate, actionable
-// "install cocoapods" message. Mirrors ensurePnpmAvailable's shape so
-// bin/index.mjs handles both with one error-tag pattern.
+// "install cocoapods" message.
 export async function ensureCocoapodsAvailable({ exec = execFileAsync } = {}) {
   try {
     await exec("pod", ["--version"], { timeout: 5000 });
   } catch (cause) {
-    const err = new Error(
-      "CocoaPods not found on PATH. expo prebuild needs it to install iOS pods. Install with: brew install cocoapods (or sudo gem install cocoapods)",
-    );
+    const err = new CocoapodsMissingError(cause);
     err.tag = COCOAPODS_MISSING_TAG;
-    err.cause = cause;
     throw err;
   }
 }
