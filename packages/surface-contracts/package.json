@@ -1,6 +1,6 @@
 {
   "name": "@mobile-surfaces/surface-contracts",
-  "version": "7.0.0",
+  "version": "8.0.0",
   "description": "Bridge-agnostic wire format for iOS Live Activities, widgets, controls, and notifications. Pairs with @mobile-surfaces/push.",
   "publishConfig": {
     "access": "public",

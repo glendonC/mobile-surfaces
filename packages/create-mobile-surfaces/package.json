@@ -1,6 +1,6 @@
 {
   "name": "create-mobile-surfaces",
-  "version": "7.0.0",
+  "version": "7.1.0",
   "description": "Scaffold a Mobile Surfaces project, or add the contract and widget target to an existing Expo app. Also ships the `mobile-surfaces audit` subcommand for checking foreign Expo projects against the trap catalog.",
   "publishConfig": {
     "access": "public"

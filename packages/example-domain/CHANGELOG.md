@@ -1,5 +1,12 @@
 # @mobile-surfaces/example-domain
 
+## 0.1.1
+
+### Patch Changes
+
+- Updated dependencies [c347e54]
+  - @mobile-surfaces/surface-contracts@8.0.0
+
 ## 0.1.0
 
 ### Minor Changes

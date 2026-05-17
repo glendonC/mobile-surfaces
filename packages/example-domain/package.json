@@ -1,6 +1,6 @@
 {
   "name": "@mobile-surfaces/example-domain",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Reference domain (DeliveryOrder) and projection family (deliveryToSnapshot) for the Mobile Surfaces example backend and the mobile app's DeliveryExampleScreen. Demonstrates the wire-boundary parse pattern that's load-bearing for every Mobile Surfaces project: domain state -> projection -> safeParseSnapshot -> adapter / App Group / APNs.",
   "publishConfig": {
     "access": "public",

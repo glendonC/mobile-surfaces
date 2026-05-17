@@ -1,5 +1,5 @@
 {
-  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@7.0/schema.json",
+  "$schema": "https://unpkg.com/@mobile-surfaces/surface-contracts@8.0/schema.json",
   "schemaVersion": "5",
   "kind": "notification",
   "id": "fixture-notification-thread-grouped",

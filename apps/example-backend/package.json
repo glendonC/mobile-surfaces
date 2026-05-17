@@ -1,6 +1,6 @@
 {
   "name": "mobile-surfaces-example-backend",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Single-file Node server that demonstrates the production shape of a Mobile Surfaces backend: receive a domain event, project to a LiveSurfaceSnapshot, drive APNs via @mobile-surfaces/push. Paired with apps/mobile/src/screens/DeliveryExampleScreen.tsx to close the loop end-to-end.",
   "private": true,
   "license": "MIT",
