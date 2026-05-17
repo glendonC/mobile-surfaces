@@ -187,12 +187,20 @@ export class Http2Client {
         abortHandler: undefined,
       };
       if (signal) {
-        waiter.abortHandler = () => {
+        // The handler must remove its own listener explicitly. `{ once: true }`
+        // does the right thing for a real AbortSignal under Node's EventTarget
+        // dispatch, but defensive cleanup means a partial AbortSignal polyfill
+        // (or a host environment that doesn't honor the `once` option) cannot
+        // leak listeners on a long-lived signal. Mirrors the per-stream timeout
+        // cleanup at http.ts:#executeRequest.
+        const abortHandler = () => {
+          signal.removeEventListener("abort", abortHandler);
           const idx = this.#waiters.indexOf(waiter);
           if (idx >= 0) this.#waiters.splice(idx, 1);
           reject(abortReason(signal));
         };
-        signal.addEventListener("abort", waiter.abortHandler, { once: true });
+        waiter.abortHandler = abortHandler;
+        signal.addEventListener("abort", abortHandler, { once: true });
       }
       this.#waiters.push(waiter);
     });
