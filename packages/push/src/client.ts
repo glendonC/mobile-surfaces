@@ -85,7 +85,7 @@ export interface CreatePushClientOptions {
   /**
    * @deprecated Renamed to `_unsafeRetryOverride` in 3.1.0; the old name is
    * still honored but logs a one-time deprecation warning per process and
-   * will be removed in 8.0. If both options are set, `_unsafeRetryOverride`
+   * will be removed in 9.0. If both options are set, `_unsafeRetryOverride`
    * wins and this field is ignored.
    */
   retryPolicy?: Partial<RetryPolicy>;
@@ -556,7 +556,7 @@ function resolveRetryPolicy(options: CreatePushClientOptions): RetryPolicy {
     retryPolicyDeprecationLogged = true;
     console.warn(
       "[@mobile-surfaces/push] `retryPolicy` is deprecated; rename to `_unsafeRetryOverride`. " +
-        "The old name will be removed in 8.0.",
+        "The old name will be removed in 9.0.",
     );
   }
   const merged: RetryPolicy = { ...DEFAULT_RETRY_POLICY, ...(override ?? {}) };
