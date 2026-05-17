@@ -16,9 +16,13 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   treeshake: true,
+  tsconfig: "./tsconfig.build.json",
   external: [
     "react",
     "@react-native-async-storage/async-storage",
     "expo-secure-store",
+    "@mobile-surfaces/surface-contracts",
+    "@mobile-surfaces/live-activity",
+    "@mobile-surfaces/traps",
   ],
 });
