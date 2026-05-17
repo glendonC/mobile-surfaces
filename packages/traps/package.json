@@ -1,6 +1,6 @@
 {
   "name": "@mobile-surfaces/traps",
-  "version": "7.0.0",
+  "version": "8.0.0",
   "description": "Single home for the trap catalog, MobileSurfacesError base, URL builder, and generated TS/Swift bindings. Imported by every package that throws or reports diagnostics; not user-facing.",
   "publishConfig": {
     "access": "public",

@@ -1,6 +1,6 @@
 {
   "name": "@mobile-surfaces/tokens",
-  "version": "7.0.0",
+  "version": "7.1.0",
   "description": "Token store and forwarder for Mobile Surfaces. Owns MS020/MS021 semantics (latest-write-wins on rotation, terminal lifecycle on activity end) for ActivityKit push, push-to-start, and APNs device tokens.",
   "publishConfig": {
     "access": "public",

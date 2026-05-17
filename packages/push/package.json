@@ -1,6 +1,6 @@
 {
   "name": "@mobile-surfaces/push",
-  "version": "7.0.0",
+  "version": "7.1.0",
   "description": "Typed APNs client for Mobile Surfaces snapshots. HTTP/2, JWT, push-to-start, iOS 18 broadcast channels.",
   "publishConfig": {
     "access": "public",
