@@ -12,7 +12,7 @@ A wall-clock 30-minute path from `npm create mobile-surfaces` to a working Live 
 - macOS with Xcode 26.2 installed (Xcode major must be ≥ 26 per [MS010](/docs/traps#ms010-toolchain-preflight)).
 - An iOS 17.2+ device. The simulator can render Live Activities but cannot receive APNs pushes; the full loop requires a real phone.
 - Apple Developer account (free or paid; paid required only for TestFlight).
-- Node 24, pnpm 10 — see [`compatibility.md`](/docs/compatibility) for the pinned row.
+- Node 24, pnpm 10. See [`compatibility.md`](/docs/compatibility) for the pinned row.
 
 ## 1. Scaffold (2 min)
 
@@ -53,7 +53,7 @@ Live Activity remote start and update need an APNs JWT. The key is one .p8 file 
 7. Copy your 10-character **Team ID** from the **Membership** tab.
 8. The bundle id is `expo.ios.bundleIdentifier` from `apps/mobile/app.json` (default: `com.<owner>.<project>`).
 
-Avoid `com.example.*` — the App Store and TestFlight uploaders reject it.
+Avoid `com.example.*`; the App Store and TestFlight uploaders reject it.
 
 ## 4. Wire APNs (1 min)
 
@@ -61,7 +61,7 @@ Avoid `com.example.*` — the App Store and TestFlight uploaders reject it.
 pnpm surface:setup-apns
 ```
 
-Interactive wizard. It validates the four `APNS_*` env vars and writes them to `.env.local`. The script handles the `.push-type.liveactivity` topic suffix internally — do not include it in `APNS_BUNDLE_ID` ([MS018](/docs/traps#ms018-apns-bundle-id-must-not-include-the-push-type-liveactivity-suffix)).
+Interactive wizard. It validates the four `APNS_*` env vars and writes them to `.env.local`. The script handles the `.push-type.liveactivity` topic suffix internally; do not include it in `APNS_BUNDLE_ID` ([MS018](/docs/traps#ms018-apns-bundle-id-must-not-include-the-push-type-liveactivity-suffix)).
 
 ## 5. Install on device (5 min)
 
@@ -109,18 +109,18 @@ The activity dismisses.
 
 You've validated the harness end-to-end. Time to build your real app on top of it. The harness is a fixture-driven playground - your app is what you replace it with.
 
-- **[Building your app](/docs/building-your-app)** — concrete migration steps from the harness to a production screen, with a worked package-delivery example covering domain types, snapshot derivation, state management, token forwarding, and backend send.
-- [Scenarios](/docs/scenarios) — the canonical delivery flow rendered step by step across all five surfaces.
-- [Concepts](/docs/concepts) — the contract, the surfaces, the adapter boundary.
-- [Surfaces](/docs/surfaces) — what each `kind` actually drives.
-- [Backend](/docs/backend) — domain event → snapshot → APNs walkthrough.
-- [Push](/docs/push) — the wire-layer reference and SDK.
-- [Observability](/docs/observability) — alertable errors and operator response.
-- [Troubleshooting](/docs/troubleshooting) — symptom-to-fix recipes.
+- **[Building your app](/docs/building-your-app)**: concrete migration steps from the harness to a production screen, with a worked package-delivery example covering domain types, snapshot derivation, state management, token forwarding, and backend send.
+- [Scenarios](/docs/scenarios): the canonical delivery flow rendered step by step across all five surfaces.
+- [Concepts](/docs/concepts): the contract, the surfaces, the adapter boundary.
+- [Surfaces](/docs/surfaces): what each `kind` actually drives.
+- [Backend](/docs/backend): domain event → snapshot → APNs walkthrough.
+- [Push](/docs/push): the wire-layer reference and SDK.
+- [Observability](/docs/observability): alertable errors and operator response.
+- [Troubleshooting](/docs/troubleshooting): symptom-to-fix recipes.
 
 ## Common 30-minute traps
 
-- **Activity starts but never updates on push.** Check [MS013](/docs/traps#ms013-app-group-entitlement-must-match-host-app-and-widget-extension) (App Group identity across host + widget). If running on simulator, switch to device — APNs Live Activity pushes are device-only.
-- **APNs returns 400 BadDeviceToken.** [MS014](/docs/traps#ms014-apns-token-environment-must-match-the-build-environment) — your token was minted by a dev-client build; the production endpoint won't accept it. Pass `--env=development`.
-- **APNs returns 400 TopicDisallowed.** [MS018](/docs/traps#ms018-apns-bundle-id-must-not-include-the-push-type-liveactivity-suffix) — `APNS_BUNDLE_ID` includes the `.push-type.liveactivity` suffix. Pass the bare bundle id.
-- **Remote start returns 200 but no activity appears.** [MS019](/docs/traps#ms019-fb21158660-push-to-start-tokens-silent-after-force-quit) — push-to-start tokens go silent after a force-quit until next launch. Apple radar FB21158660; ask the user to open the app once.
+- **Activity starts but never updates on push.** Check [MS013](/docs/traps#ms013-app-group-entitlement-must-match-host-app-and-widget-extension) (App Group identity across host + widget). If running on simulator, switch to device; APNs Live Activity pushes are device-only.
+- **APNs returns 400 BadDeviceToken.** [MS014](/docs/traps#ms014-apns-token-environment-must-match-the-build-environment): your token was minted by a dev-client build, and the production endpoint will not accept it. Pass `--env=development`.
+- **APNs returns 400 TopicDisallowed.** [MS018](/docs/traps#ms018-apns-bundle-id-must-not-include-the-push-type-liveactivity-suffix): `APNS_BUNDLE_ID` includes the `.push-type.liveactivity` suffix. Pass the bare bundle id.
+- **Remote start returns 200 but no activity appears.** [MS019](/docs/traps#ms019-fb21158660-push-to-start-tokens-silent-after-force-quit): push-to-start tokens go silent after a force-quit until next launch. Apple radar FB21158660; ask the user to open the app once.

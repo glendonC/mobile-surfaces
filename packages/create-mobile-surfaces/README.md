@@ -14,10 +14,10 @@ bun  create mobile-surfaces
 
 The installer detects which of four starting situations applies and runs the matching flow:
 
-- **Empty directory** — scaffolds a fresh project in place.
-- **An existing Expo app** — switches to add-to-existing mode, recaps every change, then patches `app.json`, copies the widget target, and adds Info.plist keys.
-- **A TypeScript monorepo without Expo** — scaffolds `apps/mobile/` inside the workspace and adds the workspace globs needed for it.
-- **Anything else with files in it** — refuses with exit code `1`, so CI stops early.
+- **Empty directory**: scaffolds a fresh project in place.
+- **An existing Expo app**: switches to add-to-existing mode, recaps every change, then patches `app.json`, copies the widget target, and adds Info.plist keys.
+- **A TypeScript monorepo without Expo**: scaffolds `apps/mobile/` inside the workspace and adds the workspace globs needed for it.
+- **Anything else with files in it**: refuses with exit code `1`, so CI stops early.
 
 ### Scripted (non-interactive)
 
@@ -58,7 +58,7 @@ A typical CI step that scaffolds and verifies a clean install. The CLI exits non
   run: cd my-app && pnpm install && pnpm mobile:prebuild:ios
 ```
 
-If you want to branch on cause, use the canonical [exit codes](#exit-codes) — `1` is user-error (bad inputs), `2` is environment-error (missing tools, install failed), `3` is a packaging issue with the CLI itself.
+If you want to branch on cause, use the canonical [exit codes](#exit-codes): `1` is user-error (bad inputs), `2` is environment-error (missing tools, install failed), `3` is a packaging issue with the CLI itself.
 
 ### Exit codes
 
@@ -66,11 +66,11 @@ CI consumers can branch on these. The categories are coarse so adding a new fail
 
 | Code | Meaning |
 |------|---------|
-| `0` | Success — also returned for `--help`, `EPIPE`, and prompts the user explicitly cancelled. |
-| `1` | User-error — bad flag value, target dir not empty, `--yes` missing a required value, or the cwd is one we can't scaffold into (non-Expo with files, or `apps/mobile/` already exists). |
-| `2` | Environment-error — preflight failed, `pnpm`/CocoaPods missing on `PATH`, install failed, prebuild failed, or the apply phase threw. The fix is in your environment. |
-| `3` | Template-error — the bundled template tarball or manifest is missing or unreadable. The published CLI is broken; please file an issue. |
-| `130` | Interrupted — Ctrl+C / `SIGINT` during a task. POSIX convention (128 + SIGINT). |
+| `0` | Success. Also returned for `--help`, `EPIPE`, and prompts the user explicitly cancelled. |
+| `1` | User-error: bad flag value, target dir not empty, `--yes` missing a required value, or the cwd is one we can't scaffold into (non-Expo with files, or `apps/mobile/` already exists). |
+| `2` | Environment-error: preflight failed, `pnpm`/CocoaPods missing on `PATH`, install failed, prebuild failed, or the apply phase threw. The fix is in your environment. |
+| `3` | Template-error: the bundled template tarball or manifest is missing or unreadable. The published CLI is broken; please file an issue. |
+| `130` | Interrupted: Ctrl+C / `SIGINT` during a task. POSIX convention (128 + SIGINT). |
 
 Breaking change in v1.4: refuse paths (cannot-scaffold-here) used to exit `2`. They now exit `1` so the contract reads `1=user, 2=env, 3=template`. Any CI that checked for `2` to detect "wrong directory" should update.
 

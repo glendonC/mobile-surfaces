@@ -12,7 +12,7 @@ In plain English: your backend describes what is happening once, validates that 
 
 For the full push surface (token taxonomy, channel management, error responses, retry policy, smoke-script flag combinations), see [`docs/push.md`](/docs/push). This page is the high-level "how does it work end-to-end" piece; the push doc is the "how do I drive the wire layer" piece.
 
-For a single runnable file that wires every piece below together — token forwarder ingress, domain event ingress, projection, APNs dispatch — see [`apps/example-backend/`](https://github.com/glendonC/mobile-surfaces/tree/main/apps/example-backend). It is a reference, not a deployable (in-memory storage, no auth, no deploy config); the wire-boundary parse pattern is the part that ports to production unchanged.
+For a single runnable file that wires every piece below together (token forwarder ingress, domain event ingress, projection, APNs dispatch), see [`apps/example-backend/`](https://github.com/glendonC/mobile-surfaces/tree/main/apps/example-backend). It is a reference, not a deployable (in-memory storage, no auth, no deploy config); the wire-boundary parse pattern is the part that ports to production unchanged.
 
 ## Mental Model
 
@@ -182,7 +182,7 @@ await push.close(); // tear down the HTTP/2 sessions when shutting down
 
 The SDK validates every snapshot through `liveSurfaceSnapshot.safeParse` and rejects non-`liveActivity` kinds for `update` / `start` / `end` / `broadcast` with a typed `InvalidSnapshotError` before any network call. `alert()`, `update()`, `start()`, `end()`, and `broadcast()` resolve with `{ apnsId, status, timestamp }`; non-2xx responses throw a typed `ApnsError` subclass per Apple reason. See [`docs/push.md`](/docs/push) for the full SDK reference, error taxonomy, and channel/broadcast surface.
 
-The raw HTTP/2 wire shape — APNs endpoints, topic headers, push-type headers, the per-event `aps` envelope, the iOS 18 broadcast and channel-management endpoints — lives in [`docs/push.md`](/docs/push). `scripts/send-apns.mjs` builds those requests verbatim if you want to read the protocol top-to-bottom in one file.
+The raw HTTP/2 wire shape (APNs endpoints, topic headers, push-type headers, the per-event `aps` envelope, the iOS 18 broadcast and channel-management endpoints) lives in [`docs/push.md`](/docs/push). `scripts/send-apns.mjs` builds those requests verbatim if you want to read the protocol top-to-bottom in one file.
 
 ### 4. Manage tokens
 

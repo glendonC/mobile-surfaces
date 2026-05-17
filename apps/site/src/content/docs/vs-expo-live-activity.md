@@ -8,22 +8,22 @@ group: "Compare"
 
 [`expo-live-activity`](https://github.com/software-mansion-labs/expo-live-activity) is the established Expo bridge for iOS Live Activities, maintained by Software Mansion. It is a focused, well-engineered native module: start, update, end an Activity from JavaScript, expose push tokens, render Dynamic Island. If you only need Lock Screen and Dynamic Island and you have a backend already, it is the right choice.
 
-Mobile Surfaces is not a competitor. It is the layer above any iOS bridge — the wire format, the push client, the catalog of silent-failure modes that turn ActivityKit code into a debugging-session generator. The two projects own different parts of the stack, and the install path explicitly supports running both at once.
+Mobile Surfaces is not a competitor. It is the layer above any iOS bridge: the wire format, the push client, and the catalog of silent-failure modes that turn ActivityKit code into a debugging-session generator. The two projects own different parts of the stack, and the install path explicitly supports running both at once.
 
 ## What each project owns
 
 | Concern | `expo-live-activity` | `@mobile-surfaces/surface-contracts` | `@mobile-surfaces/push` | `@mobile-surfaces/traps` (catalog) |
 | --- | --- | --- | --- | --- |
-| iOS bridge: `Activity.request`, `Activity.update`, `Activity.end` | yes | — | — | — |
-| Dynamic Island layouts (compact, minimal, expanded) | yes | — | — | — |
+| iOS bridge: `Activity.request`, `Activity.update`, `Activity.end` | yes | no | no | no |
+| Dynamic Island layouts (compact, minimal, expanded) | yes | no | no | no |
 | `relevanceScore`, `staleDate`, small images, ActivityKit knobs | yes (broad surface) | typed-through where present | typed-through where present | catalogs the failure modes |
-| Push tokens (per-activity, push-to-start) | yes (subscriptions) | — | accepts the tokens at the wire layer | catalogs token-lifecycle rules (MS016, MS020, MS021, MS023) |
-| Wire contract for the snapshot shape | — | yes (`LiveSurfaceSnapshot`) | uses the contract | — |
-| Home-screen widget, control widget, lock accessory, StandBy | — | yes (one snapshot, six projections) | drives the alert that triggers the host write | catalogs widget App Group rules (MS013, MS025, MS036) |
-| Notification surface (alert, content extension, category routing) | — | yes | yes (`client.sendNotification`) | catalogs notification rules (MS037) |
-| Node APNs SDK (JWT signing, HTTP/2 pooling, error taxonomy, retry, broadcast channels) | — | — | yes | catalogs APNs reason rules (MS011, MS014, MS018, MS028, MS030, MS031, MS032, MS034, MS035) |
-| Catalog of silent-failure modes (40 documented; 21 PR-gated in CI, 6 surfaced as typed errors at SDK call time) | - | - | - | yes |
-| AI-coding-assistant grounding artifact (`AGENTS.md`, `CLAUDE.md`) | — | — | — | yes |
+| Push tokens (per-activity, push-to-start) | yes (subscriptions) | no | accepts the tokens at the wire layer | catalogs token-lifecycle rules (MS016, MS020, MS021, MS023) |
+| Wire contract for the snapshot shape | no | yes (`LiveSurfaceSnapshot`) | uses the contract | no |
+| Home-screen widget, control widget, lock accessory, StandBy | no | yes (one snapshot, six projections) | drives the alert that triggers the host write | catalogs widget App Group rules (MS013, MS025, MS036) |
+| Notification surface (alert, content extension, category routing) | no | yes | yes (`client.sendNotification`) | catalogs notification rules (MS037) |
+| Node APNs SDK (JWT signing, HTTP/2 pooling, error taxonomy, retry, broadcast channels) | no | no | yes | catalogs APNs reason rules (MS011, MS014, MS018, MS028, MS030, MS031, MS032, MS034, MS035) |
+| Catalog of silent-failure modes (40 documented; 21 PR-gated in CI, 6 surfaced as typed errors at SDK call time) | no | no | no | yes |
+| AI-coding-assistant grounding artifact (`AGENTS.md`, `CLAUDE.md`) | no | no | no | yes |
 
 The diagonal is the point. `expo-live-activity` is the iOS bridge. Mobile Surfaces is everything that surrounds the bridge: the contract that types the wire shape, the push SDK that drives it, and the catalog that catches the failures the bridge can't see.
 
@@ -91,7 +91,7 @@ The contract and push client are bridge-agnostic; the bridge in this repo is not
 | Single-surface, need wider ActivityKit knob surface (`relevanceScore`, custom small images) | `expo-live-activity` alone. The Mobile Surfaces bridge has not absorbed those knobs yet. |
 | Multiple surfaces (widget + control + Live Activity) sharing one data shape | `expo-live-activity` + `@mobile-surfaces/surface-contracts`. The contract is the only shape your domain emits; every surface projects from it. |
 | Multiple surfaces and you also build the backend | Add `@mobile-surfaces/push`. The Node SDK saves the wire-layer work and types the error taxonomy for retry decisions. |
-| Building from zero, want every surface wired up out of the box | `pnpm create mobile-surfaces`. The starter ships the Mobile Surfaces bridge as the default; swap to `expo-live-activity` later if needed (the adapter boundary at `apps/mobile/src/liveActivity/index.ts` is a one-file swap point). |
+| Building from zero, want every surface set up end to end | `pnpm create mobile-surfaces`. The starter ships the Mobile Surfaces bridge as the default; swap to `expo-live-activity` later if needed (the adapter boundary at `apps/mobile/src/liveActivity/index.ts` is a one-file swap point). |
 | Foreign Expo project, want to harden against silent ActivityKit failures | Read the catalog at [`/docs/traps`](/docs/traps) and apply each `error`-severity rule manually; the standalone `mobile-surfaces audit` subcommand is on the v9 roadmap. |
 | AI coding assistant working in a Live Activity codebase | Point the assistant at `AGENTS.md` / `CLAUDE.md` (generated from the catalog). The catalog is the grounding artifact regardless of which bridge the project uses. |
 

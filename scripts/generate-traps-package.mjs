@@ -56,8 +56,11 @@ const SWIFT_REPLICA_SHARED = resolve(
   "apps/mobile/targets/_shared/MobileSurfacesTraps.swift",
 );
 
+// Per-trap docsUrl strings deep-link into the full reference. AGENTS.md
+// carries the per-rule Symptom + Fix prose; CLAUDE.md is a compact index
+// that points back at AGENTS.md for the same anchors.
 const DOCS_BASE_URL =
-  "https://github.com/glendonC/mobile-surfaces/blob/main/CLAUDE.md";
+  "https://github.com/glendonC/mobile-surfaces/blob/main/AGENTS.md";
 
 const raw = readFileSync(TRAPS_PATH, "utf8");
 const parsed = JSON.parse(raw);

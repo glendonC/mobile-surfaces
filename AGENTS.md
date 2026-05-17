@@ -7,9 +7,11 @@
 
 # Mobile Surfaces: Invariants for AI Coding Assistants
 
-This document lists the mandatory invariants enforced by Mobile Surfaces' test suite. AI coding assistants working in a Mobile Surfaces project must respect these rules; `pnpm surface:check` enforces them in CI. The same rules apply to human engineers; the catalog makes them explicit. It is generated from `data/traps.json` — edits go to the catalog, not to this file.
+This document lists the mandatory invariants enforced by Mobile Surfaces' test suite. AI coding assistants working in a Mobile Surfaces project must respect these rules; `pnpm surface:check` enforces them in CI. The same rules apply to human engineers; the catalog makes them explicit. It is generated from `data/traps.json`; edits go to the catalog, not to this file.
 
 Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynamic Island, home-screen widgets, and iOS 18 control widgets. iOS Live Activities silently fail: your code compiles, your push returns 200, and nothing appears on the Lock Screen. This catalog enumerates the failure modes that produce that silence and the static, config, and runtime checks the repo uses to surface them at PR time instead of on a customer device.
+
+Claude Code does not auto-discover AGENTS.md and instead reads [`CLAUDE.md`](./CLAUDE.md) at conversation start. CLAUDE.md is a compact index that links back to the rule sections here for per-rule prose.
 
 ## Index
 
@@ -112,7 +114,7 @@ MobileSurfacesActivityAttributes.swift in packages/live-activity/ios/ and apps/m
 
 **Symptom.** Activity starts on the device but never appears on the Lock Screen. No log, no error. ActivityKit silently drops updates whose decoded ContentState shape does not match the widget extension's struct.
 
-**Fix.** Both files are generated from the Zod source of truth. Edit liveSurfaceActivityContentState or liveSurfaceStage in packages/surface-contracts/src/schema.ts, then run pnpm surface:codegen to regenerate both files. CI gates codegen drift at stage 2 and byte-identity + Zod parity at stage 3. The follow-up plan to consolidate this duplication into a local Swift Package is upstream-blocked on @bacons/apple-targets local-SPM support and RN 0.84 local-path spm_dependency landing in Expo SDK 56; codegen is the intermediate state until that unblocks.
+**Fix.** Both files are generated from the Zod source of truth. Edit liveSurfaceActivityContentState or liveSurfaceStage in packages/surface-contracts/src/schema.ts, then run pnpm surface:codegen to regenerate both files. CI gates codegen drift at stage 2 and byte-identity + Zod parity at stage 3. The follow-up plan to consolidate this duplication into a local Swift Package is upstream-blocked on @bacons/apple-targets local-SPM support and RN 0.84 local-path spm_dependency landing in Expo SDK 56. Codegen is the intermediate state until that unblocks.
 
 **See:** [https://mobile-surfaces.com/docs/architecture#native-constraints](https://mobile-surfaces.com/docs/architecture#native-constraints)
 
@@ -206,11 +208,11 @@ Mobile Surfaces commits to push-to-start tokens (Activity<...>.pushToStartTokenU
 
 **severity:** error  •  **detection:** static (script-checkable)  •  **tags:** app-group, widget, control, config  •  **enforced by:** `scripts/check-app-group-identity.mjs`
 
-apps/mobile/app.json is the single source of truth for the App Group identifier. The widget entitlements file at apps/mobile/targets/widget/generated.entitlements, the Swift constant at apps/mobile/targets/_shared/MobileSurfacesAppGroup.swift, and the TS constant at apps/mobile/src/generated/appGroup.ts are codegened from it and must not be hand-edited. check-app-group-identity is the defense-in-depth identity check across the four declaration sites; the primary enforcer is the generate-app-group-constants --check gate at stage 2.
+apps/mobile/app.json is the single source of truth for the App Group identifier. The widget entitlements file at apps/mobile/targets/widget/generated.entitlements, the Swift constant at apps/mobile/targets/_shared/MobileSurfacesAppGroup.swift, and the TS constant at apps/mobile/src/generated/appGroup.ts are codegened from it and must not be hand-edited.
 
 **Symptom.** Widget renders placeholder forever; control widget never reads the toggle state. No error: the entitlement mismatch makes both sides read separate App Group containers.
 
-**Fix.** Edit app.json and run pnpm surface:codegen to regenerate the Swift constant, TS constant, and widget entitlements in lockstep. Rename across every site via pnpm surface:rename. Hand edits to the generated files revert on the next codegen and fail the stage-2 drift gate.
+**Fix.** Edit app.json and run pnpm surface:codegen to regenerate the Swift constant, TS constant, and widget entitlements in lockstep. Rename across every site via pnpm surface:rename. Hand edits to the generated files revert on the next codegen and fail the stage-2 drift gate. The primary enforcer is the generate-app-group-constants --check gate at stage 2; check-app-group-identity is the defense-in-depth identity check across the four declaration sites.
 
 **See:** [https://mobile-surfaces.com/docs/ios-environment](https://mobile-surfaces.com/docs/ios-environment)
 
@@ -280,7 +282,7 @@ Both pushTokenUpdates and pushToStartTokenUpdates may emit fresh values at any m
 
 Foreign Expo projects auditing as Mobile Surfaces consumers must list the contract package; backends sending pushes must additionally list @mobile-surfaces/push.
 
-**Symptom.** Type errors on snapshot helpers, or hand-rolled APNs code that diverges from the validated contract. The failure mode is wire-level drift between client and server.
+**Symptom.** Type errors fire on the snapshot helpers, or hand-rolled APNs code diverges from the validated contract. The failure mode is wire-level drift between client and server.
 
 **Fix.** Add @mobile-surfaces/surface-contracts on every layer that emits or consumes a snapshot. Add @mobile-surfaces/push on the backend. Both packages release together (linked group).
 
@@ -328,7 +330,7 @@ Same constraint as MS012, applied during an audit of an arbitrary Expo project t
 
 Both the SDK and scripts/send-apns.mjs require APNS_KEY_ID, APNS_TEAM_ID, APNS_KEY_PATH, and APNS_BUNDLE_ID.
 
-**Symptom.** Throw at construction time (createPushClient) or at the first send. Often hidden inside a deployment whose env vars never made it into the runtime.
+**Symptom.** The SDK throws at construction time (createPushClient) or at the first send. The failure is often hidden inside a deployment whose env vars never made it into the runtime.
 
 **Fix.** Verify each env var on startup. The SDK's createPushClient validates presence; reject fast if any are missing.
 
@@ -422,7 +424,7 @@ Every hand-maintained Codable struct in apps/mobile/targets/_shared/MobileSurfac
 
 packages/surface-contracts/src/notificationCategories.ts is the single source of truth for every UNNotificationCategory identifier Mobile Surfaces ships. The generated TS constant at apps/mobile/src/generated/notificationCategories.ts (host registration), the Swift constant at apps/mobile/targets/_shared/MobileSurfacesNotificationCategories.swift (extension routing), and (when the file exists) the UNNotificationExtensionCategory array in apps/mobile/targets/notification-content/Info.plist are all codegened from it and must not be hand-edited. The schema enforces parity at the wire boundary by constraining liveSurfaceNotificationSlice.category to z.enum over the registry's ids.
 
-**Symptom.** Notification arrives at the device with aps.category set, but the UNNotificationContentExtension is never invoked: the user sees the default system chrome instead of the surface-aware custom view. No log, no error - iOS silently falls back when the payload category does not match any registered UNNotificationExtensionCategory in the extension Info.plist.
+**Symptom.** Notification arrives at the device with aps.category set, but the UNNotificationContentExtension is never invoked: the user sees the default system chrome instead of the surface-aware custom view. No log, no error. iOS silently falls back when the payload category does not match any registered UNNotificationExtensionCategory in the extension Info.plist.
 
 **Fix.** Edit packages/surface-contracts/src/notificationCategories.ts and run pnpm surface:codegen to regenerate every consumer in lockstep. The schema-level z.enum constraint rejects payloads that name a category outside the registry, so the wire stays load-bearing for parity.
 
@@ -440,7 +442,7 @@ Every adapter method that hands a LiveSurfaceActivityContentState to the native 
 
 **severity:** error  •  **detection:** static (script-checkable)  •  **tags:** live-activity, tokens, contract  •  **enforced by:** `scripts/check-token-discipline.mjs`
 
-Application code under apps/*/src/ must subscribe to onPushToken, onPushToStartToken, and onActivityStateChange through @mobile-surfaces/tokens (or its /react sub-path), never via direct adapter.addListener calls. The token-store package owns MS020/MS021 semantics — latest-write-wins on rotation, terminal lifecycle on activity end — and hand-rolled subscriptions in app code reliably re-introduce the silent token-drift failure mode the package exists to prevent.
+Application code under apps/*/src/ must subscribe to onPushToken, onPushToStartToken, and onActivityStateChange through @mobile-surfaces/tokens (or its /react sub-path), never via direct adapter.addListener calls. The token-store package owns MS020/MS021 semantics (latest-write-wins on rotation, terminal lifecycle on activity end), and hand-rolled subscriptions in app code reliably re-introduce the silent token-drift failure mode the package exists to prevent.
 
 **Symptom.** Backend send to a stored token returns 410 Unregistered or 400 BadDeviceToken after a working session, or the host accumulates dead tokens for a since-ended activity and never marks them terminal. The failure mode is the app forgetting it has stale state; the diagnostic surface is the backend logs, not the device.
 
@@ -464,7 +466,7 @@ Every projection-output Zod schema (liveSurfaceWidgetTimelineEntry, liveSurfaceC
 
 **Symptom.** Widget binary on schemaVersion N reads a host snapshot at schemaVersion N+1; full Codable decode succeeds because the snapshot's shape happens to be a superset (additive minor) or fails silently (real schema break). Either way, the widget renders stale data or a placeholder without telling the user the host has shipped a schemaVersion the widget doesn't recognize.
 
-**Fix.** Add `schemaVersion: z.literal("<current>")` as the first property of every projection-output schema in packages/surface-contracts/src/schema.ts. The literal value must match the snapshot schema's `schemaVersion` literal (the canonical wire-format generation). Mirror the field in the matching Swift Codable struct in apps/mobile/targets/_shared/MobileSurfacesSharedState.swift (and apps/mobile/targets/notification-content/ for the notification mirror) so the widget's `readSnapshot` helper attempts the `{ schemaVersion: String }` probe first; a mismatch renders the version-mismatch placeholder view instead of failing silently.
+**Fix.** Add `schemaVersion: z.literal("<current>")` as the first property of every projection-output schema in packages/surface-contracts/src/schema.ts. The literal value must match the snapshot schema's `schemaVersion` literal (the canonical wire-format generation). Mirror the field in the matching Swift Codable struct in apps/mobile/targets/_shared/MobileSurfacesSharedState.swift (and apps/mobile/targets/notification-content/ for the notification mirror). The widget's `readSnapshot` helper then attempts the `{ schemaVersion: String }` probe first, and a mismatch renders the version-mismatch placeholder view instead of failing silently.
 
 ### MS042: Deprecation prose must not promise removal in the current or a past major
 
@@ -472,7 +474,7 @@ Every projection-output Zod schema (liveSurfaceWidgetTimelineEntry, liveSurfaceC
 
 Source files and docs cannot ship a 'will be removed in X.0.0' (or 'removed in X.0') claim from a @mobile-surfaces/surface-contracts version at major X or higher. The deprecation promise is load-bearing for downstream consumers who plan migrations against it; shipping the major while the prose still says the removal is happening now silently breaks the contract.
 
-**Symptom.** Source comment in schema-v4.ts says the codec is gone at 9.0.0. Package ships at 9.0.0 with the codec still present in safeParseAnyVersion. Consumers reading the source comment believe v4 is gone and skip a migration window; consumers reading the runtime keep using v4 indefinitely. The deprecation promise was broken silently.
+**Symptom.** Source comment in schema-v4.ts says the codec is gone at 9.0.0. Package ships at 9.0.0 with the codec still present in safeParseAnyVersion. Consumers reading the source comment believe v4 is gone and skip a migration window; consumers reading the runtime keep using v4 indefinitely.
 
 **Fix.** Update the deprecation prose to a future major (one major past the current is the charter minimum). If the codec really should be removed now, drop it in a coordinated release and remove the prose at the same time. To opt a specific prose line out of the check, prefix the preceding line with `// CHARTER: keep` (the allowlist marker is intentionally narrow).
 
@@ -482,7 +484,7 @@ Source files and docs cannot ship a 'will be removed in X.0.0' (or 'removed in X
 
 Every package under packages/* whose package.json declares version X.0.0 (for X >= 1) must have a matching `## X.0.0` heading in its CHANGELOG.md. The check looks for the heading; the body is up to the maintainer. The release workflow normally writes the entry on `changeset version`; this gate catches the case where a major was bumped manually or the changeset entry was missed.
 
-**Symptom.** Package silently bumps from 5.0.0 to 6.0.0 with no CHANGELOG entry. Downstream consumers reading the CHANGELOG to understand the bump find nothing; release notes lose the audit trail; the major version becomes meaningless. This was the actual failure mode that triggered the gate: push, live-activity, validators, and create-mobile-surfaces all shipped 5.0.0 against the linked group without their own CHANGELOG entries.
+**Symptom.** Package silently bumps from 5.0.0 to 6.0.0 with no CHANGELOG entry. Downstream consumers reading the CHANGELOG to understand the bump find nothing; release notes lose the audit trail; the major version becomes meaningless.
 
 **Fix.** Write the CHANGELOG entry. Use `pnpm changeset version` if it didn't run, or hand-write the `## X.0.0` heading with the major changes underneath. For packages bumped purely by the linked-release group with no API change of their own, the convention is: `Linked-group bump for the v<N> schema release in @mobile-surfaces/surface-contracts. No <package> API change.`
 
@@ -492,7 +494,7 @@ Every package under packages/* whose package.json declares version X.0.0 (for X 
 
 pnpm dev:doctor verifies Node 24, pnpm 10, Xcode major 26+, and simulator availability before iOS work begins.
 
-**Symptom.** Builds fail with confusing Swift compiler errors, simulator launches that hang, or pnpm refusing to install. None of which point at the actual cause (a stale toolchain row).
+**Symptom.** Builds fail with confusing Swift compiler errors, simulator launches that hang, or pnpm refusing to install. None of these point at the actual cause: a stale toolchain row.
 
 **Fix.** Run pnpm dev:doctor. Update Xcode and re-run if the major version is below 26. Use Node 24.
 

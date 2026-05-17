@@ -127,7 +127,7 @@ test("typed errors expose docsUrl from the generated bindings", () => {
   const err = reasonToError("PayloadTooLarge", { status: 413 });
   assert.equal(
     err.docsUrl,
-    "https://github.com/glendonC/mobile-surfaces/blob/main/CLAUDE.md#ms011-activitykit-payload-size-ceiling-4-kb-5-kb-broadcast",
+    "https://github.com/glendonC/mobile-surfaces/blob/main/AGENTS.md#ms011-activitykit-payload-size-ceiling-4-kb-5-kb-broadcast",
   );
   // MissingApnsConfigError is bound to MS028 but is not an APNs-response
   // error; it still needs to carry the doc pointer for the createPushClient
@@ -135,7 +135,7 @@ test("typed errors expose docsUrl from the generated bindings", () => {
   const cfg = new MissingApnsConfigError(["keyId"]);
   assert.equal(
     cfg.docsUrl,
-    "https://github.com/glendonC/mobile-surfaces/blob/main/CLAUDE.md#ms028-apns-auth-key-environment-variables-must-be-set-before-sending",
+    "https://github.com/glendonC/mobile-surfaces/blob/main/AGENTS.md#ms028-apns-auth-key-environment-variables-must-be-set-before-sending",
   );
 });
 

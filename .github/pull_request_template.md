@@ -16,7 +16,7 @@ If this PR adds a new abstraction (helper, type, contract field, adapter slot, c
 
 - Consumer 1:
 - Consumer 2:
-- N/A — this PR doesn't add an abstraction.
+- N/A: this PR doesn't add an abstraction.
 
 ## Non-goals check
 

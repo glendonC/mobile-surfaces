@@ -6,7 +6,7 @@ group: "Reference"
 ---
 # Schema
 
-`LiveSurfaceSnapshot` is at `schemaVersion: "5"`. The published JSON Schema is at `https://unpkg.com/@mobile-surfaces/surface-contracts@8.0/schema.json` (the URL pins to the surface-contracts package major.minor — see [JSON Schema `$id` Pinning](#json-schema-id-pinning)). The codec chain `safeParseAnyVersion` covers v5 → v4; the v3 codec was retired at 8.0 and the v4 codec is scheduled for retirement at 9.0 per the [Versioning Charter](/docs/stability).
+`LiveSurfaceSnapshot` is at `schemaVersion: "5"`. The published JSON Schema is at `https://unpkg.com/@mobile-surfaces/surface-contracts@8.0/schema.json` (the URL pins to the surface-contracts package major.minor; see [JSON Schema `$id` Pinning](#json-schema-id-pinning)). The codec chain `safeParseAnyVersion` covers v5 → v4; the v3 codec was retired at 8.0 and the v4 codec is scheduled for retirement at 9.0 per the [Versioning Charter](/docs/stability).
 
 This page leads with the v5 shape, the migration entry points consumers use today, and the JSON Schema URL convention. Older-version migrations and the historical deprecation timeline live in the [Migrating from earlier versions](#migrating-from-earlier-versions) appendix at the bottom.
 
@@ -27,7 +27,7 @@ interface LiveSurfaceSnapshotBase {
 
 Every rendering field lives in the per-kind slice for the kind that actually uses it. See [`docs/surfaces.md`](/docs/surfaces) for the slice shapes and the projection helpers.
 
-The v5 additions over v4 are additive on the snapshot wire shape (four new optional fields on the notification slice — `subtitle`, `interruptionLevel`, `relevanceScore`, `targetContentId`) and realign the projection-output sidecar's discriminator from `"surface_notification"` to `"surface_snapshot"` so on-device routing code can switch on one literal regardless of which Mobile Surfaces wrapper produced the userInfo.
+The v5 additions over v4 are additive on the snapshot wire shape (four new optional fields on the notification slice: `subtitle`, `interruptionLevel`, `relevanceScore`, `targetContentId`) and realign the projection-output sidecar's discriminator from `"surface_notification"` to `"surface_snapshot"` so on-device routing code can switch on one literal regardless of which Mobile Surfaces wrapper produced the userInfo.
 
 ## Validating snapshots
 
@@ -117,7 +117,7 @@ This appendix documents the history of the schema and the migration entry points
 | --- | --- | --- |
 | `schemaVersion` | `"4"` | `"5"` |
 | Notification slice | `title`, `body`, `deepLink`, `category?`, `threadId?` | adds optional `subtitle`, `interruptionLevel`, `relevanceScore`, `targetContentId` (all `aps`-mapped, iOS 17.2+) |
-| `notification.category` typing | `z.string().optional()` | `z.enum([...NOTIFICATION_CATEGORY_IDS]).optional()` — values come from `packages/surface-contracts/src/notificationCategories.ts`, enforced by MS037 codegen |
+| `notification.category` typing | `z.string().optional()` | `z.enum([...NOTIFICATION_CATEGORY_IDS]).optional()`; values come from `packages/surface-contracts/src/notificationCategories.ts`, enforced by MS037 codegen |
 | Notification projection sidecar | `kind: "surface_notification"` | `kind: "surface_snapshot"` (aligned with `liveActivityAlertPayload`'s sidecar) |
 | `liveSurfaceNotificationContentEntry` | inline anonymous object | hoisted, named, MS036-parity-checked |
 | `$id` | `https://unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json` | `https://unpkg.com/@mobile-surfaces/surface-contracts@8.0/schema.json` |
@@ -133,7 +133,7 @@ The current codec chain in `safeParseAnyVersion` is v5 → v4. The v4 codec is s
 | 5.0.0 | v3 codec on. `safeParseAnyVersion` emits a `deprecationWarning` on every v3 parse. | Start migrating producers to v4. |
 | 6.0.0 | v5 schema cuts over. v4 codec joins v3 with a `deprecationWarning`. Both remain on. | Start migrating producers to v5. |
 | 7.0.0 | v3 and v4 codecs remain on with `deprecationWarning`. Final warning major for v3. | Producers still on v3 must migrate before 8.0. |
-| 8.0.0 | v3 codec removed. v4 codec remains on with `deprecationWarning` — final warning major for v4. | Producers still on v4 must migrate before 9.0. |
+| 8.0.0 | v3 codec removed. v4 codec remains on with `deprecationWarning`; final warning major for v4. | Producers still on v4 must migrate before 9.0. |
 | 9.0.0 | v4 codec removed. v4 payloads fail with a v5 `ZodError`. | Must be on v5 before bumping past 8.x. |
 
 ### Migrating stored v3 payloads (and older)

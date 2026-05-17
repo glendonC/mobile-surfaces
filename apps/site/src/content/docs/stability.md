@@ -75,7 +75,7 @@ A breaking change is one a typed consumer could detect at the type-system bounda
 - Removing a deprecated codec from `safeParseAnyVersion`.
 - Removing a trap id from the catalog.
 
-A non-breaking change is one a consumer can absorb by upgrading the lockfile. New exports, new optional fields, new trap ids, new error subclasses (additive), new diagnostic detail in an existing error — all minor.
+A non-breaking change is one a consumer can absorb by upgrading the lockfile. New exports, new optional fields, new trap ids, new error subclasses (additive), and new diagnostic detail in an existing error are all minor.
 
 ## schemaVersion policy
 
@@ -92,13 +92,13 @@ A deprecated codec lives for at least one major past the release that deprecated
 - A codec deprecated in `surface-contracts@6` is removable in `@8` at the earliest.
 - A codec deprecated in `surface-contracts@5` is removable in `@7` at the earliest.
 
-The actual schedule sits inline with the codec source (`schema-v4.ts`) and in the deprecation warning string the codec emits. The MS042 gate (`scripts/check-deprecation-prose.mjs`) catches the case where the prose says "will be removed in X.0.0" but the package has already shipped X.0.0 — that's a charter violation. The fix is to push the deprecation to a future major (charter minimum: one past the current) or to actually drop the codec.
+The actual schedule sits inline with the codec source (`schema-v4.ts`) and in the deprecation warning string the codec emits. The MS042 gate (`scripts/check-deprecation-prose.mjs`) catches the case where the prose says "will be removed in X.0.0" but the package has already shipped X.0.0; that's a charter violation. The fix is to push the deprecation to a future major (charter minimum: one past the current) or to actually drop the codec.
 
 The check is opt-out only via an explicit `// CHARTER: keep` marker on the preceding line. Use sparingly; the marker exists for the rare case where the prose intentionally describes a historical promise.
 
 ## CHANGELOG requirement
 
-Every package whose `package.json` declares version `X.0.0` (for `X >= 1`) must have a matching `## X.0.0` heading in its `CHANGELOG.md`. The body is up to the maintainer; the check enforces the heading. The MS043 gate (`scripts/check-changelog-on-major.mjs`) is the belt to the changeset workflow's suspender — it catches the case where a major was hand-bumped or the changeset entry was missed.
+Every package whose `package.json` declares version `X.0.0` (for `X >= 1`) must have a matching `## X.0.0` heading in its `CHANGELOG.md`. The body is up to the maintainer; the check enforces the heading. The MS043 gate (`scripts/check-changelog-on-major.mjs`) backstops the changeset workflow: it catches the case where a major was hand-bumped or the changeset entry was missed.
 
 For a linked-group bump where the independent package has no API change of its own, the convention is one line:
 

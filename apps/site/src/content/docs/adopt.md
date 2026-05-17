@@ -8,7 +8,7 @@ group: "Start here"
 
 You already ship a Live Activity. You have an Expo app with `expo-live-activity` (or a hand-rolled bridge), a backend that signs APNs JWTs, and a working `Activity.request(...)` flow. What's still painful: each surface (Lock Screen, widget, control) carries its own ad-hoc mapping function, the backend code duplicates the typed `aps` envelope shape from your iOS code, and silent ActivityKit failures still surface as "the customer screenshot looks wrong."
 
-Mobile Surfaces does not replace your bridge. It is the layer above any iOS bridge: a typed wire contract, a Node APNs SDK, and a catalog of every silent-failure mode iOS has — enforceable in CI. Drop two packages in alongside what you already ship.
+Mobile Surfaces does not replace your bridge. It is the layer above any iOS bridge: a typed wire contract, a Node APNs SDK, and a catalog of every silent-failure mode iOS has, enforceable in CI. Drop two packages in alongside what you already ship.
 
 ## Install
 
@@ -93,7 +93,7 @@ await push.end(activityToken, snapshot);
 await push.alert(deviceToken, snapshot);
 ```
 
-The SDK validates every snapshot through `liveSurfaceSnapshot.safeParse` and rejects mismatched kinds with a typed `InvalidSnapshotError` before any network call. Non-2xx APNs responses throw a typed `ApnsError` subclass per Apple reason — `BadDeviceTokenError`, `UnregisteredError`, `PayloadTooLargeError`, `TooManyRequestsError`, etc. The full taxonomy is in [`push.md`](/docs/push).
+The SDK validates every snapshot through `liveSurfaceSnapshot.safeParse` and rejects mismatched kinds with a typed `InvalidSnapshotError` before any network call. Non-2xx APNs responses throw a typed `ApnsError` subclass per Apple reason: `BadDeviceTokenError`, `UnregisteredError`, `PayloadTooLargeError`, `TooManyRequestsError`, and so on. The full taxonomy is in [`push.md`](/docs/push).
 
 ## Audit your project against the trap catalog
 
@@ -103,7 +103,7 @@ Mobile Surfaces ships a CLI subcommand that audits any Expo project against the 
 npx mobile-surfaces audit .
 ```
 
-The audit walks every static and config rule in `data/traps.json` — App Group identity across host and widget extension (MS013), iOS deployment target (MS012/MS027), App Group declaration in `app.json` (MS025), `apns-topic` bundle id discipline (MS018/MS035), workspace dependencies (MS024), gitignored `apps/mobile/ios/` (MS029) — and prints pass/warn/fail rows with MS-id chips and links to the catalog entry.
+The audit walks every static and config rule in `data/traps.json` and prints pass/warn/fail rows with MS-id chips and links to the catalog entry. Coverage includes App Group identity across host and widget extension (MS013), iOS deployment target (MS012/MS027), App Group declaration in `app.json` (MS025), `apns-topic` bundle id discipline (MS018/MS035), workspace dependencies (MS024), and the gitignored `apps/mobile/ios/` directory (MS029).
 
 Use `--json` for CI:
 
@@ -119,8 +119,8 @@ Both packages are designed to coexist with the established ecosystem bridge. The
 
 ## What to read next
 
-- [`docs/surfaces.md`](/docs/surfaces) — every `kind` value, its projection helper, the native target it drives.
-- [`docs/backend.md`](/docs/backend) — domain event to snapshot to APNs end-to-end.
-- [`docs/push.md`](/docs/push) — wire-layer reference, token taxonomy, error taxonomy, broadcast channels.
-- [`docs/traps.md`](/docs/traps) — trap catalog maintenance, the source `data/traps.json` consumes.
-- [`docs/troubleshooting.md`](/docs/troubleshooting) — symptom-to-fix recipes for silent ActivityKit failures.
+- [`docs/surfaces.md`](/docs/surfaces): every `kind` value, its projection helper, the native target it drives.
+- [`docs/backend.md`](/docs/backend): domain event to snapshot to APNs end-to-end.
+- [`docs/push.md`](/docs/push): wire-layer reference, token taxonomy, error taxonomy, broadcast channels.
+- [`docs/traps.md`](/docs/traps): trap catalog maintenance, the source `data/traps.json` consumes.
+- [`docs/troubleshooting.md`](/docs/troubleshooting): symptom-to-fix recipes for silent ActivityKit failures.
