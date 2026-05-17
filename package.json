@@ -60,7 +60,7 @@
     "surface:setup-apns": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/setup-apns.mjs",
     "surface:codegen": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/codegen.mjs",
     "surface:codegen:check": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/codegen.mjs --check",
-    "release:version": "changeset version && node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/bump-fixture-schema-urls.mjs && node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/codegen.mjs",
+    "release:version": "changeset version && node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/bump-fixture-schema-urls.mjs && node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/codegen.mjs && SNAPSHOT_UPDATE=1 pnpm cli:test",
     "surface:check": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/surface-check.mjs",
     "agents:build": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/build-agents-md.mjs",
     "agents:check": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/build-agents-md.mjs --check",
