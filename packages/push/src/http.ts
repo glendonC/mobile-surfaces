@@ -476,7 +476,15 @@ export class Http2Client {
       return this.#closePromise;
     }
     const closeTimeoutMs = this.#closeTimeoutMs;
-    const startedAt = Date.now();
+    // Monotonic clock for the elapsed-ms measurement. setTimeout fires after
+    // closeTimeoutMs of event-loop time, but Date.now() is wall-clock and can
+    // jump backward on NTP corrections; on a CI runner under load an NTP
+    // adjustment between startedAt and the timer callback can leave
+    // Date.now() - startedAt smaller than closeTimeoutMs even though the
+    // timer ran past the requested delay. performance.now() is monotonic and
+    // never goes backward, so the post-condition elapsedMs >= closeTimeoutMs
+    // holds by construction.
+    const startedAt = performance.now();
     this.#closePromise = new Promise<void>((resolve) => {
       let settled = false;
       let timer: NodeJS.Timeout | undefined;
@@ -497,7 +505,7 @@ export class Http2Client {
           // session down so process teardown can proceed. session.destroy()
           // synchronously triggers the "close" event, which calls finish()
           // via the listener above; settled-guard prevents double-resolve.
-          const elapsedMs = Date.now() - startedAt;
+          const elapsedMs = performance.now() - startedAt;
           try {
             session.destroy();
           } catch {
