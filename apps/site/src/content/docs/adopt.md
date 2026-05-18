@@ -60,7 +60,7 @@ const contentState = toLiveActivityContentState(snapshot);
 // module, or any other ActivityKit bridge. The contract does not care.
 ```
 
-The published JSON Schema at `https://unpkg.com/@mobile-surfaces/surface-contracts@7.0/schema.json` is generated from the same Zod source. Backends that prefer Ajv, jsonschema, or a Valibot-via-Standard-Schema interop can validate without depending on Zod at runtime.
+The published JSON Schema at `https://unpkg.com/@mobile-surfaces/surface-contracts@8.0/schema.json` is generated from the same Zod source. Backends that prefer Ajv, jsonschema, or a Valibot-via-Standard-Schema interop can validate without depending on Zod at runtime.
 
 ## Drop in the push client
 

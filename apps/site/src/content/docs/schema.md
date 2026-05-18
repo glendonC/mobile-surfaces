@@ -57,12 +57,12 @@ The codec is the only blessed migration entry point. Do not write your own `if (
 `scripts/build-schema.mjs` pins `$id` to the current package **major.minor**:
 
 ```text
-https://unpkg.com/@mobile-surfaces/surface-contracts@7.0/schema.json
+https://unpkg.com/@mobile-surfaces/surface-contracts@8.0/schema.json
 ```
 
-Pinning to `7.0` rather than `7` lets a future minor that adds a discriminated-union variant publish at `@7.1/schema.json` without invalidating the URL existing consumers reference. Backends that want to track the latest minor automatically can pin to `@7/schema.json` (unpkg resolves the major), but the canonical `$id` stamped into the schema is the major.minor URL. Older URLs (`@6.0/schema.json`, `@5.0/schema.json`, `@4.0/schema.json`, `@3.0/schema.json`) stay resolvable forever; unpkg never deletes a published artifact.
+Pinning to `8.0` rather than `8` lets a future minor that adds a discriminated-union variant publish at `@8.1/schema.json` without invalidating the URL existing consumers reference. Backends that want to track the latest minor automatically can pin to `@8/schema.json` (unpkg resolves the major), but the canonical `$id` stamped into the schema is the major.minor URL. Older URLs (`@7.0/schema.json`, `@6.0/schema.json`, `@5.0/schema.json`, `@4.0/schema.json`, `@3.0/schema.json`) stay resolvable forever; unpkg never deletes a published artifact.
 
-The URL channel is keyed off the package major; the wire-format `schemaVersion` lags by one (package 7.x ships `schemaVersion: "5"`, package 6.x shipped the same). This is self-consistent and intentional: a coordinated linked-group bump can be driven by changes elsewhere in the family without forcing a wire-format major.
+The URL channel is keyed off the package major; the wire-format `schemaVersion` stays at `"5"` across package majors that ship no breaking wire change (every package major from 5.x onward has shipped `schemaVersion: "5"`). This is self-consistent and intentional: a coordinated linked-group bump can be driven by changes elsewhere in the family without forcing a wire-format major.
 
 ## Schema Version vs Package Version
 

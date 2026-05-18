@@ -143,7 +143,7 @@ if (versioned.success) {
 
 `safeParseAnyVersion` is the migration path documented in [`docs/schema.md`](/docs/schema). Use it whenever you read snapshots from a store that may still hold v4 payloads. The v4 -> v5 codec runs in `safeParseAnyVersion`; the v3 codec was retired at 8.0.0 and the v2 codec earlier at 5.0.0.
 
-The published JSON Schema at [`unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json`](https://unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json) is generated from the same Zod source and pinned to `major.minor`. Use it for IDE tooling, OpenAPI components, or non-TypeScript validators (Ajv, jsonschema, etc.). Standard Schema interop is automatic, every exported Zod schema implements the `~standard` getter (`{ vendor: "zod", version: 1, validate, jsonSchema }`), so the contract drops directly into Standard-Schema-aware libraries (Valibot runners, ArkType, `@standard-schema/spec`) without depending on Zod at runtime.
+The published JSON Schema at [`unpkg.com/@mobile-surfaces/surface-contracts@8.0/schema.json`](https://unpkg.com/@mobile-surfaces/surface-contracts@8.0/schema.json) is generated from the same Zod source and pinned to `major.minor`. Use it for IDE tooling, OpenAPI components, or non-TypeScript validators (Ajv, jsonschema, etc.). Standard Schema interop is automatic, every exported Zod schema implements the `~standard` getter (`{ vendor: "zod", version: 1, validate, jsonSchema }`), so the contract drops directly into Standard-Schema-aware libraries (Valibot runners, ArkType, `@standard-schema/spec`) without depending on Zod at runtime.
 
 ### 3. Send the APNs request
 

@@ -1,5 +1,5 @@
 {
-  "$schema": "Internal: cross-surface scenario fixture. Each step holds five pre-projected snapshots (one per surface kind) so applying a step lights up Live Activity + widget + control + lock accessory + StandBy in one action.",
+  "$schema": "Internal: cross-surface scenario fixture. Each step holds five pre-projected snapshots, one per ambient surface kind, so applying a step lights up Live Activity + widget + control + lock accessory + StandBy in one action. The sixth snapshot kind (notification) is exercised by its own fixtures rather than the scenario flow.",
   "id": "delivery",
   "title": "Package delivery",
   "summary": "Track a package from depot to doorstep across all five surfaces.",

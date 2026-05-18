@@ -1,5 +1,5 @@
 {
-  "$schema": "Internal: cross-surface scenario fixture; covers the non-monotonic case (running -> failing -> green) so the attention state is exercised across all five surfaces.",
+  "$schema": "Internal: cross-surface scenario fixture; covers the non-monotonic case (running -> failing -> green) so the attention state is exercised across the five ambient surfaces (Live Activity, widget, control, lock accessory, StandBy). The sixth snapshot kind, notification, is exercised by its own fixtures.",
   "id": "build",
   "title": "CI build pipeline",
   "summary": "Watch a CI run move from running through a failing-tests attention state into green completion across every surface.",
