@@ -11,9 +11,9 @@ Mobile Surfaces is not a Live Activity bridge. It is the layer above the bridge 
 
 Three pieces ship together:
 
-- **`@mobile-surfaces/surface-contracts`** — typed `LiveSurfaceSnapshot` plus six projection helpers, a published JSON Schema, Standard Schema interop, and a v4 → v5 migration codec.
-- **`@mobile-surfaces/push`** — Node APNs client. HTTP/2 connection pooling, JWT signing, push-to-start tokens, iOS 18 broadcast channels, typed errors for every documented APNs reason.
-- **Trap catalog** — 40 documented iOS silent-failure modes ([`data/traps.json`](./data/traps.json)) enforced as CI invariants and rendered as [`AGENTS.md`](./AGENTS.md) and [`CLAUDE.md`](./CLAUDE.md). Static rules fail at PR time; runtime rules surface as typed errors.
+- **`@mobile-surfaces/surface-contracts`**: typed `LiveSurfaceSnapshot` plus six projection helpers, a published JSON Schema, Standard Schema interop, and a v4 → v5 migration codec.
+- **`@mobile-surfaces/push`**: Node APNs client. HTTP/2 connection pooling, JWT signing, push-to-start tokens, iOS 18 broadcast channels, typed errors for every documented APNs reason.
+- **Trap catalog**: 40 documented iOS silent-failure modes ([`data/traps.json`](./data/traps.json)) enforced as CI invariants and rendered as [`AGENTS.md`](./AGENTS.md) and [`CLAUDE.md`](./CLAUDE.md). Static rules fail at PR time; runtime rules surface as typed errors.
 
 ```ts
 import { assertSnapshot, toLiveActivityContentState } from "@mobile-surfaces/surface-contracts";
@@ -32,19 +32,27 @@ await pushClient.update(activityToken, snapshot);
 
 ## Install
 
-**Already shipping Live Activities?** Drop the contract and push client in alongside `expo-live-activity`, a hand-rolled native module, or any other bridge:
+Three install paths depending on where you are starting from.
+
+### Already shipping Live Activities
+
+Drop the contract and push client in alongside `expo-live-activity`, a hand-rolled native module, or any other bridge:
 
 ```bash
 pnpm add @mobile-surfaces/surface-contracts @mobile-surfaces/push
 ```
 
-**Starting from zero?** Scaffold a working iPhone app with every surface wired up:
+### Starting from zero
+
+Scaffold a working iPhone app with every surface set up end to end:
 
 ```bash
 pnpm create mobile-surfaces
 ```
 
-**Auditing an existing Expo project?** Run the trap catalog against it:
+### Auditing an existing Expo project
+
+Run the trap catalog against it:
 
 ```bash
 npx mobile-surfaces audit ./path/to/project
@@ -64,11 +72,11 @@ iOS Live Activities silently fail. Your code compiles, your push returns HTTP 20
 
 Add a home-screen widget, an iOS 18 Control Center button, and a backend driving all of it through APNs, and the surface area for silent failure roughly doubles.
 
-We are not better than [`expo-live-activity`](https://github.com/software-mansion-labs/expo-live-activity). We are the layer above any iOS bridge: the contract that keeps your snapshot shape consistent across surfaces, the push client that drives the wire correctly, and the catalog of failure modes so they break at CI instead of on a customer device. See [Mobile Surfaces with expo-live-activity](https://mobile-surfaces.com/docs/vs-expo-live-activity) for the side-by-side.
+Mobile Surfaces is not a replacement for [`expo-live-activity`](https://github.com/software-mansion-labs/expo-live-activity) or any other ActivityKit bridge. It sits above whichever bridge you use. The contract keeps your snapshot shape consistent across surfaces. The push client drives the wire correctly. The trap catalog turns ActivityKit's silent-failure modes into CI errors so they break at PR time, not on a customer device. See [Mobile Surfaces with expo-live-activity](https://mobile-surfaces.com/docs/vs-expo-live-activity) for the side-by-side.
 
 ## Links
 
 - [Docs hub](https://mobile-surfaces.com/docs)
-- [`AGENTS.md`](./AGENTS.md) — invariants for AI coding assistants (also published as [`CLAUDE.md`](./CLAUDE.md))
+- [`AGENTS.md`](./AGENTS.md): invariants for AI coding assistants (also published as [`CLAUDE.md`](./CLAUDE.md))
 - [`CONTRIBUTING.md`](./CONTRIBUTING.md)
-- [LICENSE](./LICENSE) — MIT
+- [LICENSE](./LICENSE): MIT

@@ -446,7 +446,7 @@ function main() {
 
   // Regen the @mobile-surfaces/traps package TS bindings + three Swift
   // replicas. The generator embeds docsUrl strings derived from the
-  // canonical CLAUDE.md anchor format; the rename-starter's text rewrite
+  // canonical AGENTS.md anchor format; the rename-starter's text rewrite
   // pass touches the file bodies but cannot guarantee byte-for-byte parity
   // with what the generator would emit fresh. Running the generator here
   // settles the difference before the user's first `pnpm surface:check`.

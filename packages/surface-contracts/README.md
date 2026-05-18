@@ -115,7 +115,7 @@ if (result.issues) {
 const snapshot = result.value; // typed LiveSurfaceSnapshot
 ```
 
-The same `~standard` surface is consumable from Valibot, ArkType, `@standard-schema/spec` runners, any library that speaks Standard Schema. A live assertion in this package's test suite pins this behavior, so the interop is a public boundary, not an accident.
+The same `~standard` surface is consumable from Valibot, ArkType, `@standard-schema/spec` runners, and any other library that speaks Standard Schema. A live assertion in this package's test suite pins this behavior, so the interop is a public boundary, not an accident.
 
 ## JSON Schema
 

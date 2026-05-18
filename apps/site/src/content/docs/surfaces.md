@@ -22,7 +22,7 @@ For the high-level integration tour, see [`docs/backend.md`](/docs/backend). For
 | StandBy widget | Shipped | `MobileSurfacesStandbyWidget.swift` |
 | Push notification (basic alert) | Shipped | `client.sendNotification(...)` projects through `toNotificationContentPayload` |
 | Notification content extension (custom expanded layout) | Shipped | `MobileSurfacesNotificationViewController.swift` renders payload-only via the `liveSurface` sidecar; categories codegened from `notificationCategories.ts` (MS037) |
-| Notification service extension (enrichment, attachments) | Deferred — see [Deferred extensions](#deferred-extensions) |  |
+| Notification service extension (enrichment, attachments) | Deferred. See [Deferred extensions](#deferred-extensions). |  |
 
 Every shipped surface renders from the same `LiveSurfaceSnapshot`. They cannot drift, because they all project from one source.
 
@@ -195,7 +195,7 @@ Control snapshots use the same App Group as widgets, with `surface.control.curre
 - State that the user can flip without unlocking the device.
 - Anything backed by an `AppIntent` shared between the app and the widget extension. The control widget calls the intent; the app reflects the result back through `surfaceStorage`.
 
-iOS < 18 has no control widget. Older OS versions still build the snapshot fine; the widget extension simply does not register the control widget.
+iOS < 18 has no control widget. Older OS versions still build the snapshot fine; the widget extension does not register the control widget on those versions.
 
 ### Code example
 
@@ -238,7 +238,7 @@ A notification content payload. Drives the standard alert UI on the Lock Screen 
 
 Projection helper: `toNotificationContentPayload` (returns the APNs envelope plus a `liveSurface` sidecar typed as `liveSurfaceNotificationContentEntry`). Sidecar discriminator: `kind: "surface_snapshot"`, aligned with the liveActivity alert payload's sidecar so on-device routing code can switch on one literal regardless of which Mobile Surfaces wrapper produced the userInfo.
 
-Native target: `apps/mobile/targets/notification-content/MobileSurfacesNotificationViewController.swift`. The extension renders payload-only: it decodes the `liveSurface` sidecar from `notification.request.content.userInfo` and shows a SwiftUI body next to the standard alert chrome. It does **not** read from the App Group container; that path would only be reliable behind a `UNNotificationServiceExtension` upstream (canonical Apple enrichment pattern) — see [Deferred extensions](#deferred-extensions).
+Native target: `apps/mobile/targets/notification-content/MobileSurfacesNotificationViewController.swift`. The extension renders payload-only: it decodes the `liveSurface` sidecar from `notification.request.content.userInfo` and shows a SwiftUI body next to the standard alert chrome. It does **not** read from the App Group container; that path would only be reliable behind a `UNNotificationServiceExtension` upstream (canonical Apple enrichment pattern). See [Deferred extensions](#deferred-extensions).
 
 The SDK sends via `client.sendNotification(deviceToken, snapshot)`; APNs push-type is `alert`, priority 10, bare-bundle-id `apns-topic`. The 4 KB alert ceiling applies (MS011); the 5 KB allowance is ActivityKit-broadcast-only.
 
@@ -246,7 +246,7 @@ The SDK sends via `client.sendNotification(deviceToken, snapshot)`; APNs push-ty
 
 `notification.category` is the iOS routing key. The schema constrains it to the registry in `packages/surface-contracts/src/notificationCategories.ts` (canonical source) via `z.enum`. The host registers every category at app launch through `registerNotificationCategories()` (calls `Notifications.setNotificationCategoryAsync`). The extension's `Info.plist` `UNNotificationExtensionCategory` array is codegened from the same source. All four sites stay in lockstep via `pnpm surface:codegen` (trapId MS037).
 
-The reference architecture ships **one** category — `surface-update` — with zero action buttons. Action-button wiring is purely additive: extend the registry, regenerate, and the host's response delegate gates on `action.identifier`.
+The reference architecture ships **one** category (`surface-update`) with zero action buttons. Action-button wiring is purely additive: extend the registry, regenerate, and the host's response delegate gates on `action.identifier`.
 
 ### When to emit
 
@@ -302,7 +302,7 @@ await push.sendNotification(deviceApnsToken, snapshot);
 
 A lock-screen accessory widget (the inline / circular / rectangular Lock Screen complications introduced in iOS 16). Renders next to the clock.
 
-**Status: shipped, lighter slice than `widget`/`control`.** The contract parses cleanly via `liveSurfaceSnapshotLockAccessory`, `toLockAccessoryEntry` projects to the consumer shape (`family`, `shortText` as an optional compact label, `gaugeValue` as an optional 0..1 fill), the `lock-accessory-circular.json` fixture exercises it, and `MobileSurfacesLockAccessoryWidget` renders it on device. The slice carries less than `widget`/`control` because the Lock Screen accessory families are themselves constrained — there is intentionally no rich glyph or detail-rows surface here.
+**Status: shipped, lighter slice than `widget`/`control`.** The contract parses cleanly via `liveSurfaceSnapshotLockAccessory`, `toLockAccessoryEntry` projects to the consumer shape (`family`, `shortText` as an optional compact label, `gaugeValue` as an optional 0..1 fill), the `lock-accessory-circular.json` fixture exercises it, and `MobileSurfacesLockAccessoryWidget` renders it on device. The slice carries less than `widget`/`control` because the Lock Screen accessory families are themselves constrained: there is intentionally no rich glyph or detail-rows surface here.
 
 ### When to emit
 

@@ -1,11 +1,19 @@
 #!/usr/bin/env node
-// Generates AGENTS.md and CLAUDE.md (identical content) from data/traps.json.
+// Generates AGENTS.md (full) and CLAUDE.md (compact) from data/traps.json.
 //
 // Why two files: AGENTS.md is the cross-tool agentic standard (Codex / Cursor
 // / Aider / Windsurf / Factory / Zed / Warp / Copilot all auto-discover it).
 // Claude Code does NOT yet auto-discover AGENTS.md and instead reads CLAUDE.md
-// natively. We generate both from the same source so the two files cannot
-// drift; nobody hand-edits either one.
+// natively at conversation start, so its size is load-bearing for Claude Code
+// performance — past ~40 KB the harness warns and slows down.
+//
+// AGENTS.md carries the full per-rule prose (Symptom + Fix per rule). CLAUDE.md
+// is a compact index — intro, the same rule table, the same tag map and
+// cross-reference list, the how-to, and the retired-id tombstones — with the
+// rule-section links pointed at AGENTS.md so a Claude Code session can grep
+// the table for the relevant trap id and fetch the prose on demand instead of
+// loading 50 KB up front. The /llms-full.txt site endpoint and the trap-
+// binding docsUrl strings point at AGENTS.md for the same reason.
 //
 // Pass --check to fail when the committed files do not match the generator
 // output. Mirrors scripts/build-schema.mjs.
@@ -115,12 +123,20 @@ const tagSummary = [...tagBuckets.entries()]
   .map(([tag, ids]) => `- \`${tag}\`: ${ids.sort().join(", ")}`)
   .join("\n");
 
-const indexTable = sortedEntries
-  .map(
-    (e) =>
-      `| [${e.id}](#${e.id.toLowerCase()}-${e.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}) | ${e.severity} | ${e.detection} | ${e.title} |`,
-  )
-  .join("\n");
+function ruleAnchor(entry) {
+  return `${entry.id.toLowerCase()}-${entry.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}`;
+}
+
+function buildIndexTable(linkBase) {
+  // linkBase is "" for AGENTS.md (in-document anchors) or "AGENTS.md" for
+  // CLAUDE.md (cross-document anchors into the full reference).
+  return sortedEntries
+    .map(
+      (e) =>
+        `| [${e.id}](${linkBase}#${ruleAnchor(e)}) | ${e.severity} | ${e.detection} | ${e.title} |`,
+    )
+    .join("\n");
+}
 
 // Cross-references: pairs of trap ids that describe the same wire shape in
 // two contexts or the inverse failures of the same header/setting. Each
@@ -159,27 +175,55 @@ const retiredSection = retiredEntries.length > 0
       .join("\n")
   : "_(no retired ids reserved.)_";
 
-const body = [
+const GENERATED_BANNER = [
   "<!--",
   "  THIS FILE IS GENERATED. DO NOT EDIT.",
   "  Source: data/traps.json (validated by packages/surface-contracts/src/traps.ts).",
   "  Regenerate with: node --experimental-strip-types scripts/build-agents-md.mjs",
   "  CI fails on drift via: pnpm surface:check",
   "-->",
+];
+
+const INDEX_SUMMARY = `${liveEntries.length} live rules: ${errorCount} error, ${warningCount} warning, ${infoCount} info. ${retiredEntries.length} retired ids reserved (see footnote).`;
+
+const HOW_TO_USE_LINES = [
+  "- **When generating or editing code in a Mobile Surfaces project**, treat every `error` rule as a hard invariant. Do not bypass it; if your change requires breaking the invariant, surface that to the user and stop.",
+  "- **When auditing an existing project**, walk the index from top to bottom. Static rules can be checked by reading files; config rules by reading `app.json`, `package.json`, and `expo-target.config.js`; runtime rules by inspecting recent APNs response codes; advisory rules by reading the symptom and confirming the user has runbook coverage.",
+  "- **When suggesting fixes**, cite the rule id (e.g. `MS013`) so the user can trace the recommendation. The catalog id is stable across releases.",
+  "- **Source of truth.** This file is generated from `data/traps.json`. The long-form docs live on the live site at https://mobile-surfaces.com/docs; this catalog carries the action-oriented summary.",
+];
+
+const RELATED_DOCS_LINES = [
+  "- [Architecture](https://mobile-surfaces.com/docs/architecture): the contract, the surfaces, the adapter boundary.",
+  "- [Multi-surface](https://mobile-surfaces.com/docs/multi-surface): every `kind` value and the projection it drives.",
+  "- [Backend integration](https://mobile-surfaces.com/docs/backend-integration): domain event to snapshot to APNs walkthrough.",
+  "- [Push](https://mobile-surfaces.com/docs/push): wire-layer reference, SDK, smoke script, token taxonomy, error reasons.",
+  "- [Observability](https://mobile-surfaces.com/docs/observability): which catalog-bound errors are worth alerting on, what a stuck Live Activity looks like on the wire, recommended log shape.",
+  "- [Troubleshooting](https://mobile-surfaces.com/docs/troubleshooting): symptom-to-fix recipes for failures not in this catalog.",
+  "- [Trap catalog maintenance](https://mobile-surfaces.com/docs/traps): schema and workflow for editing this catalog.",
+];
+
+// AGENTS.md — the full reference. Per-rule Symptom + Fix prose lives here;
+// other agentic tools (Codex / Cursor / Aider / ...) auto-discover it, and
+// the site's /llms-full.txt endpoint mirrors it.
+const agentsBody = [
+  ...GENERATED_BANNER,
   "",
   "# Mobile Surfaces: Invariants for AI Coding Assistants",
   "",
-  "This document lists the mandatory invariants enforced by Mobile Surfaces' test suite. AI coding assistants working in a Mobile Surfaces project must respect these rules; `pnpm surface:check` enforces them in CI. The same rules apply to human engineers; the catalog makes them explicit. It is generated from `data/traps.json` — edits go to the catalog, not to this file.",
+  "This document lists the mandatory invariants enforced by Mobile Surfaces' test suite. AI coding assistants working in a Mobile Surfaces project must respect these rules; `pnpm surface:check` enforces them in CI. The same rules apply to human engineers; the catalog makes them explicit. It is generated from `data/traps.json`; edits go to the catalog, not to this file.",
   "",
   "Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynamic Island, home-screen widgets, and iOS 18 control widgets. iOS Live Activities silently fail: your code compiles, your push returns 200, and nothing appears on the Lock Screen. This catalog enumerates the failure modes that produce that silence and the static, config, and runtime checks the repo uses to surface them at PR time instead of on a customer device.",
   "",
+  "Claude Code does not auto-discover AGENTS.md and instead reads [`CLAUDE.md`](./CLAUDE.md) at conversation start. CLAUDE.md is a compact index that links back to the rule sections here for per-rule prose.",
+  "",
   "## Index",
   "",
-  `${liveEntries.length} live rules: ${errorCount} error, ${warningCount} warning, ${infoCount} info. ${retiredEntries.length} retired ids reserved (see footnote).`,
+  INDEX_SUMMARY,
   "",
   "| ID | Severity | Detection | Title |",
   "| --- | --- | --- | --- |",
-  indexTable,
+  buildIndexTable(""),
   "",
   "## Rules by tag",
   "",
@@ -193,10 +237,7 @@ const body = [
   "",
   "## How to use this document",
   "",
-  "- **When generating or editing code in a Mobile Surfaces project**, treat every `error` rule as a hard invariant. Do not bypass it; if your change requires breaking the invariant, surface that to the user and stop.",
-  "- **When auditing an existing project**, walk the index from top to bottom. Static rules can be checked by reading files; config rules by reading `app.json`, `package.json`, and `expo-target.config.js`; runtime rules by inspecting recent APNs response codes; advisory rules by reading the symptom and confirming the user has runbook coverage.",
-  "- **When suggesting fixes**, cite the rule id (e.g. `MS013`) so the user can trace the recommendation. The catalog id is stable across releases.",
-  "- **Source of truth.** This file is generated from `data/traps.json`. The long-form docs live on the live site at https://mobile-surfaces.com/docs; this catalog carries the action-oriented summary.",
+  ...HOW_TO_USE_LINES,
   "",
   "## Rules",
   "",
@@ -210,27 +251,76 @@ const body = [
   "",
   "## Related local documentation",
   "",
-  "- [Architecture](https://mobile-surfaces.com/docs/architecture): the contract, the surfaces, the adapter boundary.",
-  "- [Multi-surface](https://mobile-surfaces.com/docs/multi-surface): every `kind` value and the projection it drives.",
-  "- [Backend integration](https://mobile-surfaces.com/docs/backend-integration): domain event to snapshot to APNs walkthrough.",
-  "- [Push](https://mobile-surfaces.com/docs/push): wire-layer reference, SDK, smoke script, token taxonomy, error reasons.",
-  "- [Observability](https://mobile-surfaces.com/docs/observability): which catalog-bound errors are worth alerting on, what a stuck Live Activity looks like on the wire, recommended log shape.",
-  "- [Troubleshooting](https://mobile-surfaces.com/docs/troubleshooting): symptom-to-fix recipes for failures not in this catalog.",
-  "- [Trap catalog maintenance](https://mobile-surfaces.com/docs/traps): schema and workflow for editing this catalog.",
+  ...RELATED_DOCS_LINES,
   "",
 ];
 
-const out = body.join("\n").replace(/\n{3,}/g, "\n\n") + "\n";
+// CLAUDE.md — compact. Same intro, index, tag map, cross-refs, how-to, and
+// retired tombstones; the rule-section links jump to AGENTS.md so the per-
+// rule Symptom + Fix prose is one hop away instead of inline. Claude Code
+// auto-loads this file into every conversation, so keeping it lean is what
+// the split is for.
+const claudeBody = [
+  ...GENERATED_BANNER,
+  "",
+  "# Mobile Surfaces: Invariants for AI Coding Assistants",
+  "",
+  "This document lists the mandatory invariants enforced by Mobile Surfaces' test suite. Treat every `error` rule as a hard invariant; `pnpm surface:check` enforces them in CI. The catalog is generated from `data/traps.json`; edits go there, not to this file.",
+  "",
+  "Mobile Surfaces is an Expo iOS reference architecture for Live Activities, Dynamic Island, home-screen widgets, and iOS 18 control widgets. iOS Live Activities silently fail: your code compiles, your push returns 200, and nothing appears on the Lock Screen. This catalog enumerates the failure modes that produce that silence and the checks the repo uses to surface them at PR time.",
+  "",
+  "The per-rule Symptom and Fix prose lives in [`AGENTS.md`](./AGENTS.md); the index rows below link to its anchors. The raw source is [`data/traps.json`](./data/traps.json). CLAUDE.md is kept compact because Claude Code loads it into every conversation.",
+  "",
+  "## Index",
+  "",
+  INDEX_SUMMARY,
+  "",
+  "| ID | Severity | Detection | Title |",
+  "| --- | --- | --- | --- |",
+  buildIndexTable("AGENTS.md"),
+  "",
+  "## Rules by tag",
+  "",
+  tagSummary,
+  "",
+  "## Cross-references",
+  "",
+  "Trap ids that describe the same constraint in two contexts, or the inverse failures of the same wire shape:",
+  "",
+  crossRefSection,
+  "",
+  "## How to use this document",
+  "",
+  ...HOW_TO_USE_LINES,
+  "",
+  "## Retired ids",
+  "",
+  "Trap ids are monotonic forever; retired rules keep their id with a one-line tombstone here so external references (PR comments, log lines, blog posts) keep resolving to a known marker.",
+  "",
+  retiredSection,
+  "",
+  "## Related local documentation",
+  "",
+  ...RELATED_DOCS_LINES,
+  "",
+];
 
-const targets = [resolve("AGENTS.md"), resolve("CLAUDE.md")];
+function finalize(lines) {
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n") + "\n";
+}
+
+const targets = [
+  { path: resolve("AGENTS.md"), content: finalize(agentsBody) },
+  { path: resolve("CLAUDE.md"), content: finalize(claudeBody) },
+];
 
 if (values.check) {
   let drift = false;
-  for (const target of targets) {
-    const current = existsSync(target) ? readFileSync(target, "utf8") : "";
-    if (current !== out) {
+  for (const { path, content } of targets) {
+    const current = existsSync(path) ? readFileSync(path, "utf8") : "";
+    if (current !== content) {
       console.error(
-        `${target.replace(`${process.cwd()}/`, "")} is out of sync with data/traps.json.`,
+        `${path.replace(`${process.cwd()}/`, "")} is out of sync with data/traps.json.`,
       );
       drift = true;
     }
@@ -243,8 +333,8 @@ if (values.check) {
   }
   console.log("AGENTS.md and CLAUDE.md are in sync with data/traps.json.");
 } else {
-  for (const target of targets) {
-    writeFileSync(target, out);
-    console.log(`Wrote ${target.replace(`${process.cwd()}/`, "")}.`);
+  for (const { path, content } of targets) {
+    writeFileSync(path, content);
+    console.log(`Wrote ${path.replace(`${process.cwd()}/`, "")}.`);
   }
 }

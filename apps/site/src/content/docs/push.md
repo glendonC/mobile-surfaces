@@ -73,7 +73,7 @@ Two halves: mint the APNs auth key in the Apple Developer portal, then wire its 
 
 6. Copy the 10-character **Key ID** from the key detail page → `APNS_KEY_ID`.
 7. Copy your 10-character **Team ID** from the **Membership** tab → `APNS_TEAM_ID`.
-8. Your bundle id (the bare `expo.ios.bundleIdentifier` from `apps/mobile/app.json`) goes into `APNS_BUNDLE_ID`. Do NOT append `.push-type.liveactivity` ([MS018](/docs/traps#ms018-apns-bundle-id-must-not-include-the-push-type-liveactivity-suffix)) — the SDK appends it internally.
+8. Your bundle id (the bare `expo.ios.bundleIdentifier` from `apps/mobile/app.json`) goes into `APNS_BUNDLE_ID`. Do NOT append `.push-type.liveactivity` ([MS018](/docs/traps#ms018-apns-bundle-id-must-not-include-the-push-type-liveactivity-suffix)); the SDK appends it internally.
 9. Pick an environment for `APNS_ENVIRONMENT`: `development` for dev-client / TestFlight-development builds, `production` for App Store / TestFlight production. Tokens are environment-scoped ([MS014](/docs/traps#ms014-apns-token-environment-must-match-the-build-environment)).
 
 ### Wire the wizard
@@ -124,7 +124,7 @@ One client per `(auth-key, environment, bundleId)` tuple. A single client multip
 
 ### `alert(deviceToken, snapshot, options?)`
 
-Plain alert push **from a `liveActivity`-kind snapshot** — the alert-fallback path. Same wire shape as `sendNotification` (push-type `alert`, bare bundle-id topic, priority 10 default) but reads the `liveActivity` slice; payload is built via `toApnsAlertPayload` (also exported for callers who want to construct the payload by hand). Use `sendNotification()` below for the dedicated `notification`-kind snapshot.
+Plain alert push **from a `liveActivity`-kind snapshot**: the alert-fallback path. Same wire shape as `sendNotification` (push-type `alert`, bare bundle-id topic, priority 10 default) but reads the `liveActivity` slice; payload is built via `toApnsAlertPayload` (also exported for callers who want to construct the payload by hand). Use `sendNotification()` below for the dedicated `notification`-kind snapshot.
 
 ```ts
 import { surfaceFixtureSnapshots } from "@mobile-surfaces/surface-contracts";
@@ -287,7 +287,7 @@ const client = createPushClient({
 
 The option is named `_unsafeRetryOverride` because changing it usually goes wrong: the defaults are tuned against MS015's iOS budget rules and the priority-aware stretch. The legacy name `retryPolicy` still works but logs a one-time deprecation warning per process; it will be removed in 9.0.
 
-For incidents, set the env var `MOBILE_SURFACES_PUSH_DISABLE_RETRY=1` (or any non-empty value) to force `maxRetries: 0` across every client in the process. This wins over any in-code override — it's an operator kill-switch.
+For incidents, set the env var `MOBILE_SURFACES_PUSH_DISABLE_RETRY=1` (or any non-empty value) to force `maxRetries: 0` across every client in the process. This wins over any in-code override; it's an operator kill-switch.
 
 `computeBackoffMs` lives in `packages/push/src/retry.ts` if you want to reuse the same backoff math elsewhere; the default formula is `min(base * 2^attempt, max) + random(0, base)` with jitter.
 
@@ -303,7 +303,7 @@ Per [MS015](/traps#ms015-push-priority-5-vs-10-budget-rules), priority 10 Live A
 
 | Field         | Priority 5 (Live Activity content updates) | Priority 10 (alerts, state transitions) |
 | ------------- | ------------------------------------------ | --------------------------------------- |
-| `maxRetries`  | configured value (default 3)               | `min(configured, 2)` — hard ceiling 2   |
+| `maxRetries`  | configured value (default 3)               | `min(configured, 2)`, hard ceiling 2   |
 | `baseDelayMs` | configured value (default 100)             | `configured * 2`                        |
 | `maxDelayMs`  | configured value (default 5000)            | `configured * 2`                        |
 
@@ -466,10 +466,10 @@ Knobs the SDK intentionally does not surface, with the reason in each row. Open 
 - **`signal: AbortSignal`** is exposed on every send method (`alert`, `sendNotification`, `update`, `start`, `end`, `broadcast`) and on each channel-management call. When aborted, an in-flight request is cancelled via `NGHTTP2_CANCEL`; a request waiting in a retry-backoff sleep wakes immediately; the promise rejects with the signal's reason or a generic `AbortError`. Pre-aborted signals reject synchronously without dialing.
 - **`describeSend(input)`** is a side-effect-free preview of the exact request a matching `send()` would issue (method, path, headers, payload, byte count). No JWT mint, no socket open. Useful for compose-time MS011 checks and `send-apns.mjs --describe`.
 - **`MOBILE_SURFACES_PUSH_DISABLE_RETRY`** env-var kill switch forces `maxRetries: 0` regardless of `_unsafeRetryOverride`. Documented because operators occasionally want to bisect "is this my retry policy or APNs?" without redeploying.
-- **`caOverride`** on `createPushClient` accepts a self-signed CA bundle. Test-only knob — the TLS regression test points the client at an in-process h2 server. Production callers never set this.
+- **`caOverride`** on `createPushClient` accepts a self-signed CA bundle. Test-only knob; the TLS regression test points the client at an in-process h2 server. Production callers never set this.
 
 ## Anti-goals
 
-- **No production-shaped backend service.** For the architecture in one runnable file, see [`apps/example-backend/`](https://github.com/glendonC/mobile-surfaces/tree/main/apps/example-backend) — a single-file Node server that receives the token forwarder payload, holds domain state in-memory, projects to a `LiveSurfaceSnapshot`, and drives APNs via this SDK. Wiring the SDK into a real queue, retry queue, or CDC pipeline (auth, persistence, observability, deploy) is application-specific; this page documents the SDK and script, not the deploy story.
+- **No production-shaped backend service.** For the architecture in one runnable file, see [`apps/example-backend/`](https://github.com/glendonC/mobile-surfaces/tree/main/apps/example-backend): a single-file Node server that receives the token forwarder payload, holds domain state in-memory, projects to a `LiveSurfaceSnapshot`, and drives APNs via this SDK. Wiring the SDK into a real queue, retry queue, or CDC pipeline (auth, persistence, observability, deploy) is application-specific; this page documents the SDK and script, not the deploy story.
 - **No restating ActivityKit concepts the SDK already abstracts.** The SDK builds correct `aps` blocks, picks topics and priorities, sets `apns-expiration`, and chooses dismissal defaults; the doc does not relitigate those.
 - **No paraphrasing of Apple's docs.** Every reason string and endpoint here is verified against current Apple documentation; the reason text is consistent with `packages/push/src/reasons.ts` (the canonical local copy).

@@ -3,7 +3,7 @@ import DocsLayout from "../layouts/DocsLayout.astro";
 
 // The traps catalog renders directly from data/traps.json so the page count,
 // the severity rollup, and every entry stay in lockstep with CLAUDE.md and
-// the runtime trap-bindings table. Vite handles the import statically — no
+// the runtime trap-bindings table. Vite handles the import statically: no
 // fs read at request time, no drift between site and source.
 import trapCatalog from "../../../../data/traps.json";
 
@@ -67,7 +67,7 @@ function anchorFor(entry: TrapEntry) {
 
 // data/traps.json `docs` entries are full URLs into the live site (the
 // long-form pages live at https://mobile-surfaces.com/docs). Pass them
-// through verbatim — Astro will turn them into <a href> targets directly.
+// through verbatim; Astro will turn them into <a href> targets directly.
 ---
 
 <DocsLayout

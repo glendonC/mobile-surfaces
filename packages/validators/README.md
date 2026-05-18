@@ -1,6 +1,6 @@
 # @mobile-surfaces/validators
 
-Project-identity input regexes for Mobile Surfaces scaffolding — project slug, URL scheme, bundle identifier, Apple Team ID, Swift identifier — consumed by [`create-mobile-surfaces`](https://www.npmjs.com/package/create-mobile-surfaces) and by the in-template `scripts/rename-starter.mjs`.
+Project-identity input regexes for Mobile Surfaces scaffolding (project slug, URL scheme, bundle identifier, Apple Team ID, Swift identifier), consumed by [`create-mobile-surfaces`](https://www.npmjs.com/package/create-mobile-surfaces) and by the in-template `scripts/rename-starter.mjs`.
 
 This is **not** wire-shape validation. If you are looking for a way to validate a `LiveSurfaceSnapshot` payload before sending it to APNs, see [`@mobile-surfaces/surface-contracts`](https://www.npmjs.com/package/@mobile-surfaces/surface-contracts), which exports the Zod schema and `safeParse` helpers.
 
@@ -16,7 +16,7 @@ Zero runtime dependencies. Node 18+. ESM-only (`type: "module"`).
 
 ## API
 
-Each `validate*` function returns `undefined` on success and a human-readable error string on failure. Consumers wrap the string with their own emission policy — the CLI re-prompts; the rename script prints and exits.
+Each `validate*` function returns `undefined` on success and a human-readable error string on failure. Consumers wrap the string with their own emission policy: the CLI re-prompts; the rename script prints and exits.
 
 ```ts
 import {
@@ -47,9 +47,9 @@ toSwiftPrefix("my-cool-app"); // → "MyCoolApp"
 | `validateBundleId(s)` | reverse-DNS, ≥ 2 segments | Rejects the `com.example.*` placeholder Apple will refuse on upload. |
 | `validateTeamId(s)` | empty or `[A-Z0-9]{10}` | Optional at scaffold time; APNs send paths enforce presence separately. |
 | `validateSwiftIdentifier(s)` | `[A-Z][A-Za-z0-9_]*` | UpperCamelCase only. Used for the Swift namespace prefix. |
-| `toScheme(projectName)` | — | Strip-non-alphanumeric helper for default scheme values. |
-| `toBundleId(projectName)` | — | Default `com.example.*` placeholder. The CLI's `validateBundleId` rejects this; the rename flow surfaces it as a prompt default. |
-| `toSwiftPrefix(projectName)` | — | UpperCamelCase prefix for Swift identifiers (widget bundle name, Live Activity attributes, etc.). |
+| `toScheme(projectName)` | (helper) | Strip-non-alphanumeric helper for default scheme values. |
+| `toBundleId(projectName)` | (helper) | Default `com.example.*` placeholder. The CLI's `validateBundleId` rejects this; the rename flow surfaces it as a prompt default. |
+| `toSwiftPrefix(projectName)` | (helper) | UpperCamelCase prefix for Swift identifiers (widget bundle name, Live Activity attributes, etc.). |
 
 ## Why a separate package?
 

@@ -5,7 +5,7 @@ order: 62
 group: "Operate"
 ---
 
-The starter ships a reference app with three tabs. **Delivery** is the default tab — a domain-typed example built on `DeliveryOrder` and `deliveryToSnapshot(order, kind)`. **Diagnostics** is the fixture-driven playground where every button fires a canonical snapshot so you can verify Lock Screen, Dynamic Island, home widget, control, lock accessory, and StandBy render correctly against the bridge. **Payload Inspector** is the live App Group dump plus a paste-payload parse playground. Use Delivery as the structural template; use Diagnostics for surface QA; use Payload Inspector to read what your host wrote without round-tripping through a debug build.
+The starter ships a reference app with three tabs. **Delivery** is the default tab: a domain-typed example built on `DeliveryOrder` and `deliveryToSnapshot(order, kind)`. **Diagnostics** is the fixture-driven playground where every button fires a canonical snapshot so you can verify Lock Screen, Dynamic Island, home widget, control, lock accessory, and StandBy render correctly against the bridge. **Payload Inspector** is the live App Group dump plus a paste-payload parse playground. Use Delivery as the structural template; use Diagnostics for surface QA; use Payload Inspector to read what your host wrote without round-tripping through a debug build.
 
 This page is the walk from "the diagnostics surfaces all render" to "my app produces real snapshots from real domain events."
 

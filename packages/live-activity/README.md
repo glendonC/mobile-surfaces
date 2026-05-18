@@ -14,7 +14,7 @@ Requires Expo SDK 55+, React Native 0.83+, React 19.2+, and iOS deployment targe
 
 ## The adapter boundary
 
-App code never imports this package directly. The Mobile Surfaces starter ships a thin re-export at `apps/mobile/src/liveActivity` (the boundary trap [MS001](https://mobile-surfaces.com/docs/architecture#adapter-contract) enforces). Importing through that boundary means swapping in a different native module — `expo-live-activity`, a hand-rolled module, a future first-party Apple module — touches one file instead of every call site.
+App code never imports this package directly. The Mobile Surfaces starter ships a thin re-export at `apps/mobile/src/liveActivity` (the boundary trap [MS001](https://mobile-surfaces.com/docs/architecture#adapter-contract) enforces). Importing through that boundary means swapping in a different native module (`expo-live-activity`, a hand-rolled module, a future first-party Apple module) touches one file instead of every call site.
 
 ```ts
 import { liveActivityAdapter, type LiveActivitySnapshot } from "../liveActivity";

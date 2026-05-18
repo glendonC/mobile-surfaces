@@ -8,7 +8,7 @@ Node SDK for sending Mobile Surfaces snapshots to Apple Push Notification servic
 - iOS 18 broadcast pushes
 - channel-management (create / list / delete)
 
-Wire-layer code only — no HTTP, retry, or APNs client framework. Uses `node:http2`, `node:crypto`, and `node:fs` directly. Runtime deps are the workspace `surface-contracts` package, plus `zod` as a peer (the same instance the contract package uses, so schemas stay interoperable).
+Wire-layer code only: no HTTP, retry, or APNs client framework. Uses `node:http2`, `node:crypto`, and `node:fs` directly. Runtime deps are the workspace `surface-contracts` package, plus `zod` as a peer (the same instance the contract package uses, so schemas stay interoperable).
 
 ## Install
 
@@ -59,7 +59,7 @@ await client.broadcast(channelId, snapshot);
 
 // Channel management
 const channel = await client.createChannel({ storagePolicy: "no-storage" });
-// channel.environment is "development" or "production" — channels are
+// channel.environment is "development" or "production"; channels are
 // environment-scoped per MS031.
 const channels = await client.listChannels();
 await client.deleteChannel(channel.channelId);
@@ -112,10 +112,10 @@ All non-2xx responses throw a typed subclass of `ApnsError`:
 
 All carry `apnsId`, `status`, `timestamp`, and `reason`. The following additional classes round out the taxonomy:
 
-- `InvalidSnapshotError` — Zod validation failure or wrong `kind`.
-- `ClientClosedError` — method called after `close()`.
-- `CreateChannelResponseError` — `createChannel()` 2xx response with no `apns-channel-id` recoverable from the headers or body (new in 5.0.0; previously a bare `Error`).
-- `AbortError` — request was aborted via `options.signal` (new in 5.0.0). Covers in-flight cancellation, mid-backoff cancellation, and already-aborted signals uniformly.
+- `InvalidSnapshotError`: Zod validation failure or wrong `kind`.
+- `ClientClosedError`: method called after `close()`.
+- `CreateChannelResponseError`: `createChannel()` 2xx response with no `apns-channel-id` recoverable from the headers or body (new in 5.0.0; previously a bare `Error`).
+- `AbortError`: request was aborted via `options.signal` (new in 5.0.0). Covers in-flight cancellation, mid-backoff cancellation, and already-aborted signals uniformly.
 
 ## Retry behavior
 
@@ -148,7 +148,7 @@ createPushClient({
 
 The name is deliberately ugly: the defaults are tuned against MS015 and the priority-aware stretch, and overriding them is usually wrong. The legacy `retryPolicy` option still works and logs a one-time deprecation warning per process.
 
-`MOBILE_SURFACES_PUSH_DISABLE_RETRY=1` in the environment turns retries off entirely — useful for tests and for diagnosing whether a flake is APNs-side or your retry policy.
+`MOBILE_SURFACES_PUSH_DISABLE_RETRY=1` in the environment turns retries off entirely. Useful for tests and for diagnosing whether a flake is APNs-side or your retry policy.
 
 ## Idempotency and retries
 
@@ -190,13 +190,13 @@ A single long-lived HTTP/2 session per (origin) is multiplexed across concurrent
 
 ### Concurrent-stream cap
 
-Each session multiplexes streams up to `maxConcurrentStreams` (default `900`). The effective cap is `min(maxConcurrentStreams, peer's SETTINGS frame, 900)` — Apple typically advertises 1000, and the 900 floor leaves headroom against peer-side enforcement variance. Excess requests wait in a FIFO queue and dispatch as in-flight streams complete; queue entries honor `AbortSignal` (an abort while queued short-circuits without opening a stream), and `client.close()` rejects every queued request with the closed error so teardown is never blocked by a long queue. Pass `0` to disable the queue entirely — the SDK then dispatches without a per-client cap and lets `NGHTTP2_REFUSED_STREAM` ride the normal retry loop.
+Each session multiplexes streams up to `maxConcurrentStreams` (default `900`). The effective cap is `min(maxConcurrentStreams, peer's SETTINGS frame, 900)`. Apple typically advertises 1000, and the 900 floor leaves headroom against peer-side enforcement variance. Excess requests wait in a FIFO queue and dispatch as in-flight streams complete; queue entries honor `AbortSignal` (an abort while queued short-circuits without opening a stream), and `client.close()` rejects every queued request with the closed error so teardown is never blocked by a long queue. Pass `0` to disable the queue entirely; the SDK then dispatches without a per-client cap and lets `NGHTTP2_REFUSED_STREAM` ride the normal retry loop.
 
 ## Operational notes
 
 ### Multi-worker JWT minting
 
-`JwtCache` is a process-local cache. In a cluster-mode or `worker_threads` deployment, each worker holds its own cache and re-mints independently every 50 minutes — that is wasted compute (a handful of ES256 signs per hour per worker) but functionally correct. If your operating model requires a single mint shared across workers — or a Redis-backed cache that fronts an external coordinator — pass a custom implementation via the `jwtCache` option. When set, `keyId`, `teamId`, and `keyPath` become optional; the injected implementation owns mint, refresh, and dedup.
+`JwtCache` is a process-local cache. In a cluster-mode or `worker_threads` deployment, each worker holds its own cache and re-mints independently every 50 minutes. That is wasted compute (a handful of ES256 signs per hour per worker) but functionally correct. If your operating model requires a single mint shared across workers, or a Redis-backed cache that fronts an external coordinator, pass a custom implementation via the `jwtCache` option. When set, `keyId`, `teamId`, and `keyPath` become optional; the injected implementation owns mint, refresh, and dedup.
 
 ```ts
 import { createPushClient, type JwtCacheLike } from "@mobile-surfaces/push";

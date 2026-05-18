@@ -2,7 +2,7 @@
 
 Reference domain and projection family for the Mobile Surfaces example backend and the mobile app's DeliveryExampleScreen. Demonstrates the wire-boundary parse pattern that's load-bearing for every Mobile Surfaces project: domain state → projection → `safeParseSnapshot` → adapter / App Group / APNs.
 
-`DeliveryOrder` is the canonical "real app" shape this repository points to: a small domain type, one projection family, and every surface kind populated from the same source of record. Production code substitutes its own domain type and its own projection family; the shape here is opinionated only inasmuch as it covers every snapshot kind v5 ships — replace `DeliveryOrder` with `RideRequest`, `Build`, `MatchScore`, etc., and the rest of the surface plumbing stays the same.
+`DeliveryOrder` is the canonical "real app" shape this repository points to: a small domain type, one projection family, and every surface kind populated from the same source of record. Production code substitutes its own domain type and its own projection family; the shape here is opinionated only inasmuch as it covers every snapshot kind v5 ships. Replace `DeliveryOrder` with `RideRequest`, `Build`, `MatchScore`, etc., and the rest of the surface plumbing stays the same.
 
 ## Install
 
@@ -39,6 +39,6 @@ The projection family covers every `kind` in the v5 schema: `liveActivity`, `wid
 
 ## See also
 
-- [`apps/example-backend/`](../../apps/example-backend) — single-file Node server that demonstrates the end-to-end domain → projection → APNs loop.
-- [`apps/mobile/src/screens/DeliveryExampleScreen.tsx`](../../apps/mobile/src/screens/DeliveryExampleScreen.tsx) — the mobile-side counterpart.
-- [`@mobile-surfaces/surface-contracts`](../surface-contracts) — the canonical wire format the projection lands in.
+- [`apps/example-backend/`](../../apps/example-backend): single-file Node server that demonstrates the end-to-end domain → projection → APNs loop.
+- [`apps/mobile/src/screens/DeliveryExampleScreen.tsx`](../../apps/mobile/src/screens/DeliveryExampleScreen.tsx): the mobile-side counterpart.
+- [`@mobile-surfaces/surface-contracts`](../surface-contracts): the canonical wire format the projection lands in.
