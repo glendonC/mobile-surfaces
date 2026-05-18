@@ -201,3 +201,124 @@ test("memory storage round-trips the snapshot for the next store", async () => {
   assert.equal(tokens.length, 1);
   assert.equal(tokens[0]?.token, "persist-me");
 });
+
+test("upsert during the hydration window still reaches storage", async () => {
+  // Storage with a load() that blocks until we resolve it manually,
+  // and a save() that records every call. Without the hydration flush
+  // the upsert below lands in the in-memory Map but its scheduleSave
+  // is silently dropped, and storage.save is never invoked until the
+  // next mutation.
+  let releaseLoad: () => void = () => {};
+  const loadGate = new Promise<void>((resolve) => {
+    releaseLoad = resolve;
+  });
+  const savedSnapshots: ReadonlyArray<TokenRecord>[] = [];
+  const storage = {
+    async load() {
+      await loadGate;
+      return [];
+    },
+    async save(tokens: ReadonlyArray<TokenRecord>) {
+      savedSnapshots.push(tokens);
+    },
+  };
+
+  const store = createTokenStore({ storage });
+  // Upsert before load() resolves. This is the race window.
+  await store.upsert({
+    kind: "pushToStart",
+    token: "queued-during-hydration",
+    environment: ENV,
+  });
+  // Storage hasn't been hit yet; hydration is still pending.
+  assert.equal(savedSnapshots.length, 0);
+
+  releaseLoad();
+  // Let the .then() and the queued scheduleSave debounce drain.
+  await new Promise((resolve) => setTimeout(resolve, 400));
+
+  assert.equal(savedSnapshots.length, 1);
+  assert.equal(savedSnapshots[0]?.length, 1);
+  assert.equal(savedSnapshots[0]?.[0]?.token, "queued-during-hydration");
+});
+
+test("upsert during hydration wins over a loaded record with the same key", async () => {
+  // Same triple (kind/activityId/token) produces the same idempotency
+  // key. If the live emission and a stale persisted record collide on
+  // load, the live one must win; overwriting it with disk state
+  // would defeat MS020 (latest-write-wins on rotation).
+  let releaseLoad: () => void = () => {};
+  const loadGate = new Promise<void>((resolve) => {
+    releaseLoad = resolve;
+  });
+  const sameKey = await computeIdempotencyKey(
+    "pushToStart",
+    undefined,
+    "shared-token",
+  );
+  const stale: TokenRecord = {
+    kind: "pushToStart",
+    token: "shared-token",
+    environment: ENV,
+    recordedAt: "2020-01-01T00:00:00.000Z",
+    lifecycle: "active",
+    idempotencyKey: sameKey,
+  };
+  const storage = {
+    async load() {
+      await loadGate;
+      return [stale];
+    },
+    async save() {},
+  };
+
+  const store = createTokenStore({ storage });
+  const live = await store.upsert({
+    kind: "pushToStart",
+    token: "shared-token",
+    environment: ENV,
+  });
+  releaseLoad();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  assert.equal(store.tokens.length, 1);
+  assert.equal(store.tokens[0]?.recordedAt, live.recordedAt);
+  assert.notEqual(store.tokens[0]?.recordedAt, stale.recordedAt);
+});
+
+test("upsert during hydration still saves when load() rejects", async () => {
+  // If storage.load() fails the in-memory write must still reach
+  // storage so the next process boot can recover it. The alternative
+  // is silent data loss when the cause of the load failure was a
+  // transient read error.
+  let rejectLoad: (err: Error) => void = () => {};
+  const loadGate = new Promise<ReadonlyArray<TokenRecord>>((_, reject) => {
+    rejectLoad = reject;
+  });
+  const savedSnapshots: ReadonlyArray<TokenRecord>[] = [];
+  const storage = {
+    async load() {
+      return loadGate;
+    },
+    async save(tokens: ReadonlyArray<TokenRecord>) {
+      savedSnapshots.push(tokens);
+    },
+  };
+  // Suppress the expected console.warn from the catch path.
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  try {
+    const store = createTokenStore({ storage });
+    await store.upsert({
+      kind: "pushToStart",
+      token: "queued-during-failed-hydration",
+      environment: ENV,
+    });
+    rejectLoad(new Error("simulated storage failure"));
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    assert.equal(savedSnapshots.length, 1);
+    assert.equal(savedSnapshots[0]?.[0]?.token, "queued-during-failed-hydration");
+  } finally {
+    console.warn = originalWarn;
+  }
+});
