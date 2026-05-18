@@ -121,6 +121,20 @@ export function createTokenStore(opts: TokenStoreOptions = {}): TokenStore {
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let saveInFlight: Promise<void> | undefined;
   let hydrated = false;
+  // Mutations during the hydration window set this flag instead of
+  // scheduling a save (a real save then would persist a snapshot that
+  // does not yet include the loaded records, overwriting durable state
+  // with an in-memory subset). After load() resolves or rejects we
+  // flush the flag so the queued write reaches storage.
+  let saveQueuedDuringHydration = false;
+
+  function finishHydration(): void {
+    hydrated = true;
+    if (saveQueuedDuringHydration) {
+      saveQueuedDuringHydration = false;
+      scheduleSave();
+    }
+  }
 
   // Hydrate from storage. The constructor returns synchronously with
   // an empty store; the load promise drains in the background and
@@ -131,21 +145,26 @@ export function createTokenStore(opts: TokenStoreOptions = {}): TokenStore {
     .then((loaded) => {
       for (const record of loaded) {
         if (!persistKinds.has(record.kind)) continue;
+        // Loaded records lose to anything the consumer upserted during
+        // the hydration window. The live emission is fresher than the
+        // last-persisted snapshot, and overwriting it with stale disk
+        // state would defeat MS020 (latest-write-wins on rotation).
+        if (records.has(record.idempotencyKey)) continue;
         records.set(record.idempotencyKey, record);
       }
-      hydrated = true;
       if (loaded.length > 0) notify();
+      finishHydration();
     })
     .catch((err) => {
       // Storage backends can fail (corrupted AsyncStorage blob, etc.).
       // We surface via a TokenStoreError on the next mutation rather
       // than throwing during construction — the alternative is an
       // unhandled rejection that crashes app startup.
-      hydrated = true;
       // eslint-disable-next-line no-console
       if (typeof console !== "undefined" && console.warn) {
         console.warn("[@mobile-surfaces/tokens] storage.load() failed:", err);
       }
+      finishHydration();
     });
 
   function snapshot(): ReadonlyArray<TokenRecord> {
@@ -169,7 +188,10 @@ export function createTokenStore(opts: TokenStoreOptions = {}): TokenStore {
   }
 
   function scheduleSave(): void {
-    if (!hydrated) return;
+    if (!hydrated) {
+      saveQueuedDuringHydration = true;
+      return;
+    }
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
       saveTimer = undefined;
