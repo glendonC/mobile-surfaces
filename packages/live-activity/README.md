@@ -2,7 +2,7 @@
 
 Expo native module wrapping ActivityKit start/update/end for iOS Live Activities, push-to-start tokens (iOS 17.2+), and broadcast channel pushes (iOS 18+). Speaks the `LiveSurfaceActivityContentState` shape from [`@mobile-surfaces/surface-contracts`](https://www.npmjs.com/package/@mobile-surfaces/surface-contracts) so your JS, your push backend, and the Swift attribute file all agree on the same wire layout.
 
-This bridge is intentionally narrower than [`expo-live-activity`](https://github.com/software-mansion-labs/expo-live-activity). It exposes the surface the Mobile Surfaces reference architecture needs and nothing else; convenience APIs like `relevanceScore`, custom presentation images, and arbitrary attribute trees are not (yet) bridged. If you need those, pair the contract package with `expo-live-activity` directly.
+This bridge is intentionally narrower than [`expo-live-activity`](https://github.com/software-mansion-labs/expo-live-activity). It exposes the surface the Mobile Surfaces reference architecture needs and nothing else; APIs like custom presentation images and arbitrary attribute trees are not bridged. If you need those, pair the contract package with `expo-live-activity` directly.
 
 ## Install
 
@@ -50,14 +50,14 @@ await liveActivityAdapter.end(activityId, "default");
 
 ## Event streams
 
-iOS Live Activity tokens never arrive synchronously. The native module exposes three event streams that you subscribe to at mount time, plus one synchronous probe for the most-recent push-to-start token:
+iOS Live Activity tokens never arrive synchronously. The native module exposes three event streams that you subscribe to at mount time, plus one async probe that returns the most-recent push-to-start token the bridge has observed:
 
 | Event | When it fires | Why subscribe at mount |
 | --- | --- | --- |
 | `onPushToken` | ActivityKit hands the JS layer a per-activity push token, on start and on rotation. | Tokens rotate at any time ([MS020](https://mobile-surfaces.com/docs/push#token-taxonomy)). Subscribing once at mount lets you re-store on every emission keyed by `activityId`. |
 | `onActivityStateChange` | The activity transitions between `active`, `ended`, `dismissed`, `stale`, `pending`, or `unknown`. | Wire it to your token store so terminal states ([MS021](https://mobile-surfaces.com/docs/push#token-taxonomy)) stop selecting dead tokens for sends. |
-| `onPushToStartToken` | iOS 17.2+ emits a fresh push-to-start token on cold launch, system rotation, and bridge reattach. | `getPushToStartToken()` always resolves null today; iOS does not expose a synchronous query ([MS016](https://mobile-surfaces.com/docs/push#token-taxonomy)). Subscribe on mount or the backend never receives a token. |
-| `getPushToStartToken()` (sync probe, no event) | Reserved for parity with the adapter contract. Always resolves null — kept so consumers can sanity-check the bridge is wired and lean on the same shape across native module implementations. | — |
+| `onPushToStartToken` | iOS 17.2+ emits a fresh push-to-start token on cold launch, system rotation, and bridge reattach. | The token may rotate at any time ([MS016](https://mobile-surfaces.com/docs/push#token-taxonomy)). Subscribe on mount or the backend never sees a rotation. |
+| `getPushToStartToken()` (async probe, no event) | Resolves to the cached value of the most recent `onPushToStartToken` emission this process has seen, or `null` if none has fired yet. The cache is in-process; a fresh launch starts empty until the subscription fires. | Useful for hydration paths that want to short-circuit on a known token without waiting for the next emission; never a substitute for the subscription. |
 
 ```ts
 useEffect(() => {
@@ -82,10 +82,14 @@ A known iOS bug ([FB21158660](https://mobile-surfaces.com/docs/push#fb21158660-p
 
 ## What this package does not do
 
-- **No payload validation.** `start` / `update` accept a `LiveActivityContentState` (alias for `LiveSurfaceActivityContentState`); validate at the wire boundary with `@mobile-surfaces/surface-contracts`. The native bridge trusts what JS hands it.
 - **No APNs sending.** Pair with [`@mobile-surfaces/push`](https://www.npmjs.com/package/@mobile-surfaces/push) (or any APNs library) on the backend. This package is the device-side bridge only.
 - **No widget rendering.** Live Activities + Dynamic Island only. Home-screen widgets, control widgets, Lock Screen accessories, and StandBy widgets live in their own targets and read App Group state directly. See [`https://mobile-surfaces.com/docs/multi-surface`](https://mobile-surfaces.com/docs/multi-surface).
-- **No `relevanceScore`, custom images, or arbitrary attributes.** Use `expo-live-activity` if you need them; this bridge stays narrow on purpose so MS002/MS003 byte-identity stays trivially auditable.
+- **No custom images or arbitrary attribute trees.** Use `expo-live-activity` if you need them; this bridge stays narrow on purpose so MS002/MS003 byte-identity stays trivially auditable.
+
+## What this package does (that you might not expect)
+
+- **`start` / `update` Zod-parse their `LiveActivityContentState` argument before crossing the bridge.** A mismatch throws `InvalidContentStateError` (bound to [MS038](https://mobile-surfaces.com/docs/architecture#adapter-contract)) at the call site rather than producing a silent Lock Screen no-show. You should still validate inbound payloads at your wire boundary with `@mobile-surfaces/surface-contracts`; the adapter parse is a backstop, not a replacement.
+- **`relevanceScore` is supported.** Pass it as an option to `start` / `update` and it is forwarded to ActivityKit. Range `[0, 1]`; the OS uses it to decide which Live Activity to surface when several are active.
 
 ## License
 
