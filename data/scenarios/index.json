@@ -1,4 +1,4 @@
 {
-  "$schema": "Internal: load order of cross-surface scenarios. Each scenario applies to all five surfaces at once, so the harness can demonstrate the architectural payoff: one domain state change, six projections.",
+  "$schema": "Internal: load order of cross-surface scenarios. Each scenario applies to the five ambient surfaces at once (Live Activity + widget + control + lock accessory + StandBy), so the harness can demonstrate the architectural payoff: one domain state change, five ambient projections plus a separate notification path.",
   "scenarios": ["delivery.json", "build.json"]
 }

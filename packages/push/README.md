@@ -16,7 +16,7 @@ Wire-layer code only — no HTTP, retry, or APNs client framework. Uses `node:ht
 pnpm add @mobile-surfaces/push@5 @mobile-surfaces/surface-contracts@5
 ```
 
-Requires Node 20+ (for stable HTTP/2 + native `crypto.randomUUID`). Surface contracts and push release together in the v5 linked group; pin to matching majors.
+Requires Node 20+ (for stable HTTP/2 + native `crypto.randomUUID`). `@mobile-surfaces/push` versions independently of the contract; the linked group covers `surface-contracts`, `validators`, and `traps` only. The push SDK declares its compatible contract major range explicitly in `peerDependencies`.
 
 ## Quickstart
 

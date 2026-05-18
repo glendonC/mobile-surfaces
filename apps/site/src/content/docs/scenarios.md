@@ -1,11 +1,11 @@
 ---
 title: "Scenarios"
-description: "Canonical multi-step flows that exercise every surface kind from one shared shape."
+description: "Canonical multi-step flows that exercise the ambient surface kinds from one shared shape."
 order: 8
 group: "Reference"
 ---
 
-A scenario is a sequence of snapshot steps that lights up every surface kind in lockstep. The repo ships two: a package delivery and a CI build. Each step is a set of five pre-projected `LiveSurfaceSnapshot` values (one per surface kind), so applying a step refreshes the Lock Screen Live Activity, home widget, control, lock accessory, and StandBy in a single action.
+A scenario is a sequence of snapshot steps that lights up the ambient surfaces (Live Activity, widget, control, lock accessory, StandBy) from one shared snapshot. The repo ships two: a package delivery and a CI build. Each step is a set of five pre-projected `LiveSurfaceSnapshot` values, one per ambient kind, so applying a step refreshes the Lock Screen Live Activity, home widget, control, lock accessory, and StandBy in a single action. The sixth snapshot kind (`notification`) is exercised by its own fixtures rather than the scenario flow; its lifecycle is one-shot rather than time-evolving.
 
 Scenarios live as JSON under `data/scenarios/` and are exposed in TypeScript via `@mobile-surfaces/surface-contracts/scenarios`. Use them as worked examples when wiring a real domain.
 
