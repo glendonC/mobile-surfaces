@@ -248,6 +248,10 @@ export function createTokenForwarder(cfg: ForwarderConfig): TokenForwarder {
         lastError = { message: messageOf(err) };
       }
       if (i < total - 1) {
+        // i is both the iteration index and the backoff exponent; the
+        // sequence is base * 2^0, base * 2^1, ... matching push's
+        // computeBackoffMs(attempt, ...) where push's `attempt` is the
+        // count of retries already performed (also 0 for the first).
         const delay = computeBackoffMs(i, baseDelayMs, maxDelayMs, jitter);
         try {
           await sleep(delay, cfg.signal);
