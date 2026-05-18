@@ -1,5 +1,14 @@
 # mobile-surfaces-app
 
+## 1.0.14
+
+### Patch Changes
+
+- Updated dependencies [a05688f]
+- Updated dependencies [c579dcd]
+  - @mobile-surfaces/live-activity@7.1.1
+  - @mobile-surfaces/tokens@7.1.1
+
 ## 1.0.13
 
 ### Patch Changes
