@@ -16,11 +16,13 @@ The flow for every change, large or small:
 6. **Wait for the Changesets `Version packages` PR** to appear (within ~1 minute of the merge to `main`). It rolls up every pending changeset into version bumps and CHANGELOG entries. Inspect the diff; if it looks right, merge it.
 7. **Watch `publish.yml`** fire on the release commit. It runs the trusted-publisher OIDC flow and pushes new versions to npm. Verify with `npm view @mobile-surfaces/<pkg> version`.
 
-### If `publish.yml` fails npm publish (`E404` / permission errors)
+### If `publish.yml` fails npm publish (`E404` / `ENEEDAUTH` / permission errors)
 
-Upstream npm often masks OIDC/trusted-publisher failures as **`404 Not Found` on PUT** ([npm/cli#8730](https://github.com/npm/cli/issues/8730), [npm/cli#8976](https://github.com/npm/cli/issues/8976)). In this repo, the release workflow avoids `registry-url` on `actions/setup-node`: that option writes `_authToken=${NODE_AUTH_TOKEN}` into `.npmrc`, which can preempt OIDC exchange when no long-lived NPM write token is present.
+**`ENEEDAUTH`** means `npm publish` never received credentials. The workflow pins **`changesets/action`** v1.8.x, publishes with **`pnpm exec changeset publish`**, and binds **`NPM_TOKEN`** to `${{ secrets.NPM_TOKEN }}` in GitHub Actions. When that repository secret is missing, Actions expands it as an empty string, which keeps classic auth stubs out of **`.npmrc`** for Trusted Publishing ([changesets/action#542](https://github.com/changesets/action/issues/542)). If you prefer a deterministic fallback, store an npm granular **Automation** token with Publish rights for **`@mobile-surfaces`** as the **`NPM_TOKEN`** Actions secret (`https://github.com/glendonC/mobile-surfaces/settings/secrets/actions`). Do not store a **read-only** granular token under that same name because Changesets will treat any non-empty value as credential-based auth.
 
-For **every new `@mobile-surfaces/*` package name**, configure **Trusted publishing → GitHub Actions** on npmjs (`publish.yml`, this repository URL) **before** the first CI publish; configuration is **per-package**, not automatic for the scope. Trusted publishing officially requires **`npm` 11.5.1+** and Node 22.14+ ([Trusted publishing on npm](https://docs.npmjs.com/trusted-publishers)).
+Upstream npm still masks failures as **`404 Not Found` on PUT** ([npm/cli#8730](https://github.com/npm/cli/issues/8730), [npm/cli#8976](https://github.com/npm/cli/issues/8976)). This repo skips `registry-url` on **`actions/setup-node`** so **`setup-node`** does not write **`_authToken=${NODE_AUTH_TOKEN}`** entries that steal the auth dance from OIDC unless you deliberately set **`NODE_AUTH_TOKEN`**.
+
+Configure **Trusted publishing → GitHub Actions** for **each** **`@mobile-surfaces/*`** package (`publish.yml`, this repository URL) before relying on OIDC alone. npm requires **`npm` 11.5.1+** for Trusted Publishing ([Trusted publishing on npm](https://docs.npmjs.com/trusted-publishers)).
 
 Cherry-picking commits between branches is forbidden in normal flow. Cherry-picks lose the regen step (every recent "regenerate X after cherry-pick" commit in `git log` is a symptom). When you need work from one branch on another, rebase or merge (never cherry-pick) and run `pnpm release:fix` on the receiving side.
 
