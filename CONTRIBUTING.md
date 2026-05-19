@@ -16,6 +16,12 @@ The flow for every change, large or small:
 6. **Wait for the Changesets `Version packages` PR** to appear (within ~1 minute of the merge to `main`). It rolls up every pending changeset into version bumps and CHANGELOG entries. Inspect the diff; if it looks right, merge it.
 7. **Watch `publish.yml`** fire on the release commit. It runs the trusted-publisher OIDC flow and pushes new versions to npm. Verify with `npm view @mobile-surfaces/<pkg> version`.
 
+### If `publish.yml` fails npm publish (`E404` / permission errors)
+
+Upstream npm often masks OIDC/trusted-publisher failures as **`404 Not Found` on PUT** ([npm/cli#8730](https://github.com/npm/cli/issues/8730), [npm/cli#8976](https://github.com/npm/cli/issues/8976)). In this repo, the release workflow avoids `registry-url` on `actions/setup-node`: that option writes `_authToken=${NODE_AUTH_TOKEN}` into `.npmrc`, which can preempt OIDC exchange when no long-lived NPM write token is present.
+
+For **every new `@mobile-surfaces/*` package name**, configure **Trusted publishing → GitHub Actions** on npmjs (`publish.yml`, this repository URL) **before** the first CI publish; configuration is **per-package**, not automatic for the scope. Trusted publishing officially requires **`npm` 11.5.1+** and Node 22.14+ ([Trusted publishing on npm](https://docs.npmjs.com/trusted-publishers)).
+
 Cherry-picking commits between branches is forbidden in normal flow. Cherry-picks lose the regen step (every recent "regenerate X after cherry-pick" commit in `git log` is a symptom). When you need work from one branch on another, rebase or merge (never cherry-pick) and run `pnpm release:fix` on the receiving side.
 
 `pnpm setup:hooks` installs an opt-in `pre-push` hook that enforces the rules locally: refuses non-fast-forward pushes, refuses direct-to-`main` pushes, and runs `pnpm release:dry-run` before the push completes. Run it once on every clone you work from.
