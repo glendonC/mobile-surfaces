@@ -42,13 +42,10 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           version: 10.7.1
-      # Do NOT pass registry-url here. setup-node persists an .npmrc that wires
-      # auth to NODE_AUTH_TOKEN; under OIDC trusted publishing npm must prefer
-      # the GitHub ID token exchange. Leaving registry-url configured without a
-      # real NPM_TOKEN historically produced misleading E404 "Not found" on PUT
-      # for the single package(s) changesets actually tried to publish, while
-      # `npm info` still worked anonymously. See npm/cli#8730, npm/cli#8976, and
-      # https://docs.npmjs.com/trusted-publishers ("npm CLI 11.5.1+").
+      # Omit registry-url so setup-node never writes `_authToken=${NODE_AUTH_TOKEN}` unless the
+      # job intentionally sets NODE_AUTH_TOKEN (we do not; trusted publishing exchanges the
+      # GitHub OIDC token at publish time). Pair that with Changesets releases that understand
+      # NPM_TOKEN emptiness (#542, astro release.yml pattern) and npm 11.5.1+.
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -64,12 +61,12 @@ jobs:
       - run: pnpm cli:smoke:existing
       - name: Pack-and-install smoke
         run: bash scripts/smoke-pack-and-install.sh
-      - uses: changesets/action@v1
+      - uses: changesets/action@v1.8.0
         with:
           title: Version packages
           commit: Version packages
           version: pnpm release:version
-          publish: pnpm changeset publish
+          publish: pnpm exec changeset publish
         env:
           # CHANGESETS_PAT is a fine-grained Personal Access Token scoped to
           # this repo with Contents: read/write and Pull requests: read/write.
@@ -89,3 +86,9 @@ jobs:
           # https://github.com/glendonC/mobile-surfaces/settings/secrets/actions.
           # The secret name does not change; no workflow edit needed.
           GITHUB_TOKEN: ${{ secrets.CHANGESETS_PAT }}
+          # Required spelling for Trusted Publishing on npm: when this secret is **unset**, the
+          # action must not synthesize bogus registry auth entries (fixes ENEEDAUTH paths on v1.x).
+          # When you **do** set `NPM_TOKEN` at https://github.com/glendonC/mobile-surfaces/settings/secrets/actions
+          # use a granular **Automation** token with Publish for `@mobile-surfaces`; read-only
+          # granular tokens confuse the OIDC vs token heuristic (changesets/discussions elsewhere).
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
