@@ -330,11 +330,15 @@ function swiftTypeFor(fieldName, schema, stageNominal) {
   return expected;
 }
 
+// Uses the public Zod API surface: ZodEnum exposes `.options` as a readonly
+// string array. Pinned by scripts/swift-content-state.test.mjs so a future
+// Zod bump that renames or removes the property fails a test rather than
+// silently misbehaving here.
 function isStageEnum(schema) {
-  const def = schema?._zod?.def;
-  if (!def || def.type !== "enum") return false;
+  const opts = schema?.options;
+  if (!Array.isArray(opts)) return false;
   const want = new Set(liveSurfaceStage.options);
-  const got = new Set(def.entries ? Object.values(def.entries) : []);
+  const got = new Set(opts);
   if (want.size !== got.size) return false;
   for (const v of want) if (!got.has(v)) return false;
   return true;
