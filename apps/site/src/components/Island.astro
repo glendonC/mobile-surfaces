@@ -22,14 +22,14 @@ const questions = [
     icon: "blueprint" as const,
     label: "What is this?",
     title: "What is Mobile Surfaces?",
-    body: "A complete iPhone surface starter. You get Live Activities, Dynamic Island, widgets, and controls set up end to end. Working harness, push SDK, contract types, demo mode. The iOS gotchas that usually take a week to find are already debugged.",
+    body: "The typed wire format that sits above your ActivityKit bridge. One snapshot shape (LiveSurfaceSnapshot) that your backend, your app, your widget extension, and your APNs payload all agree on. It ships with a contract package, a Node push client, and a catalog of iOS silent-failure modes enforced as CI checks. A reference app wires all of it end to end. Built and maintained by one person as a reference architecture.",
   },
   {
     id: "start",
     icon: "arrow-diagonal" as const,
     label: "How fast can I ship?",
-    title: "Up and running in minutes.",
-    body: "Run the install command, follow the wizard, and a Live Activity shows up on your simulator. The wizard auto-configures APNs, demo mode, and the harness. No Xcode plumbing required.",
+    title: "Scaffold, then build with Xcode.",
+    body: "Scaffold a project with one command, then build it with Xcode 26 and an iOS 17.2 simulator. The wizard configures the App Group, the widget target, APNs, and demo mode. You bring the Apple toolchain; the cross-surface wiring is done for you.",
   },
   {
     id: "bugs",
@@ -120,9 +120,9 @@ const cmd = (mgr: string) => `${mgr} create mobile-surfaces`;
         Live Activities for<br />Expo iOS.
       </h1>
       <p class="island-tagline">
-        The fastest way to ship Live Activities, Dynamic Island, widgets,
-        and controls on iPhone. Run one command and start building. iOS
-        17.2 and up.
+        A typed wire format for Live Activities, Dynamic Island, widgets,
+        and controls. One snapshot shape your backend, your app, and your
+        push payload agree on. iOS 17.2 and up.
       </p>
     </div>
 
@@ -212,9 +212,9 @@ const cmd = (mgr: string) => `${mgr} create mobile-surfaces`;
         Live Activities for<br />Expo iOS.
       </h1>
       <p class="island-tagline">
-        The fastest way to ship Live Activities, Dynamic Island, widgets,
-        and controls on iPhone. Run one command and start building. iOS
-        17.2 and up.
+        A typed wire format for Live Activities, Dynamic Island, widgets,
+        and controls. One snapshot shape your backend, your app, and your
+        push payload agree on. iOS 17.2 and up.
       </p>
     </div>
 
