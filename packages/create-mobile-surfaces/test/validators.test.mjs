@@ -26,6 +26,12 @@ describe("validateProjectSlug", () => {
     assert.match(validateProjectSlug("has space"), /Lowercase/);
     assert.match(validateProjectSlug("has_underscore"), /Lowercase/);
   });
+
+  it("rejects a slug longer than the npm package-name limit", () => {
+    assert.match(validateProjectSlug("a".repeat(215)), /214 characters/);
+    // 214 characters exactly is still accepted.
+    assert.equal(validateProjectSlug("a".repeat(214)), undefined);
+  });
 });
 
 describe("validateScheme", () => {
@@ -66,6 +72,46 @@ describe("validateBundleId", () => {
   it("does not reject other reverse-DNS prefixes that look generic", () => {
     // "acme" is a real reverse-DNS prefix for several orgs; we don't gate.
     assert.equal(validateBundleId("com.acme.foo"), undefined);
+  });
+
+  it("rejects reserved vendor prefixes the developer does not own", () => {
+    assert.match(validateBundleId("com.apple.myapp"), /reserved vendor prefix/);
+    assert.match(validateBundleId("com.google.myapp"), /reserved vendor prefix/);
+    assert.match(validateBundleId("com.amazon.myapp"), /reserved vendor prefix/);
+    assert.match(
+      validateBundleId("com.microsoft.myapp"),
+      /reserved vendor prefix/,
+    );
+    assert.match(
+      validateBundleId("com.facebook.myapp"),
+      /reserved vendor prefix/,
+    );
+    assert.match(validateBundleId("com.meta.myapp"), /reserved vendor prefix/);
+    // The default React Native template ships org.reactjs.native.example.*;
+    // catching it nudges the developer to rename before they ship.
+    assert.match(
+      validateBundleId("org.reactjs.native.example.app"),
+      /reserved vendor prefix/,
+    );
+    // Case-insensitive on the vendor portion.
+    assert.match(validateBundleId("COM.APPLE.myapp"), /reserved vendor prefix/);
+  });
+
+  it("does not reject prefixes that merely contain a vendor name mid-segment", () => {
+    // The guard is a prefix match; "com.apples.foo" is not com.apple.*.
+    assert.equal(validateBundleId("com.apples.foo"), undefined);
+    assert.equal(validateBundleId("com.mycompany.google"), undefined);
+  });
+
+  it("rejects a bundle id longer than Apple's 155 character limit", () => {
+    assert.match(
+      validateBundleId(`com.acme.${"a".repeat(160)}`),
+      /155 characters/,
+    );
+    // A 155-char id at the boundary still passes the length gate.
+    const atLimit = "com.acme." + "a".repeat(155 - "com.acme.".length);
+    assert.equal(atLimit.length, 155);
+    assert.equal(validateBundleId(atLimit), undefined);
   });
 
   it("falls through to the structural error when the trailing segment is empty", () => {

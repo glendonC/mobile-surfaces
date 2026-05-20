@@ -11,8 +11,43 @@
 // string on failure. Consumers wrap the string with their own emission
 // policy (CLI prompts re-ask; rename-starter prints + exits).
 
+// The project slug becomes the scaffolded project's directory name and its
+// package.json `name`. npm caps package names at 214 characters; that is the
+// binding constraint (tighter than any filesystem path limit), so it is the
+// cap enforced here.
+const PROJECT_SLUG_MAX = 214;
+
+// Bundle identifiers are CFBundleIdentifier values. Apple documents a 155
+// character maximum; longer ids are rejected at upload.
+const BUNDLE_ID_MAX = 155;
+
+// Reverse-DNS prefixes that belong to a platform vendor. Apple rejects an
+// upload whose bundle id sits under com.apple.*; the others are not yours to
+// publish under and signal a copied-template id the developer forgot to
+// rename. com.example.* is handled separately below because its guidance is
+// about placeholders, not vendor ownership.
+const RESERVED_BUNDLE_PREFIXES = [
+  "com.apple.",
+  "com.google.",
+  "com.amazon.",
+  "com.microsoft.",
+  "com.facebook.",
+  "com.meta.",
+  "org.reactjs.",
+];
+
+// Note on Unicode: every validator below restricts input to an ASCII subset
+// via its regex (`[a-z0-9-]`, `[A-Za-z0-9-]`, `[A-Z0-9]`). JavaScript regex
+// character classes are ASCII-only by default, so fullwidth digits, Cyrillic
+// homoglyphs, and other confusable characters are already rejected. NFKC
+// normalization would add no behavior the regexes do not already enforce, so
+// it is deliberately not applied.
+
 export function validateProjectSlug(s) {
   if (!s || s.length === 0) return "Project name is required.";
+  if (s.length > PROJECT_SLUG_MAX) {
+    return `Project name must be ${PROJECT_SLUG_MAX} characters or fewer (npm package-name limit).`;
+  }
   if (!/^[a-z0-9][a-z0-9-]*$/.test(s)) {
     return "Lowercase letters, digits, and dashes only. Must start with a letter or digit.";
   }
@@ -29,11 +64,19 @@ export function validateScheme(s) {
 
 export function validateBundleId(s) {
   if (!s || s.length === 0) return "Bundle identifier is required.";
+  if (s.length > BUNDLE_ID_MAX) {
+    return `Bundle identifier must be ${BUNDLE_ID_MAX} characters or fewer (Apple's CFBundleIdentifier limit).`;
+  }
   if (!/^[A-Za-z][A-Za-z0-9-]*(\.[A-Za-z0-9-]+){1,}$/.test(s)) {
     return "Should be reverse-DNS (e.g. com.company.appname) with at least two segments.";
   }
   if (/^com\.example\./i.test(s)) {
     return "com.example.* is a placeholder Apple rejects on upload. Use your real reverse-DNS prefix (e.g. com.acme.myapp).";
+  }
+  const lowered = s.toLowerCase();
+  const reserved = RESERVED_BUNDLE_PREFIXES.find((p) => lowered.startsWith(p));
+  if (reserved) {
+    return `${reserved}* is a reserved vendor prefix. Use your own reverse-DNS prefix (e.g. com.acme.myapp); a copied-template id under ${reserved}* will not be yours to publish.`;
   }
   return undefined;
 }
