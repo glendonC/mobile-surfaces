@@ -16,11 +16,30 @@ Source of findings: `notes/audit-state.md` (v8 baseline) + the prior five-agent 
 
 ## MS-id allocations (monotonic; pre-reserved by this plan)
 
-- **MS044** - APNs env-bundle-id suffix shape. (Phase 1, catalog honesty)
-- **MS045** - Live-Activity / APNs environment-tag agreement at token-store boundary (Phase 1; subsumes the runtime-only MS014).
-- **MS046** - Catalog-vs-claim headline-number consistency. (Phase 5, enforces the "honest headline" rule above.)
+REVISED 2026-05-19 after the five-agent design review. The original allocation
+pre-reserved MS044/MS045/MS046; the review found MS044 and MS045 were not real
+distinct failure modes and should not be added (see Phase 1a/1b below). Only one
+genuine new rule survives, so it takes the next free id MS044, not MS046.
 
-The Phase 1 retirements (MS016, MS020, MS021, MS023, MS026, MS034) demote rather than free the id slots; the ids stay reserved per the monotonic-forever policy.
+- **MS044** - Catalog headline-count consistency. A generated `data/catalog-stats.json`
+  is the single source of every public catalog number; the check fails on artifact
+  drift. (Phase 5; replaces the prose-grep "MS046" idea.)
+- ~~MS045~~ - struck. The token-environment concern is a runtime mismatch a static
+  check cannot see; it is handled by promoting MS014 to a push-SDK preflight (Phase 1b),
+  not a new rule.
+- ~~MS046~~ - struck. Renumbered to MS044 (the catalog had no MS044/MS045 entries,
+  so there is no gap to preserve; monotonic-after-MS043 gives MS044).
+
+The Phase 1 retirements (MS016, MS020, MS021, MS023, MS026, MS034) demote rather
+than free the id slots; the ids stay reserved per the monotonic-forever policy.
+
+Why the original MS044/MS045 were dropped (design-review finding): MS044-as-specced
+scanned documentation examples for a bad env-var string, which is doc hygiene, not
+the silent-failure mode MS018 already names. MS045-as-specced asserted that
+`tokenStore.upsert()` call sites read `environment` from `process.env` - but this is
+a React Native bundle with no `process.env`, the reference app correctly hard-codes
+the literal, and the check would fail the project's own correct code. Both concerns
+are real but belong in the push SDK as runtime preflights, not as new static rules.
 
 ---
 
@@ -38,21 +57,60 @@ Must complete before any other phase. The intent is to keep audits comparable ac
 
 Goal: every `error`-severity row in `data/traps.json` is either PR-enforced, SDK-pre-flight-enforced with a typed error class, or downgraded out of `error` severity. The catalog stops disagreeing with itself.
 
-- 1a. **Build MS044** (`APNS_BUNDLE_ID` must not include the `.push-type.liveactivity` suffix at env-var time, not just app.json). New check `scripts/check-apns-env-shape.mjs` runs in CI even without secrets - it asserts that the env-var EXAMPLE (`.env.example`, README snippets) is suffix-free and that any docs example matching the pattern `APNS_BUNDLE_ID=*\.push-type\.liveactivity` is rejected. Wires into registry, gets a test. Extends MS018 with the runtime-detection complement.
-- 1b. **Build MS045** (token-environment agreement). New static check `scripts/check-token-environment-binding.mjs` verifies that any reachable `tokenStore.upsert()` call site reads `environment` from a `process.env`-derived source (rather than a hard-coded literal that would diverge from the APNs config). This catches the "token from production build sent to development APNs" failure class that today only surfaces as a 400. Wires into registry.
+- 1a. REVISED. **Harden MS018 in the push SDK** instead of building MS044. The original
+  plan added a script that grepped doc examples for a suffixed `APNS_BUNDLE_ID`; that is
+  doc hygiene, not enforcement, and the real failure lives in a developer's gitignored
+  `.env`. Correct fix: in `createPushClient`, after the existing presence check, reject a
+  `bundleId` ending in `.push-type.liveactivity` with a typed error. This catches the
+  developer's actual env at construction time. No new MS-id; update MS018's enforcement
+  note and the MS018/MS035 sibling cross-link. Optionally fold a docs-example check into
+  the existing `scripts/check-doc-promises.mjs` as a warning-class lint.
+- 1b. REVISED. **Promote MS014 to a push-SDK preflight** instead of building MS045. The
+  original plan added a static check that `tokenStore.upsert()` reads `environment` from
+  `process.env`; a React Native bundle has no `process.env`, the reference app correctly
+  hard-codes the literal, and the check would fail correct code. Correct fix: add a
+  preflight in `packages/push/src/preflight.ts` (alongside the MS011/MS032 preflights)
+  that compares the token record's `environment` against the client's configured APNs
+  environment and throws before the send. This converts MS014 from DOC-ONLY to
+  RUNTIME-SDK - the Phase 1 goal - without a fake static rule.
 - 1c. **Retire MS016** (subscribe-at-mount). Move to `detection: "advisory"`, severity `info`. The constraint is real but there is no enforceable static or runtime gate; documenting it as such matches reality.
 - 1d. **Retire MS020 / MS021 / MS023** (token rotation / discard-at-end / per-activity binding). All three are tokens-package-internal invariants. MS020 is already covered structurally by the token store's `latestWriteWins` Map keying (recorded in `tokens/src/index.ts` header). MS021 is encoded in the `markEnding -> markDead` lifecycle. MS023 is implicit in the `kind: "perActivity"` discriminant. Downgrade to `info` / `advisory` and note in catalog summary that the constraint is encoded structurally rather than gate-enforced.
 - 1e. **Reclassify MS026** (`expo-target.config.js` present). Either: (a) promote the existing warn-emit in `probe-app-config.mjs` to a `fail` (and add a `trapIds: ["MS026"]` binding in the registry); or (b) downgrade catalog severity to `warning`. The choice depends on whether a fresh-scaffold project always lands an `expo-target.config.js`. Decide via Phase 1 spike - if yes, promote; if not, downgrade.
 - 1f. **Retire MS034** (broadcast capability). Pure operational; the iOS 18 broadcast capability is a JWT auth-key property an APNs operator toggles. There is no client-side gate possible. Move to `detection: "advisory"`, severity `info`.
 - 1g. **Merge MS012 + MS027**. Both fire the same deployment-target-min check on the same file. Keep MS012 as the canonical id; demote MS027 to `deprecated: true` with a one-line tombstone pointing at MS012. AGENTS.md renderer updated to surface the alias in the retired-ids footnote.
 - 1h. **Merge MS018 + MS035 framing**. Keep both rules (they are distinct symptoms - env-var shape vs missing topic header) but cross-link in the catalog `siblings` field (already partly there) and add a joint "you probably want MS044's static gate" pointer.
-- 1i. **MS037 split** (notification-categories codegen drift). Today MS037 is a single gate that bundles "regen check" + "TS export sync". Split into two registry entries with distinct error messages; same trap id but clearer diagnostics.
+- 1i. REVISED. **MS037 per-artifact sub-diagnostics**, not a registry split. Design review
+  found the "TS export sync" half is a non-failure: `NOTIFICATION_CATEGORY_IDS` is derived
+  in-module from `NOTIFICATION_CATEGORIES` and cannot drift. Two registry entries pointing
+  at one script with one trap id is cosmetic and breaks the registry's one-script-one-entry
+  model. Correct fix: `generate-notification-categories.mjs --check` already collects a
+  `drifts[]` array; emit it as multiple `checks[]` entries in the one `buildReport`
+  (`ts-const-sync`, `swift-const-sync`, `plist-sync`), each with its own status and summary.
+  Clearer diagnostics, zero registry change, zero new id.
 
 ### Phase 2 - Architecture seams (task #7)
 
 Goal: remove the "guard built on guard" pattern where multiple drift-checks compensate for an unfinished generator.
 
-- 2a. **Swift shared-state codegen.** Extend `scripts/generate-activity-attributes.mjs` (or add `scripts/generate-shared-state.mjs`) to emit `MobileSurfacesWidgetSnapshot`, `MobileSurfacesControlSnapshot`, `MobileSurfacesLockAccessorySnapshot`, `MobileSurfacesStandbySnapshot` (and the `notification` envelope) from their Zod projection-output schemas. Existing `check-surface-snapshots.mjs` (MS036) becomes the byte-identity / parity check for the generator output instead of for hand-written structs. Removes the inconsistency where ActivityAttributes is generated but the four sibling Codables are hand-maintained.
+- 2a. REVISED per design review. **Swift shared-state codegen**, scoped down.
+  - Extend the existing generator (rename `scripts/generate-activity-attributes.mjs` to
+    `scripts/generate-surface-swift.mjs`), do NOT add a second generator - the two outputs
+    share the Zod-to-Swift resolver and the run-mode harness.
+  - Emit the four flat structs (`MobileSurfacesWidgetSnapshot`, `MobileSurfacesControlSnapshot`,
+    `MobileSurfacesLockAccessorySnapshot`, `MobileSurfacesStandbySnapshot`) into a new
+    generated file `apps/mobile/targets/_shared/MobileSurfacesSurfaceSnapshots.swift`.
+    Move the four hand-written structs OUT of `MobileSurfacesSharedState.swift` (that file
+    keeps its real logic, stays hand-written).
+  - Do NOT generate the `aps` notification envelope. It has no on-device Swift consumer
+    (the extension reads `aps.*` via system accessors); inventing a struct for it is scope
+    creep and needs nested-type generator support. Generate only the flat
+    `MobileSurfacesNotificationContentEntry` sidecar from `liveSurfaceNotificationContentEntry`.
+  - MS036 becomes `generate-surface-swift.mjs --check` (regenerate-in-memory, diff committed
+    file), NOT a byte-identity gate. Byte-identity is the right invariant only for
+    multi-copy files (ActivityAttributes, Traps); the surface snapshots are single-copy, so
+    `--check` IS the parity gate. Reuse `check-surface-snapshots.mjs`'s per-field diagnostics.
+  - Sequence: land 2d (public-API Zod resolver) and 2b (z.lazy removal) before 2a, since the
+    resolver walks `_zod.def`. PR #117 already carries 2b and 2d.
 - 2b. **Remove `z.lazy()` wrapper on the main union.** `packages/surface-contracts/src/schema.ts:514-522`. The cold-start argument is unproven and the wrapper breaks some downstream type-narrowing. Drop the wrapper; rely on Zod's normal discriminated-union construction. Verify via a microbenchmark check-in (one-shot, not in CI).
 - 2c. **MS041 ordering rule: relax the regex.** `scripts/check-projection-envelope-version.mjs:103-104` enforces "first property must be `schemaVersion`" using a regex over the source. The Swift probe consuming it uses Codable which is key-based, not order-sensitive - so the "first" constraint protects nothing. Keep the literal-typed check (`z.literal("5")`), remove the ordering sub-rule. Update the rule prose in `data/traps.json` to match.
 - 2d. **Replace Zod-internals reach in `check-activity-attributes.mjs`.** Currently uses `schema?._zod?.def` and `def.entries` (private). Replace with `schema.shape` walking (public) plus a small Zod-version-pin regression test that asserts the public API still exposes what we need. Lock Zod to `4.3.6` for now (already exact-pinned); the test surfaces if the next Zod minor breaks the API.
@@ -74,17 +132,40 @@ Goal: the user-facing surface (README, landing, key docs) accurately describes w
 
 Goal: ship the `mobile-surfaces audit` subcommand for real, or formally drop it.
 
-- 4a. **Decision spike**: poll the maintainer (Glendon) on whether the audit subcommand justifies the work to ship correctly. Two options:
-  - **Ship**: bundle the gate scripts inside the published tarball, refactor each script to accept a `rootDir`, write real tests against a synthetic foreign-project fixture, restore the `mobile-surfaces` bin entry to a thin entrypoint.
-  - **Drop**: remove `src/audit.mjs` and all references in docs; the catalog is consumed inside a Mobile Surfaces checkout via `pnpm surface:check`. The promise was load-bearing in vs-expo; the v8 hotfix bundle already softened that, this finalizes.
-- 4b. **If shipping** (4a yes): refactor `scripts/probe-app-config.mjs`, `scripts/check-app-group-identity.mjs`, `scripts/check-ios-gitignore.mjs`, `scripts/doctor.mjs` to accept a `rootDir` argument (default cwd). Bundle these in the CLI tarball under `bin/scripts/` and resolve via `import.meta.url`. The current `src/audit.mjs:42-55` walk-up-to-find-scripts heuristic is removed.
-- 4c. **If shipping**: write `packages/create-mobile-surfaces/test/audit.test.mjs` exercising the audit subcommand against a `test/fixtures/foreign-project/` synthetic tree (a minimal Expo app with one MS013/MS025 violation, one MS029 violation, etc.). Pin pass/fail per fixture.
+- 4a. DECIDED 2026-05-19 after design review: **DROP the published subcommand; expose an
+  in-checkout wrapper instead.** Shipping a foreign-project scanner means bundling the gate
+  scripts plus their `scripts/lib/` dependency closure into the CLI tarball; one of those
+  libs (`toolchain-minimums.mjs`) hard-codes the monorepo root path, so bundling forks the
+  libs into a second copy that drifts. That maintenance shape is wrong for a single-maintainer
+  reference architecture, and every foreign Expo layout the one test fixture misses becomes
+  a bug report. The capability already exists inside a checkout (the gate scripts already
+  accept `--root`/`--mode=audit`). Concrete actions:
+  - Delete `packages/create-mobile-surfaces/src/audit.mjs` (dead code; no entrypoint).
+  - Add a root `package.json` script `surface:audit` that runs the existing gate scripts
+    against a `--root <path>` argument from inside a checkout.
+  - Fix the docs that still print `npx mobile-surfaces audit`: `README.md`, `adopt.md`,
+    `traps.md`. Replace with the checkout-and-run instruction.
+- 4b/4c. **Struck.** These were the "if shipping" tarball-bundling and foreign-fixture
+  test steps. Not needed under the 4a drop decision.
 - 4d. **Validators package hardening** (independent of 4a): add reserved-bundle-id list (`com.apple.*`, `com.google.*`, `com.amazon.*`, etc.), length caps (255 for slug per filesystem realities, 155 for bundle id per Apple), Unicode normalization (NFKC), template-default clash detection. Each new rule gets a test.
 - 4e. **Snapshot test escape-hatch**. Today `packages/create-mobile-surfaces/test/snapshot-scaffold.test.mjs` excludes the CLI internals from its hash. Add a separate CLI-logic regression test (not snapshot-driven) that asserts: every `apply*` task is reachable from at least one mode (greenfield / add-existing / monorepo), every prompt validator wired into a real prompt, every `--flag` reachable from `parseFlags`. Catches regressions the file-hash snapshots cannot.
 
 ### Phase 5 - Versioning charter + CI gates (cross-cutting)
 
-- 5a. **MS046** (catalog-vs-claim headline consistency). New `scripts/check-headline-counts.mjs` runs in CI: greps the documented quantitative claims out of `README.md`, `CLAUDE.md`, `AGENTS.md` index header, and `apps/site/src/content/docs/vs-expo-live-activity.md`, and asserts they match the breakdown computed from `data/traps.json` + `scripts/lib/check-registry.mjs`. The grid then becomes the source of truth for every public number. Fails on drift.
+- 5a. REVISED. **MS044** (catalog headline consistency; renumbered from MS046 since the
+  catalog has no MS044/MS045 entries). Do NOT grep prose - that is permanently CI-flaky on
+  every doc reword. Instead:
+  - New `scripts/generate-catalog-stats.mjs` writes `data/catalog-stats.json`, computing the
+    canonical breakdown by joining `data/traps.json` (severity, detection, `deprecated`)
+    with `scripts/lib/check-registry.mjs` `trapIds[]` membership. Duplicate pairs
+    (MS012/MS027, MS018/MS035) are read from the `siblings` field, not prose.
+  - README and `vs-expo-live-activity.md` consume the generated numbers via an in-place
+    marker block the generator rewrites (same pattern as the notification-categories
+    Info.plist codegen). AGENTS.md/CLAUDE.md already generate their headline from the
+    catalog - no change needed there.
+  - MS044 = `generate-catalog-stats.mjs --check` wired into the registry at stage 2. Fails
+    on artifact/marker drift, never on prose wording.
+  - Build this AFTER the Phase 1 retirements land so it computes against the final catalog.
 - 5b. **Pin the audit framework in CI** (light touch). Add `pnpm audit:diff` script that prints `git diff notes/audit-state.md` and fails if the diff is non-empty without a paired update in `audit-state.md`'s `audit-date` header. Optional: run on PRs that touch `data/traps.json` or `scripts/check-*.mjs`. The intent is to make audit-state.md the canonical changelog for the catalog's enforcement surface.
 - 5c. **Linked-group bumps to 9.0**. `surface-contracts + validators + traps` cut at 9.0 with the Phase 1 catalog changes (rule retirements + new MS-ids) as the breaking-change rationale. Independent majors for push / live-activity / tokens only if their Phase 2 / Phase 3 work changes the public surface.
 
