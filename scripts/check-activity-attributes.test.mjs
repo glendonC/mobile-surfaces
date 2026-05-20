@@ -199,3 +199,26 @@ test("MS004 catches an added Stage case missing from Zod", () => {
     ws.cleanup();
   }
 });
+
+// Pins the public Zod API surface the gate's isStageEnum helper depends on.
+// The earlier implementation reached into schema._zod.def private state and
+// would break silently on a Zod internal rename. The current implementation
+// reads `.options` (public on ZodEnum); this test fails loudly if a future
+// Zod bump removes that property, so the regression surfaces as a test
+// failure rather than a confused CI run.
+test("liveSurfaceStage exposes .options as a readonly string array", async () => {
+  const { liveSurfaceStage } = await import(
+    "../packages/surface-contracts/src/schema.ts"
+  );
+  assert.ok(
+    Array.isArray(liveSurfaceStage.options),
+    "liveSurfaceStage.options must be an array. If a future Zod bump renames or removes this property, update isStageEnum in scripts/check-activity-attributes.mjs to use the new public API.",
+  );
+  for (const opt of liveSurfaceStage.options) {
+    assert.equal(
+      typeof opt,
+      "string",
+      "every entry in liveSurfaceStage.options must be a string literal",
+    );
+  }
+});

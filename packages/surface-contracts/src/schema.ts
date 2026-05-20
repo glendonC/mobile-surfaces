@@ -494,16 +494,7 @@ export type LiveSurfaceSnapshotStandby = z.infer<
   typeof liveSurfaceSnapshotStandby
 >;
 
-// Discriminated union over `kind`. v4 requires `kind` to be set explicitly.
-//
-// Wrapped in z.lazy() so the discriminated-union construction (building the
-// kind -> variant Map across 6 variants) is deferred to the first
-// parse/safeParse call instead of running at module import. Backends that
-// import this package but only validate occasionally, and short-lived
-// serverless invocations that rarely hit the codepath, do not pay the
-// construction cost on cold start. The variants themselves stay eagerly
-// built (they are independently exported) and .parse / .safeParse still
-// pass through transparently.
+// Discriminated union over `kind`. Six variants, one per surface kind.
 //
 // Standard Schema (https://standardschema.dev) interop is provided automatically
 // by Zod 4 via the `~standard` property: `liveSurfaceSnapshot["~standard"]`
@@ -511,15 +502,14 @@ export type LiveSurfaceSnapshotStandby = z.infer<
 // pass this contract to any Standard-Schema-aware library (Valibot, ArkType,
 // `@standard-schema/spec` runners) without depending on Zod at runtime. The
 // fixture-validation tests pin this; do not remove the assertion.
-export const liveSurfaceSnapshot = z.lazy(() =>
-  z.discriminatedUnion("kind", [
-    liveSurfaceSnapshotLiveActivity,
-    liveSurfaceSnapshotWidget,
-    liveSurfaceSnapshotControl,
-    liveSurfaceSnapshotNotification,
-    liveSurfaceSnapshotLockAccessory,
-    liveSurfaceSnapshotStandby,
-  ]));
+export const liveSurfaceSnapshot = z.discriminatedUnion("kind", [
+  liveSurfaceSnapshotLiveActivity,
+  liveSurfaceSnapshotWidget,
+  liveSurfaceSnapshotControl,
+  liveSurfaceSnapshotNotification,
+  liveSurfaceSnapshotLockAccessory,
+  liveSurfaceSnapshotStandby,
+]);
 export type LiveSurfaceSnapshot = z.infer<typeof liveSurfaceSnapshot>;
 
 // ---------------------------------------------------------------------------
