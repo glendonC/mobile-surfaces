@@ -276,9 +276,9 @@ app.json must declare a com.apple.security.application-groups entry for widgets 
 
 ### MS026: Widget target managed by @bacons/apple-targets
 
-**severity:** error  •  **detection:** config (declarative file)  •  **tags:** widget, control, toolchain
+**severity:** error  •  **detection:** config (declarative file)  •  **tags:** widget, control, toolchain  •  **enforced by:** `scripts/probe-app-config.mjs`
 
-The Mobile Surfaces widget target lives outside the generated ios/ directory and is materialized by @bacons/apple-targets at prebuild time.
+The Mobile Surfaces widget target lives outside the generated ios/ directory and is materialized by @bacons/apple-targets at prebuild time. The check fires when targets/widget/ exists but expo-target.config.js does not; a project with no widget target at all is skipped.
 
 **Symptom.** Hand-managed Xcode target gets wiped on the next prebuild, or the widget extension never appears in the built app.
 

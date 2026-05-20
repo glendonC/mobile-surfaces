@@ -64,10 +64,8 @@ export function probeAppConfig({ rootDir = process.cwd(), mode = "in-tree" } = {
     mobileRoot = resolve(root, "apps/mobile");
   }
   const appPackageJsonPath = join(mobileRoot, "package.json");
-  const widgetConfigPath = join(
-    mobileRoot,
-    "targets/widget/expo-target.config.js",
-  );
+  const widgetTargetDir = join(mobileRoot, "targets/widget");
+  const widgetConfigPath = join(widgetTargetDir, "expo-target.config.js");
 
   const checks = [];
 
@@ -203,19 +201,26 @@ export function probeAppConfig({ rootDir = process.cwd(), mode = "in-tree" } = {
             },
           }),
     });
-  } else {
+  } else if (existsSync(widgetTargetDir)) {
+    // Widget target directory exists but expo-target.config.js is missing.
+    // The target cannot be materialized by @bacons/apple-targets without
+    // the config, so this is a hard failure (MS026). The check is
+    // conditioned on the dir existing so a foreign project that ships no
+    // widget target at all is not penalized for the absence.
     checks.push({
-      id: "widget-app-group-inheritance",
-      status: "warn",
+      id: "widget-target-config-present",
+      status: "fail",
       trapId: "MS026",
       summary:
-        "Widget target config (targets/widget/expo-target.config.js) not found.",
+        "Widget target dir exists at targets/widget/ but expo-target.config.js is missing.",
       detail: {
         message:
-          "If you intend to ship widgets/controls, materialize the target via @bacons/apple-targets.",
+          "Add expo-target.config.js that uses @bacons/apple-targets. Without the config, the widget target is not materialized at prebuild time and the widget extension never reaches the iOS build output.",
       },
     });
   }
+  // If neither the dir nor the config exists, the project ships no widget
+  // target and MS026 does not apply; no row emitted.
 
   // --- Bundle identifier sanity (MS018 — bare bundle id, no suffix) -------
   const bundleId = appJson?.expo?.ios?.bundleIdentifier;

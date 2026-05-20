@@ -415,7 +415,7 @@ export const TRAP_BINDINGS: ReadonlyMap<TrapId, TrapBinding> = new Map<
       title: "Widget target managed by @bacons/apple-targets",
       severity: "error",
       detection: "config",
-      summary: "The Mobile Surfaces widget target lives outside the generated ios/ directory and is materialized by @bacons/apple-targets at prebuild time.",
+      summary: "The Mobile Surfaces widget target lives outside the generated ios/ directory and is materialized by @bacons/apple-targets at prebuild time. The check fires when targets/widget/ exists but expo-target.config.js does not; a project with no widget target at all is skipped.",
       symptom: "Hand-managed Xcode target gets wiped on the next prebuild, or the widget extension never appears in the built app.",
       fix: "Keep the target source under apps/mobile/targets/widget/ with an expo-target.config.js. Pin @bacons/apple-targets at the supported exact version.",
       docsUrl: "https://github.com/glendonC/mobile-surfaces/blob/main/AGENTS.md#ms026-widget-target-managed-by-bacons-apple-targets",
