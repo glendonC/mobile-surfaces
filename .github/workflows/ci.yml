@@ -27,6 +27,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm surface:check
+      - run: pnpm audit:diff
       - run: pnpm typecheck
       - run: pnpm site:build
       - run: pnpm test:push

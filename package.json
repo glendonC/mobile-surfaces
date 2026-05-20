@@ -95,6 +95,7 @@
     "typecheck": "pnpm build && pnpm --filter mobile-surfaces-app typecheck",
     "release:dry-run": "node scripts/release-dry-run.mjs",
     "release:fix": "node scripts/release-fix.mjs",
+    "audit:diff": "node scripts/audit-diff.mjs",
     "setup:hooks": "node scripts/setup-hooks.mjs"
   },
   "devDependencies": {
