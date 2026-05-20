@@ -15,6 +15,8 @@ Three pieces ship together:
 - **`@mobile-surfaces/push`**: Node APNs client. HTTP/2 connection pooling, JWT signing, push-to-start tokens, iOS 18 broadcast channels, typed errors for every documented APNs reason.
 - **Trap catalog**: 40 documented iOS silent-failure modes ([`data/traps.json`](./data/traps.json)) enforced as CI invariants and rendered as [`AGENTS.md`](./AGENTS.md) and [`CLAUDE.md`](./CLAUDE.md). Static rules fail at PR time; runtime rules surface as typed errors.
 
+Mobile Surfaces is a single-maintainer reference architecture. The trap catalog and push client reflect failure modes encountered building the reference app, not a survey of every production deployment. Treat it as a worked example to read and adapt, not a turnkey dependency with a support contract.
+
 ```ts
 import { assertSnapshot, toLiveActivityContentState } from "@mobile-surfaces/surface-contracts";
 
