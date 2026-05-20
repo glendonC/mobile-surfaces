@@ -2,7 +2,7 @@
 
 Reference domain and projection family for the Mobile Surfaces example backend and the mobile app's DeliveryExampleScreen. Demonstrates the wire-boundary parse pattern that's load-bearing for every Mobile Surfaces project: domain state → projection → `safeParseSnapshot` → adapter / App Group / APNs.
 
-`DeliveryOrder` is the canonical "real app" shape this repository points to: a small domain type, one projection family, and every surface kind populated from the same source of record. Production code substitutes its own domain type and its own projection family; the shape here is opinionated only inasmuch as it covers every snapshot kind v5 ships. Replace `DeliveryOrder` with `RideRequest`, `Build`, `MatchScore`, etc., and the rest of the surface plumbing stays the same.
+`DeliveryOrder` is the canonical "real app" shape this repository points to: a small domain type, one projection family, and every surface kind populated from the same source of record. Production code substitutes its own domain type and its own projection family; the shape here is opinionated only inasmuch as it covers every snapshot kind wire schemaVersion 5 ships. Replace `DeliveryOrder` with `RideRequest`, `Build`, `MatchScore`, etc., and the rest of the surface plumbing stays the same.
 
 ## Install
 
@@ -10,7 +10,7 @@ Reference domain and projection family for the Mobile Surfaces example backend a
 npm install @mobile-surfaces/example-domain @mobile-surfaces/surface-contracts
 ```
 
-This package is a workspace member of the Mobile Surfaces repo; it ships at `0.1.x` as a versioned-but-pre-1.0 reference. The shape is stable across the v5 schema generation but may evolve when the snapshot schema bumps.
+This package is a workspace member of the Mobile Surfaces repo; it ships at `0.1.x` as a versioned-but-pre-1.0 reference. The shape is stable across wire schemaVersion 5 but may evolve when the snapshot schema bumps.
 
 ## Use
 
@@ -35,7 +35,7 @@ const parsed = safeParseSnapshot(snapshot);
 // parsed.success is true; parsed.data is a strongly-typed LiveSurfaceSnapshot.
 ```
 
-The projection family covers every `kind` in the v5 schema: `liveActivity`, `widget`, `control`, `lockAccessory`, `standby`, `notification`. See the source comment in `src/index.ts` for the per-kind mapping.
+The projection family covers every `kind` in wire schemaVersion 5: `liveActivity`, `widget`, `control`, `lockAccessory`, `standby`, `notification`. See the source comment in `src/index.ts` for the per-kind mapping.
 
 ## See also
 

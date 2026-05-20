@@ -32,6 +32,10 @@ const snapshot = assertSnapshot({
 await pushClient.update(activityToken, snapshot);
 ```
 
+## Who this is for
+
+An Expo iOS team shipping a multi-surface product — a Live Activity, the Dynamic Island, home-screen and Lock Screen widgets, a Control Center control — backed by a Node service. Stay on `expo-live-activity` or any other ActivityKit bridge: Mobile Surfaces is the typed contract and the push-side layer above whichever bridge you use, not a replacement for it. If you ship a single surface with no backend, the contract is more structure than the job needs.
+
 ## Install
 
 Three install paths depending on where you are starting from.
