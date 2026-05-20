@@ -1,25 +1,48 @@
 ---
-audit-date: 2026-05-17
-branch: audit/v8-framework
-audit-target: v8 working tree at HEAD = main + audit/v8-framework
-prior-audit: none (this is the first baseline)
+audit-date: 2026-05-19
+branch: fix/publish-auth-oidc (verification pass only; updates not committed - notes/ is gitignored)
+audit-target: v8 baseline plus shipped corrections through PR #95
+prior-audit: notes/audit-state.v8.md (frozen snapshot of the 2026-05-17 baseline)
 framework-version: notes/audit-framework.md
+verification-pass: 2026-05-19 (Phase 0c per notes/refactor-v9.md and notes/path-to-10.md)
 ---
 
-# Audit State: v8 baseline
+# Audit State: v8 baseline + 0c verification refresh
 
-Filled per `notes/audit-framework.md`. The diff against the previous version of this file is the audit report.
+Filled per `notes/audit-framework.md`. The diff against `notes/audit-state.v8.md` is the v9 audit report so far.
+
+## Phase 0c verification log (2026-05-19)
+
+The following changes against `notes/audit-state.v8.md` reflect work that has shipped since 2026-05-17 plus drift in file:line references and one newly confirmed doc lie. Every cell change carries a one-line justification.
+
+- S1 `create-mobile-surfaces`: BROKEN -> SHIP. `mobile-surfaces` bin entry removed in #88 (8ac0e50). Audit subcommand decision still open per Phase 4a.
+- S1 `@mobile-surfaces/live-activity`: DEGRADED -> SHIP. Three README contradictions corrected in #90 (a05688f).
+- S1 `@mobile-surfaces/tokens`: DEGRADED -> SHIP. Hydration race fixed in #89 (c579dcd); forwarder backoff parity acknowledged in #91. Remaining "duplicates push retry shape that could be shared" is Phase 2 surface-area work, not a defect.
+- S3 schema URL pin drift across `adopt.md`, `schema.md`, `concepts.md`, `backend.md`, `roadmap.md`: STALE -> MATCHES (shipped #92).
+- S3 JWT rotation 60-min vs 50-min: LIES -> MATCHES (shipped #92).
+- S3 "five surfaces" doc drift: LIES -> MATCHES (shipped #92).
+- S3 push linked-group misclaim: LIES -> MATCHES (shipped #92).
+- S3 `vs-expo-live-activity.md:75` "29 of those rules": OVERSTATES -> MATCHES (rewritten in #92 to "21 PR-gated in CI, 6 surfaced as typed errors"; matches the headline math in S2).
+- S3 `vs-expo-live-activity.md:25` and `README.md:16` "40 documented ... enforced in CI": split. The vs-expo row is now MATCHES per #92. The README.md:16 wording is unchanged and still OVERSTATES; tracked separately below.
+- S3 `push.md:380` "Sixteen of the error classes are catalog-bound via `trapIdForErrorClass`": STALE-RISK -> LIES. `trapIdForErrorClass` is not exported from `packages/push/src/reasons.ts`. The symbol does not exist. Promote to S4 RED.
+- S4 row `push-hash-fallback`: GREEN -> RESOLVED. `packages/push/src/hash.ts` no longer exists; no FNV-1a code remains in the push package. Concern eliminated, not just acknowledged.
+- S4 row `swift-shared-state-handwritten`: file extends to line 347, not 320. Line range updated to 296-347 below.
+- S4 row `ms026-catalog-drift`: emission block moved one line down. Line range updated to 207-218 below.
+- S4 row `readme-headline-overstate`: split into two rows. The vs-expo portion shipped in #92 (GREEN). The README.md:16 + CLAUDE.md:18 portion stands.
+- New S4 row `push-md-trap-id-symbol-lies`: confirmed RED via verification.
+
+All other rows confirmed unchanged.
 
 ## S1. Packages
 
 | name | version | bin declared | bin exists | files declared exist | README matches code | known bugs | verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `create-mobile-surfaces` | 7.1.0 | `mobile-surfaces:./bin/mobile-surfaces.mjs`, `create-mobile-surfaces:./bin/index.mjs` | `mobile-surfaces` bin MISSING | yes | README omits the `audit` subcommand entirely | `package.json:30` bin entry has no file; install via `npm i -g` ships broken symlink; `audit` subcommand has no entrypoint, no tests, walks paths not in published tarball | BROKEN |
+| `create-mobile-surfaces` | 7.1.1 | `create-mobile-surfaces:./bin/index.mjs` only | yes | yes | README still omits the `audit` subcommand; resolution gated on Phase 4a decision | broken `mobile-surfaces` bin entry removed in #88 (8ac0e50); `src/audit.mjs` ship-or-drop decision still open per Phase 4a | SHIP |
 | `@mobile-surfaces/example-domain` | 0.1.1 | n/a | n/a | yes | yes | none recorded | SHIP |
-| `@mobile-surfaces/live-activity` | 7.1.0 | n/a | n/a | yes | NO - three documented behaviors contradict shipped code | README claims `getPushToStartToken()` returns null (false, caches at `ObserverRegistry.swift:71-73`); claims no payload validation (false, MS038 at `src/index.ts:214-222`); claims no `relevanceScore` (false, threaded JS-to-Swift at `src/index.ts:49-52`) | DEGRADED |
-| `@mobile-surfaces/push` | 7.1.0 | n/a | n/a | yes | yes | `#retryPolicy` deprecation warn uses module-global flag (`src/client.ts:547`); FNV-1a hash fallback silently engages without surfacing to caller (`src/hash.ts:58-71`) | SHIP |
+| `@mobile-surfaces/live-activity` | 7.1.1 | n/a | n/a | yes | yes | three README contradictions corrected in #90 (a05688f); peer-floor claim at line 13 ("Expo SDK 55+, RN 0.83+, React 19.2+") still unverified against `peerDependencies` (tracked separately in S4) | SHIP |
+| `@mobile-surfaces/push` | 7.1.1 | n/a | n/a | yes | yes | `#retryPolicy` deprecation warn uses module-global flag (`src/client.ts:540-547`; acknowledged in code comment); FNV-1a hash fallback removed (file `src/hash.ts` deleted; no references remain) | SHIP |
 | `@mobile-surfaces/surface-contracts` | 8.0.0 | n/a | n/a | yes | yes | `z.lazy()` wrapper on main union (`schema.ts:514-522`) - misleading rationale; four hand-maintained Codable structs at `MobileSurfacesSharedState.swift:296-320` inconsistent with "Zod is the source of truth" framing | SHIP |
-| `@mobile-surfaces/tokens` | 7.1.0 | n/a | n/a | yes | yes | hydration write-loss race (`src/index.ts:129-149` + `~:172`); forwarder backoff off-by-one vs push retry (`src/forwarder.ts:103-113` vs `:251`); duplicates push retry shape that could be shared | DEGRADED |
+| `@mobile-surfaces/tokens` | 7.1.1 | n/a | n/a | yes | yes | hydration write-loss race fixed in #89 (c579dcd); forwarder backoff parity acknowledged in #91; duplicated retry shape is Phase 2 surface-area work, not a defect | SHIP |
 | `@mobile-surfaces/traps` | 8.0.0 | n/a | n/a | yes | yes | deliberate no-Zod-import constraint is documented (`packages/traps/src/index.ts` header) | SHIP |
 | `@mobile-surfaces/validators` | 8.0.0 | n/a | n/a | yes | yes | thin regex coverage - no reserved-bundle-id checks, no length caps, no Unicode normalization, no clash detection with template defaults (`packages/validators/src/index.mjs`) | DEGRADED |
 
@@ -111,20 +134,22 @@ The headline number for honest public claims is **21 PR-gated error conditions**
 | `packages/live-activity/README.md:~60` | "`getPushToStartToken()` always resolves null today; iOS does not expose a synchronous query" | `ios/LiveActivityModule.swift:147-150`, `ios/ObserverRegistry.swift:71-73` | LIES | Swift caches latest emission and returns it |
 | `packages/live-activity/README.md:~85` | "No payload validation" | `src/index.ts:214-222` (MS038 enforced) | LIES | adapter Zod-parses inputs before crossing bridge |
 | `packages/live-activity/README.md:~88` | "No `relevanceScore`" | `src/index.ts:49-52`, `client.ts:240`, `LiveActivityModule.swift:311-326` | LIES | threaded JS to Swift |
-| `apps/site/src/content/docs/adopt.md:63` | JSON Schema URL `...@7.0/schema.json` | `packages/surface-contracts/schema.json` `$id` is `@8.0/schema.json` | STALE | URL pin drift (wire schemaVersion 5 is correct; the URL pin is the stale part) |
-| `apps/site/src/content/docs/schema.md:60,63,123` | URLs and prose say `@7.0`; "Pinning to `7.0` rather than `7`..." | actual `$id` is `@8.0`; internally inconsistent with `:9` and `:123` which already say `@8.0` | STALE | URL pin drift within a single file |
-| `apps/site/src/content/docs/concepts.md:208` | `$id` derivation example shows `...@7.0/schema.json` | actual schema `$id` is `@8.0` | STALE | URL pin drift |
-| `apps/site/src/content/docs/backend.md:146` | "published JSON Schema at `unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json`" | actual `$id` is `@8.0` | STALE | URL pin drift (3 majors behind) |
-| `notes/roadmap.md:30` | JSON Schema URL `@7.0/schema.json` | actual `$id` is `@8.0` | STALE | internal note; same drift class |
-| `apps/site/src/content/docs/vs-expo-live-activity.md:75` | "29 of those rules are statically enforced by scripts in `surface:check`" | S2 totals: 21 distinct PR-gated error rules; 24 static+config total | OVERSTATES | |
-| `apps/site/src/content/docs/vs-expo-live-activity.md:25` and `README.md:16` | "40 documented iOS silent-failure modes ... enforced in CI" | S2 totals: 21 PR-gated error rules; 40 is the documented-mode count but "enforced in CI" overstates | OVERSTATES | |
-| `apps/site/src/content/docs/vs-expo-live-activity.md:73` | "ES256 JWT signing with a 60-minute key rotation" | `apps/site/src/content/docs/push.md:386` and `packages/push/README.md:199` both say 50 minutes | LIES | internal contradiction on a load-bearing security number |
-| `apps/site/src/content/docs/building-your-app.md:43,199`, `quickstart.md:113`, `scenarios.md:8` | "all five surfaces" / "five pre-projected outputs, one per surface kind" | `packages/surface-contracts/src/schema.ts:46-54` enumerates SIX kinds (`liveActivity`, `widget`, `control`, `lockAccessory`, `standby`, `notification`) | LIES | doc drift after `notification` kind landed |
-| `packages/push/README.md:19` | "Surface contracts and push release together in the v5 linked group" | per `apps/site/src/content/docs/stability.md:26-32`, linked group is `surface-contracts + validators + traps`; push versions independently | LIES | |
+| `apps/site/src/content/docs/adopt.md:63` | JSON Schema URL `...@7.0/schema.json` | (was) `$id` is `@8.0` | MATCHES (shipped #92) | resolved |
+| `apps/site/src/content/docs/schema.md:60,63,123` | URLs and prose said `@7.0` | (was) `$id` is `@8.0` | MATCHES (shipped #92) | resolved |
+| `apps/site/src/content/docs/concepts.md:208` | `$id` derivation example showed `@7.0` | (was) actual `$id` is `@8.0` | MATCHES (shipped #92) | resolved |
+| `apps/site/src/content/docs/backend.md:146` | "published JSON Schema at `...@5.0/schema.json`" | (was) actual `$id` is `@8.0` | MATCHES (shipped #92) | resolved |
+| `notes/roadmap.md:30` | JSON Schema URL `@7.0/schema.json` | (was) actual `$id` is `@8.0` | MATCHES (shipped #92) | resolved |
+| `apps/site/src/content/docs/vs-expo-live-activity.md:25` | "40 documented; 21 PR-gated in CI, 6 surfaced as typed errors at SDK call time" | S2 totals confirm | MATCHES (rewritten #92) | resolved |
+| `apps/site/src/content/docs/vs-expo-live-activity.md:74` | "21 of those rules are PR-gated by scripts in `surface:check`; another 6 surface as typed errors" | S2 totals confirm | MATCHES (rewritten #92) | resolved |
+| `README.md:16` | "40 documented iOS silent-failure modes ... enforced as CI invariants" | S2 totals: 21 PR-gated error rules; "enforced as CI invariants" overstates the catalog | OVERSTATES | unchanged since baseline; vs-expo half of this row resolved in #92 |
+| `CLAUDE.md:18` | "40 live rules: 35 error, 4 warning, 1 info. 3 retired ids reserved" | matches data/traps.json | MATCHES | accurate enumeration; the "enforced in CI" overclaim lives only in README.md:16 now |
+| `apps/site/src/content/docs/vs-expo-live-activity.md:73` | "ES256 JWT signing with a 60-minute key rotation" | (was) push.md and push/README.md said 50 minutes | MATCHES (shipped #92) | resolved |
+| `apps/site/src/content/docs/building-your-app.md`, `quickstart.md`, `scenarios.md` | "five surfaces" / "five pre-projected outputs" | (was) schema enumerates SIX kinds | MATCHES (shipped #92) | resolved |
+| `packages/push/README.md:19` | (was) "Surface contracts and push release together in the v5 linked group" | actual linked group is contracts+validators+traps | MATCHES (shipped #92) | resolved |
 | `packages/example-domain/README.md:5,13,38` | "stable across the v5 schema generation" / "every snapshot kind v5 ships" | surface-contracts is at 8.0.0; wire schemaVersion is "5" but "v5 schema generation" phrasing reads as the package version | STALE | ambiguous prose; either rewrite as "schemaVersion 5" or bump |
 | `apps/site/src/components/Island.astro:123,215` | "The fastest way to ship Live Activities..." | no benchmark anywhere in repo; superlative is unsubstantiated and conflicts with the brand-voice "declarative and clean, no jokey" preference | OVERSTATES | |
 | `apps/site/src/components/Island.astro:32` | "Run the install command, follow the wizard, and a Live Activity shows up on your simulator" | `packages/create-mobile-surfaces/README.md:81` requires Xcode 26+, iOS 17.2 sim runtime, pnpm, CocoaPods; not single-command | OVERSTATES | |
-| `apps/site/src/content/docs/push.md:380` | "Sixteen of the error classes are catalog-bound ... mapping to eleven distinct trap ids" | precise count not verified inline against `packages/push/src/reasons.ts` `trapIdForErrorClass` | STALE-RISK | needs reality-check against reasons.ts |
+| `apps/site/src/content/docs/push.md:380` | "Sixteen of the error classes are catalog-bound via `trapIdForErrorClass`" | `trapIdForErrorClass` is not exported from `packages/push/src/reasons.ts`. The named symbol does not exist | LIES | confirmed 2026-05-19; promote to S4 RED. Either implement the symbol or rewrite the prose. |
 | `packages/live-activity/README.md:13` | "Requires Expo SDK 55+, React Native 0.83+, React 19.2+" | precise floor claims not verified against `peerDependencies` | STALE-RISK | |
 | `README.md:15` | "typed errors for every documented APNs reason" | universal quantifier not verified against `reasons.ts` | STALE-RISK | |
 | `notes/positioning.md:55` | "Our bridge has roughly one user (us)" | README + landing | MATCHES (internally), STALE (externally - not surfaced in user-facing copy) | |
@@ -135,33 +160,33 @@ The headline number for honest public claims is **21 PR-gated error conditions**
 
 | id | file:line | issue | severity | task-ref |
 | --- | --- | --- | --- | --- |
-| cli-bin-missing | packages/create-mobile-surfaces/package.json:30 | declared bin file does not exist | RED | #2 |
-| tokens-hydration-race | packages/tokens/src/index.ts:129-149 | upsert during hydration window silently never persists | RED | #3 |
-| live-activity-readme-lies | packages/live-activity/README.md | three contradictions vs shipped code | RED | #4 |
-| forwarder-off-by-one | packages/tokens/src/forwarder.ts:103-113 vs :251 | backoff math diverges from push retry shape it claims to mirror | YELLOW | #5 |
-| ms026-catalog-drift | data/traps.json MS026 + scripts/probe-app-config.mjs:206-218 | severity error but only warn-emits, no registry binding | YELLOW | #6 |
-| ms014-ms016-ms020-ms034-ms035-doc-only | data/traps.json | error severity with zero enforcement at any layer | YELLOW | #6 |
-| ms012-ms027-duplicate | data/traps.json + probe-app-config.mjs | same condition counted twice | YELLOW | #6 |
-| ms041-ordering-theatrical | scripts/check-projection-envelope-version.mjs:103-104 | "first-property" rule protects a Swift probe that uses key-based Codable decoding | YELLOW | #7 |
-| swift-shared-state-handwritten | apps/mobile/targets/_shared/MobileSurfacesSharedState.swift:296-320 | four Codable structs hand-maintained while ActivityAttributes is generated; architectural inconsistency | YELLOW | #7 |
-| zod-internals-reach | scripts/check-activity-attributes.mjs:271-278 | reaches into `_zod.def` / `def.entries`; couples CI gate to Zod internal repr | YELLOW | #7 |
-| z-lazy-premature-opt | packages/surface-contracts/src/schema.ts:514-522 | `z.lazy()` wrapper with misleading rationale | YELLOW | #7 |
-| validators-thin | packages/validators/src/index.mjs | regex coverage only; no reserved-id, length, normalization, clash checks | YELLOW | #9 |
-| snapshot-tests-partially-circular | packages/create-mobile-surfaces/test/snapshot-scaffold.test.mjs:108-145 | exclude list defeats CLI-logic regression detection | YELLOW | #9 |
-| schema-url-drift-fanout | adopt.md:63, schema.md:60-63, concepts.md:208, backend.md:146, roadmap.md:30 | URL pin `@7.0` (or `@5.0` in backend.md) vs actual `$id` `@8.0`; drift spans 5 files including one internal contradiction inside schema.md | RED | #11 |
-| jwt-rotation-doc-contradiction | vs-expo-live-activity.md:73 (60 min) vs push.md:386 + push/README.md:199 (50 min) | load-bearing security number contradicts itself across public docs | RED | #11 |
-| five-vs-six-surfaces-doc-drift | building-your-app.md:43,199 + quickstart.md:113 + scenarios.md:8 | docs say "five surfaces"; schema ships six (`notification` added) | YELLOW | #11 |
-| push-linked-group-misclaim | packages/push/README.md:19 | claims push is in a "v5 linked group"; actual linked group is contracts+validators+traps, push is independent | YELLOW | #11 |
-| fastest-superlative-unsubstantiated | apps/site/src/components/Island.astro:123,215 | "fastest way to ship" with no benchmark; conflicts with brand-voice memory | YELLOW | #8 |
-| site-starter-vs-wire-format | apps/site/src/components/Island.astro:25 | site copy still says "starter" while positioning has moved | YELLOW | #8 |
-| readme-headline-overstate | README.md + CLAUDE.md "35 invariants enforced at PR time" | actual distinct PR-gated count is 21 (per S2 totals) | YELLOW | #6 / #8 |
-| one-maintainer-undisclosed | README, landing | no "single-maintainer reference architecture" disclosure | YELLOW | #8 |
-| doc-surface-bloat | apps/site/src/content/docs/**, notes/ | 4500+ lines for ~3 published packages | YELLOW | #8 |
-| push-error-class-count-unverified | apps/site/src/content/docs/push.md:380 | "16 catalog-bound error classes mapping to 11 distinct trap ids" - precise number never reality-checked against packages/push/src/reasons.ts trapIdForErrorClass | YELLOW | #6 |
-| live-activity-peer-floor-unverified | packages/live-activity/README.md:13 | "Expo SDK 55+, RN 0.83+, React 19.2+" not verified against peerDependencies | YELLOW | #8 |
-| typed-errors-every-claim-unverified | README.md:15 | "typed errors for every documented APNs reason" - universal quantifier not verified | YELLOW | #6 |
-| push-retrypolicy-warn-global | packages/push/src/client.ts:547 | module-global flag suppresses across PushClient instances | GREEN | (acknowledged in code comment) |
-| push-hash-fallback | packages/push/src/hash.ts:58-71 | FNV-1a silently engages, pads to 64 hex; consumer can't tell | GREEN | (acknowledged) |
+| cli-bin-missing | packages/create-mobile-surfaces/package.json:30 | declared bin file did not exist | GREEN | shipped #88 (8ac0e50) |
+| tokens-hydration-race | packages/tokens/src/index.ts:129-149 | upsert during hydration window silently never persisted | GREEN | shipped #89 (c579dcd) |
+| live-activity-readme-lies | packages/live-activity/README.md | three contradictions vs shipped code | GREEN | shipped #90 (a05688f) |
+| forwarder-off-by-one | packages/tokens/src/forwarder.ts:103-113 vs :251 | backoff parity question | GREEN | acknowledged #91 (already matched; doc note added) |
+| ms026-catalog-drift | data/traps.json MS026 + scripts/probe-app-config.mjs:207-218 | severity error but only warn-emits, no registry binding | YELLOW | #98 (Phase 1e) |
+| ms014-ms016-ms020-ms034-doc-only | data/traps.json | error severity with zero enforcement at any layer (MS035 removed from this row: it has typed `MissingTopicError` and the duplicate framing is tracked separately under ms012-ms027-duplicate) | YELLOW | #99 (Phase 1c/1d/1f) |
+| ms012-ms027-duplicate | data/traps.json + probe-app-config.mjs | same condition counted twice | YELLOW | #100 (Phase 1g) |
+| ms041-ordering-theatrical | scripts/check-projection-envelope-version.mjs:103-104 | "first-property" rule protects a Swift probe that uses key-based Codable decoding | YELLOW | #101 (Phase 2c) |
+| swift-shared-state-handwritten | apps/mobile/targets/_shared/MobileSurfacesSharedState.swift:296-347 | four Codable structs (Widget at 296, Control at 310, LockAccessory at 322, Standby at 335) hand-maintained while ActivityAttributes is generated | YELLOW | #102 (Phase 2a) |
+| zod-internals-reach | scripts/check-activity-attributes.mjs:271-278 | reaches into `_zod.def` / `def.entries`; couples CI gate to Zod internal repr | YELLOW | #103 (Phase 2d) |
+| z-lazy-premature-opt | packages/surface-contracts/src/schema.ts:514-522 | `z.lazy()` wrapper with misleading rationale | YELLOW | #104 (Phase 2b) |
+| validators-thin | packages/validators/src/index.mjs (entire file: 92 lines, 5 validators) | regex coverage only; no reserved-id list, no length caps, no NFKC normalization, no clash detection with template defaults; package has no own test/ dir (only cross-package coverage via packages/create-mobile-surfaces/test/validators.test.mjs) | YELLOW | #105 (Phase 4d) |
+| snapshot-tests-partially-circular | packages/create-mobile-surfaces/test/snapshot-scaffold.test.mjs:108-145 | exclude list defeats CLI-logic regression detection | YELLOW | #106 (Phase 4e) |
+| schema-url-drift-fanout | adopt.md, schema.md, concepts.md, backend.md, roadmap.md | URL pin `@7.0`/`@5.0` vs actual `$id` `@8.0` | GREEN | shipped #92 |
+| jwt-rotation-doc-contradiction | vs-expo-live-activity.md vs push.md + push/README.md | load-bearing security number contradicted itself | GREEN | shipped #92 |
+| five-vs-six-surfaces-doc-drift | building-your-app.md + quickstart.md + scenarios.md | docs said "five surfaces"; schema ships six | GREEN | shipped #92 |
+| push-linked-group-misclaim | packages/push/README.md:19 | claimed push was in v5 linked group | GREEN | shipped #92 |
+| fastest-superlative-unsubstantiated | apps/site/src/components/Island.astro:123,215 | "The fastest way to ship Live Activities..." appears at both line ranges; no benchmark; conflicts with brand-voice memory | YELLOW | #107 (Phase 3a) |
+| site-starter-vs-wire-format | apps/site/src/components/Island.astro:25 | "A complete iPhone surface starter" still present; positioning has moved to wire-format-above-the-bridge | YELLOW | #108 (Phase 3a) |
+| readme-headline-overstate | README.md:16 | "40 documented iOS silent-failure modes ... enforced as CI invariants" - actual distinct PR-gated count is 21 | YELLOW | #109 (Phase 3b/3c). vs-expo half resolved in #92; CLAUDE.md:18 line is accurate as a catalog enumeration |
+| one-maintainer-undisclosed | README, landing | no "single-maintainer reference architecture" disclosure | YELLOW | #110 (Phase 3c) |
+| doc-surface-bloat | apps/site/src/content/docs/**, notes/ | 4500+ lines for ~3 published packages | YELLOW | #111 (Phase 3d) |
+| push-md-trap-id-symbol-lies | apps/site/src/content/docs/push.md:380 | references `trapIdForErrorClass` which is not exported from packages/push/src/reasons.ts; "Sixteen of the error classes are catalog-bound via `trapIdForErrorClass` (mapping to eleven distinct trap ids)" cannot be verified because the named symbol does not exist | RED | #114 (Phase 3). Decision recorded 2026-05-19: rewrite the prose against the actual mechanism (per-instance lazy lookup via MobileSurfacesError base class through @mobile-surfaces/traps). Do not add trapIdForErrorClass lookup function (no second consumer per CONTRIBUTING.md two-consumer rule). |
+| live-activity-peer-floor-unverified | packages/live-activity/README.md:13 | "Expo SDK 55+, RN 0.83+, React 19.2+" not verified against peerDependencies | YELLOW | #112 (Phase 3) |
+| typed-errors-every-claim-unverified | README.md:15 | "typed errors for every documented APNs reason" - universal quantifier not verified against Apple's reason list; reasons.ts coverage is partial per push-md-trap-id-symbol-lies investigation | YELLOW | #113 (Phase 3, paired with #114) |
+| push-retrypolicy-warn-global | packages/push/src/client.ts:540-547 | module-global flag suppresses across PushClient instances | GREEN | acknowledged in code comment; no action needed |
+| push-hash-fallback | packages/push/src/hash.ts | (was) FNV-1a fallback engaged silently | GREEN | file deleted; no FNV-1a code remains in push package as of 2026-05-19 |
 
 ## S5. Branch posture
 

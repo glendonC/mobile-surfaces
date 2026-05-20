@@ -293,7 +293,7 @@ export const checkRegistry = Object.freeze([
     script: "scripts/probe-app-config.mjs",
     diagnose: true,
     mode: "single-mode",
-    trapIds: ["MS012", "MS024", "MS025", "MS027"],
+    trapIds: ["MS012", "MS024", "MS025"],
   },
   {
     id: "check-doc-schema-version",
