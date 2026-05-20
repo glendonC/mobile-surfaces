@@ -96,19 +96,6 @@ final class MobileSurfacesNotificationViewController: UIViewController, UNNotifi
   }
 }
 
-/// Codable mirror of `liveSurfaceNotificationContentEntry` from the Zod source
-/// of truth. MS036's check-surface-snapshots gate verifies field/type/optionality
-/// parity against the schema; never hand-edit the field set in isolation.
-struct MobileSurfacesNotificationContentEntry: Codable, Hashable {
-  let schemaVersion: String
-  let kind: String
-  let snapshotId: String
-  let surfaceId: String
-  let state: String
-  let deepLink: String
-  let category: String?
-}
-
 /// SwiftUI body the extension renders. Plain text-stacked layout that
 /// gracefully handles a missing sidecar; the system alert chrome renders
 /// above it regardless.

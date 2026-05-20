@@ -639,7 +639,7 @@ export type LiveSurfaceStandbyEntryOutput = z.infer<
 
 /**
  * Sidecar block inside the notification APNs payload's `liveSurface` field.
- * Hoisted out of the envelope so MS036's check-surface-snapshots gate can
+ * Hoisted out of the envelope so MS036's generate-surface-swift gate can
  * target it directly and so a Codable mirror on the on-device extension can
  * decode `notification.request.content.userInfo.liveSurface` against the
  * same shape the wire emits.

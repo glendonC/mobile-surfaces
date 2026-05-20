@@ -363,7 +363,9 @@ function main() {
     `apps/mobile/targets/_shared/${currentIdentity.swiftPrefix}ControlIntents.swift`,
     `apps/mobile/targets/_shared/${currentIdentity.swiftPrefix}NotificationCategories.swift`,
     `apps/mobile/targets/_shared/${currentIdentity.swiftPrefix}SharedState.swift`,
+    `apps/mobile/targets/_shared/${currentIdentity.swiftPrefix}SurfaceSnapshots.swift`,
     `apps/mobile/targets/notification-content/${currentIdentity.swiftPrefix}NotificationViewController.swift`,
+    `apps/mobile/targets/notification-content/${currentIdentity.swiftPrefix}NotificationContentEntry.swift`,
   ];
   for (const rel of renameTargets) {
     if (!fs.existsSync(rel)) continue;
@@ -434,7 +436,7 @@ function main() {
   // Why not the full `scripts/codegen.mjs` orchestrator here? Rename runs in
   // a freshly-extracted scaffold tarball before `pnpm install`, so workspace
   // packages have no node_modules. Orchestrator entries that import zod
-  // (build-schema, generate-activity-attributes, generate-notification-
+  // (build-schema, generate-surface-swift, generate-notification-
   // categories) cannot resolve their deps in that context, and several of
   // them would also UNDO the rename's text substitution (they emit Swift
   // files with the MobileSurfaces prefix hardcoded). Post-rename codegen is
