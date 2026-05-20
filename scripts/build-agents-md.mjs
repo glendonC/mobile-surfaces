@@ -21,6 +21,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { trapCatalog } from "../packages/surface-contracts/src/traps.ts";
+import { computeCatalogStats } from "./lib/catalog-stats.mjs";
 
 const { values } = parseArgs({
   options: { check: { type: "boolean", default: false } },
@@ -107,9 +108,10 @@ const sortedEntries = [...liveEntries].sort((a, b) => {
   return a.id.localeCompare(b.id);
 });
 
-const errorCount = liveEntries.filter((e) => e.severity === "error").length;
-const warningCount = liveEntries.filter((e) => e.severity === "warning").length;
-const infoCount = liveEntries.filter((e) => e.severity === "info").length;
+// The headline counts come from the shared computeCatalogStats so the
+// AGENTS.md / CLAUDE.md headline and the README + doc-site marker blocks
+// (scripts/generate-catalog-stats.mjs) cannot count rules two different ways.
+const stats = computeCatalogStats(catalog);
 
 const tagBuckets = new Map();
 for (const entry of liveEntries) {
@@ -184,7 +186,7 @@ const GENERATED_BANNER = [
   "-->",
 ];
 
-const INDEX_SUMMARY = `${liveEntries.length} live rules: ${errorCount} error, ${warningCount} warning, ${infoCount} info. ${retiredEntries.length} retired ids reserved (see footnote).`;
+const INDEX_SUMMARY = `${stats.live} live rules: ${stats.bySeverity.error} error, ${stats.bySeverity.warning} warning, ${stats.bySeverity.info} info. ${stats.deprecated} retired ids reserved (see footnote).`;
 
 const HOW_TO_USE_LINES = [
   "- **When generating or editing code in a Mobile Surfaces project**, treat every `error` rule as a hard invariant. Do not bypass it; if your change requires breaking the invariant, surface that to the user and stop.",
