@@ -329,15 +329,16 @@
         "push",
         "config"
       ],
-      "summary": "The push SDK auto-appends .push-type.liveactivity to the apns-topic; passing it pre-suffixed produces a malformed topic header.",
-      "symptom": "APNs responds 400 TopicDisallowed even though your auth key is correctly enabled for the app. The topic header has the suffix doubled or in the wrong position.",
+      "summary": "The push SDK auto-appends .push-type.liveactivity to the apns-topic; passing it pre-suffixed produces a malformed topic header. createPushClient rejects a pre-suffixed bundleId at construction with MalformedApnsConfigError, so the mistake fails fast instead of on every send.",
+      "symptom": "Without the construction-time guard the topic header carries a doubled suffix and APNs responds 400 TopicDisallowed on every send, even though the auth key is correctly enabled for the app. With the guard, createPushClient throws before the first send.",
       "fix": "Set APNS_BUNDLE_ID to the bare bundle id (e.g. com.example.mobilesurfaces). The SDK and scripts/send-apns.mjs both handle the suffix internally.",
       "docs": [
         "https://mobile-surfaces.com/docs/push#error-responses"
       ],
       "since": "1.0.0",
       "errorClasses": [
-        "TopicDisallowedError"
+        "TopicDisallowedError",
+        "MalformedApnsConfigError"
       ],
       "siblings": [
         "MS035"

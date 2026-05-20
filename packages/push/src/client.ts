@@ -23,6 +23,7 @@ import {
   CreateChannelResponseError,
   ExpiredProviderTokenError,
   InvalidSnapshotError,
+  MalformedApnsConfigError,
   MissingApnsConfigError,
   TooManyRequestsError,
   reasonToError,
@@ -601,6 +602,17 @@ function assertConfigComplete(options: CreatePushClientOptions): void {
   }
   if (missing.length > 0) {
     throw new MissingApnsConfigError(missing);
+  }
+  // Per MS018: the SDK appends `.push-type.liveactivity` to the apns-topic
+  // itself for Live Activity sends. A bundleId that already carries the
+  // suffix produces a doubled topic and a 400 TopicDisallowed on every send.
+  // Reject it once, at construction, instead of per-send. The match is
+  // case-insensitive because the suffix is a fixed Apple-defined string.
+  if (/\.push-type\.liveactivity$/i.test(options.bundleId)) {
+    throw new MalformedApnsConfigError(
+      "bundleId",
+      "it ends in .push-type.liveactivity. Pass the bare bundle id (e.g. com.example.app); the SDK appends the push-type suffix to the apns-topic itself. See data/traps.json MS018.",
+    );
   }
 }
 

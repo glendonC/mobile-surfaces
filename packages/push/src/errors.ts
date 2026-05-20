@@ -337,6 +337,28 @@ export class MissingApnsConfigError extends MobileSurfacesError {
   }
 }
 
+/**
+ * Thrown by `createPushClient` when a required config value is present but
+ * malformed. Distinct from `MissingApnsConfigError` (absent config): here the
+ * value was supplied but cannot be used as-is.
+ *
+ * The current case (data/traps.json MS018): `bundleId` carries a trailing
+ * `.push-type.liveactivity` suffix. The SDK appends that suffix itself when it
+ * builds the `apns-topic` for Live Activity pushes, so a pre-suffixed
+ * `bundleId` produces a doubled suffix and APNs rejects every send with a
+ * 400 TopicDisallowed. Catching it at construction turns a per-send runtime
+ * failure into one fast rejection. `field` names the offending option.
+ */
+export class MalformedApnsConfigError extends MobileSurfacesError {
+  readonly field: string;
+
+  constructor(field: string, detail: string) {
+    super(`createPushClient: ${field} is malformed — ${detail}`);
+    this.name = "MalformedApnsConfigError";
+    this.field = field;
+  }
+}
+
 interface ReasonToErrorInit {
   status: number;
   apnsId?: string;

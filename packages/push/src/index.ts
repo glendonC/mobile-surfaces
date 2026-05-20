@@ -63,6 +63,7 @@ export {
   InvalidSnapshotError,
   ClientClosedError,
   MissingApnsConfigError,
+  MalformedApnsConfigError,
   CreateChannelResponseError,
   AbortError,
 } from "./errors.ts";

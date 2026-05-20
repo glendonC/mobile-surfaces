@@ -15,6 +15,7 @@ const {
   InvalidSnapshotError,
   ClientClosedError,
   MissingApnsConfigError,
+  MalformedApnsConfigError,
   PayloadTooLargeError,
   FeatureNotEnabledError,
   ChannelNotRegisteredError,
@@ -886,6 +887,44 @@ test("createPushClient throws MissingApnsConfigError when required options are m
   assert.throws(
     () => createPushClient({ ...baseConfig, keyPath: "" }),
     (err) => err instanceof MissingApnsConfigError && err.missing[0] === "keyPath",
+  );
+});
+
+test("createPushClient rejects a bundleId carrying the push-type suffix (MS018)", () => {
+  const baseConfig = {
+    keyId: "ABC1234567",
+    teamId: "TEAM123456",
+    keyPath: KEY.file,
+    environment: "development",
+  };
+  for (const suffixed of [
+    "com.example.test.push-type.liveactivity",
+    "com.example.test.PUSH-TYPE.LIVEACTIVITY",
+  ]) {
+    assert.throws(
+      () => createPushClient({ ...baseConfig, bundleId: suffixed }),
+      (err) => {
+        assert.ok(
+          err instanceof MalformedApnsConfigError,
+          `expected MalformedApnsConfigError for ${suffixed}`,
+        );
+        assert.equal(err.field, "bundleId");
+        assert.equal(err.trapId, "MS018");
+        assert.match(err.message, /push-type\.liveactivity/);
+        return true;
+      },
+    );
+  }
+  // The bare bundle id is accepted; the SDK appends the suffix itself.
+  assert.doesNotThrow(() =>
+    createPushClient({ ...baseConfig, bundleId: "com.example.test" }),
+  );
+  // A bundle id that merely contains the substring mid-string is fine.
+  assert.doesNotThrow(() =>
+    createPushClient({
+      ...baseConfig,
+      bundleId: "com.example.push-type.liveactivity.app",
+    }),
   );
 });
 

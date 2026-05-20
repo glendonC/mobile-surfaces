@@ -201,8 +201,8 @@ public enum MSTraps {
       title: "APNS_BUNDLE_ID must not include the .push-type.liveactivity suffix",
       severity: "error",
       detection: "runtime",
-      summary: "The push SDK auto-appends .push-type.liveactivity to the apns-topic; passing it pre-suffixed produces a malformed topic header.",
-      symptom: "APNs responds 400 TopicDisallowed even though your auth key is correctly enabled for the app. The topic header has the suffix doubled or in the wrong position.",
+      summary: "The push SDK auto-appends .push-type.liveactivity to the apns-topic; passing it pre-suffixed produces a malformed topic header. createPushClient rejects a pre-suffixed bundleId at construction with MalformedApnsConfigError, so the mistake fails fast instead of on every send.",
+      symptom: "Without the construction-time guard the topic header carries a doubled suffix and APNs responds 400 TopicDisallowed on every send, even though the auth key is correctly enabled for the app. With the guard, createPushClient throws before the first send.",
       fix: "Set APNS_BUNDLE_ID to the bare bundle id (e.g. com.example.mobilesurfaces). The SDK and scripts/send-apns.mjs both handle the suffix internally.",
       docsUrl: "https://github.com/glendonC/mobile-surfaces/blob/main/AGENTS.md#ms018-apns-bundle-id-must-not-include-the-push-type-liveactivity-suffix"
     ),
@@ -470,6 +470,7 @@ public enum MSTraps {
     "InvalidContentStateError": "MS038",
     "InvalidProviderTokenError": "MS030",
     "InvalidSnapshotError": "MS008",
+    "MalformedApnsConfigError": "MS018",
     "MissingApnsConfigError": "MS028",
     "MissingChannelIdError": "MS031",
     "MissingTopicError": "MS035",
