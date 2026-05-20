@@ -796,7 +796,7 @@
         "config"
       ],
       "summary": "Source files and docs cannot ship a 'will be removed in X.0.0' (or 'removed in X.0') claim from a @mobile-surfaces/surface-contracts version at major X or higher. The deprecation promise is load-bearing for downstream consumers who plan migrations against it; shipping the major while the prose still says the removal is happening now silently breaks the contract.",
-      "symptom": "Source comment in schema-v4.ts says the codec is gone at 9.0.0. Package ships at 9.0.0 with the codec still present in safeParseAnyVersion. Consumers reading the source comment believe v4 is gone and skip a migration window; consumers reading the runtime keep using v4 indefinitely.",
+      "symptom": "A source comment or doc says a codec will be gone at version X.0.0. The package then ships at X.0.0 with the codec still present. Consumers reading the prose believe the codec is gone and skip a migration window; consumers reading the runtime keep using it indefinitely. The promise and the shipped behavior disagree.",
       "fix": "Update the deprecation prose to a future major (one major past the current is the charter minimum). If the codec really should be removed now, drop it in a coordinated release and remove the prose at the same time. To opt a specific prose line out of the check, prefix the preceding line with `// CHARTER: keep` (the allowlist marker is intentionally narrow).",
       "enforcement": {
         "script": "scripts/check-deprecation-prose.mjs"
