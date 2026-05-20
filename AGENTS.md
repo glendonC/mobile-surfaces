@@ -158,7 +158,7 @@ Every JSON file under data/surface-fixtures/ must parse via the current schemaVe
 
 ### MS008: Snapshot kind must match its projection slice
 
-**severity:** error  •  **detection:** static (script-checkable)  •  **tags:** contract  •  **enforced by:** `scripts/surface-contracts.test.mjs`
+**severity:** error  •  **detection:** static (script-checkable)  •  **tags:** contract  •  **enforced by:** `packages/surface-contracts/test/surface-contracts.test.mjs`
 
 kind: 'widget' requires a widget slice; kind: 'control' requires a control slice; kind: 'notification' requires a notification slice.
 

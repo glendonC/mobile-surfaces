@@ -136,7 +136,7 @@
       "symptom": "safeParse throws a discriminated-union error at the wire boundary; or worse, an old code path bypasses safeParse and a missing slice causes downstream surfaces to render placeholder data.",
       "fix": "Pair every kind change with its slice. Use the projection helper for the kind (toWidgetTimelineEntry, toControlValueProvider, toNotificationContentPayload) rather than reaching into the snapshot directly.",
       "enforcement": {
-        "script": "scripts/surface-contracts.test.mjs"
+        "script": "packages/surface-contracts/test/surface-contracts.test.mjs"
       },
       "since": "1.0.0",
       "errorClasses": [

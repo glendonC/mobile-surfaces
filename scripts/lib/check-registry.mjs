@@ -336,15 +336,29 @@ export const checkRegistry = Object.freeze([
   // parity reports it complements.
   {
     id: "surface-contracts-tests",
-    label: "surface-contracts.test.mjs (full unit suite)",
+    label: "surface-contracts unit suite",
     stage: 5,
     dependsOn: ["build-schema"],
-    script: "scripts/surface-contracts.test.mjs",
+    // Moved out of scripts/ in v9 so the published package's tests live
+    // next to the source they exercise; this is also what reviewers
+    // expect when they look for tests inside the package boundary.
+    script: "packages/surface-contracts/test/surface-contracts.test.mjs",
     runner: "node-test",
     diagnose: false,
     mode: "single-mode",
     json: false,
     trapIds: ["MS008"],
+  },
+  {
+    id: "surface-contracts-projection-invariants",
+    label: "surface-contracts projection invariant suite (Phase 2e)",
+    stage: 5,
+    dependsOn: ["build-schema"],
+    script: "packages/surface-contracts/test/projection-invariants.test.mjs",
+    runner: "node-test",
+    diagnose: false,
+    mode: "single-mode",
+    json: false,
   },
 
   // Stage 6: trap-derived files. The trap catalog must validate before

@@ -23,7 +23,7 @@ import {
   toNotificationContentPayload,
   toStandbyEntry,
   toWidgetTimelineEntry,
-} from "../packages/surface-contracts/src/index.ts";
+} from "../src/index.ts";
 
 const queued = surfaceFixtureSnapshots.queued;
 
