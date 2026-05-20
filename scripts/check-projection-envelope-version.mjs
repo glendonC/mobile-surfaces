@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 // MS041: every projection-output Zod schema in
-// packages/surface-contracts/src/schema.ts must declare `schemaVersion` as
-// its FIRST property, value `z.literal("<canonical>")`. The canonical
-// literal is read from `liveSurfaceSnapshotBaseShape` (the snapshot schema's
-// own schemaVersion literal).
+// packages/surface-contracts/src/schema.ts must declare `schemaVersion`
+// with the value `z.literal("<canonical>")`. The canonical literal is read
+// from `liveSurfaceSnapshotBaseShape` (the snapshot schema's own
+// schemaVersion literal).
 //
-// Why first-property: the on-device Codable mirror reads
-// `{ schemaVersion: String }` first so it can detect a host that has shipped
-// schemaVersion N+1 against a widget binary on schemaVersion N before
-// attempting full Codable decode. Re-ordering schemaVersion later in the
-// struct breaks that probe.
+// The on-device Codable mirror decodes `{ schemaVersion: String }` by key
+// name, so property ordering in the Zod source has no wire effect. An
+// earlier version of this check enforced that schemaVersion appear as the
+// first object property; that ordering rule protected nothing and was
+// removed. The literal-type check below is the load-bearing part.
 //
 // Projection-output schemas are identified by name suffix:
 //   liveSurface<Kind>Entry
@@ -112,40 +112,34 @@ while ((m = EXPORT_RE.exec(source)) !== null) {
   inspected += 1;
 
   const body = m[2];
-  // First non-comment, non-whitespace line of the object body.
   const lines = body.split("\n");
-  let firstFieldName = null;
-  let firstFieldLineIdx = -1;
+
+  // Find the schemaVersion field anywhere in the body. Property ordering
+  // is not significant on the wire (Codable decodes by key name), so the
+  // field can appear at any position.
+  let schemaVersionLineIdx = -1;
   for (let i = 0; i < lines.length; i += 1) {
     const trimmed = lines[i].trim();
-    if (trimmed === "") continue;
-    if (trimmed.startsWith("//")) continue;
-    if (trimmed.startsWith("/*") || trimmed.startsWith("*")) continue;
-    // Match `<name>:` at the start of the trimmed line.
-    const fm = /^([A-Za-z_][\w]*)\s*:/.exec(trimmed);
-    if (fm) {
-      firstFieldName = fm[1];
-      firstFieldLineIdx = i;
+    if (/^schemaVersion\s*:/.test(trimmed)) {
+      schemaVersionLineIdx = i;
       break;
     }
-    // Anything else (e.g. spread) — stop here, we won't recognize it.
-    break;
   }
 
-  if (firstFieldName !== "schemaVersion") {
+  if (schemaVersionLineIdx === -1) {
     issues.push({
       path: `packages/surface-contracts/src/schema.ts:${name}`,
-      message: `first property is ${firstFieldName ?? "(not recognized)"}, expected "schemaVersion". The on-device Codable mirror reads schemaVersion first; reordering breaks the pre-decode version probe.`,
+      message: `schemaVersion field not found. Every projection-output schema must declare \`schemaVersion: z.literal("${canonical}")\`.`,
     });
     continue;
   }
 
   // Confirm the value is `z.literal("<canonical>")` (optionally followed by
   // chained method calls like .describe(...)). Pull the schemaVersion value
-  // block — from after `schemaVersion:` up to the next top-level comma or
+  // block: from after `schemaVersion:` up to the next top-level comma or
   // closing brace. String-aware bracket counter so `.describe("text with (parens)")`
   // doesn't fool the depth tracker.
-  const startFrom = firstFieldLineIdx;
+  const startFrom = schemaVersionLineIdx;
   const firstLine = lines[startFrom];
   const colonIdx = firstLine.indexOf(":");
   // Reconstruct the remaining text from the colon onward and walk it as one
@@ -211,12 +205,12 @@ emitDiagnosticReport(
       trapId: "MS041",
       summary:
         issues.length === 0
-          ? `All ${inspected} projection-output schema(s) declare schemaVersion as the first property at literal "${canonical}".`
+          ? `All ${inspected} projection-output schema(s) declare schemaVersion as z.literal("${canonical}").`
           : `${issues.length} projection-output schema(s) violate the MS041 envelope-version invariant.`,
       ...(issues.length > 0
         ? {
             detail: {
-              message: `Canonical schemaVersion literal is "${canonical}" (from liveSurfaceSnapshotBaseShape). Every projection-output schema must declare \`schemaVersion: z.literal("${canonical}")\` as its FIRST property.`,
+              message: `Canonical schemaVersion literal is "${canonical}" (from liveSurfaceSnapshotBaseShape). Every projection-output schema must declare \`schemaVersion: z.literal("${canonical}")\`.`,
               issues,
             },
           }

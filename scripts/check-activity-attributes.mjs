@@ -267,11 +267,19 @@ function expectedSwiftType(name, schema) {
 // future widening of liveSurfaceActivityContentState that adds a different
 // enum literal under the field name "stage" would otherwise be silently
 // mapped to the wrong Swift type.
+//
+// Uses the public Zod API surface: ZodEnum exposes `.options` as a readonly
+// string array. A schema that does not have an `.options` array (e.g. a
+// non-enum schema, or a wrapping schema that hid the property) returns
+// false. The earlier implementation reached into `_zod.def` private state
+// and broke whenever Zod renamed an internal field; the `.options` path is
+// pinned by lib-swift-content-state.test.mjs so a future Zod bump that
+// removes it fails a test rather than silently passing this gate.
 function isStageEnum(schema) {
-  const def = schema?._zod?.def;
-  if (!def || def.type !== "enum") return false;
+  const opts = schema?.options;
+  if (!Array.isArray(opts)) return false;
   const want = new Set(liveSurfaceStage.options);
-  const got = new Set(def.entries ? Object.values(def.entries) : []);
+  const got = new Set(opts);
   if (want.size !== got.size) return false;
   for (const v of want) if (!got.has(v)) return false;
   return true;
