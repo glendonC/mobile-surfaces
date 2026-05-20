@@ -10,8 +10,8 @@
 // declaration in app.json.
 //
 // Phase 6 (refactor/v7): exposes a rootDir-parameterised core function so
-// the `mobile-surfaces audit` subcommand can run the doctor checks against
-// a foreign project. CLI behavior preserved when invoked without --root.
+// `pnpm surface:audit` can run the doctor checks against a foreign project.
+// CLI behavior preserved when invoked without --root.
 import { execFileSync } from "node:child_process";
 import { resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";

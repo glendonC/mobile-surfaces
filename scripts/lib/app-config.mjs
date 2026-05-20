@@ -13,8 +13,7 @@ import { join, resolve } from "node:path";
 
 /**
  * Locate an Expo `app.json` (or `app.config.json`) inside `rootDir`. Used by
- * the `mobile-surfaces audit` subcommand to handle the three common
- * project layouts:
+ * `pnpm surface:audit` to handle the three common project layouts:
  *
  *   1. Root-shaped Expo project:  rootDir/app.json
  *   2. Mobile Surfaces monorepo:  rootDir/apps/mobile/app.json

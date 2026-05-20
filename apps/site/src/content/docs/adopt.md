@@ -97,21 +97,21 @@ The SDK validates every snapshot through `liveSurfaceSnapshot.safeParse` and rej
 
 ## Audit your project against the trap catalog
 
-Mobile Surfaces ships a CLI subcommand that audits any Expo project against the silent-failure catalog without forking it:
+The trap catalog runs from inside a Mobile Surfaces checkout, against any Expo project, without forking it. Clone this repo, install once, and point the audit at your project root:
 
 ```bash
-npx mobile-surfaces audit .
+pnpm surface:audit --root /path/to/your-expo-project
 ```
 
-The audit walks every static and config rule in `data/traps.json` and prints pass/warn/fail rows with MS-id chips and links to the catalog entry. Coverage includes App Group identity across host and widget extension (MS013), iOS deployment target (MS012/MS027), App Group declaration in `app.json` (MS025), `apns-topic` bundle id discipline (MS018/MS035), workspace dependencies (MS024), and the gitignored `apps/mobile/ios/` directory (MS029).
+The audit runs the static and config gates that apply to a foreign project and prints pass/warn/fail rows with MS-id chips: App Group identity across host and widget extension (MS013), iOS deployment target (MS012), App Group declaration in `app.json` (MS025), the workspace dependency on the contract package (MS024), the widget target managed by `@bacons/apple-targets` (MS026), the gitignored `apps/mobile/ios/` directory (MS029), and the toolchain preflight (MS010).
 
-Use `--json` for CI:
+Add `--json` for CI:
 
 ```bash
-npx mobile-surfaces audit . --json
+pnpm surface:audit --root /path/to/your-expo-project --json
 ```
 
-The output is a `DiagnosticReport` (one canonical shape across every Mobile Surfaces check). Wire it into your existing PR checks; the catalog covers every silent ActivityKit failure mode that has cost a debugging session.
+The output is a single JSON object aggregating one `DiagnosticReport` per gate, the canonical shape every Mobile Surfaces check emits. Wire it into your existing PR checks.
 
 ## Live alongside `expo-live-activity`
 

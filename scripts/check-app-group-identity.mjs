@@ -33,8 +33,8 @@
 // against a different container than the widgets are reading.
 //
 // Phase 6 (refactor/v7): exposes a rootDir-parameterised core function so
-// the `mobile-surfaces audit` subcommand can run the same check against a
-// foreign project. CLI behavior preserved when invoked without --root.
+// `pnpm surface:audit` can run the same check against a foreign project.
+// CLI behavior preserved when invoked without --root.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

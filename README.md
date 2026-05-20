@@ -54,11 +54,13 @@ pnpm create mobile-surfaces
 
 ### Auditing an existing Expo project
 
-Run the trap catalog against it:
+The trap catalog runs from inside a Mobile Surfaces checkout. Clone this repo, install once, and point the audit at your project:
 
 ```bash
-npx mobile-surfaces audit ./path/to/project
+pnpm surface:audit --root ./path/to/project
 ```
+
+Add `--json` to wire the report into CI.
 
 See [the docs](https://mobile-surfaces.com/docs) for the full reading paths.
 

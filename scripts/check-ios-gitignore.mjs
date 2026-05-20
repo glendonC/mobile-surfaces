@@ -24,8 +24,8 @@
 // only oracle that resolves precedence the same way every other tool does.
 //
 // Phase 6 (refactor/v7): exposes a rootDir-parameterised core function so
-// the `mobile-surfaces audit` subcommand can run the same check against a
-// foreign project. CLI behavior preserved when invoked without --root.
+// `pnpm surface:audit` can run the same check against a foreign project.
+// CLI behavior preserved when invoked without --root.
 
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
