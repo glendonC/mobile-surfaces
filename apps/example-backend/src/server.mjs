@@ -151,6 +151,11 @@ async function dispatchUpdate(order) {
       // Live Activity content updates default to priority 5 per MS015's
       // budget rules; the snapshot-shaped projection above carries the
       // content state the on-device widget renders.
+      //
+      // Pass the token record's stored environment so the SDK rejects an
+      // environment mismatch before the round-trip (MS014) rather than
+      // letting it surface as an opaque 400 BadDeviceToken.
+      tokenEnvironment: liveActivityToken.environment,
     });
     return { dispatched: "liveActivity", contentState };
   }
@@ -166,6 +171,11 @@ async function dispatchUpdate(order) {
       await pushClient.sendNotification(apnsDeviceToken.token, snapshot, {
         // Notification body is the projection-output payload; the SDK
         // wraps it in the aps envelope.
+        //
+        // Same MS014 pre-flight as the Live Activity path: the stored
+        // environment is threaded through so a token/host mismatch fails
+        // before the send.
+        tokenEnvironment: apnsDeviceToken.environment,
       });
       return { dispatched: "notification", payload };
     }

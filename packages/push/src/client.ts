@@ -23,6 +23,7 @@ import {
   CreateChannelResponseError,
   ExpiredProviderTokenError,
   InvalidSnapshotError,
+  MalformedApnsConfigError,
   MissingApnsConfigError,
   TooManyRequestsError,
   reasonToError,
@@ -32,6 +33,7 @@ import {
   MAX_PAYLOAD_BYTES_DEFAULT,
   assertActivityTimestampOptions,
   assertPayloadWithinLimit,
+  assertTokenEnvironment,
   resolveBroadcastExpiration,
 } from "./preflight.ts";
 import type { PayloadKind } from "./preflight.ts";
@@ -255,6 +257,17 @@ export interface SendOptions {
    * aborted signal rejects synchronously without dialing.
    */
   signal?: AbortSignal;
+  /**
+   * Optional environment the target token was minted for. When supplied on a
+   * token-targeted send (`update`, `start`, `end`, `sendNotification`,
+   * `sendAlert`), the SDK rejects with `TokenEnvironmentMismatchError` before
+   * the round-trip if it disagrees with the environment this client targets
+   * — turning the otherwise opaque 400 `BadDeviceToken` into a precise
+   * pre-send error (data/traps.json MS014). Pass the `environment` field of
+   * the stored token record. Ignored by `broadcast`, which targets a channel
+   * rather than a device token.
+   */
+  tokenEnvironment?: "development" | "production";
 }
 
 export interface BroadcastOptions extends SendOptions {
@@ -601,6 +614,17 @@ function assertConfigComplete(options: CreatePushClientOptions): void {
   }
   if (missing.length > 0) {
     throw new MissingApnsConfigError(missing);
+  }
+  // Per MS018: the SDK appends `.push-type.liveactivity` to the apns-topic
+  // itself for Live Activity sends. A bundleId that already carries the
+  // suffix produces a doubled topic and a 400 TopicDisallowed on every send.
+  // Reject it once, at construction, instead of per-send. The match is
+  // case-insensitive because the suffix is a fixed Apple-defined string.
+  if (/\.push-type\.liveactivity$/i.test(options.bundleId)) {
+    throw new MalformedApnsConfigError(
+      "bundleId",
+      "it ends in .push-type.liveactivity. Pass the bare bundle id (e.g. com.example.app); the SDK appends the push-type suffix to the apns-topic itself. See data/traps.json MS018.",
+    );
   }
 }
 
@@ -1296,6 +1320,11 @@ export class PushClient {
     // BadExpirationDate. expirationSeconds: 0 is a valid apns-expiration value
     // ("deliver once, do not store") and passes through unchanged.
     assertActivityTimestampOptions(args.options);
+    // MS014 pre-flight: when the caller threaded the token record's stored
+    // environment through, reject a token/host mismatch before the round-trip
+    // instead of letting it surface as an opaque 400 BadDeviceToken. No-op
+    // when tokenEnvironment was not supplied.
+    assertTokenEnvironment(args.options.tokenEnvironment, this.#options.environment);
     const apnsId = args.options.apnsId ?? genApnsId();
     const priority = args.options.priority ?? args.defaultPriority;
     const expiration = String(args.options.expirationSeconds ?? nowSec() + 3600);

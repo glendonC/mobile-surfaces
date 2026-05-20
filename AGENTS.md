@@ -218,11 +218,11 @@ apps/mobile/app.json is the single source of truth for the App Group identifier.
 
 **severity:** error  •  **detection:** runtime (only at send/receive)  •  **tags:** push, tokens
 
-Tokens minted by a development build cannot authenticate against the production APNs endpoint, and vice versa.
+Tokens minted by a development build cannot authenticate against the production APNs endpoint, and vice versa. When a send call is given the token record's stored environment via the tokenEnvironment option, the push SDK rejects a mismatch with TokenEnvironmentMismatchError before the round-trip.
 
-**Symptom.** APNs responds 400 BadDeviceToken. The token is valid; it just belongs to the other environment.
+**Symptom.** Without the pre-flight, APNs responds 400 BadDeviceToken: the token is valid, it just belongs to the other environment, and the response gives no hint of that. With the tokenEnvironment option supplied, the SDK throws a precise pre-send error naming both environments.
 
-**Fix.** Use environment: 'development' for dev-client and expo run:ios builds, environment: 'production' only for TestFlight and App Store builds. Track which environment minted each token.
+**Fix.** Use environment: 'development' for dev-client and expo run:ios builds, environment: 'production' only for TestFlight and App Store builds. Track which environment minted each token (the @mobile-surfaces/tokens record carries it) and pass it as the tokenEnvironment send option so the mismatch is caught before the send.
 
 **See:** [https://mobile-surfaces.com/docs/push#error-responses](https://mobile-surfaces.com/docs/push#error-responses)
 
@@ -242,9 +242,9 @@ Continuous Native Generation rebuilds apps/mobile/ios/ from app.json, packages/l
 
 **severity:** error  •  **detection:** runtime (only at send/receive)  •  **tags:** push, config
 
-The push SDK auto-appends .push-type.liveactivity to the apns-topic; passing it pre-suffixed produces a malformed topic header.
+The push SDK auto-appends .push-type.liveactivity to the apns-topic; passing it pre-suffixed produces a malformed topic header. createPushClient rejects a pre-suffixed bundleId at construction with MalformedApnsConfigError, so the mistake fails fast instead of on every send.
 
-**Symptom.** APNs responds 400 TopicDisallowed even though your auth key is correctly enabled for the app. The topic header has the suffix doubled or in the wrong position.
+**Symptom.** Without the construction-time guard the topic header carries a doubled suffix and APNs responds 400 TopicDisallowed on every send, even though the auth key is correctly enabled for the app. With the guard, createPushClient throws before the first send.
 
 **Fix.** Set APNS_BUNDLE_ID to the bare bundle id (e.g. com.example.mobilesurfaces). The SDK and scripts/send-apns.mjs both handle the suffix internally.
 
