@@ -10,11 +10,8 @@ import {
   liveSurfaceNotificationContentPayload,
   liveSurfaceNotificationSliceForExtension,
   liveSurfaceSnapshot,
-  liveSurfaceSnapshotV4,
   liveSurfaceStandbyEntry,
   liveSurfaceWidgetTimelineEntry,
-  migrateV4ToV5,
-  safeParseAnyVersion,
   safeParseSnapshot,
   surfaceFixtureSnapshots,
   toControlValueProvider,
@@ -380,61 +377,25 @@ test("toStandbyEntry defaults presentation to card and null-tints when absent", 
 });
 
 // ---------------------------------------------------------------------------
-// safeParseAnyVersion: v5 (strict) -> v4 (frozen codec, deprecated, removed
-// in 9.0). The v3 codec was dropped at 8.0; consumers still emitting v3 must
-// promote via @mobile-surfaces/surface-contracts@7.x once.
+// Strict v5 parsing. The v4 codec was removed at 9.0 per the versioning
+// charter (v3 was removed at 8.0); a payload on an older wire generation
+// must be migrated by its producer before it reaches the parser.
 // ---------------------------------------------------------------------------
 
-test("safeParseAnyVersion accepts a v5 payload with no deprecation warning", () => {
-  const result = safeParseAnyVersion(queued);
+test("safeParseSnapshot accepts a v5 payload", () => {
+  const result = safeParseSnapshot(queued);
   assert.equal(result.success, true);
   if (result.success) {
     assert.equal(result.data.kind, "liveActivity");
     assert.equal(result.data.schemaVersion, "5");
-    assert.equal(result.deprecationWarning, undefined);
   }
 });
 
-test("safeParseAnyVersion accepts a v4 payload and surfaces a v4 deprecation warning", () => {
-  // Build a valid v4 snapshot by spreading a v5 fixture and downgrading the
-  // schemaVersion literal. v4's wire shape is otherwise identical to v5 for
-  // liveActivity-kind snapshots (the v5 additions live on the notification
-  // slice), so this is a faithful v4 input.
-  const v4Payload = { ...queued, schemaVersion: "4" };
-  const result = safeParseAnyVersion(v4Payload);
-  assert.equal(result.success, true);
-  if (result.success) {
-    assert.equal(result.data.kind, "liveActivity");
-    assert.equal(result.data.schemaVersion, "5");
-    assert.match(result.deprecationWarning ?? "", /v4 is deprecated/i);
-  }
-});
-
-test("safeParseAnyVersion fails when no version parses", () => {
-  const result = safeParseAnyVersion({ schemaVersion: "999", nonsense: true });
-  assert.equal(result.success, false);
-  if (!result.success) {
-    assert.ok(result.error);
-  }
-});
-
-test("safeParseAnyVersion rejects a v3-shaped payload (v3 codec retired at 8.0)", () => {
-  const v3Shaped = {
-    schemaVersion: "3",
-    kind: "liveActivity",
-    id: "fixture-v3-live",
-    surfaceId: "surface-v3-live",
-    updatedAt: "2026-05-12T18:00:00.000Z",
-    state: "active",
-    primaryText: "Surface in progress",
-    secondaryText: "v3 body copy.",
-    liveActivity: {
-      stage: "inProgress",
-      estimatedSeconds: 90,
-      morePartsCount: 1,
-    },
-  };
-  const result = safeParseAnyVersion(v3Shaped);
+test("safeParseSnapshot rejects a v4-shaped payload (v4 codec removed at 9.0)", () => {
+  // v4's wire shape was otherwise identical to v5 for liveActivity-kind
+  // snapshots; only the schemaVersion literal differs. With the codec gone,
+  // the strict parser rejects it on the schemaVersion mismatch.
+  const result = safeParseSnapshot({ ...queued, schemaVersion: "4" });
   assert.equal(result.success, false);
 });
 

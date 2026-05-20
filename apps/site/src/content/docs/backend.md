@@ -117,31 +117,24 @@ The contract package ships two validators with different policies:
 import {
   assertSnapshot,
   safeParseSnapshot,
-  safeParseAnyVersion,
 } from "@mobile-surfaces/surface-contracts";
 
-// Strict v5 only. Throws ZodError on anything that isn't a current-version
+// Strict v5, throwing. Throws ZodError on anything that isn't a current-version
 // snapshot. Use this on outbound code paths where you control the producer.
 const snapshot = assertSnapshot(snapshotFromJob(job));
 
-// Strict v5 safe-parse. Returns { success, data | error }.
+// Strict v5, non-throwing. Returns { success, data | error }. Use this on
+// inbound code paths (HTTP handlers, queue consumers) where the payload is
+// untrusted.
 const result = safeParseSnapshot(input);
-
-// Wire-edge tolerant. Tries v5 first; falls back to v4 with auto-migration
-// and emits a deprecationWarning on success. Use this on inbound code paths
-// (HTTP handlers, queue consumers) where producers may not have migrated to
-// v5 yet. The v4 codec lives through the 8.x release line; see
-// docs/schema.md for the deprecation timeline.
-const versioned = safeParseAnyVersion(input);
-if (versioned.success) {
-  if (versioned.deprecationWarning) {
-    log.warn(versioned.deprecationWarning, { snapshotId: versioned.data.id });
-  }
-  // versioned.data is a LiveSurfaceSnapshot in v5 shape.
+if (!result.success) {
+  log.warn("snapshot rejected", { issues: result.error.issues });
+  return;
 }
+// result.data is a LiveSurfaceSnapshot.
 ```
 
-`safeParseAnyVersion` is the migration path documented in [`docs/schema.md`](/docs/schema). Use it whenever you read snapshots from a store that may still hold v4 payloads. The v4 -> v5 codec runs in `safeParseAnyVersion`; the v3 codec was retired at 8.0.0 and the v2 codec earlier at 5.0.0.
+The package validates strictly against `schemaVersion: "5"`; there is no multi-version codec. A stored payload written under an older `schemaVersion` fails the parser. The v4 codec was retired at 9.0.0 and the v3 codec at 8.0.0; a producer holding older payloads migrates them to v5 before a consumer reads them, as documented in [`docs/schema.md`](/docs/schema).
 
 The published JSON Schema at [`unpkg.com/@mobile-surfaces/surface-contracts@8.0/schema.json`](https://unpkg.com/@mobile-surfaces/surface-contracts@8.0/schema.json) is generated from the same Zod source and pinned to `major.minor`. Use it for IDE tooling, OpenAPI components, or non-TypeScript validators (Ajv, jsonschema, etc.). Standard Schema interop is automatic, every exported Zod schema implements the `~standard` getter (`{ vendor: "zod", version: 1, validate, jsonSchema }`), so the contract drops directly into Standard-Schema-aware libraries (Valibot runners, ArkType, `@standard-schema/spec`) without depending on Zod at runtime.
 
@@ -237,7 +230,7 @@ For the full set of flags, including `--event=start`, `--push-to-start-token`, `
 
 All string fields on `LiveSurfaceSnapshot` are pre-rendered for one locale per snapshot. The backend selects the locale (per-user preference, request `Accept-Language`, etc.) and emits the snapshot in that locale. If the locale changes, send a fresh snapshot. There is no in-place locale switch on the client.
 
-A future `LocalizedString` shape (e.g. `{ en: string; "es-MX"?: string }`) would arrive in a future major and bump `schemaVersion` again. v4 stays string-only on purpose; ActivityKit content states are size-bound (4 KB) and shipping every translation per push wastes that budget.
+A future `LocalizedString` shape (e.g. `{ en: string; "es-MX"?: string }`) would arrive in a future major and bump `schemaVersion` again. The snapshot stays string-only on purpose; ActivityKit content states are size-bound (4 KB) and shipping every translation per push wastes that budget.
 
 ## What Stays Stable
 

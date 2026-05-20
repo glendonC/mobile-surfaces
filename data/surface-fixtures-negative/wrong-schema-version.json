@@ -7,7 +7,7 @@
   "state": "queued",
   "liveActivity": {
     "title": "Wrong wire-format version",
-    "body": "schemaVersion is a literal; payloads minted against an unknown version are rejected by every codec in safeParseAnyVersion.",
+    "body": "schemaVersion is a literal; a payload minted against an unknown version fails the strict parser.",
     "progress": 0,
     "deepLink": "mobilesurfaces://surface/neg",
     "stage": "prompted",

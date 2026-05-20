@@ -1,14 +1,5 @@
 import { z } from "zod";
-import {
-  liveSurfaceSnapshotV4,
-  type LiveSurfaceSnapshotV4,
-} from "./schema-v4.ts";
 import { NOTIFICATION_CATEGORY_IDS } from "./notificationCategories.ts";
-
-export {
-  liveSurfaceSnapshotV4,
-  type LiveSurfaceSnapshotV4,
-};
 
 // ---------------------------------------------------------------------------
 // Enums (shared across base, slices, and projection-output schemas).
@@ -398,9 +389,8 @@ export type LiveSurfaceNotificationSliceForExtension = z.infer<
 const liveSurfaceSnapshotBaseShape = {
   schemaVersion: z.literal("5").describe(
     "Wire-format generation. Required; producers MUST set this explicitly. " +
-      "Consumers parse against the version they understand; cross-version " +
-      "payloads are upgraded via migrateV4ToV5 inside safeParseAnyVersion " +
-      "before parsing.",
+      "Consumers parse against the version they understand; a payload on a " +
+      "different generation fails parse and must be migrated by its producer.",
   ),
   id: z.string().min(1).describe(
     "Stable, idempotent snapshot identifier. The same logical state produced " +
@@ -731,94 +721,18 @@ export const liveSurfaceKinds = liveSurfaceKind.options as unknown as readonly [
 
 /**
  * Strict v5 parser. Throws on any payload that does not match the v5
- * discriminated union. Does NOT auto-migrate v4 payloads — for that, use
- * {@link safeParseAnyVersion}.
+ * discriminated union. A payload on an older wire generation must be
+ * migrated by its producer before it reaches this parser.
  */
 export function assertSnapshot(value: unknown): LiveSurfaceSnapshot {
   return liveSurfaceSnapshot.parse(value);
 }
 
 /**
- * Strict v5 safe-parse. Returns Zod's standard SafeParseReturnType. Does NOT
- * auto-migrate v4 payloads — for that, use {@link safeParseAnyVersion}.
+ * Strict v5 safe-parse. Returns Zod's standard SafeParseReturnType. A payload
+ * on an older wire generation must be migrated by its producer before it
+ * reaches this parser.
  */
 export function safeParseSnapshot(value: unknown) {
   return liveSurfaceSnapshot.safeParse(value);
-}
-
-export type SafeParseAnyVersionSuccess = {
-  success: true;
-  data: LiveSurfaceSnapshot;
-  /** Set when the input parsed as v4 and was migrated to v5. */
-  deprecationWarning?: string;
-};
-
-export type SafeParseAnyVersionFailure = {
-  success: false;
-  error: z.ZodError;
-};
-
-export type SafeParseAnyVersionResult =
-  | SafeParseAnyVersionSuccess
-  | SafeParseAnyVersionFailure;
-
-/**
- * Pure v4->v5 transform. Always succeeds for a parsed v4 payload.
- *
- * v5's only wire-shape addition is four optional fields on the notification
- * slice (subtitle, interruptionLevel, relevanceScore, targetContentId).
- * Every other kind is unchanged. A v4 snapshot promotes to v5 by bumping the
- * schemaVersion literal; no field renames, no slice restructure. The breaking
- * change v5 carries lives in the projection-output sidecar
- * (`kind: "surface_notification"` -> `"surface_snapshot"` in
- * `liveSurfaceNotificationContentEntry`), which is consumed by
- * `toNotificationContentPayload`, not the snapshot itself.
- */
-export function migrateV4ToV5(
-  v4: LiveSurfaceSnapshotV4,
-): LiveSurfaceSnapshot {
-  return { ...v4, schemaVersion: "5" as const };
-}
-
-const V4_DEPRECATION_WARNING =
-  "liveSurfaceSnapshot v4 is deprecated and will be removed in " +
-  "@mobile-surfaces/surface-contracts@9.0. Migrate producers to " +
-  'schemaVersion "5"; the snapshot wire shape is unchanged but the ' +
-  "notification projection-output sidecar's kind discriminator " +
-  'aligned to "surface_snapshot" (see schema docs).';
-
-/**
- * Multi-version safe-parse. Tries v5 (strict) first; on failure, tries v4
- * (frozen, migrates via migrateV4ToV5). Returns the v5 ZodError when every
- * attempt fails so callers see the most relevant message.
- *
- * On a v4->v5 migration, the result carries a `deprecationWarning` so
- * telemetry can surface producers still on the old shape; see
- * https://mobile-surfaces.com/docs/observability for the recommended log.
- *
- * The v3 codec was dropped at 8.0.0 per the charter's one-major-deprecation
- * window. Consumers still emitting v3 must run their payloads through
- * @mobile-surfaces/surface-contracts@7.x to promote v3 -> v5, store the
- * result, then upgrade. The v2 codec was dropped earlier at 5.0.0.
- */
-export function safeParseAnyVersion(value: unknown): SafeParseAnyVersionResult {
-  const v5 = liveSurfaceSnapshot.safeParse(value);
-  if (v5.success) return { success: true, data: v5.data };
-
-  const v4 = liveSurfaceSnapshotV4.safeParse(value);
-  if (v4.success) {
-    const migrated = migrateV4ToV5(v4.data);
-    const recheck = liveSurfaceSnapshot.safeParse(migrated);
-    if (recheck.success) {
-      return {
-        success: true,
-        data: recheck.data,
-        deprecationWarning: V4_DEPRECATION_WARNING,
-      };
-    }
-    return { success: false, error: recheck.error };
-  }
-
-  // Return v5 error: most relevant to a producer targeting current.
-  return { success: false, error: v5.error };
 }
