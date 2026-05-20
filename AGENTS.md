@@ -15,7 +15,7 @@ Claude Code does not auto-discover AGENTS.md and instead reads [`CLAUDE.md`](./C
 
 ## Index
 
-40 live rules: 35 error, 4 warning, 1 info. 3 retired ids reserved (see footnote).
+39 live rules: 31 error, 2 warning, 6 info. 4 retired ids reserved (see footnote).
 
 | ID | Severity | Detection | Title |
 | --- | --- | --- | --- |
@@ -31,20 +31,16 @@ Claude Code does not auto-discover AGENTS.md and instead reads [`CLAUDE.md`](./C
 | [MS012](#ms012-ios-deployment-target-must-be-17-2-or-higher) | error | config | iOS deployment target must be 17.2 or higher |
 | [MS013](#ms013-app-group-entitlement-must-match-host-app-and-widget-extension) | error | static | App Group entitlement must match host app and widget extension |
 | [MS014](#ms014-apns-token-environment-must-match-the-build-environment) | error | runtime | APNs token environment must match the build environment |
-| [MS016](#ms016-subscribe-to-onpushtostarttoken-at-mount-not-on-demand) | error | runtime | Subscribe to onPushToStartToken at mount, not on demand |
 | [MS017](#ms017-apps-mobile-ios-is-generated-do-not-edit) | error | advisory | apps/mobile/ios/ is generated; do not edit |
 | [MS018](#ms018-apns-bundle-id-must-not-include-the-push-type-liveactivity-suffix) | error | runtime | APNS_BUNDLE_ID must not include the .push-type.liveactivity suffix |
-| [MS020](#ms020-per-activity-and-push-to-start-tokens-may-rotate-at-any-time) | error | runtime | Per-activity and push-to-start tokens may rotate at any time |
 | [MS024](#ms024-project-must-depend-on-mobile-surfaces-surface-contracts-and-push-when-sending) | error | config | Project must depend on @mobile-surfaces/surface-contracts (and push, when sending) |
 | [MS025](#ms025-app-group-declared-in-app-json) | error | config | App Group declared in app.json |
 | [MS026](#ms026-widget-target-managed-by-bacons-apple-targets) | error | config | Widget target managed by @bacons/apple-targets |
-| [MS027](#ms027-foreign-expo-project-must-target-ios-17-2-or-higher) | error | config | Foreign Expo project must target iOS 17.2 or higher |
 | [MS028](#ms028-apns-auth-key-environment-variables-must-be-set-before-sending) | error | runtime | APNs auth key environment variables must be set before sending |
 | [MS029](#ms029-generated-apps-mobile-ios-is-gitignored) | error | config | Generated apps/mobile/ios/ is gitignored |
 | [MS030](#ms030-apns-provider-token-must-be-valid-and-current) | error | runtime | APNs provider token must be valid and current |
 | [MS031](#ms031-channel-management-failures-missing-malformed-or-unregistered-channel-id) | error | runtime | Channel management failures (missing, malformed, or unregistered channel id) |
 | [MS032](#ms032-activity-timestamp-fields-must-be-valid-unix-seconds-integers) | error | runtime | Activity timestamp fields must be valid unix-seconds integers |
-| [MS034](#ms034-broadcast-capability-must-be-enabled-on-the-apns-auth-key) | error | runtime | Broadcast capability must be enabled on the APNs auth key |
 | [MS035](#ms035-apns-topic-header-missing-or-bundleid-misconfigured) | error | runtime | apns-topic header missing or bundleId misconfigured |
 | [MS036](#ms036-surface-snapshot-swift-structs-match-their-zod-projection-output-schemas) | error | static | Surface snapshot Swift structs match their Zod projection-output schemas |
 | [MS037](#ms037-notification-category-outputs-in-sync-with-canonical-registry) | error | static | Notification category outputs in sync with canonical registry |
@@ -56,19 +52,22 @@ Claude Code does not auto-discover AGENTS.md and instead reads [`CLAUDE.md`](./C
 | [MS043](#ms043-changelog-entry-required-on-package-major) | error | static | CHANGELOG entry required on package major |
 | [MS010](#ms010-toolchain-preflight-node-24-pnpm-xcode-26) | warning | config | Toolchain preflight (Node 24, pnpm, Xcode 26+) |
 | [MS015](#ms015-push-priority-5-vs-10-budget-rules) | warning | runtime | Push priority 5 vs 10 budget rules |
-| [MS021](#ms021-discard-per-activity-tokens-when-the-activity-ends) | warning | runtime | Discard per-activity tokens when the activity ends |
-| [MS023](#ms023-per-activity-tokens-are-bound-to-a-single-activity-instance) | warning | runtime | Per-activity tokens are bound to a single Activity instance |
+| [MS016](#ms016-subscribe-to-onpushtostarttoken-at-mount-not-on-demand) | info | advisory | Subscribe to onPushToStartToken at mount, not on demand |
 | [MS019](#ms019-fb21158660-push-to-start-tokens-silent-after-force-quit) | info | advisory | FB21158660: push-to-start tokens silent after force-quit |
+| [MS020](#ms020-per-activity-and-push-to-start-tokens-may-rotate-at-any-time) | info | advisory | Per-activity and push-to-start tokens may rotate at any time |
+| [MS021](#ms021-discard-per-activity-tokens-when-the-activity-ends) | info | advisory | Discard per-activity tokens when the activity ends |
+| [MS023](#ms023-per-activity-tokens-are-bound-to-a-single-activity-instance) | info | advisory | Per-activity tokens are bound to a single Activity instance |
+| [MS034](#ms034-broadcast-capability-must-be-enabled-on-the-apns-auth-key) | info | advisory | Broadcast capability must be enabled on the APNs auth key |
 
 ## Rules by tag
 
 - `app-group`: MS013, MS025
 - `channels`: MS031, MS034
 - `cng`: MS017, MS029
-- `config`: MS012, MS013, MS017, MS018, MS025, MS027, MS029, MS034, MS035, MS037, MS041, MS042, MS043
+- `config`: MS012, MS013, MS017, MS018, MS025, MS029, MS034, MS035, MS037, MS041, MS042, MS043
 - `contract`: MS001, MS003, MS004, MS006, MS007, MS008, MS009, MS024, MS036, MS037, MS038, MS039, MS040, MS041, MS042, MS043
 - `control`: MS013, MS026, MS036
-- `ios-version`: MS012, MS027
+- `ios-version`: MS012
 - `ios18`: MS031, MS034
 - `live-activity`: MS001, MS002, MS003, MS004, MS011, MS015, MS016, MS019, MS021, MS032, MS038, MS039
 - `notification`: MS037
@@ -82,7 +81,6 @@ Claude Code does not auto-discover AGENTS.md and instead reads [`CLAUDE.md`](./C
 
 Trap ids that describe the same constraint in two contexts, or the inverse failures of the same wire shape:
 
-- **MS012 ↔ MS027** — iOS deployment target must be 17.2 or higher; Foreign Expo project must target iOS 17.2 or higher.
 - **MS018 ↔ MS035** — APNS_BUNDLE_ID must not include the .push-type.liveactivity suffix; apns-topic header missing or bundleId misconfigured.
 
 ## How to use this document
@@ -228,18 +226,6 @@ Tokens minted by a development build cannot authenticate against the production 
 
 **See:** [https://mobile-surfaces.com/docs/push#error-responses](https://mobile-surfaces.com/docs/push#error-responses)
 
-### MS016: Subscribe to onPushToStartToken at mount, not on demand
-
-**severity:** error  •  **detection:** runtime (only at send/receive)  •  **tags:** tokens, live-activity  •  **ios min:** 17.2
-
-iOS only delivers push-to-start tokens through Activity<...>.pushToStartTokenUpdates as an async sequence; getPushToStartToken() always resolves null.
-
-**Symptom.** Backend never receives a push-to-start token, or only receives one after a manual app re-launch. Remote Live Activity start never fires for users who have not opened the app since install.
-
-**Fix.** Subscribe via liveActivityAdapter.addListener('onPushToStartToken', ...) inside a mount-time effect. Re-store the token on every emission, since Apple may rotate at cold launch or system rotation.
-
-**See:** [https://mobile-surfaces.com/docs/push#token-taxonomy](https://mobile-surfaces.com/docs/push#token-taxonomy)
-
 ### MS017: apps/mobile/ios/ is generated; do not edit
 
 **severity:** error  •  **detection:** advisory (no programmatic check)  •  **tags:** cng, config
@@ -263,18 +249,6 @@ The push SDK auto-appends .push-type.liveactivity to the apns-topic; passing it 
 **Fix.** Set APNS_BUNDLE_ID to the bare bundle id (e.g. com.example.mobilesurfaces). The SDK and scripts/send-apns.mjs both handle the suffix internally.
 
 **See:** [https://mobile-surfaces.com/docs/push#error-responses](https://mobile-surfaces.com/docs/push#error-responses)
-
-### MS020: Per-activity and push-to-start tokens may rotate at any time
-
-**severity:** error  •  **detection:** runtime (only at send/receive)  •  **tags:** tokens
-
-Both pushTokenUpdates and pushToStartTokenUpdates may emit fresh values at any moment (cold launch, system rotation, foreground transition).
-
-**Symptom.** Backend send to a stored token returns 410 Unregistered or 400 BadDeviceToken on a previously-working device. The user did nothing wrong; the OS rotated the token.
-
-**Fix.** Treat the latest event as authoritative. Re-store on every emission keyed by user/device id, and update the active record rather than appending.
-
-**See:** [https://mobile-surfaces.com/docs/push#token-taxonomy](https://mobile-surfaces.com/docs/push#token-taxonomy)
 
 ### MS024: Project must depend on @mobile-surfaces/surface-contracts (and push, when sending)
 
@@ -311,18 +285,6 @@ The Mobile Surfaces widget target lives outside the generated ios/ directory and
 **Fix.** Keep the target source under apps/mobile/targets/widget/ with an expo-target.config.js. Pin @bacons/apple-targets at the supported exact version.
 
 **See:** [https://mobile-surfaces.com/docs/architecture](https://mobile-surfaces.com/docs/architecture)
-
-### MS027: Foreign Expo project must target iOS 17.2 or higher
-
-**severity:** error  •  **detection:** config (declarative file)  •  **tags:** ios-version, config  •  **ios min:** 17.2  •  **enforced by:** `scripts/probe-app-config.mjs`
-
-Same constraint as MS012, applied during an audit of an arbitrary Expo project that adopts Mobile Surfaces.
-
-**Symptom.** Audit fails with a deployment-target mismatch; a downstream prebuild surfaces compile errors on iOS 17.2-only symbols.
-
-**Fix.** Set ios.deploymentTarget to '17.2' (or higher) in app.json or via expo-build-properties.
-
-**See:** [https://mobile-surfaces.com/docs/compatibility](https://mobile-surfaces.com/docs/compatibility)
 
 ### MS028: APNs auth key environment variables must be set before sending
 
@@ -381,18 +343,6 @@ APNs rejects Live Activity pushes whose date fields (staleDateSeconds, dismissal
 **Symptom.** APNs returns 400 BadDate or 400 BadExpirationDate. The push payload looked valid locally but a date field was a millisecond timestamp, a negative number, or a non-integer; or apns-expiration was set on a no-storage broadcast channel.
 
 **Fix.** Confirm every date field is a positive unix-seconds integer (not milliseconds, not Date.now()). For broadcast on a no-storage channel, apns-expiration must be 0; the SDK's broadcast() already enforces this.
-
-**See:** [https://mobile-surfaces.com/docs/push#error-responses](https://mobile-surfaces.com/docs/push#error-responses)
-
-### MS034: Broadcast capability must be enabled on the APNs auth key
-
-**severity:** error  •  **detection:** runtime (only at send/receive)  •  **tags:** push, channels, ios18, config
-
-iOS 18 broadcast pushes and channel-admin calls require the 'Broadcast to Live Activity' capability on the APNs auth key. The capability is per-key, not per-app, and is invisible until the first send fails.
-
-**Symptom.** createChannel() or broadcast() fails with 403 FeatureNotEnabled. The auth key is otherwise valid and other push types succeed; only broadcast-related calls reject.
-
-**Fix.** Enable broadcast in the Apple Developer portal under Certificates, Identifiers & Profiles > Keys > select the key > edit > tick 'Broadcast to Live Activity'. Save and retry; no client change is needed.
 
 **See:** [https://mobile-surfaces.com/docs/push#error-responses](https://mobile-surfaces.com/docs/push#error-responses)
 
@@ -510,27 +460,15 @@ Live Activity priority 10 is for immediate user-visible updates and is heavily b
 
 **See:** [https://mobile-surfaces.com/docs/push#error-responses](https://mobile-surfaces.com/docs/push#error-responses)
 
-### MS021: Discard per-activity tokens when the activity ends
+### MS016: Subscribe to onPushToStartToken at mount, not on demand
 
-**severity:** warning  •  **detection:** runtime (only at send/receive)  •  **tags:** tokens, live-activity
+**severity:** info  •  **detection:** advisory (no programmatic check)  •  **tags:** tokens, live-activity  •  **ios min:** 17.2
 
-Once onActivityStateChange reports 'ended' or 'dismissed', the per-activity push token is dead; sending to it is accepted by APNs (200) but iOS will not surface anything.
+Advisory: no enforceable static or runtime gate exists for this rule; treat it as a discipline note. iOS only delivers push-to-start tokens through Activity<...>.pushToStartTokenUpdates as an async sequence; getPushToStartToken() always resolves null.
 
-**Symptom.** Backend keeps spending sends on a token that produces no user-visible effect. No error, just silent drops.
+**Symptom.** Backend never receives a push-to-start token, or only receives one after a manual app re-launch. Remote Live Activity start never fires for users who have not opened the app since install.
 
-**Fix.** Wire onActivityStateChange to your token store; mark tokens for the activity as terminal and stop selecting them for sends.
-
-**See:** [https://mobile-surfaces.com/docs/push#token-taxonomy](https://mobile-surfaces.com/docs/push#token-taxonomy)
-
-### MS023: Per-activity tokens are bound to a single Activity instance
-
-**severity:** warning  •  **detection:** runtime (only at send/receive)  •  **tags:** tokens
-
-A new Activity.request mints a fresh per-activity token; tokens from a previous run cannot drive the new activity.
-
-**Symptom.** Update lands at APNs (200) but appears not to do anything. Reading the harness shows a different per-activity token than what your backend stored.
-
-**Fix.** Re-store on every onPushToken emission; treat tokens as activity-scoped, not user-scoped.
+**Fix.** Subscribe via liveActivityAdapter.addListener('onPushToStartToken', ...) inside a mount-time effect. Re-store the token on every emission, since Apple may rotate at cold launch or system rotation.
 
 **See:** [https://mobile-surfaces.com/docs/push#token-taxonomy](https://mobile-surfaces.com/docs/push#token-taxonomy)
 
@@ -546,12 +484,61 @@ Apple-reported bug. After the user force-quits the app, pushToStartTokenUpdates 
 
 **See:** [https://mobile-surfaces.com/docs/push#fb21158660-push-to-start-after-force-quit](https://mobile-surfaces.com/docs/push#fb21158660-push-to-start-after-force-quit)
 
+### MS020: Per-activity and push-to-start tokens may rotate at any time
+
+**severity:** info  •  **detection:** advisory (no programmatic check)  •  **tags:** tokens
+
+Advisory: token rotation is encoded structurally in the @mobile-surfaces/tokens latestWriteWins Map; no separate static or runtime gate. Both pushTokenUpdates and pushToStartTokenUpdates may emit fresh values at any moment (cold launch, system rotation, foreground transition).
+
+**Symptom.** Backend send to a stored token returns 410 Unregistered or 400 BadDeviceToken on a previously-working device. The user did nothing wrong; the OS rotated the token.
+
+**Fix.** Treat the latest event as authoritative. Re-store on every emission keyed by user/device id, and update the active record rather than appending.
+
+**See:** [https://mobile-surfaces.com/docs/push#token-taxonomy](https://mobile-surfaces.com/docs/push#token-taxonomy)
+
+### MS021: Discard per-activity tokens when the activity ends
+
+**severity:** info  •  **detection:** advisory (no programmatic check)  •  **tags:** tokens, live-activity
+
+Advisory: terminal-state token discard is encoded structurally in the tokens-package markEnding -> markDead lifecycle; no separate gate. Once onActivityStateChange reports 'ended' or 'dismissed', the per-activity push token is dead; sending to it is accepted by APNs (200) but iOS will not surface anything.
+
+**Symptom.** Backend keeps spending sends on a token that produces no user-visible effect. No error, just silent drops.
+
+**Fix.** Wire onActivityStateChange to your token store; mark tokens for the activity as terminal and stop selecting them for sends.
+
+**See:** [https://mobile-surfaces.com/docs/push#token-taxonomy](https://mobile-surfaces.com/docs/push#token-taxonomy)
+
+### MS023: Per-activity tokens are bound to a single Activity instance
+
+**severity:** info  •  **detection:** advisory (no programmatic check)  •  **tags:** tokens
+
+Advisory: per-activity binding is encoded structurally in the tokens-package kind: 'perActivity' discriminant; no separate gate. A new Activity.request mints a fresh per-activity token; tokens from a previous run cannot drive the new activity.
+
+**Symptom.** Update lands at APNs (200) but appears not to do anything. Reading the harness shows a different per-activity token than what your backend stored.
+
+**Fix.** Re-store on every onPushToken emission; treat tokens as activity-scoped, not user-scoped.
+
+**See:** [https://mobile-surfaces.com/docs/push#token-taxonomy](https://mobile-surfaces.com/docs/push#token-taxonomy)
+
+### MS034: Broadcast capability must be enabled on the APNs auth key
+
+**severity:** info  •  **detection:** advisory (no programmatic check)  •  **tags:** push, channels, ios18, config
+
+Advisory: the iOS 18 broadcast capability is an APNs auth-key property an operator toggles in the Apple developer console; no client-side gate is possible. iOS 18 broadcast pushes and channel-admin calls require the 'Broadcast to Live Activity' capability on the APNs auth key. The capability is per-key, not per-app, and is invisible until the first send fails.
+
+**Symptom.** createChannel() or broadcast() fails with 403 FeatureNotEnabled. The auth key is otherwise valid and other push types succeed; only broadcast-related calls reject.
+
+**Fix.** Enable broadcast in the Apple Developer portal under Certificates, Identifiers & Profiles > Keys > select the key > edit > tick 'Broadcast to Live Activity'. Save and retry; no client change is needed.
+
+**See:** [https://mobile-surfaces.com/docs/push#error-responses](https://mobile-surfaces.com/docs/push#error-responses)
+
 ## Retired ids
 
 Trap ids are monotonic forever; retired rules keep their id with a one-line tombstone here so external references (PR comments, log lines, blog posts) keep resolving to a known marker.
 
 - **MS005** — Reserved id. The original rule was removed before its prose was preserved in git history; the id is held back so external references (PR comments, log lines, blog posts citing MS005) keep resolving to a known marker rather than collide with a future rule.
 - **MS022** — Reserved id. The original rule was an early-draft duplicate of MS003 (Swift ContentState fields and JSON keys match Zod liveSurfaceActivityContentState) and was merged into it. See git commit d79ffb0.
+- **MS027** — Retired alias of MS012. The original rule fired the same iOS 17.2 deployment-target minimum check as MS012 on the same file; the catalog now counts the constraint once under MS012. The id stays reserved per the monotonic-forever policy in CONTRIBUTING.md.
 - **MS033** — Reserved id. The original rule was removed before its prose was preserved in git history; the id is held back so external references (PR comments, log lines, blog posts citing MS033) keep resolving to a known marker rather than collide with a future rule.
 
 ## Related local documentation

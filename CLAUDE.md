@@ -15,7 +15,7 @@ The per-rule Symptom and Fix prose lives in [`AGENTS.md`](./AGENTS.md); the inde
 
 ## Index
 
-40 live rules: 35 error, 4 warning, 1 info. 3 retired ids reserved (see footnote).
+39 live rules: 31 error, 2 warning, 6 info. 4 retired ids reserved (see footnote).
 
 | ID | Severity | Detection | Title |
 | --- | --- | --- | --- |
@@ -31,20 +31,16 @@ The per-rule Symptom and Fix prose lives in [`AGENTS.md`](./AGENTS.md); the inde
 | [MS012](AGENTS.md#ms012-ios-deployment-target-must-be-17-2-or-higher) | error | config | iOS deployment target must be 17.2 or higher |
 | [MS013](AGENTS.md#ms013-app-group-entitlement-must-match-host-app-and-widget-extension) | error | static | App Group entitlement must match host app and widget extension |
 | [MS014](AGENTS.md#ms014-apns-token-environment-must-match-the-build-environment) | error | runtime | APNs token environment must match the build environment |
-| [MS016](AGENTS.md#ms016-subscribe-to-onpushtostarttoken-at-mount-not-on-demand) | error | runtime | Subscribe to onPushToStartToken at mount, not on demand |
 | [MS017](AGENTS.md#ms017-apps-mobile-ios-is-generated-do-not-edit) | error | advisory | apps/mobile/ios/ is generated; do not edit |
 | [MS018](AGENTS.md#ms018-apns-bundle-id-must-not-include-the-push-type-liveactivity-suffix) | error | runtime | APNS_BUNDLE_ID must not include the .push-type.liveactivity suffix |
-| [MS020](AGENTS.md#ms020-per-activity-and-push-to-start-tokens-may-rotate-at-any-time) | error | runtime | Per-activity and push-to-start tokens may rotate at any time |
 | [MS024](AGENTS.md#ms024-project-must-depend-on-mobile-surfaces-surface-contracts-and-push-when-sending) | error | config | Project must depend on @mobile-surfaces/surface-contracts (and push, when sending) |
 | [MS025](AGENTS.md#ms025-app-group-declared-in-app-json) | error | config | App Group declared in app.json |
 | [MS026](AGENTS.md#ms026-widget-target-managed-by-bacons-apple-targets) | error | config | Widget target managed by @bacons/apple-targets |
-| [MS027](AGENTS.md#ms027-foreign-expo-project-must-target-ios-17-2-or-higher) | error | config | Foreign Expo project must target iOS 17.2 or higher |
 | [MS028](AGENTS.md#ms028-apns-auth-key-environment-variables-must-be-set-before-sending) | error | runtime | APNs auth key environment variables must be set before sending |
 | [MS029](AGENTS.md#ms029-generated-apps-mobile-ios-is-gitignored) | error | config | Generated apps/mobile/ios/ is gitignored |
 | [MS030](AGENTS.md#ms030-apns-provider-token-must-be-valid-and-current) | error | runtime | APNs provider token must be valid and current |
 | [MS031](AGENTS.md#ms031-channel-management-failures-missing-malformed-or-unregistered-channel-id) | error | runtime | Channel management failures (missing, malformed, or unregistered channel id) |
 | [MS032](AGENTS.md#ms032-activity-timestamp-fields-must-be-valid-unix-seconds-integers) | error | runtime | Activity timestamp fields must be valid unix-seconds integers |
-| [MS034](AGENTS.md#ms034-broadcast-capability-must-be-enabled-on-the-apns-auth-key) | error | runtime | Broadcast capability must be enabled on the APNs auth key |
 | [MS035](AGENTS.md#ms035-apns-topic-header-missing-or-bundleid-misconfigured) | error | runtime | apns-topic header missing or bundleId misconfigured |
 | [MS036](AGENTS.md#ms036-surface-snapshot-swift-structs-match-their-zod-projection-output-schemas) | error | static | Surface snapshot Swift structs match their Zod projection-output schemas |
 | [MS037](AGENTS.md#ms037-notification-category-outputs-in-sync-with-canonical-registry) | error | static | Notification category outputs in sync with canonical registry |
@@ -56,19 +52,22 @@ The per-rule Symptom and Fix prose lives in [`AGENTS.md`](./AGENTS.md); the inde
 | [MS043](AGENTS.md#ms043-changelog-entry-required-on-package-major) | error | static | CHANGELOG entry required on package major |
 | [MS010](AGENTS.md#ms010-toolchain-preflight-node-24-pnpm-xcode-26) | warning | config | Toolchain preflight (Node 24, pnpm, Xcode 26+) |
 | [MS015](AGENTS.md#ms015-push-priority-5-vs-10-budget-rules) | warning | runtime | Push priority 5 vs 10 budget rules |
-| [MS021](AGENTS.md#ms021-discard-per-activity-tokens-when-the-activity-ends) | warning | runtime | Discard per-activity tokens when the activity ends |
-| [MS023](AGENTS.md#ms023-per-activity-tokens-are-bound-to-a-single-activity-instance) | warning | runtime | Per-activity tokens are bound to a single Activity instance |
+| [MS016](AGENTS.md#ms016-subscribe-to-onpushtostarttoken-at-mount-not-on-demand) | info | advisory | Subscribe to onPushToStartToken at mount, not on demand |
 | [MS019](AGENTS.md#ms019-fb21158660-push-to-start-tokens-silent-after-force-quit) | info | advisory | FB21158660: push-to-start tokens silent after force-quit |
+| [MS020](AGENTS.md#ms020-per-activity-and-push-to-start-tokens-may-rotate-at-any-time) | info | advisory | Per-activity and push-to-start tokens may rotate at any time |
+| [MS021](AGENTS.md#ms021-discard-per-activity-tokens-when-the-activity-ends) | info | advisory | Discard per-activity tokens when the activity ends |
+| [MS023](AGENTS.md#ms023-per-activity-tokens-are-bound-to-a-single-activity-instance) | info | advisory | Per-activity tokens are bound to a single Activity instance |
+| [MS034](AGENTS.md#ms034-broadcast-capability-must-be-enabled-on-the-apns-auth-key) | info | advisory | Broadcast capability must be enabled on the APNs auth key |
 
 ## Rules by tag
 
 - `app-group`: MS013, MS025
 - `channels`: MS031, MS034
 - `cng`: MS017, MS029
-- `config`: MS012, MS013, MS017, MS018, MS025, MS027, MS029, MS034, MS035, MS037, MS041, MS042, MS043
+- `config`: MS012, MS013, MS017, MS018, MS025, MS029, MS034, MS035, MS037, MS041, MS042, MS043
 - `contract`: MS001, MS003, MS004, MS006, MS007, MS008, MS009, MS024, MS036, MS037, MS038, MS039, MS040, MS041, MS042, MS043
 - `control`: MS013, MS026, MS036
-- `ios-version`: MS012, MS027
+- `ios-version`: MS012
 - `ios18`: MS031, MS034
 - `live-activity`: MS001, MS002, MS003, MS004, MS011, MS015, MS016, MS019, MS021, MS032, MS038, MS039
 - `notification`: MS037
@@ -82,7 +81,6 @@ The per-rule Symptom and Fix prose lives in [`AGENTS.md`](./AGENTS.md); the inde
 
 Trap ids that describe the same constraint in two contexts, or the inverse failures of the same wire shape:
 
-- **MS012 ↔ MS027** — iOS deployment target must be 17.2 or higher; Foreign Expo project must target iOS 17.2 or higher.
 - **MS018 ↔ MS035** — APNS_BUNDLE_ID must not include the .push-type.liveactivity suffix; apns-topic header missing or bundleId misconfigured.
 
 ## How to use this document
@@ -98,6 +96,7 @@ Trap ids are monotonic forever; retired rules keep their id with a one-line tomb
 
 - **MS005** — Reserved id. The original rule was removed before its prose was preserved in git history; the id is held back so external references (PR comments, log lines, blog posts citing MS005) keep resolving to a known marker rather than collide with a future rule.
 - **MS022** — Reserved id. The original rule was an early-draft duplicate of MS003 (Swift ContentState fields and JSON keys match Zod liveSurfaceActivityContentState) and was merged into it. See git commit d79ffb0.
+- **MS027** — Retired alias of MS012. The original rule fired the same iOS 17.2 deployment-target minimum check as MS012 on the same file; the catalog now counts the constraint once under MS012. The id stays reserved per the monotonic-forever policy in CONTRIBUTING.md.
 - **MS033** — Reserved id. The original rule was removed before its prose was preserved in git history; the id is held back so external references (PR comments, log lines, blog posts citing MS033) keep resolving to a known marker rather than collide with a future rule.
 
 ## Related local documentation
