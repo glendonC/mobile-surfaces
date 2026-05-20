@@ -6,7 +6,7 @@ group: "Reference"
 ---
 # Schema
 
-`LiveSurfaceSnapshot` is at `schemaVersion: "5"`. The published JSON Schema is at `https://unpkg.com/@mobile-surfaces/surface-contracts@8.0/schema.json` (the URL pins to the surface-contracts package major.minor; see [JSON Schema `$id` Pinning](#json-schema-id-pinning)). The codec chain `safeParseAnyVersion` covers v5 → v4; the v3 codec was retired at 8.0 and the v4 codec is scheduled for retirement at 9.0 per the [Versioning Charter](/docs/stability).
+`LiveSurfaceSnapshot` is at `schemaVersion: "5"`. The published JSON Schema is at `https://unpkg.com/@mobile-surfaces/surface-contracts@8.0/schema.json` (the URL pins to the surface-contracts package major.minor; see [JSON Schema `$id` Pinning](#json-schema-id-pinning)). The codec chain `safeParseAnyVersion` accepts v5 and v4 payloads, migrating a v4 payload forward to v5; the v3 codec was retired at 8.0 and the v4 codec is scheduled for retirement at 9.0 per the [Versioning Charter](/docs/stability).
 
 This page leads with the v5 shape, the migration entry points consumers use today, and the JSON Schema URL convention. Older-version migrations and the historical deprecation timeline live in the [Migrating from earlier versions](#migrating-from-earlier-versions) appendix at the bottom.
 
@@ -126,7 +126,7 @@ The breaking change v5 carries lives in the projection-output sidecar, not the s
 
 ### Deprecation timeline
 
-The current codec chain in `safeParseAnyVersion` is v5 → v4. The v4 codec is scheduled for retirement at 9.0 per the [Versioning Charter](/docs/stability) (a codec lives at least one full major past the release that deprecated it; v4 was first announced as deprecated at 6.0).
+The current codec chain in `safeParseAnyVersion` accepts v5 and v4 payloads, migrating v4 forward to v5. The v4 codec is scheduled for retirement at 9.0 per the [Versioning Charter](/docs/stability) (a codec lives at least one full major past the release that deprecated it; v4 was first announced as deprecated at 6.0).
 
 | Release | Codec state | Producer guidance |
 | --- | --- | --- |

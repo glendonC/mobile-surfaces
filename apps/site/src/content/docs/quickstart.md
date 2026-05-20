@@ -61,7 +61,7 @@ Avoid `com.example.*`; the App Store and TestFlight uploaders reject it.
 pnpm surface:setup-apns
 ```
 
-Interactive wizard. It validates the four `APNS_*` env vars and writes them to `.env.local`. The script handles the `.push-type.liveactivity` topic suffix internally; do not include it in `APNS_BUNDLE_ID` ([MS018](/docs/traps#ms018-apns-bundle-id-must-not-include-the-push-type-liveactivity-suffix)).
+Interactive wizard. It validates the four `APNS_*` env vars and writes them to a mode-600 `.env` at the repo root. The script handles the `.push-type.liveactivity` topic suffix internally; do not include it in `APNS_BUNDLE_ID` ([MS018](/docs/traps#ms018-apns-bundle-id-must-not-include-the-push-type-liveactivity-suffix)).
 
 ## 5. Install on device (5 min)
 
@@ -110,7 +110,7 @@ The activity dismisses.
 You've validated the harness end-to-end. Time to build your real app on top of it. The harness is a fixture-driven playground - your app is what you replace it with.
 
 - **[Building your app](/docs/building-your-app)**: concrete migration steps from the harness to a production screen, with a worked package-delivery example covering domain types, snapshot derivation, state management, token forwarding, and backend send.
-- [Scenarios](/docs/scenarios): the canonical delivery flow rendered step by step across all five surfaces.
+- [Scenarios](/docs/scenarios): the canonical delivery flow rendered step by step across all five ambient surfaces.
 - [Concepts](/docs/concepts): the contract, the surfaces, the adapter boundary.
 - [Surfaces](/docs/surfaces): what each `kind` actually drives.
 - [Backend](/docs/backend): domain event → snapshot → APNs walkthrough.

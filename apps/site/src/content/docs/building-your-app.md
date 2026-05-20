@@ -40,7 +40,7 @@ The harness is the entry point that you replace. Everything around it is reusabl
 
 ## Worked example: a package-delivery flow
 
-The repo ships a complete scenario (`data/scenarios/delivery.json`) that defines four steps across all five surfaces. The shape is the canonical wire format every projection helper accepts. Use it as the structure for your own domain.
+The repo ships a complete scenario (`data/scenarios/delivery.json`) that defines four steps across all five ambient surfaces. The shape is the canonical wire format every projection helper accepts. Use it as the structure for your own domain.
 
 ### 1. Domain types
 
@@ -196,7 +196,7 @@ See the [Push reference](/docs/push) for the full taxonomy of typed APNs errors 
 
 Concrete order to go from the harness to your app:
 
-1. **Branch.** Make sure the harness still works on simulator before you change anything: `pnpm mobile:sim`, tap a few buttons, verify all five surfaces render.
+1. **Branch.** Make sure the harness still works on simulator before you change anything: `pnpm mobile:sim`, tap a few buttons, verify all five ambient surfaces render.
 2. **Add your domain types** under `apps/mobile/src/types/`.
 3. **Write the projection functions** under `apps/mobile/src/services/<your-domain>/snapshots.ts`. Use [Surfaces](/docs/surfaces) as a per-kind reference.
 4. **Add your screen** under `apps/mobile/src/screens/<YourScreen>.tsx`. Import `liveActivityAdapter` and the surface-storage helpers exactly the way `DiagnosticsScreen.tsx` does.
