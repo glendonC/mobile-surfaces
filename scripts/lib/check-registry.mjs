@@ -146,20 +146,22 @@ export const checkRegistry = Object.freeze([
     diagnose: false,
     mode: "check-mode",
   },
-  // codegen for both MobileSurfacesActivityAttributes.swift copies. Source
-  // of truth is liveSurfaceActivityContentState + liveSurfaceStage. Runs at
-  // stage 2 so drift fails before the stage-3 byte-identity + Zod parity
-  // gate; when this passes, the two committed files are byte-identical to
-  // the codegen output, which means byte-identical to each other and in
-  // sync with the Zod source.
+  // codegen for every Swift type that mirrors the Zod contract: both
+  // MobileSurfacesActivityAttributes.swift copies, the four surface snapshot
+  // structs, and the notification-content entry struct. Runs at stage 2 so
+  // drift fails before the stage-3 byte-identity + Zod parity gate. --check
+  // diffs each committed file against the codegen output; it carries MS036
+  // because the generated surface structs are correct-by-construction (the
+  // ActivityAttributes copies keep their own semantic gate at stage 3).
   {
-    id: "generate-activity-attributes",
-    label: "MobileSurfacesActivityAttributes.swift in sync with Zod source",
+    id: "generate-surface-swift",
+    label: "generated Swift (ActivityAttributes + surface snapshots) in sync with Zod source",
     stage: 2,
-    script: "scripts/generate-activity-attributes.mjs",
+    script: "scripts/generate-surface-swift.mjs",
     args: ["--check"],
-    diagnose: false,
+    diagnose: true,
     mode: "check-mode",
+    trapIds: ["MS036"],
   },
   {
     id: "generate-notification-categories",
@@ -179,10 +181,10 @@ export const checkRegistry = Object.freeze([
   // published artifact is supposed to prevent.
 
   // Stage 3: Swift parity and boundary checks. Each scans a distinct slice
-  // of the repo with no shared mutable state. The activity-attributes and
-  // surface-snapshots scripts read the same Zod schema that stage 2
-  // validates against the committed JSON Schema; running after stage 2
-  // ensures Zod-source issues surface first.
+  // of the repo with no shared mutable state. check-activity-attributes
+  // reads the same Zod schema that stage 2 validates against the committed
+  // JSON Schema; running after stage 2 ensures Zod-source issues surface
+  // first.
   {
     id: "check-ajv-zod-parity",
     label: "published JSON Schema validates fixtures identically to Zod source",
@@ -196,21 +198,11 @@ export const checkRegistry = Object.freeze([
     id: "check-activity-attributes",
     label: "ActivityKit Swift attributes match Zod",
     stage: 3,
-    dependsOn: ["build-schema", "generate-activity-attributes"],
+    dependsOn: ["build-schema", "generate-surface-swift"],
     script: "scripts/check-activity-attributes.mjs",
     diagnose: true,
     mode: "single-mode",
     trapIds: ["MS002", "MS003", "MS004"],
-  },
-  {
-    id: "check-surface-snapshots",
-    label: "Swift snapshot structs match Zod projection outputs",
-    stage: 3,
-    dependsOn: ["build-schema"],
-    script: "scripts/check-surface-snapshots.mjs",
-    diagnose: true,
-    mode: "single-mode",
-    trapIds: ["MS036"],
   },
   {
     id: "check-adapter-boundary",
