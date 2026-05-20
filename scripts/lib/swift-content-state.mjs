@@ -359,7 +359,12 @@ function findBracedBlockFromMatch(source, m) {
 // (not `String`). That script special-cases the Stage instance check before
 // delegating to this resolver.
 export function resolveExpectedSwiftType(schema) {
-  const def = schema?._zod?.def;
+  // `schema.def` is Zod 4's public schema-definition accessor (a getter that
+  // surfaces the same object as the internal `_zod.def`). Reading it through
+  // the public name keeps this resolver off the `_zod` core namespace; the
+  // shape it exposes (`type`, `innerType`, `format`, `entries`, `values`) is
+  // pinned by scripts/swift-content-state.test.mjs.
+  const def = schema?.def;
   if (!def) return { expected: null, reason: "no resolvable Zod def" };
 
   if (def.type === "optional" || def.type === "nullable") {

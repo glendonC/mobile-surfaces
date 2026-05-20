@@ -273,7 +273,7 @@ function expectedSwiftType(name, schema) {
 // non-enum schema, or a wrapping schema that hid the property) returns
 // false. The earlier implementation reached into `_zod.def` private state
 // and broke whenever Zod renamed an internal field; the `.options` path is
-// pinned by lib-swift-content-state.test.mjs so a future Zod bump that
+// pinned by scripts/swift-content-state.test.mjs so a future Zod bump that
 // removes it fails a test rather than silently passing this gate.
 function isStageEnum(schema) {
   const opts = schema?.options;
