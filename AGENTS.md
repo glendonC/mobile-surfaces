@@ -218,11 +218,11 @@ apps/mobile/app.json is the single source of truth for the App Group identifier.
 
 **severity:** error  •  **detection:** runtime (only at send/receive)  •  **tags:** push, tokens
 
-Tokens minted by a development build cannot authenticate against the production APNs endpoint, and vice versa.
+Tokens minted by a development build cannot authenticate against the production APNs endpoint, and vice versa. When a send call is given the token record's stored environment via the tokenEnvironment option, the push SDK rejects a mismatch with TokenEnvironmentMismatchError before the round-trip.
 
-**Symptom.** APNs responds 400 BadDeviceToken. The token is valid; it just belongs to the other environment.
+**Symptom.** Without the pre-flight, APNs responds 400 BadDeviceToken: the token is valid, it just belongs to the other environment, and the response gives no hint of that. With the tokenEnvironment option supplied, the SDK throws a precise pre-send error naming both environments.
 
-**Fix.** Use environment: 'development' for dev-client and expo run:ios builds, environment: 'production' only for TestFlight and App Store builds. Track which environment minted each token.
+**Fix.** Use environment: 'development' for dev-client and expo run:ios builds, environment: 'production' only for TestFlight and App Store builds. Track which environment minted each token (the @mobile-surfaces/tokens record carries it) and pass it as the tokenEnvironment send option so the mismatch is caught before the send.
 
 **See:** [https://mobile-surfaces.com/docs/push#error-responses](https://mobile-surfaces.com/docs/push#error-responses)
 

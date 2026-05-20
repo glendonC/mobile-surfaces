@@ -359,6 +359,33 @@ export class MalformedApnsConfigError extends MobileSurfacesError {
   }
 }
 
+/**
+ * Thrown by a send method when the caller passes `tokenEnvironment` and it
+ * does not match the environment the `PushClient` was constructed for.
+ *
+ * APNs push tokens are environment-specific: a token minted by a dev-client
+ * or `expo run:ios` build authenticates only against the development APNs
+ * host, and a TestFlight / App Store token only against production. Sending a
+ * token to the wrong host fails with a 400 `BadDeviceToken` that gives no
+ * hint the cause is an environment mismatch (data/traps.json MS014). When the
+ * caller threads the token record's stored `environment` through as
+ * `tokenEnvironment`, this preflight turns that opaque 400 into a precise
+ * pre-send error naming both environments.
+ */
+export class TokenEnvironmentMismatchError extends MobileSurfacesError {
+  readonly tokenEnvironment: string;
+  readonly clientEnvironment: string;
+
+  constructor(tokenEnvironment: string, clientEnvironment: string) {
+    super(
+      `Token environment mismatch: the token was minted for "${tokenEnvironment}" but this PushClient targets "${clientEnvironment}" APNs. A token is only valid against the APNs host of the build that minted it. Route the token to a PushClient constructed with environment: "${tokenEnvironment}", or confirm the stored environment is correct. See data/traps.json MS014.`,
+    );
+    this.name = "TokenEnvironmentMismatchError";
+    this.tokenEnvironment = tokenEnvironment;
+    this.clientEnvironment = clientEnvironment;
+  }
+}
+
 interface ReasonToErrorInit {
   status: number;
   apnsId?: string;

@@ -16,6 +16,7 @@ const {
   ClientClosedError,
   MissingApnsConfigError,
   MalformedApnsConfigError,
+  TokenEnvironmentMismatchError,
   PayloadTooLargeError,
   FeatureNotEnabledError,
   ChannelNotRegisteredError,
@@ -107,6 +108,40 @@ test("alert() sends a properly-shaped request and resolves with apns-id", async 
     title: SNAPSHOT.liveActivity.title,
     body: SNAPSHOT.liveActivity.body,
   });
+});
+
+test("update() rejects a token-environment mismatch before the round-trip (MS014)", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin }); // environment: development
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    client.update("b".repeat(64), SNAPSHOT, { tokenEnvironment: "production" }),
+    (err) => {
+      assert.ok(
+        err instanceof TokenEnvironmentMismatchError,
+        `expected TokenEnvironmentMismatchError, got ${err?.constructor?.name}`,
+      );
+      assert.equal(err.tokenEnvironment, "production");
+      assert.equal(err.clientEnvironment, "development");
+      assert.equal(err.trapId, "MS014");
+      return true;
+    },
+  );
+  // The preflight fired before any APNs round-trip.
+  assert.equal(mock.requests.length, 0);
+});
+
+test("update() with a matching tokenEnvironment sends normally", async (t) => {
+  const mock = await startMockApns(() => ({ status: 200 }));
+  const client = makeClient({ sendOrigin: mock.origin }); // environment: development
+  teardown(t, client, mock);
+
+  const res = await client.update("b".repeat(64), SNAPSHOT, {
+    tokenEnvironment: "development",
+  });
+  assert.equal(res.status, 200);
+  assert.equal(mock.requests.length, 1);
 });
 
 test("update() targets liveactivity push-type with priority 5 and projected content-state", async (t) => {

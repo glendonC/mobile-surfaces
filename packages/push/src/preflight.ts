@@ -10,12 +10,31 @@
 //
 // MS011: payload size ceilings.
 // MS032: timestamp magnitude / sign rules.
+// MS014: token-environment agreement.
 
 import {
   BadDateError,
   BadExpirationDateError,
   PayloadTooLargeError,
+  TokenEnvironmentMismatchError,
 } from "./errors.ts";
+
+/**
+ * MS014 pre-flight. When the caller threads a token record's stored
+ * `environment` through a send call, reject before the round-trip if it
+ * disagrees with the environment the client targets. A no-op when
+ * `tokenEnvironment` is undefined — the check is opt-in, because the bare
+ * token string a caller may pass instead carries no environment to compare.
+ */
+export function assertTokenEnvironment(
+  tokenEnvironment: "development" | "production" | undefined,
+  clientEnvironment: "development" | "production",
+): void {
+  if (tokenEnvironment === undefined) return;
+  if (tokenEnvironment !== clientEnvironment) {
+    throw new TokenEnvironmentMismatchError(tokenEnvironment, clientEnvironment);
+  }
+}
 
 // APNs payload ceilings per MS011. Per-activity and alert sends are bounded
 // at 4 KB; iOS 18 broadcast pushes get an extra 1 KB. The SDK enforces

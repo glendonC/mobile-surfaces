@@ -64,6 +64,7 @@ export {
   ClientClosedError,
   MissingApnsConfigError,
   MalformedApnsConfigError,
+  TokenEnvironmentMismatchError,
   CreateChannelResponseError,
   AbortError,
 } from "./errors.ts";
