@@ -3,6 +3,16 @@
 // "coming soon", "will ship", "future scaffolding", "planned but not
 // shipped", "not yet shipped", and similar tells.
 //
+// Also flags unsubstantiated marketing comparatives ("fastest",
+// "production-grade", "blazing", and similar puffery) in the published doc
+// site, unless the same line carries a citation — a markdown link, a test
+// reference, or an issue number — that backs the claim. The brand voice for
+// Mobile Surfaces copy is declarative: a superlative either earns its place
+// with evidence or it does not belong in the docs. "the only" is
+// deliberately NOT in the comparative list: it has heavy legitimate factual
+// use in these docs ("the only blessed migration entry point", "the only
+// linked group") and is not puffery.
+//
 // Why this exists: between v5 and v7 the docs accumulated unfulfilled
 // promises that shipped releases ago ("future scaffolding should publish
 // create-mobile-surfaces..." at architecture.md:154 — already shipped),
@@ -67,6 +77,38 @@ const ALLOWLIST_PATTERNS = [
   /upstream-blocked/i,
 ];
 
+// Unsubstantiated marketing comparatives. These are puffery a reference
+// architecture should not lean on: each one is a claim that begs for a
+// benchmark or a citation. Checked only in the published doc site (not
+// package READMEs, which describe shipped APIs in plainer terms).
+const COMPARATIVE_PATTERNS = [
+  /\bfastest\b/i,
+  /\bblazing(?:[\s-]fast)?\b/i,
+  /\bproduction-grade\b/i,
+  /\bworld-class\b/i,
+  /\bindustry-leading\b/i,
+  /\bbest-in-class\b/i,
+  /\bcutting-edge\b/i,
+  /\bstate-of-the-art\b/i,
+  /\bseamless(?:ly)?\b/i,
+  /\beffortless(?:ly)?\b/i,
+  /\bunmatched\b/i,
+  /\bthe easiest\b/i,
+  /\bsimplest way\b/i,
+];
+
+// A comparative is excused when the SAME line carries evidence: a markdown
+// link (the claim points at something), a test-file reference, or an issue
+// number. "Paired with a citation on the same line" per the v9 plan.
+const CITATION_PATTERNS = [
+  /\]\(/, // markdown link
+  /#\d+/, // issue ref
+  /[\w/-]+\.(?:test|spec)\.\w+/, // test-file reference
+];
+
+// Comparatives are scanned only under this subtree (the published site).
+const COMPARATIVE_SCOPE = "apps/site/src/content/docs";
+
 const SKIP_DIRS = new Set([
   "node_modules",
   ".git",
@@ -125,6 +167,7 @@ function* walkMdRoot(absRoot, relRoot) {
 
 const repoRoot = path.resolve(".");
 const issues = [];
+const comparativeIssues = [];
 let scanned = 0;
 
 for (const root of SCAN_ROOTS) {
@@ -133,6 +176,7 @@ for (const root of SCAN_ROOTS) {
     const abs = path.join(repoRoot, rel);
     const src = fs.readFileSync(abs, "utf8");
     const lines = src.split("\n");
+    const inComparativeScope = rel.startsWith(COMPARATIVE_SCOPE);
     for (let i = 0; i < lines.length; i += 1) {
       const line = lines[i];
       // Skip lines inside fenced code blocks where TODO is often a
@@ -150,6 +194,19 @@ for (const root of SCAN_ROOTS) {
           message: line.trim(),
         });
         break; // one issue per line is enough
+      }
+      // Comparatives: doc-site only, excused by a same-line citation.
+      if (inComparativeScope) {
+        for (const pat of COMPARATIVE_PATTERNS) {
+          const m = pat.exec(line);
+          if (!m) continue;
+          if (CITATION_PATTERNS.some((c) => c.test(line))) break;
+          comparativeIssues.push({
+            path: `${rel}:${i + 1}`,
+            message: `unsubstantiated comparative "${m[0]}": ${line.trim()}`,
+          });
+          break;
+        }
       }
     }
   }
@@ -170,6 +227,23 @@ emitDiagnosticReport(
               message:
                 "Doc prose cannot ship 'TODO', 'coming soon', 'will ship', or similar without an adjacent #issue link or 'intentionally deferred' marker. Either link the tracking issue or rewrite the claim.",
               issues,
+            },
+          }
+        : {}),
+    },
+    {
+      id: "doc-comparatives",
+      status: comparativeIssues.length === 0 ? "ok" : "fail",
+      summary:
+        comparativeIssues.length === 0
+          ? "No unsubstantiated comparatives in the doc site."
+          : `${comparativeIssues.length} unsubstantiated comparative(s) in the doc site.`,
+      ...(comparativeIssues.length > 0
+        ? {
+            detail: {
+              message:
+                "A marketing comparative in the doc site needs a citation on the same line (a markdown link, a test reference, or an issue number) or it should be rewritten declaratively. Brand voice for Mobile Surfaces copy is declarative, not superlative.",
+              issues: comparativeIssues,
             },
           }
         : {}),
