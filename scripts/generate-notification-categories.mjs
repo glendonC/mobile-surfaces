@@ -64,42 +64,85 @@ const targets = [
 ];
 
 if (values.check) {
-  const drifts = [];
-  for (const target of targets) {
-    const current = existsSync(target.path) ? readFileSync(target.path, "utf8") : null;
-    if (current !== target.contents) {
-      drifts.push({ path: target.path, label: target.label });
-    }
-  }
-  if (plistUpdate.applicable && plistUpdate.drift) {
-    drifts.push({ path: PLIST_OUT, label: "extension Info.plist UNNotificationExtensionCategory" });
-  }
-  emitDiagnosticReport(
-    buildReport(TOOL, [
-      {
-        id: "notification-categories-sync",
-        status: drifts.length === 0 ? "ok" : "fail",
-        summary:
-          drifts.length === 0
-            ? `Notification category outputs are in sync (${targets.length} files${plistUpdate.applicable ? " + extension Info.plist" : ""}).`
-            : `${drifts.length} notification-category output(s) out of sync.`,
-        trapId: "MS037",
-        ...(drifts.length > 0
-          ? {
-              detail: {
-                message:
-                  "The canonical source is packages/surface-contracts/src/notificationCategories.ts. Edit it and run pnpm surface:codegen. The generated files revert on the next codegen run.",
-                issues: drifts.map((d) => ({
-                  path: d.path,
-                  message: `${d.label} drifted from canonical`,
-                })),
-              },
-            }
-          : {}),
+  // One check per generated artifact so a drift report names the exact file
+  // out of sync (ts-const-sync / swift-const-sync / plist-sync) rather than a
+  // single rolled-up count. All three carry MS037: the trap is one constraint,
+  // but the diagnostics are per-artifact. The report status rolls up across
+  // them, so a drift in any one still fails the gate.
+  const CANONICAL_HINT =
+    "The canonical source is packages/surface-contracts/src/notificationCategories.ts. Edit it and run pnpm surface:codegen. The generated files revert on the next codegen run.";
+
+  const fileChecks = [
+    { id: "ts-const-sync", target: targets[0] },
+    { id: "swift-const-sync", target: targets[1] },
+  ].map(({ id, target }) => {
+    const current = existsSync(target.path)
+      ? readFileSync(target.path, "utf8")
+      : null;
+    const drifted = current !== target.contents;
+    return {
+      id,
+      status: drifted ? "fail" : "ok",
+      summary: drifted
+        ? `${target.label} drifted from the canonical notification-category registry.`
+        : `${target.label} is in sync with the canonical notification-category registry.`,
+      trapId: "MS037",
+      ...(drifted
+        ? {
+            detail: {
+              message: CANONICAL_HINT,
+              issues: [
+                {
+                  path: target.path,
+                  message: `${target.label} drifted from canonical`,
+                },
+              ],
+            },
+          }
+        : {}),
+    };
+  });
+
+  let plistCheck;
+  if (!plistUpdate.applicable) {
+    plistCheck = {
+      id: "plist-sync",
+      status: "ok",
+      summary:
+        "Extension Info.plist absent; UNNotificationExtensionCategory sync not applicable.",
+      trapId: "MS037",
+    };
+  } else if (plistUpdate.drift) {
+    plistCheck = {
+      id: "plist-sync",
+      status: "fail",
+      summary:
+        "Extension Info.plist UNNotificationExtensionCategory drifted from the canonical notification-category registry.",
+      trapId: "MS037",
+      detail: {
+        message: CANONICAL_HINT,
+        issues: [
+          {
+            path: PLIST_OUT,
+            message:
+              "extension Info.plist UNNotificationExtensionCategory drifted from canonical",
+          },
+        ],
       },
-    ]),
-    { json: values.json },
-  );
+    };
+  } else {
+    plistCheck = {
+      id: "plist-sync",
+      status: "ok",
+      summary:
+        "Extension Info.plist UNNotificationExtensionCategory is in sync with the canonical notification-category registry.",
+      trapId: "MS037",
+    };
+  }
+
+  emitDiagnosticReport(buildReport(TOOL, [...fileChecks, plistCheck]), {
+    json: values.json,
+  });
 } else {
   for (const target of targets) {
     mkdirSync(dirname(target.path), { recursive: true });
