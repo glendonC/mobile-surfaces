@@ -16,9 +16,9 @@ data/traps.json ──► packages/surface-contracts/src/traps.ts (Zod validatio
                 └─► CLAUDE.md   (identical content; Claude Code reads this directly)
 ```
 
-Additional consumers shipped in v7:
+Additional consumers:
 
-- `npx mobile-surfaces audit [path]`: walks the catalog against an existing Expo project, emits a pass/warn/fail report with MS-id chips and `docsUrl` links. Backed by the same script set that runs in `pnpm surface:check` for this repo. Available with the `create-mobile-surfaces` install.
+- `pnpm surface:audit --root <path>`: runs the catalog's static and config gates against an existing Expo project from inside a Mobile Surfaces checkout, emitting a pass/warn/fail report with MS-id chips. Backed by the same gate scripts that run in `pnpm surface:check` for this repo.
 
 All consumers read from this catalog. None are hand-maintained.
 

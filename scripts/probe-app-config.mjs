@@ -9,10 +9,9 @@
 // when the apps/mobile/ tree is absent so a foreign consumer running
 // surface:diagnose still gets a useful bundle.
 //
-// Phase 6 (refactor/v7): added `rootDir` API surface so the
-// `mobile-surfaces audit` subcommand can probe a foreign project without
-// changing process.cwd. CLI behavior is preserved when invoked without
-// --root (rootDir defaults to process.cwd()).
+// Phase 6 (refactor/v7): added `rootDir` API surface so `pnpm surface:audit`
+// can probe a foreign project without changing process.cwd. CLI behavior is
+// preserved when invoked without --root (rootDir defaults to process.cwd()).
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { parseArgs } from "node:util";
@@ -52,7 +51,7 @@ export function probeAppConfig({ rootDir = process.cwd(), mode = "in-tree" } = {
           summary: `No Expo app.json found under ${root}.`,
           detail: {
             message:
-              "Looked for app.json at the project root, apps/mobile/, and any apps/<dir>/ subfolder. Run mobile-surfaces audit against the directory that contains your Expo project.",
+              "Looked for app.json at the project root, apps/mobile/, and any apps/<dir>/ subfolder. Run `pnpm surface:audit --root <path>` against the directory that contains your Expo project.",
           },
         },
       ]);
