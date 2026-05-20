@@ -149,26 +149,24 @@ The schema is also exported via the package's `./schema` subpath if you want to 
 import schema from "@mobile-surfaces/surface-contracts/schema";
 ```
 
-## Migration codec
+## Validating snapshots
 
-Use `safeParseAnyVersion` at wire edges that may receive an older schema shape:
+Use `safeParseSnapshot` at wire edges; it validates strictly against v5 and returns `{ success, data | error }`:
 
 ```ts
-import { safeParseAnyVersion } from "@mobile-surfaces/surface-contracts";
+import { safeParseSnapshot } from "@mobile-surfaces/surface-contracts";
 
-const result = safeParseAnyVersion(rawBody);
+const result = safeParseSnapshot(rawBody);
 if (!result.success) {
   return reject(result.error);
 }
 
-if (result.deprecationWarning) {
-  log.warn(result.deprecationWarning, { snapshotId: result.data.id });
-}
-
-handle(result.data); // always v5
+handle(result.data);
 ```
 
-The current chain is v5 → v4. The v3 codec was retired at 8.0.0; consumers with v3 payloads at rest must pin `@mobile-surfaces/surface-contracts@7.x` once to promote v3 → v5, store the result, then upgrade. The v2 codec was retired earlier at 5.0.0. Full migration policy lives at [`https://mobile-surfaces.com/docs/schema`](https://mobile-surfaces.com/docs/schema).
+For outbound paths where you control the producer, `assertSnapshot` throws on anything that is not a v5 snapshot.
+
+The package validates strictly against `schemaVersion: "5"`; there is no multi-version codec. The v4 codec was retired at 9.0.0 and the v3 codec at 8.0.0. Consumers with older payloads at rest must pin the last major that still carried the codec (`@8.x` for v4, `@7.x` for v3), promote the stored payloads to v5, store the result, then upgrade. Full migration policy lives at [`https://mobile-surfaces.com/docs/schema`](https://mobile-surfaces.com/docs/schema).
 
 ## Pairing options
 

@@ -6,7 +6,6 @@ export {
   liveSurfaceSnapshotNotification,
   liveSurfaceSnapshotLockAccessory,
   liveSurfaceSnapshotStandby,
-  liveSurfaceSnapshotV4,
   liveSurfaceLiveActivitySlice,
   liveSurfaceState,
   liveSurfaceStage,
@@ -32,8 +31,6 @@ export {
   liveSurfaceKinds,
   assertSnapshot,
   safeParseSnapshot,
-  migrateV4ToV5,
-  safeParseAnyVersion,
 } from "./schema.ts";
 export type {
   LiveSurfaceSnapshot,
@@ -43,7 +40,6 @@ export type {
   LiveSurfaceSnapshotNotification,
   LiveSurfaceSnapshotLockAccessory,
   LiveSurfaceSnapshotStandby,
-  LiveSurfaceSnapshotV4,
   LiveSurfaceLiveActivitySlice,
   LiveSurfaceState,
   LiveSurfaceStage,
@@ -58,9 +54,6 @@ export type {
   LiveSurfaceStandbyPresentation,
   LiveSurfaceStandbySlice,
   LiveSurfaceActivityContentState,
-  SafeParseAnyVersionResult,
-  SafeParseAnyVersionSuccess,
-  SafeParseAnyVersionFailure,
 } from "./schema.ts";
 
 // Public projection-output types are inferred from the Zod schemas in

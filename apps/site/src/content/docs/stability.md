@@ -19,7 +19,7 @@ These three axes advance independently. A consumer pinning a package version is 
 | Wire `schemaVersion` literal | `"5"` | Bumps only on a breaking wire-format change. The literal can lag the package major by multiple releases. |
 | Deprecation window for retired codecs | one full major past the deprecation announcement | Enforced by the MS042 gate. Typical window is two majors. |
 
-The current state: package major `8.0` ships `schemaVersion: "5"` on the wire. The v3 codec was retired at 8.0 (one major past its 7.0 final-warning year); the v4 codec is on its final-warning major and retires at 9.0.
+The current state: package major `8.0` ships `schemaVersion: "5"` on the wire. The v3 codec was retired at 8.0 (one major past its 7.0 final-warning year); the v4 codec is retired at 9.0. The source no longer carries a multi-version codec or any frozen `schema-v<N>.ts` file; the package validates strictly against the current wire generation.
 
 ## Linked release group
 
@@ -72,7 +72,7 @@ A breaking change is one a typed consumer could detect at the type-system bounda
 - Narrowing a type's input (a required field becomes optional is additive; an optional field becomes required is breaking).
 - Changing a function's return type to a non-superset.
 - Changing the wire-format `schemaVersion` literal.
-- Removing a deprecated codec from `safeParseAnyVersion`.
+- Removing a deprecated migration codec.
 - Removing a trap id from the catalog.
 
 A non-breaking change is one a consumer can absorb by upgrading the lockfile. New exports, new optional fields, new trap ids, new error subclasses (additive), and new diagnostic detail in an existing error are all minor.
@@ -83,7 +83,7 @@ A non-breaking change is one a consumer can absorb by upgrading the lockfile. Ne
 
 The first-property ordering is load-bearing. The on-device Codable mirror reads `{ schemaVersion: String }` before attempting full Codable decode. A widget binary on schemaVersion N that reads a host snapshot at schemaVersion N+1 detects the mismatch up front and renders a version-mismatch placeholder instead of failing silently against an incompatible struct shape. The gate is MS041 (`scripts/check-projection-envelope-version.mjs`).
 
-A `schemaVersion` bump always moves the linked group's major. The frozen codec for the previous version ships as `schema-v<N-1>.ts` and is exercised by `safeParseAnyVersion` as a fallback path. Producers running on the old generation get a `deprecationWarning` from the codec; the warning carries the migration target.
+A `schemaVersion` bump always moves the linked group's major. When a bump lands, payloads on the previous generation stop validating against the package; the path for migrating stored payloads is documented per release in the CHANGELOG and in [`schema.md`](/docs/schema).
 
 ## Deprecation timeline
 
@@ -92,7 +92,7 @@ A deprecated codec lives for at least one major past the release that deprecated
 - A codec deprecated in `surface-contracts@6` is removable in `@8` at the earliest.
 - A codec deprecated in `surface-contracts@5` is removable in `@7` at the earliest.
 
-The actual schedule sits inline with the codec source (`schema-v4.ts`) and in the deprecation warning string the codec emits. The MS042 gate (`scripts/check-deprecation-prose.mjs`) catches the case where the prose says "will be removed in X.0.0" but the package has already shipped X.0.0; that's a charter violation. The fix is to push the deprecation to a future major (charter minimum: one past the current) or to actually drop the codec.
+The MS042 gate (`scripts/check-deprecation-prose.mjs`) catches the case where prose says "will be removed in X.0.0" but the package has already shipped X.0.0; that's a charter violation. The fix is to push the deprecation to a future major (charter minimum: one past the current) or to actually drop the deprecated code.
 
 The check is opt-out only via an explicit `// CHARTER: keep` marker on the preceding line. Use sparingly; the marker exists for the rare case where the prose intentionally describes a historical promise.
 
