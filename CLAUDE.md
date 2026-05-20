@@ -15,7 +15,7 @@ The per-rule Symptom and Fix prose lives in [`AGENTS.md`](./AGENTS.md); the inde
 
 ## Index
 
-39 live rules: 31 error, 2 warning, 6 info. 4 retired ids reserved (see footnote).
+40 live rules: 32 error, 2 warning, 6 info. 4 retired ids reserved (see footnote).
 
 | ID | Severity | Detection | Title |
 | --- | --- | --- | --- |
@@ -50,6 +50,7 @@ The per-rule Symptom and Fix prose lives in [`AGENTS.md`](./AGENTS.md); the inde
 | [MS041](AGENTS.md#ms041-projection-output-envelopes-must-declare-schemaversion) | error | static | Projection-output envelopes must declare schemaVersion |
 | [MS042](AGENTS.md#ms042-deprecation-prose-must-not-promise-removal-in-the-current-or-a-past-major) | error | static | Deprecation prose must not promise removal in the current or a past major |
 | [MS043](AGENTS.md#ms043-changelog-entry-required-on-package-major) | error | static | CHANGELOG entry required on package major |
+| [MS044](AGENTS.md#ms044-catalog-headline-counts-stay-in-sync-with-the-trap-catalog) | error | static | Catalog headline counts stay in sync with the trap catalog |
 | [MS010](AGENTS.md#ms010-toolchain-preflight-node-24-pnpm-xcode-26) | warning | config | Toolchain preflight (Node 24, pnpm, Xcode 26+) |
 | [MS015](AGENTS.md#ms015-push-priority-5-vs-10-budget-rules) | warning | runtime | Push priority 5 vs 10 budget rules |
 | [MS016](AGENTS.md#ms016-subscribe-to-onpushtostarttoken-at-mount-not-on-demand) | info | advisory | Subscribe to onPushToStartToken at mount, not on demand |
@@ -64,8 +65,8 @@ The per-rule Symptom and Fix prose lives in [`AGENTS.md`](./AGENTS.md); the inde
 - `app-group`: MS013, MS025
 - `channels`: MS031, MS034
 - `cng`: MS017, MS029
-- `config`: MS012, MS013, MS017, MS018, MS025, MS029, MS034, MS035, MS037, MS041, MS042, MS043
-- `contract`: MS001, MS003, MS004, MS006, MS007, MS008, MS009, MS024, MS036, MS037, MS038, MS039, MS040, MS041, MS042, MS043
+- `config`: MS012, MS013, MS017, MS018, MS025, MS029, MS034, MS035, MS037, MS041, MS042, MS043, MS044
+- `contract`: MS001, MS003, MS004, MS006, MS007, MS008, MS009, MS024, MS036, MS037, MS038, MS039, MS040, MS041, MS042, MS043, MS044
 - `control`: MS013, MS026, MS036
 - `ios-version`: MS012
 - `ios18`: MS031, MS034

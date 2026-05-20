@@ -46,6 +46,7 @@ export const TrapIds = {
   MS041: "MS041",
   MS042: "MS042",
   MS043: "MS043",
+  MS044: "MS044",
 } as const satisfies Record<string, TrapId>;
 
 export const ERROR_CLASS_TO_TRAP_ID: Record<string, TrapId> = {
@@ -653,6 +654,19 @@ export const TRAP_BINDINGS: ReadonlyMap<TrapId, TrapBinding> = new Map<
       symptom: "Package silently bumps from 5.0.0 to 6.0.0 with no CHANGELOG entry. Downstream consumers reading the CHANGELOG to understand the bump find nothing; release notes lose the audit trail; the major version becomes meaningless.",
       fix: "Write the CHANGELOG entry. Use `pnpm changeset version` if it didn't run, or hand-write the `## X.0.0` heading with the major changes underneath. For packages bumped purely by the linked-release group with no API change of their own, the convention is: `Linked-group bump for the v<N> schema release in @mobile-surfaces/surface-contracts. No <package> API change.`",
       docsUrl: "https://github.com/glendonC/mobile-surfaces/blob/main/AGENTS.md#ms043-changelog-entry-required-on-package-major",
+      },
+    ],
+    [
+      "MS044",
+      {
+      id: "MS044",
+      title: "Catalog headline counts stay in sync with the trap catalog",
+      severity: "error",
+      detection: "static",
+      summary: "Every public count of catalog rules is generated. data/catalog-stats.json holds the canonical breakdown (total, live, deprecated, the severity and detection splits, and the PR-gated count), and the `catalog-stats:` marker blocks in README.md and the doc site are rewritten from it. The check fails when the stats file or a marker block drifts from data/traps.json.",
+      symptom: "A rule is added, retired, or reclassified and a prose number is not updated. README advertises a documented-rule count the catalog no longer matches; vs-expo-live-activity.md claims a PR-gated count that disagrees with the registry. The catalog silently contradicts itself across published surfaces.",
+      fix: "Run `pnpm surface:codegen` (or `node --experimental-strip-types scripts/generate-catalog-stats.mjs`) to regenerate data/catalog-stats.json and rewrite the marker blocks. Never hand-edit a number inside a `catalog-stats:` marker; edit data/traps.json and regenerate.",
+      docsUrl: "https://github.com/glendonC/mobile-surfaces/blob/main/AGENTS.md#ms044-catalog-headline-counts-stay-in-sync-with-the-trap-catalog",
       },
     ],
 ]);

@@ -394,6 +394,21 @@ export const checkRegistry = Object.freeze([
     diagnose: false,
     mode: "check-mode",
   },
+  // Catalog headline counts: data/catalog-stats.json plus the catalog-stats
+  // marker blocks in README.md and the doc site. Joins the catalog (severity,
+  // detection, deprecated) with this registry (which rules are gated at
+  // stage >= 1), so it depends on both stage-1 source validators.
+  {
+    id: "generate-catalog-stats",
+    label: "catalog-stats.json and doc headline counts in sync with traps.json",
+    stage: 6,
+    dependsOn: ["validate-trap-catalog", "validate-check-registry"],
+    script: "scripts/generate-catalog-stats.mjs",
+    args: ["--check"],
+    diagnose: true,
+    mode: "check-mode",
+    trapIds: ["MS044"],
+  },
 
   // Diagnose-only probes. These do not participate in surface-check (they
   // are not gates — they describe the local environment for paste-in bug

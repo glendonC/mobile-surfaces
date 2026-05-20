@@ -40,6 +40,10 @@ const QUICK_REGENS = [
     name: "CLAUDE.md + AGENTS.md (build-agents-md.mjs)",
     cmd: ["node", "--experimental-strip-types", "--no-warnings=ExperimentalWarning", "scripts/build-agents-md.mjs"],
   },
+  {
+    name: "catalog-stats.json + doc headline counts (generate-catalog-stats.mjs)",
+    cmd: ["node", "--experimental-strip-types", "--no-warnings=ExperimentalWarning", "scripts/generate-catalog-stats.mjs"],
+  },
 ];
 
 function run(cmd) {

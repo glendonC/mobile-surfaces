@@ -166,6 +166,19 @@ Goal: ship the `mobile-surfaces audit` subcommand for real, or formally drop it.
   - MS044 = `generate-catalog-stats.mjs --check` wired into the registry at stage 2. Fails
     on artifact/marker drift, never on prose wording.
   - Build this AFTER the Phase 1 retirements land so it computes against the final catalog.
+  - SHIPPED (PR #132): wired at registry **stage 6**, not stage 2 - it is a
+    trap-derived generator like `build-agents-md` and depends on
+    `validate-check-registry` (it joins the registry to compute `prGated`).
+    Counting logic lives in `scripts/lib/catalog-stats.mjs`, shared with
+    `build-agents-md` so the AGENTS.md headline and the doc markers cannot
+    count rules two ways. The five-agent design review found the
+    "21 PR-gated / 6 SDK-runtime / 8 advisory" taxonomy in the cross-cutting
+    decisions is not derivable from `data/traps.json` (categories cross
+    detection, severity, and registry membership); `catalog-stats.json`
+    publishes only what is derivable - live/deprecated, the severity and
+    detection splits, and `prGated` (live ids bound to a registry check at
+    stage >= 1). The doc prose was reworded onto live + prGated + runtime +
+    a derived remainder.
 - 5b. **Pin the audit framework in CI** (light touch). Add `pnpm audit:diff` script that prints `git diff notes/audit-state.md` and fails if the diff is non-empty without a paired update in `audit-state.md`'s `audit-date` header. Optional: run on PRs that touch `data/traps.json` or `scripts/check-*.mjs`. The intent is to make audit-state.md the canonical changelog for the catalog's enforcement surface.
 - 5c. **Linked-group bumps to 9.0**. `surface-contracts + validators + traps` cut at 9.0 with the Phase 1 catalog changes (rule retirements + new MS-ids) as the breaking-change rationale. Independent majors for push / live-activity / tokens only if their Phase 2 / Phase 3 work changes the public surface.
 

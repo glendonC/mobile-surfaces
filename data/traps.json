@@ -819,6 +819,23 @@
         "script": "scripts/check-changelog-on-major.mjs"
       },
       "since": "7.0.0"
+    },
+    {
+      "id": "MS044",
+      "title": "Catalog headline counts stay in sync with the trap catalog",
+      "severity": "error",
+      "detection": "static",
+      "tags": [
+        "contract",
+        "config"
+      ],
+      "summary": "Every public count of catalog rules is generated. data/catalog-stats.json holds the canonical breakdown (total, live, deprecated, the severity and detection splits, and the PR-gated count), and the `catalog-stats:` marker blocks in README.md and the doc site are rewritten from it. The check fails when the stats file or a marker block drifts from data/traps.json.",
+      "symptom": "A rule is added, retired, or reclassified and a prose number is not updated. README advertises a documented-rule count the catalog no longer matches; vs-expo-live-activity.md claims a PR-gated count that disagrees with the registry. The catalog silently contradicts itself across published surfaces.",
+      "fix": "Run `pnpm surface:codegen` (or `node --experimental-strip-types scripts/generate-catalog-stats.mjs`) to regenerate data/catalog-stats.json and rewrite the marker blocks. Never hand-edit a number inside a `catalog-stats:` marker; edit data/traps.json and regenerate.",
+      "enforcement": {
+        "script": "scripts/generate-catalog-stats.mjs"
+      },
+      "since": "9.0.0"
     }
   ]
 }
