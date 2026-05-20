@@ -223,39 +223,16 @@ process.on("SIGTERM", async () => {
 
 ### Error class hierarchy
 
-Every non-2xx APNs response throws a typed subclass of `ApnsError`. Each instance carries `reason`, `status`, `apnsId`, and `timestamp`. The full set, mirroring `packages/push/src/errors.ts`:
+Every non-2xx APNs response throws a typed subclass of `ApnsError`. Each instance carries `reason`, `status`, `apnsId`, and `timestamp`; classes bound to a catalog trap also expose `trapId` and `docsUrl`. The full reason-to-subclass mapping, with the cause and fix for each, is in [Error responses](#error-responses) below.
 
-| Subclass | Reason string | When |
-| --- | --- | --- |
-| `BadDeviceTokenError` | `BadDeviceToken` | Token / environment mismatch. |
-| `InvalidProviderTokenError` | `InvalidProviderToken` | JWT rejected (key id, team id, or .p8 wrong). |
-| `ExpiredProviderTokenError` | `ExpiredProviderToken` | JWT older than 1 hour (clock skew). |
-| `TopicDisallowedError` | `TopicDisallowed` | Auth key not enabled for this bundle id. |
-| `UnregisteredError` | `Unregistered` | Device, per-activity, or push-to-start token is permanently dead (410). Drop from your token store. |
-| `ForbiddenError` | `Forbidden` | Auth key was revoked in the Apple Developer portal. Mint a new one and rotate `APNS_KEY_ID` / `APNS_KEY_PATH`. |
-| `PayloadTooLargeError` | `PayloadTooLarge` | Activity payload > 4 KB (5 KB for broadcast). |
-| `BadPriorityError` | `BadPriority` | Priority is not 5 or 10. |
-| `BadExpirationDateError` | `BadExpirationDate` | `expirationSeconds` malformed. |
-| `BadDateError` | `BadDate` | Other timestamp field malformed. |
-| `MissingTopicError` | `MissingTopic` | `apns-topic` header missing. |
-| `MissingChannelIdError` | `MissingChannelId` | `apns-channel-id` header missing on a broadcast/management call. |
-| `BadChannelIdError` | `BadChannelId` | Channel id malformed or oversized. |
-| `ChannelNotRegisteredError` | `ChannelNotRegistered` | Channel does not exist in this environment. |
-| `CannotCreateChannelConfigError` | `CannotCreateChannelConfig` | 10,000-channel limit reached for the bundle id. |
-| `InvalidPushTypeError` | `InvalidPushType` | `apns-push-type` is wrong (channels accept only `liveactivity`). |
-| `FeatureNotEnabledError` | `FeatureNotEnabled` | Broadcast capability not enabled on the auth key. |
-| `MissingPushTypeError` | `MissingPushType` | `apns-push-type` header missing. |
-| `TooManyRequestsError` | `TooManyRequests` | 429. `retryAfterSeconds` parsed from `Retry-After` when present. |
-| `InternalServerError` | (5xx, no reason) | APNs internal error. Retried by the default policy; surface if it persists. |
-| `ServiceUnavailableError` | (503) | APNs unavailable. Retried by the default policy. |
-| `UnknownApnsError` | (any other) | Reason not in the local guide. Raw reason preserved on `.reason`. |
-
-Five non-APNs errors complete the picture:
+Seven non-APNs errors complete the picture:
 
 | Class | When |
 | --- | --- |
 | `InvalidSnapshotError` | Snapshot failed `liveSurfaceSnapshot.safeParse`, or `kind` is not allowed for the chosen method (e.g. calling `update` with a `widget`-kind snapshot). Carries `issues: readonly string[]` for ergonomic logging. Thrown **before any network call**. |
-| `MissingApnsConfigError` | `createPushClient` was called with one of `APNS_KEY_ID` / `APNS_TEAM_ID` / `APNS_KEY_PATH` / `APNS_BUNDLE_ID` unset or empty. Thrown at construction time so the failure surfaces before the first send. |
+| `MissingApnsConfigError` | `createPushClient` was called with one of `APNS_KEY_ID` / `APNS_TEAM_ID` / `APNS_KEY_PATH` / `APNS_BUNDLE_ID` unset or empty. Carries `missing` naming the absent options. Thrown at construction time so the failure surfaces before the first send. |
+| `MalformedApnsConfigError` | A `createPushClient` config value is present but malformed — currently `bundleId` carrying a trailing `.push-type.liveactivity` suffix, which the SDK appends itself. Carries `field` naming the offending option. Thrown at construction time (MS018). |
+| `TokenEnvironmentMismatchError` | A send method was passed a `tokenEnvironment` that does not match the environment the client was constructed for. APNs push tokens are environment-specific. Carries `tokenEnvironment` and `clientEnvironment`. Thrown before any network call (MS014). |
 | `CreateChannelResponseError` | `createChannel` succeeded over the wire (2xx) but the response carried no usable channel id. Carries `bodySnippet` (truncated to 200 chars) for post-hoc debugging. |
 | `ClientClosedError` | Any send/manage method called after `close()`. |
 | `AbortError` | A send was canceled via the `AbortSignal` passed in `SendOptions.signal`. |
@@ -377,30 +354,34 @@ Channels are environment-scoped: a channel created with `--env=development` cann
 
 ## Error responses
 
-The full mapping mirrors `packages/push/src/reasons.ts` and `scripts/send-apns.mjs`'s `APNS_REASON_GUIDE`. The SDK exports a typed subclass per reason (see [Error class hierarchy](#error-class-hierarchy)) so callers can `instanceof`-narrow without parsing strings. Sixteen of the error classes are catalog-bound via `trapIdForErrorClass` (mapping to eleven distinct trap ids) and are the ones worth alerting on in production; see [`docs/observability.md`](/docs/observability) for the recommended log shape and signal-by-signal alerting playbook.
+Every non-2xx APNs response throws a typed subclass of `ApnsError`, so callers can `instanceof`-narrow without parsing reason strings. Error classes that correspond to a catalog trap also expose `trapId` and `docsUrl`, resolved lazily per instance by the `MobileSurfacesError` base class against the generated `ERROR_CLASS_TO_TRAP_ID` map in `@mobile-surfaces/traps`; those are the responses worth alerting on in production. See [`docs/observability.md`](/docs/observability) for the recommended log shape and signal-by-signal alerting playbook.
 
-| Reason | Cause | Fix |
+The table mirrors `packages/push/src/errors.ts`, `packages/push/src/reasons.ts`, and `scripts/send-apns.mjs`'s `APNS_REASON_GUIDE`. The `Subclass` column is the typed error thrown for that reason; the [non-APNs error classes](#error-class-hierarchy) (snapshot validation, config, lifecycle) are listed separately.
+
+| Reason | Subclass | Cause and fix |
 | --- | --- | --- |
-| `BadDeviceToken` | Token / environment mismatch. | Use `environment: "development"` for dev-client / `expo run:ios` builds, `"production"` only for TestFlight / App Store builds. Tokens from one environment do not authenticate against the other. |
-| `InvalidProviderToken` | JWT rejected by APNs. | Confirm `keyId` (10 chars), `teamId` (10 chars), and the `.p8` at `keyPath` all match the same auth key. JWTs are also rejected when local clock skew > ~1 hour; sync system time. |
-| `ExpiredProviderToken` | JWT older than 1 hour. | The SDK refreshes JWTs every 50 minutes; this is almost always clock skew. Sync NTP and retry. |
-| `TopicDisallowed` | Auth key not enabled for this bundle id, or `bundleId` is wrong. | For Live Activity pushes the topic is auto-suffixed with `.push-type.liveactivity`. Do not include that suffix in `bundleId`. |
-| `Forbidden` | Auth key revoked. | Generate a new APNs auth key in the Apple Developer portal and update `keyPath` / `keyId`. |
-| `BadPriority` | Priority is not 5 or 10. | Use priority 5 (default for Live Activity) or 10 (immediate user-visible). |
-| `BadExpirationDate` | `expirationSeconds` is malformed. | Pass a positive unix-seconds integer. For broadcast on a No-Message-Stored channel, `apns-expiration` must be 0; Apple rejects nonzero expirations there (the SDK's `broadcast()` already sets 0). |
-| `BadDate` | A timestamp field is malformed. | Same as `BadExpirationDate`; confirm `staleDateSeconds` / `dismissalDateSeconds` are unix-seconds integers. |
-| `MissingTopic` | `apns-topic` header missing. | Set `bundleId` to your bundle identifier (without the `.push-type.liveactivity` suffix; the SDK appends it). |
-| `PayloadTooLarge` | Activity payload > 4 KB (5 KB for broadcast). | Trim snapshot fields. ActivityKit content states are bounded; localization or long secondary text are the usual offenders. |
-| `TooManyRequests` | Apple is rate-limiting your bundle id (or the Live Activity priority budget is exhausted). | Back off. Live Activity priority 10 has aggressive budgets; drop to 5 unless the update must be visible immediately. The SDK retries with `Retry-After` automatically when the header is present. |
-| `MissingChannelId` | `apns-channel-id` header is missing. | Pass `channelId` to `broadcast()` or `deleteChannel()`. The header is set automatically when the argument is provided. |
-| `BadChannelId` | `apns-channel-id` is malformed or oversized. | Channel ids are base64-encoded strings returned by `createChannel()`. Don't truncate, URL-decode, or re-encode them; pass the value through as-is. |
-| `ChannelNotRegistered` | The channel id does not exist. | Channels are environment-scoped; a channel created in `development` cannot be reached in `production`. Re-create in the target environment, or `listChannels()` to confirm. |
-| `InvalidPushType` | `apns-push-type` is wrong. | Channel sends require `liveactivity`. The SDK always sets this; if you reach this from a custom payload, drop the override. |
-| `CannotCreateChannelConfig` | 10,000-channel limit reached. | Audit with `listChannels()` and `deleteChannel()` stale ones before creating new channels. |
-| `FeatureNotEnabled` | Broadcast capability not enabled for this bundle id. | Enable broadcast for the auth key in the Apple Developer portal (Certificates, Identifiers & Profiles > Keys). The capability is per-key, not per-app. |
-| `MissingPushType` | `apns-push-type` header missing. | The SDK sets this automatically; if you see it from a custom payload, restore the default. |
-| `InternalServerError` | APNs internal error. | Retry with backoff. The default retry policy already handles this. |
-| `ServiceUnavailable` | APNs temporarily unavailable. | Retry with backoff. The default retry policy already handles this. |
+| `BadDeviceToken` | `BadDeviceTokenError` | Token / environment mismatch. Use `environment: "development"` for dev-client / `expo run:ios` builds, `"production"` only for TestFlight / App Store builds. Tokens from one environment do not authenticate against the other. |
+| `InvalidProviderToken` | `InvalidProviderTokenError` | JWT rejected by APNs. Confirm `keyId` (10 chars), `teamId` (10 chars), and the `.p8` at `keyPath` all match the same auth key. JWTs are also rejected when local clock skew > ~1 hour; sync system time. |
+| `ExpiredProviderToken` | `ExpiredProviderTokenError` | JWT older than 1 hour. The SDK refreshes JWTs every 50 minutes, so this is almost always clock skew. Sync NTP and retry. |
+| `TopicDisallowed` | `TopicDisallowedError` | Auth key not enabled for this bundle id, or `bundleId` is wrong. For Live Activity pushes the topic is auto-suffixed with `.push-type.liveactivity`; do not include that suffix in `bundleId`. |
+| `Unregistered` | `UnregisteredError` | Device, per-activity, or push-to-start token is permanently dead (410). Drop it from your token store. |
+| `Forbidden` | `ForbiddenError` | Auth key revoked in the Apple Developer portal. Mint a new APNs auth key and rotate `APNS_KEY_ID` / `APNS_KEY_PATH`. |
+| `PayloadTooLarge` | `PayloadTooLargeError` | Activity payload > 4 KB (5 KB for broadcast). Trim snapshot fields. ActivityKit content states are bounded; localization or long secondary text are the usual offenders. |
+| `BadPriority` | `BadPriorityError` | Priority is not 5 or 10. Use priority 5 (default for Live Activity) or 10 (immediate user-visible). |
+| `BadExpirationDate` | `BadExpirationDateError` | `expirationSeconds` is malformed. Pass a positive unix-seconds integer. For broadcast on a No-Message-Stored channel, `apns-expiration` must be 0; Apple rejects nonzero expirations there (the SDK's `broadcast()` already sets 0). |
+| `BadDate` | `BadDateError` | A timestamp field is malformed. Confirm `staleDateSeconds` / `dismissalDateSeconds` are unix-seconds integers. |
+| `MissingTopic` | `MissingTopicError` | `apns-topic` header missing. Set `bundleId` to your bundle identifier (without the `.push-type.liveactivity` suffix; the SDK appends it). |
+| `MissingChannelId` | `MissingChannelIdError` | `apns-channel-id` header is missing on a broadcast or management call. Pass `channelId` to `broadcast()` or `deleteChannel()`; the header is set automatically when the argument is provided. |
+| `BadChannelId` | `BadChannelIdError` | `apns-channel-id` is malformed or oversized. Channel ids are base64-encoded strings returned by `createChannel()`. Don't truncate, URL-decode, or re-encode them; pass the value through as-is. |
+| `ChannelNotRegistered` | `ChannelNotRegisteredError` | The channel id does not exist in this environment. Channels are environment-scoped; a channel created in `development` cannot be reached in `production`. Re-create in the target environment, or `listChannels()` to confirm. |
+| `CannotCreateChannelConfig` | `CannotCreateChannelConfigError` | 10,000-channel limit reached for the bundle id. Audit with `listChannels()` and `deleteChannel()` stale ones before creating new channels. |
+| `InvalidPushType` | `InvalidPushTypeError` | `apns-push-type` is wrong; channel sends accept only `liveactivity`. The SDK always sets this. If you reach it from a custom payload, drop the override. |
+| `FeatureNotEnabled` | `FeatureNotEnabledError` | Broadcast capability not enabled for this bundle id. Enable broadcast for the auth key in the Apple Developer portal (Certificates, Identifiers & Profiles > Keys). The capability is per-key, not per-app. |
+| `MissingPushType` | `MissingPushTypeError` | `apns-push-type` header missing. The SDK sets this automatically; if you see it from a custom payload, restore the default. |
+| `TooManyRequests` | `TooManyRequestsError` | 429: Apple is rate-limiting your bundle id, or the Live Activity priority budget is exhausted. Back off. Priority 10 has aggressive budgets; drop to 5 unless the update must be visible immediately. The SDK retries with `Retry-After` automatically when the header is present, and parses `retryAfterSeconds` onto the error. |
+| `InternalServerError` | `InternalServerError` | APNs internal error (5xx, no reason string). Retried by the default policy; surface it if it persists. |
+| `ServiceUnavailable` | `ServiceUnavailableError` | APNs temporarily unavailable (503). Retried by the default policy. |
+| (any other) | `UnknownApnsError` | Reason not in the local guide. The raw reason string is preserved on `.reason`. |
 
 ## Smoke script reference
 
