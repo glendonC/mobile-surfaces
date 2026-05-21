@@ -185,6 +185,18 @@ export const checkRegistry = Object.freeze([
     diagnose: true,
     mode: "check-mode",
   },
+  // The Swift EXPECTED_SCHEMA_VERSION constant is generated from the single
+  // wire-format constant in packages/surface-contracts/src/version.ts so the
+  // on-device version probe (MS041) cannot drift from the Zod schemaVersion.
+  {
+    id: "generate-schema-version",
+    label: "Swift EXPECTED_SCHEMA_VERSION in sync with version.ts",
+    stage: 2,
+    script: "scripts/generate-schema-version.mjs",
+    args: ["--check"],
+    diagnose: true,
+    mode: "check-mode",
+  },
   // Ajv ↔ Zod parity belongs in stage 3 because it depends on build-schema
   // having already passed its --check (stage 2): the gate reads the
   // committed schema.json and asserts every fixture validates identically

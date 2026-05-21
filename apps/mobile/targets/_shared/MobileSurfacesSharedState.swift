@@ -2,12 +2,10 @@ import Foundation
 import OSLog
 import WidgetKit
 
-/// Schema version this widget binary was compiled against. Host snapshots
-/// emitting a different schemaVersion render a placeholder instead of decoding,
-/// preventing silent rendering of incompatible shapes (MS041). Bumped in
-/// lockstep with the Zod `schemaVersion` literal on the projection-output
-/// schemas in `packages/surface-contracts/src/schema.ts`.
-public let EXPECTED_SCHEMA_VERSION = "5"
+// EXPECTED_SCHEMA_VERSION is declared in the generated file
+// MobileSurfacesSchemaVersion.swift (same _shared target), codegened from
+// packages/surface-contracts/src/version.ts so the Swift constant cannot
+// drift from the Zod wire-format generation. See MS041.
 
 /// Result of a two-stage snapshot read. The reader decodes
 /// `{ "schemaVersion": String }` first and compares against

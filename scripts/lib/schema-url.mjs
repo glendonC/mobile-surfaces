@@ -8,14 +8,17 @@
 // other than the upstream) get no URL because the tarball is not published.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { SCHEMA_VERSION } from "../../packages/surface-contracts/src/version.ts";
 
 export const UPSTREAM_PACKAGE_NAME = "@mobile-surfaces/surface-contracts";
 
-// Single source of truth for the wire-format generation literal that
-// appears in `schemaVersion: "<n>"` across fixtures, docs, README snippets,
-// and the CLI template tarball. Bumped together with the package major when
-// the schema's discriminator literal changes.
-export const CANONICAL_SCHEMA_VERSION = "5";
+// The wire-format generation literal that appears in `schemaVersion: "<n>"`
+// across fixtures, docs, README snippets, and the CLI template tarball. Its
+// single source of truth is packages/surface-contracts/src/version.ts; it is
+// re-exported here under the name the script layer has always used so a
+// consumer importing CANONICAL_SCHEMA_VERSION does not have to know the
+// constant moved into the contract package.
+export const CANONICAL_SCHEMA_VERSION = SCHEMA_VERSION;
 
 export function readSurfaceContractsPackageJson() {
   return JSON.parse(

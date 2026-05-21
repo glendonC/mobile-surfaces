@@ -95,6 +95,7 @@ import {
   liveSurfaceStandbyEntry,
   liveSurfaceNotificationContentPayload,
 } from "./schema.ts";
+import { SCHEMA_VERSION } from "./version.ts";
 import type { ZodIssue, ZodType } from "zod";
 
 /**
@@ -182,7 +183,7 @@ export function toWidgetTimelineEntry(
     "toWidgetTimelineEntry",
     liveSurfaceWidgetTimelineEntry,
     {
-      schemaVersion: "5",
+      schemaVersion: SCHEMA_VERSION,
       kind: "widget",
       snapshotId: snapshot.id,
       surfaceId: snapshot.surfaceId,
@@ -205,7 +206,7 @@ export function toControlValueProvider(
     "toControlValueProvider",
     liveSurfaceControlValueProvider,
     {
-      schemaVersion: "5",
+      schemaVersion: SCHEMA_VERSION,
       kind: "control",
       snapshotId: snapshot.id,
       surfaceId: snapshot.surfaceId,
@@ -226,7 +227,7 @@ export function toLockAccessoryEntry(
     "toLockAccessoryEntry",
     liveSurfaceLockAccessoryEntry,
     {
-      schemaVersion: "5",
+      schemaVersion: SCHEMA_VERSION,
       kind: "lockAccessory",
       snapshotId: snapshot.id,
       surfaceId: snapshot.surfaceId,
@@ -248,7 +249,7 @@ export function toStandbyEntry(
   snapshot: LiveSurfaceSnapshotStandby,
 ): LiveSurfaceStandbyEntryOutput {
   return ensureProjection("toStandbyEntry", liveSurfaceStandbyEntry, {
-    schemaVersion: "5",
+    schemaVersion: SCHEMA_VERSION,
     kind: "standby",
     snapshotId: snapshot.id,
     surfaceId: snapshot.surfaceId,
@@ -270,7 +271,7 @@ export function toNotificationContentPayload(
     "toNotificationContentPayload",
     liveSurfaceNotificationContentPayload,
     {
-      schemaVersion: "5",
+      schemaVersion: SCHEMA_VERSION,
       aps: {
         alert: {
           title: note.title,
@@ -291,7 +292,7 @@ export function toNotificationContentPayload(
           : {}),
       },
       liveSurface: {
-        schemaVersion: "5",
+        schemaVersion: SCHEMA_VERSION,
         kind: "surface_snapshot",
         snapshotId: snapshot.id,
         surfaceId: snapshot.surfaceId,

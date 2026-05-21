@@ -42,14 +42,20 @@ function makeWorkspace() {
     join(dir, "scripts", "lib", "diagnostics.mjs"),
   );
   // schema-url.mjs reads packages/surface-contracts/package.json; provide a
-  // minimal stub so the import does not throw. We only need
-  // CANONICAL_SCHEMA_VERSION, which is a constant, but readSurfaceContractsPackageJson
-  // is called at import time only if a consumer touches it. Stub anyway to
-  // be safe.
-  mkdirSync(join(dir, "packages", "surface-contracts"), { recursive: true });
+  // minimal stub so the import does not throw. schema-url.mjs also re-exports
+  // CANONICAL_SCHEMA_VERSION from packages/surface-contracts/src/version.ts,
+  // so the real version.ts is copied in: the test's canonical then tracks the
+  // true wire-format constant rather than a duplicated literal.
+  mkdirSync(join(dir, "packages", "surface-contracts", "src"), {
+    recursive: true,
+  });
   writeFileSync(
     join(dir, "packages", "surface-contracts", "package.json"),
     JSON.stringify({ name: "@mobile-surfaces/surface-contracts", version: "5.0.0" }),
+  );
+  cpSync(
+    join(REPO_ROOT, "packages", "surface-contracts", "src", "version.ts"),
+    join(dir, "packages", "surface-contracts", "src", "version.ts"),
   );
   return dir;
 }

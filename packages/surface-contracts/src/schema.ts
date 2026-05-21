@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { NOTIFICATION_CATEGORY_IDS } from "./notificationCategories.ts";
+import { SCHEMA_VERSION } from "./version.ts";
 
 // ---------------------------------------------------------------------------
 // Enums (shared across base, slices, and projection-output schemas).
@@ -387,7 +388,7 @@ export type LiveSurfaceNotificationSliceForExtension = z.infer<
 // inside the notification slice; see the slice definitions above.
 // ---------------------------------------------------------------------------
 const liveSurfaceSnapshotBaseShape = {
-  schemaVersion: z.literal("5").describe(
+  schemaVersion: z.literal(SCHEMA_VERSION).describe(
     "Wire-format generation. Required; producers MUST set this explicitly. " +
       "Consumers parse against the version they understand; a payload on a " +
       "different generation fails parse and must be migrated by its producer.",
@@ -539,7 +540,7 @@ export type LiveSurfaceActivityContentState = z.infer<
 export const liveSurfaceWidgetTimelineEntry = z
   .object({
     schemaVersion: z
-      .literal("5")
+      .literal(SCHEMA_VERSION)
       .describe(
         "Wire-format generation. Read by App Group consumers before full decode so a host on a newer schemaVersion than the widget binary expects renders 'needs app update' instead of failing silently (MS041).",
       ),
@@ -564,7 +565,7 @@ export type LiveSurfaceWidgetTimelineEntryOutput = z.infer<
 export const liveSurfaceControlValueProvider = z
   .object({
     schemaVersion: z
-      .literal("5")
+      .literal(SCHEMA_VERSION)
       .describe(
         "Wire-format generation. Read by App Group consumers before full decode so a host on a newer schemaVersion than the widget binary expects renders 'needs app update' instead of failing silently (MS041).",
       ),
@@ -585,7 +586,7 @@ export type LiveSurfaceControlValueProviderOutput = z.infer<
 export const liveSurfaceLockAccessoryEntry = z
   .object({
     schemaVersion: z
-      .literal("5")
+      .literal(SCHEMA_VERSION)
       .describe(
         "Wire-format generation. Read by App Group consumers before full decode so a host on a newer schemaVersion than the widget binary expects renders 'needs app update' instead of failing silently (MS041).",
       ),
@@ -607,7 +608,7 @@ export type LiveSurfaceLockAccessoryEntryOutput = z.infer<
 export const liveSurfaceStandbyEntry = z
   .object({
     schemaVersion: z
-      .literal("5")
+      .literal(SCHEMA_VERSION)
       .describe(
         "Wire-format generation. Read by App Group consumers before full decode so a host on a newer schemaVersion than the widget binary expects renders 'needs app update' instead of failing silently (MS041).",
       ),
@@ -647,7 +648,7 @@ export type LiveSurfaceStandbyEntryOutput = z.infer<
 export const liveSurfaceNotificationContentEntry = z
   .object({
     schemaVersion: z
-      .literal("5")
+      .literal(SCHEMA_VERSION)
       .describe(
         "Wire-format generation. Mirrors the envelope-level schemaVersion so the notification-content extension can gate on `userInfo.liveSurface.schemaVersion` directly without having to read a sibling key (MS041). The Codable mirror in the extension reads this field first; a mismatch against EXPECTED_SCHEMA_VERSION renders a 'needs app update' placeholder instead of a half-decoded sidecar.",
       ),
@@ -666,7 +667,7 @@ export type LiveSurfaceNotificationContentEntryOutput = z.infer<
 export const liveSurfaceNotificationContentPayload = z
   .object({
     schemaVersion: z
-      .literal("5")
+      .literal(SCHEMA_VERSION)
       .describe(
         "Wire-format generation. Read by the notification-content extension before sidecar decode so a payload emitted by a newer host than the extension binary expects renders default system chrome instead of a half-decoded custom view (MS041).",
       ),
