@@ -1,5 +1,12 @@
 # mobile-surfaces-example-backend
 
+## 0.1.4
+
+### Patch Changes
+
+- Updated dependencies [a00db4d]
+  - @mobile-surfaces/push@7.3.0
+
 ## 0.1.3
 
 ### Patch Changes
