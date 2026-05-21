@@ -43,7 +43,7 @@ The notification content extension ships in this same slice at v6: `apps/mobile/
 
 ### Phase 4: Modern APNs
 
-- `Activity<MobileSurfacesActivityAttributes>.pushToStartTokenUpdates` (iOS 17.2+) exposed via the `onPushToStartToken` event on `@mobile-surfaces/live-activity`. `getPushToStartToken()` exists for adapter-contract symmetry but always resolves `null` (Apple does not expose a synchronous query).
+- `Activity<MobileSurfacesActivityAttributes>.pushToStartTokenUpdates` (iOS 17.2+) exposed via the `onPushToStartToken` event on `@mobile-surfaces/live-activity`. `getPushToStartToken()` exists for adapter-contract symmetry; Apple exposes no synchronous query, so it returns only the most recent token the `onPushToStartToken` event stream has already cached (`null` until the first emission).
 - Optional `channelId` argument on `start()` routes ActivityKit through `pushType: .channel(...)` for iOS 18+ broadcast push. iOS < 18 throws `ACTIVITY_UNSUPPORTED_FEATURE` rather than silently degrading.
 - `scripts/send-apns.mjs` extended with `--push-to-start-token`, `--channel-id`, `--channel-action={create,list,delete}`, `--storage-policy`. Channel-management requests hit `api-manage-broadcast.{sandbox.,}push.apple.com:2195/2196` with the sandbox/prod split per Apple docs.
 - APNs reason translator extended with `MissingChannelId`, `BadChannelId`, `ChannelNotRegistered`, `CannotCreateChannelConfig`, `InvalidPushType`, `FeatureNotEnabled`, `MissingPushType`, verified verbatim against current Apple docs.

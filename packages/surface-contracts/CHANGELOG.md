@@ -88,7 +88,7 @@
 
 - v5 schema: additive notification fields, projection-output sidecar discriminator rename, notification category registry as single source of truth.
 
-  The snapshot wire shape is unchanged from v4 at the base level. `schemaVersion` bumps to `"5"`; `migrateV4ToV5` is a pure identity bump on the snapshot. The notification slice gains four optional fields (`routingId`, `threadId`, `interruptionLevel`, `relevanceScore`) that map to the corresponding iOS `aps` keys (`aps.thread-id`, `aps.interruption-level`, `aps.relevance-score`, and the new routingId for in-extension dispatch).
+  The snapshot wire shape is unchanged from v4 at the base level. `schemaVersion` bumps to `"5"`; `migrateV4ToV5` is a pure identity bump on the snapshot. The notification slice gains four optional fields (`subtitle`, `interruptionLevel`, `relevanceScore`, `targetContentId`) that map to the corresponding iOS `aps` keys (`aps.alert.subtitle`, `aps.interruption-level`, `aps.relevance-score`, and `aps.target-content-id` for routing a tap to a specific scene the host app advertises).
 
   Breaking on the projection-output side: the notification content payload's inner sidecar discriminator on `liveSurfaceNotificationContentPayload` renames from `kind: "surface_notification"` to `kind: "surface_snapshot"`. The new literal aligns with the live-activity alert payload's sidecar (`liveActivityAlertPayload.liveSurface.kind`) so on-device routing code can switch on one literal regardless of which Mobile Surfaces wrapper produced the userInfo. Consumers projecting through `toNotificationContentPayload` get the new shape for free; producers that hand-rolled APNs envelopes against the old literal must update.
 

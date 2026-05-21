@@ -25,7 +25,7 @@ ActivityKit and APNs use three distinct token kinds. They are not interchangeabl
 ### Where each token comes from in the harness
 
 - **Device APNs token**: registered by the Expo runtime once notifications are granted. The harness shows it in the bottom row labeled "Device APNs token".
-- **Push-to-start token**: the live-activity adapter (`apps/mobile/src/liveActivity/index.ts`) subscribes to `onPushToStartToken` at mount time and logs every value through. The contract for this event is documented in [the adapter contract](/docs/concepts#adapter-contract). Apple does not expose a synchronous query, so `getPushToStartToken()` always resolves `null`; production code subscribes to the event stream.
+- **Push-to-start token**: the live-activity adapter (`apps/mobile/src/liveActivity/index.ts`) subscribes to `onPushToStartToken` at mount time and logs every value through. The contract for this event is documented in [the adapter contract](/docs/concepts#adapter-contract). Apple does not expose a synchronous query, so `getPushToStartToken()` returns only the most recent token the event stream has already cached (`null` until the first emission); production code subscribes to the event stream.
 - **Per-activity push token**: emitted on `onPushToken` for each active `Activity` instance. The harness "All active activities" panel renders the token as it streams in.
 
 ### How a backend stores them
@@ -378,6 +378,20 @@ The table mirrors `packages/push/src/errors.ts`, `packages/push/src/reasons.ts`,
 | `InvalidPushType` | `InvalidPushTypeError` | `apns-push-type` is wrong; channel sends accept only `liveactivity`. The SDK always sets this. If you reach it from a custom payload, drop the override. |
 | `FeatureNotEnabled` | `FeatureNotEnabledError` | Broadcast capability not enabled for this bundle id. Enable broadcast for the auth key in the Apple Developer portal (Certificates, Identifiers & Profiles > Keys). The capability is per-key, not per-app. |
 | `MissingPushType` | `MissingPushTypeError` | `apns-push-type` header missing. The SDK sets this automatically; if you see it from a custom payload, restore the default. |
+| `BadCollapseId` | `BadCollapseIdError` | `apns-collapse-id` exceeds the 64-byte limit. Shorten the `collapseId` value. |
+| `BadMessageId` | `BadMessageIdError` | `apns-id` header is malformed. Omit it and let APNs assign one, or pass a valid UUID string. |
+| `BadTopic` | `BadTopicError` | `apns-topic` is malformed. Set `bundleId` to the bare bundle identifier; the SDK derives the topic from it. |
+| `DeviceTokenNotForTopic` | `DeviceTokenNotForTopicError` | The device token does not match the topic. Confirm the token was minted by a build whose bundle id matches `bundleId`. |
+| `DuplicateHeaders` | `DuplicateHeadersError` | A request header was sent more than once. This indicates a transport-layer bug; file an issue with the `apns-id`. |
+| `IdleTimeout` | `IdleTimeoutError` | The connection was idle too long and APNs closed it. Retry; the SDK re-dials a fresh HTTP/2 session. Sustained occurrences point at a network path that drops idle connections. |
+| `MissingDeviceToken` | `MissingDeviceTokenError` | The request carried no device token. Pass a non-empty token; an empty string reaches APNs as a missing token. |
+| `PayloadEmpty` | `PayloadEmptyError` | The request body was empty. Confirm the snapshot projects to a non-empty payload before the send. |
+| `BadCertificate` | `BadCertificateError` | The TLS certificate offered was invalid. Mobile Surfaces authenticates with a JWT, not a certificate; a proxy or TLS-intercepting layer is rewriting the connection. |
+| `BadCertificateEnvironment` | `BadCertificateEnvironmentError` | Client certificate for the wrong environment. Same root cause as `BadCertificate`: remove the intercepting proxy or point it at the correct host. |
+| `MissingProviderToken` | `MissingProviderTokenError` | No provider JWT was supplied. This indicates a JWT-signing failure; confirm `keyId`, `teamId`, and `keyPath` are set so the SDK can mint a bearer token. |
+| `BadPath` | `BadPathError` | The request URL path was malformed. This indicates an SDK bug; file an issue with the `apns-id`. |
+| `MethodNotAllowed` | `MethodNotAllowedError` | The request used an HTTP method other than POST. This indicates an SDK bug; APNs requires POST and the SDK always uses it. |
+| `TooManyProviderTokenUpdates` | `TooManyProviderTokenUpdatesError` | 429: the provider JWT is being re-minted too often. Reuse one `PushClient` across sends instead of constructing a fresh client per send. |
 | `TooManyRequests` | `TooManyRequestsError` | 429: Apple is rate-limiting your bundle id, or the Live Activity priority budget is exhausted. Back off. Priority 10 has aggressive budgets; drop to 5 unless the update must be visible immediately. The SDK retries with `Retry-After` automatically when the header is present, and parses `retryAfterSeconds` onto the error. |
 | `InternalServerError` | `InternalServerError` | APNs internal error (5xx, no reason string). Retried by the default policy; surface it if it persists. |
 | `ServiceUnavailable` | `ServiceUnavailableError` | APNs temporarily unavailable (503). Retried by the default policy. |

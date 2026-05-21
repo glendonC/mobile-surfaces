@@ -32,11 +32,20 @@ const { values } = parseArgs({
 const TOOL = "check-deprecation-prose";
 const REPO_ROOT = path.resolve(".");
 
-// Match "will be removed in [@scope/pkg@]X.0[.0]". Captures the optional
-// package qualifier and the major number. Case-insensitive for the
-// "will be removed in" head.
+// Match a removal promise: "<removal verb> in [version] [@scope/pkg@][v]X.0[.0]".
+// Captures the optional package qualifier and the major number. The verb set
+// is deliberately broad so a promise written as "removed in 9.0", "scheduled
+// for removal in 9.0.0", or "will be gone in 9.0" is caught, not only the one
+// canonical "will be removed in X.0" phrasing. Case-insensitive.
+//
+// The breadth can also match past-tense history ("removed in 3.0 of an
+// upstream library"). That is rare in the scanned surface (package src, the
+// doc pages, and the README -- CHANGELOGs are excluded), and a deliberate
+// historical line opts out with a `// CHARTER: keep` marker. The trade is
+// intentional: missing a real removal promise is worse than an allowlistable
+// false positive.
 const PROSE_RE =
-  /will be removed in\s+(?:(@[\w-]+\/[\w-]+)@)?(\d+)\.0(?:\.0)?/gi;
+  /\b(?:will be removed|to be removed|will be gone|scheduled for removal|slated for removal|removed|removal)\s+in\s+(?:version\s+)?(?:(@[\w-]+\/[\w-]+)@)?v?(\d+)\.0(?:\.0)?/gi;
 
 // Allowlist markers. The TS/JS one is a `// CHARTER: keep` single-line comment
 // on the line immediately preceding the prose. The markdown one is an HTML

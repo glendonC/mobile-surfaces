@@ -6,14 +6,23 @@
 // hand-rolled subscriptions reliably re-introduce the failure modes
 // the package exists to prevent.
 //
-// The check is grep-shaped. A file that calls addListener with one
-// of the three token-related events is a violation unless it also
-// imports from @mobile-surfaces/tokens (or @mobile-surfaces/tokens/react
-// — the sub-path import counts).
+// The check is grep-shaped. Any file under apps/*/src/ that calls
+// addListener with one of the three token-related events is a
+// violation: correct code routes the subscription through
+// @mobile-surfaces/tokens, whose own addListener call lives inside the
+// package (out of scope here), so app code that imports the token
+// store still has zero direct token addListener calls. An earlier
+// version exempted any file that imported @mobile-surfaces/tokens for
+// any reason; that let a file import the store AND hand-roll a direct
+// subscription, the exact MS039 violation the rule exists to catch.
+//
+// Source is run through stripNonCode with keepStrings: true so a
+// commented-out subscription cannot trip the gate, while the event-name
+// string argument the pattern matches is preserved.
 //
 // Implementations of the adapter itself (packages/live-activity/src/)
-// and the token store (packages/tokens/src/) are scanned by other
-// gates and explicitly out of scope here.
+// and the token store (packages/tokens/src/) are not under apps/ and
+// are out of scope here.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -22,6 +31,7 @@ import {
   buildReport,
   emitDiagnosticReport,
 } from "./lib/diagnostics.mjs";
+import { stripNonCode } from "./lib/strip-noncode.mjs";
 
 const { values } = parseArgs({
   options: { json: { type: "boolean", default: false } },
@@ -48,8 +58,6 @@ const EXEMPT_FILES = new Set();
 const EVENT_PATTERN = new RegExp(
   `\\baddListener\\s*\\(\\s*[\"'](${TOKEN_EVENTS.join("|")})[\"']`,
 );
-
-const TOKENS_IMPORT_PATTERN = /from\s+["']@mobile-surfaces\/tokens(?:\/[^"']*)?["']/;
 
 if (!fs.existsSync(APPS_ROOT)) {
   emitDiagnosticReport(
@@ -93,19 +101,23 @@ function walk(dir) {
 function scanFile(file) {
   scanned += 1;
   if (EXEMPT_FILES.has(path.resolve(file))) return;
-  const src = fs.readFileSync(file, "utf8");
-  if (!EVENT_PATTERN.test(src)) return;
-  // The file subscribes to a token event. It must import from
-  // @mobile-surfaces/tokens (vanilla or /react). If it does, the
-  // assumption is the subscription is routed through the store.
-  if (TOKENS_IMPORT_PATTERN.test(src)) return;
-  // Record one violation per matching addListener call so the
-  // diagnostic detail lists the line numbers.
+  const raw = fs.readFileSync(file, "utf8");
+  // eventSrc keeps string contents (the "onPushToken" event-name argument the
+  // pattern matches) but blanks comments, so a commented-out subscription
+  // cannot register. codeSrc additionally blanks string contents; the two
+  // share byte offsets. A match is a real violation only when the
+  // `addListener` token is still live code in codeSrc -- a match whose
+  // `addListener` was blanked there sat entirely inside a string literal
+  // (e.g. a doc example) and is not an actual call.
+  const eventSrc = stripNonCode(raw, { keepStrings: true });
+  const codeSrc = stripNonCode(raw);
+  if (!EVENT_PATTERN.test(eventSrc)) return;
   EVENT_PATTERN.lastIndex = 0;
   const matcher = new RegExp(EVENT_PATTERN.source, "g");
   let m;
-  while ((m = matcher.exec(src)) !== null) {
-    const line = src.slice(0, m.index).split("\n").length;
+  while ((m = matcher.exec(eventSrc)) !== null) {
+    if (!codeSrc.startsWith("addListener", m.index)) continue; // inside a string
+    const line = eventSrc.slice(0, m.index).split("\n").length;
     violations.push({ file, line, event: m[1] });
   }
 }
@@ -116,8 +128,8 @@ const checks = [
     status: violations.length === 0 ? "ok" : "fail",
     summary:
       violations.length === 0
-        ? `Token discipline intact (${scanned} file(s) scanned; no direct addListener("onPushToken"|"onPushToStartToken"|"onActivityStateChange") outside @mobile-surfaces/tokens consumers).`
-        : `${violations.length} call site${violations.length === 1 ? "" : "s"} subscribe to ActivityKit token events without importing @mobile-surfaces/tokens.`,
+        ? `Token discipline intact (${scanned} file(s) scanned; no direct addListener("onPushToken"|"onPushToStartToken"|"onActivityStateChange") calls in app code).`
+        : `${violations.length} call site${violations.length === 1 ? "" : "s"} in app code subscribe to ActivityKit token events via a direct adapter.addListener call.`,
     trapId: "MS039",
     ...(violations.length > 0
       ? {

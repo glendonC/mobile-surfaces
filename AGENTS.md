@@ -15,7 +15,7 @@ Claude Code does not auto-discover AGENTS.md and instead reads [`CLAUDE.md`](./C
 
 ## Index
 
-40 live rules: 32 error, 2 warning, 6 info. 4 retired ids reserved (see footnote).
+40 live rules: 32 error, 2 warning, 6 info. 23 are enforced at PR time by `pnpm surface:check`; the rest surface as runtime errors or advisory notes. 4 retired ids reserved (see footnote).
 
 | ID | Severity | Detection | Title |
 | --- | --- | --- | --- |
@@ -475,7 +475,7 @@ Live Activity priority 10 is for immediate user-visible updates and is heavily b
 
 **severity:** info  •  **detection:** advisory (no programmatic check)  •  **tags:** tokens, live-activity  •  **ios min:** 17.2
 
-Advisory: no enforceable static or runtime gate exists for this rule; treat it as a discipline note. iOS only delivers push-to-start tokens through Activity<...>.pushToStartTokenUpdates as an async sequence; getPushToStartToken() always resolves null.
+Advisory: no enforceable static or runtime gate exists for this rule; treat it as a discipline note. iOS only delivers push-to-start tokens through Activity<...>.pushToStartTokenUpdates as an async sequence; getPushToStartToken() is only a probe of the latest token the event stream has already cached (it resolves null until the first emission), not an acquisition path.
 
 **Symptom.** Backend never receives a push-to-start token, or only receives one after a manual app re-launch. Remote Live Activity start never fires for users who have not opened the app since install.
 

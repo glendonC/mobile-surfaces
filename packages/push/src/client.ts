@@ -47,7 +47,8 @@ import {
   sleep,
 } from "./retry.ts";
 import type { RetryPolicy } from "./retry.ts";
-import { RETRYABLE_TRANSPORT_CODES, TERMINAL_REASONS } from "./reasons.ts";
+import { TERMINAL_REASONS } from "./reasons.ts";
+import { RETRYABLE_TRANSPORT_CODES } from "./transport.ts";
 import {
   extractChannelList,
   normalizeChannelEntry,

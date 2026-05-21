@@ -73,6 +73,30 @@ final class ObserverRegistryTests: XCTestCase {
         XCTAssertNil(postToken)
     }
 
+    func testClearObserversCancelsHandlesButKeepsPushToStartToken() async {
+        // OnStopObserving (a listener detach, e.g. a component unmount) calls
+        // clearObservers(), which cancels every drain Task but must preserve
+        // the cached push-to-start token: a detach is not evidence the token
+        // went stale, and a remount re-attaches the drain. Dropping the token
+        // here would make a post-remount getPushToStartToken() poll return a
+        // misleading nil. clearAll() (deinit only) is the path that drops it.
+        let registry = ObserverRegistry()
+        let activityTask = Task<Void, Never> {}
+        let pushToStartTask = Task<Void, Never> {}
+        await registry.replace(id: "ACT-1", tasks: [activityTask])
+        await registry.replacePushToStart(pushToStartTask)
+        await registry.setPushToStartToken("hex-token")
+
+        await registry.clearObservers()
+        let postCount = await registry.handleCount()
+        XCTAssertEqual(postCount, 0)
+        let postHasPushToStart = await registry.hasPushToStartHandle()
+        XCTAssertFalse(postHasPushToStart)
+        // The token survives the observer teardown.
+        let postToken = await registry.pushToStartToken()
+        XCTAssertEqual(postToken, "hex-token")
+    }
+
     func testPushToStartTokenIsNilBeforeFirstEmission() async {
         // Cold-start contract for MS016: until the AsyncSequence drain emits
         // its first token, `pushToStartToken()` returns nil. A non-nil default

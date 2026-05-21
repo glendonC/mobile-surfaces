@@ -88,6 +88,35 @@ test("MS042: prose promising removal in a past major fails", () => {
   }
 });
 
+test("MS042: alternate removal phrasings are all caught", () => {
+  // Each line promises removal in major 4 while the package is at major 5,
+  // so every phrasing must be flagged. A reader who writes the promise in
+  // any of these natural forms cannot slip it past the gate.
+  const phrasings = [
+    "// The codec is removed in 4.0.\n",
+    "// The codec is scheduled for removal in 4.0.0.\n",
+    "// The codec will be gone in 4.0.\n",
+    "// The codec is to be removed in version 4.0.0.\n",
+    "// The codec is slated for removal in v4.0.\n",
+  ];
+  const dir = withWorkspace("@mobile-surfaces/example", "5.0.0", {
+    "phrasings.ts": phrasings.join(""),
+  });
+  try {
+    const result = runScript(dir);
+    assert.equal(result.status, 1, "every phrasing must fail the gate");
+    const report = JSON.parse(result.stdout);
+    const issues = report.checks[0].detail.issues;
+    assert.equal(
+      issues.length,
+      phrasings.length,
+      `expected one issue per phrasing, got ${issues.length}`,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("MS042: prose promising removal in a future major passes", () => {
   const dir = withWorkspace("@mobile-surfaces/example", "5.0.0", {
     "schema-v1.ts":

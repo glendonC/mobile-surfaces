@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 // MS041: every projection-output Zod schema in
 // packages/surface-contracts/src/schema.ts must declare `schemaVersion`
-// with the value `z.literal("<canonical>")`. The canonical literal is read
-// from `liveSurfaceSnapshotBaseShape` (the snapshot schema's own
-// schemaVersion literal).
+// with the value `z.literal(SCHEMA_VERSION)`. SCHEMA_VERSION is the single
+// wire-format constant in packages/surface-contracts/src/version.ts; every
+// schema referencing it cannot disagree on the literal by construction, so
+// this check verifies the reference is present rather than comparing digit
+// strings across schemas.
 //
 // The on-device Codable mirror decodes `{ schemaVersion: String }` by key
 // name, so property ordering in the Zod source has no wire effect. An
@@ -25,6 +27,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { buildReport, emitDiagnosticReport } from "./lib/diagnostics.mjs";
+import { SCHEMA_VERSION } from "../packages/surface-contracts/src/version.ts";
 
 const { values } = parseArgs({
   options: { json: { type: "boolean", default: false } },
@@ -47,47 +50,18 @@ const PROJECTION_SUFFIXES = [/Entry$/, /ValueProvider$/, /ContentPayload$/];
 
 const source = fs.readFileSync(SCHEMA_PATH, "utf8");
 
-// Extract the canonical schemaVersion literal from
-// `liveSurfaceSnapshotBaseShape`. The literal is the single source of truth
-// every projection-output schema must mirror.
-function extractCanonicalSchemaVersion() {
-  const baseStart = source.indexOf("liveSurfaceSnapshotBaseShape");
-  if (baseStart < 0) return null;
-  // Find the next schemaVersion: z.literal("<n>") within the base shape.
-  // Use a localized search to avoid grabbing literals from later schemas.
-  const window = source.slice(baseStart, baseStart + 4000);
-  const m = /schemaVersion\s*:\s*z\s*\.\s*literal\(\s*["'](\d+)["']\s*\)/.exec(
-    window,
-  );
-  return m ? m[1] : null;
-}
-
-const canonical = extractCanonicalSchemaVersion();
-if (!canonical) {
-  emitDiagnosticReport(
-    buildReport(TOOL, [
-      {
-        id: "canonical-schema-version",
-        status: "fail",
-        trapId: "MS041",
-        summary:
-          "Could not locate the canonical schemaVersion literal in liveSurfaceSnapshotBaseShape.",
-        detail: {
-          message:
-            "scripts/check-projection-envelope-version.mjs expects a `schemaVersion: z.literal(\"<n>\")` field inside `liveSurfaceSnapshotBaseShape` in packages/surface-contracts/src/schema.ts. Update the script if the canonical literal has moved.",
-        },
-      },
-    ]),
-    { json: values.json },
-  );
-}
+// The canonical wire-format generation is the SCHEMA_VERSION constant in
+// packages/surface-contracts/src/version.ts. Projection-output schemas must
+// reference that constant, not a hand-typed digit, so there is no per-schema
+// literal to extract or compare.
+const canonical = SCHEMA_VERSION;
 
 // Iterate every top-level `export const liveSurface<...> = z.object({ ... }).strict()`
 // declaration. For each whose name matches a projection-output suffix
-// (and is not allowlisted), assert:
-//   1. The first property in the z.object literal is `schemaVersion`.
-//   2. That property's value is `z.literal("<canonical>")` (with optional
-//      .describe(...) chained off).
+// (and is not allowlisted), assert it declares a `schemaVersion` property
+// whose value is `z.literal(SCHEMA_VERSION)` (with optional .describe(...)
+// chained off). Property ordering is not checked: the on-device Codable
+// mirror decodes by key name.
 //
 // We avoid a full TS AST dependency: the schema file is hand-maintained and
 // the projection schemas follow a deterministic shape, so a careful regex
@@ -180,19 +154,14 @@ while ((m = EXPORT_RE.exec(source)) !== null) {
   //   schemaVersion: z
   //     .literal("5")
   //     .describe(...)
-  const literalRe = /z\s*\.\s*literal\(\s*["'](\d+)["']\s*\)/;
-  const lm = literalRe.exec(block);
-  if (!lm) {
+  // Allow whitespace between `z` and `.literal(...)` because the source
+  // formats wide chained calls across multiple lines. The argument must be
+  // the SCHEMA_VERSION constant, not a hand-typed digit literal.
+  const literalRe = /z\s*\.\s*literal\(\s*SCHEMA_VERSION\s*\)/;
+  if (!literalRe.test(block)) {
     issues.push({
       path: `packages/surface-contracts/src/schema.ts:${name}.schemaVersion`,
-      message: `value is not z.literal("<n>"). Use z.literal("${canonical}") to match the canonical wire-format generation.`,
-    });
-    continue;
-  }
-  if (lm[1] !== canonical) {
-    issues.push({
-      path: `packages/surface-contracts/src/schema.ts:${name}.schemaVersion`,
-      message: `z.literal("${lm[1]}") disagrees with the canonical "${canonical}". All projection-output schemas must mirror liveSurfaceSnapshotBaseShape's schemaVersion literal.`,
+      message: `value is not z.literal(SCHEMA_VERSION). Every projection-output schema must declare schemaVersion as z.literal(SCHEMA_VERSION) (imported from ./version.ts) so it cannot drift from the canonical wire-format generation ("${canonical}").`,
     });
   }
 }
@@ -205,12 +174,12 @@ emitDiagnosticReport(
       trapId: "MS041",
       summary:
         issues.length === 0
-          ? `All ${inspected} projection-output schema(s) declare schemaVersion as z.literal("${canonical}").`
+          ? `All ${inspected} projection-output schema(s) declare schemaVersion as z.literal(SCHEMA_VERSION).`
           : `${issues.length} projection-output schema(s) violate the MS041 envelope-version invariant.`,
       ...(issues.length > 0
         ? {
             detail: {
-              message: `Canonical schemaVersion literal is "${canonical}" (from liveSurfaceSnapshotBaseShape). Every projection-output schema must declare \`schemaVersion: z.literal("${canonical}")\`.`,
+              message: `The canonical wire-format generation is SCHEMA_VERSION ("${canonical}") in packages/surface-contracts/src/version.ts. Every projection-output schema must declare \`schemaVersion: z.literal(SCHEMA_VERSION)\`.`,
               issues,
             },
           }

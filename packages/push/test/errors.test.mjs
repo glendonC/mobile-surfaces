@@ -39,34 +39,42 @@ const { ERROR_CLASS_TO_TRAP_ID } = await import("@mobile-surfaces/traps");
 
 const { reasonToError } = await import("../dist/errors.js");
 
-const REASON_TABLE = [
-  ["BadDeviceToken", BadDeviceTokenError],
-  ["InvalidProviderToken", InvalidProviderTokenError],
-  ["ExpiredProviderToken", ExpiredProviderTokenError],
-  ["TopicDisallowed", TopicDisallowedError],
-  ["Unregistered", UnregisteredError],
-  ["PayloadTooLarge", PayloadTooLargeError],
-  ["BadPriority", BadPriorityError],
-  ["BadExpirationDate", BadExpirationDateError],
-  ["BadDate", BadDateError],
-  ["MissingTopic", MissingTopicError],
-  ["MissingChannelId", MissingChannelIdError],
-  ["BadChannelId", BadChannelIdError],
-  ["ChannelNotRegistered", ChannelNotRegisteredError],
-  ["CannotCreateChannelConfig", CannotCreateChannelConfigError],
-  ["InvalidPushType", InvalidPushTypeError],
-  ["FeatureNotEnabled", FeatureNotEnabledError],
-  ["MissingPushType", MissingPushTypeError],
-  ["TooManyRequests", TooManyRequestsError],
-  ["Forbidden", ForbiddenError],
-];
+const { readFileSync } = await import("node:fs");
+const { fileURLToPath } = await import("node:url");
 
-test("reasonToError maps each documented reason to its typed subclass", () => {
-  for (const [reason, Klass] of REASON_TABLE) {
+// data/apns-reasons.json is the source of truth for the reason set: the same
+// file generate-apns-reasons.mjs renders into reasons.ts and
+// check-apns-reason-coverage.mjs gates errors.ts against. Driving the test
+// from it means a reason added to the catalog cannot be silently left without
+// behavioral coverage here.
+const apnsReasons = JSON.parse(
+  readFileSync(
+    fileURLToPath(new URL("../../../data/apns-reasons.json", import.meta.url)),
+    "utf8",
+  ),
+).reasons;
+
+// Class name for a reason: `<Reason>Error`, unless the reason already ends in
+// "Error" (InternalServerError), where the class name is the reason verbatim.
+function classNameFor(reason) {
+  return reason.endsWith("Error") ? reason : `${reason}Error`;
+}
+
+test("reasonToError maps every reason in data/apns-reasons.json to a typed subclass", () => {
+  assert.ok(apnsReasons.length > 0, "expected a non-empty reason catalog");
+  for (const { reason } of apnsReasons) {
     const err = reasonToError(reason, { status: 400, apnsId: "abc" });
-    assert.equal(err.constructor.name, Klass.name, `reason=${reason}`);
-    assert.ok(err instanceof Klass, `reason=${reason} instanceof ${Klass.name}`);
     assert.ok(err instanceof ApnsError, `reason=${reason} instanceof ApnsError`);
+    assert.notEqual(
+      err.constructor.name,
+      "UnknownApnsError",
+      `reason=${reason} falls through to UnknownApnsError instead of a typed subclass`,
+    );
+    assert.equal(
+      err.constructor.name,
+      classNameFor(reason),
+      `reason=${reason} should map to ${classNameFor(reason)}`,
+    );
     assert.equal(err.reason, reason);
     assert.equal(err.status, 400);
     assert.equal(err.apnsId, "abc");

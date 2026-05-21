@@ -9,7 +9,10 @@
 //
 // The check is grep-shaped on purpose: a TS-AST check would couple
 // to the compiler version, and the markers are stable identifiers
-// the architecture deliberately exposes.
+// the architecture deliberately exposes. The source is first run
+// through stripNonCode so a marker that survives only inside a
+// comment or string literal (e.g. a parse call commented out during
+// a refactor) cannot satisfy the gate.
 
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, relative } from "node:path";
@@ -18,6 +21,7 @@ import {
   buildReport,
   emitDiagnosticReport,
 } from "./lib/diagnostics.mjs";
+import { stripNonCode } from "./lib/strip-noncode.mjs";
 
 const { values } = parseArgs({
   options: { json: { type: "boolean", default: false } },
@@ -41,32 +45,45 @@ if (!existsSync(ADAPTER_PATH)) {
   );
 }
 
-const src = readFileSync(ADAPTER_PATH, "utf8");
+const rawSrc = readFileSync(ADAPTER_PATH, "utf8");
+// codeSrc has comments and string/regex contents blanked, so a marker that
+// survives only inside a comment or a string cannot satisfy the gate.
+// importSrc keeps string contents (the imports-schema marker has to match a
+// module specifier, which is itself a string literal) but still blanks
+// comments, so a commented-out import cannot satisfy it either.
+const codeSrc = stripNonCode(rawSrc);
+const importSrc = stripNonCode(rawSrc, { keepStrings: true });
 
 const REQUIRED_MARKERS = [
   {
     id: "imports-schema",
     pattern: /import[^;]*\bliveSurfaceActivityContentState\b[^;]*from\s+["']@mobile-surfaces\/surface-contracts["']/s,
     description: `imports liveSurfaceActivityContentState from ${SCHEMA_IMPORT}`,
+    source: "import",
   },
   {
     id: "parses-input",
     pattern: /liveSurfaceActivityContentState\s*\.\s*safeParse\s*\(/,
     description: "calls liveSurfaceActivityContentState.safeParse(...) on adapter inputs",
+    source: "code",
   },
   {
     id: "throws-typed-error",
     pattern: /throw\s+new\s+InvalidContentStateError\s*\(/,
     description: "throws new InvalidContentStateError(...) on parse failure",
+    source: "code",
   },
   {
     id: "declares-error-class",
     pattern: /export\s+class\s+InvalidContentStateError\s+extends\s+MobileSurfacesError\b/,
     description: "exports class InvalidContentStateError extends MobileSurfacesError",
+    source: "code",
   },
 ];
 
-const missing = REQUIRED_MARKERS.filter((m) => !m.pattern.test(src));
+const missing = REQUIRED_MARKERS.filter(
+  (m) => !m.pattern.test(m.source === "import" ? importSrc : codeSrc),
+);
 
 const checks = [
   {
