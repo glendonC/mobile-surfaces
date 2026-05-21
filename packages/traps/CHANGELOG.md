@@ -1,5 +1,38 @@
 # @mobile-surfaces/traps
 
+## 9.0.0
+
+### Major Changes
+
+- fe9eb25: Demote five doc-only rules from error or warning severity to info advisory: MS016, MS020, MS021, MS023, MS034. The rules remain in the catalog with their prose intact, but their severity now matches what the repo actually enforces. None of these rules has a static gate, an SDK pre-flight, or a runtime throw, so the prior error/warning severity over-promised enforcement. The MS-ids stay reserved per the monotonic-forever policy in CONTRIBUTING.md.
+
+  Retire MS027 as a deprecated alias of MS012. Both rules fired the same iOS 17.2 deployment-target check on the same file; the catalog now counts the constraint once. MS027's id remains reserved and the catalog summary points at MS012.
+
+  Public-surface impact for @mobile-surfaces/traps consumers: filtering by severity returns four fewer error rules and two fewer warning rules; reading MS027 receives a deprecated entry pointing at MS012. Headline catalog counts become 39 live rules (31 error, 2 warning, 6 info) with 4 retired ids reserved.
+
+### Minor Changes
+
+- c696c1b: Promote MS026 (widget target managed by @bacons/apple-targets) from a warning-only emission to a fail. The check now fires as a build failure when `apps/mobile/targets/widget/` exists but `expo-target.config.js` does not. A project that ships no widget target at all skips the check entirely.
+
+  The catalog entry for MS026 gains an `enforcement.script` field pointing at `scripts/probe-app-config.mjs`, so `@mobile-surfaces/traps` consumers reading the binding will now see the script reference where the field was previously absent. The MS026 severity was already `error`; this change brings the gate behavior into line with what the catalog has always claimed.
+
+  Background: the spike for refactor-v9 Phase 1e confirmed that every Mobile Surfaces scaffold variant lands `expo-target.config.js` regardless of the home-widget or control-widget toggles, so the file's absence in a starter-shaped project signals a deliberate removal of the config (not the toggling-off of widget surfaces). For foreign Expo projects audited via the catalog, the new conditional means projects without a widget target dir are not penalized.
+
+- 15310fe: Add MS044 to the trap catalog: catalog headline counts stay in sync with the trap catalog. The rule is enforced by `scripts/generate-catalog-stats.mjs`, which generates `data/catalog-stats.json` (the canonical breakdown of total, live, deprecated, severity, detection, and PR-gated counts) and rewrites the `catalog-stats:` marker blocks in `README.md` and the doc site. A rule added, retired, or reclassified now fails the build unless every published count is regenerated alongside it.
+
+  Public-surface impact for `@mobile-surfaces/traps` consumers: `TRAP_BINDINGS` and the `TrapId` union gain `MS044`; filtering by severity returns one more `error` rule and filtering by detection one more `static` rule. Headline catalog counts become 40 live rules (32 error, 2 warning, 6 info) with 4 retired ids reserved.
+
+- 11495c3: Repoint MS036 (surface snapshot Swift structs match their Zod projection-output schemas) at `scripts/generate-surface-swift.mjs`.
+
+  The four surface snapshot structs and the notification-content entry struct are now generated from their Zod schemas instead of hand-maintained. The structs are correct by construction; the single remaining failure mode — a committed Swift file drifting from the generator output — is caught by `generate-surface-swift.mjs --check`. The standalone semantic parity checker `check-surface-snapshots.mjs` is retired.
+
+  Public-surface impact for `@mobile-surfaces/traps` consumers: `findTrap("MS036").enforcement.script` changes from `scripts/check-surface-snapshots.mjs` to `scripts/generate-surface-swift.mjs`, and the rule's `summary` and `fix` prose now describe the generated structs and the codegen workflow.
+
+### Patch Changes
+
+- e4cb220: Correct the MS041 prose. The rule's `summary` and `fix` described schemaVersion as needing to be the _first_ property of every projection-output schema and called that ordering "load-bearing." The enforcement check stopped requiring property order in v9 (Swift Codable decodes by key name, so source order never reached the wire); the literal-type check is the load-bearing part. The catalog text now matches the shipped gate.
+- 66d5702: Reword the MS042 `symptom` prose. It used `schema-v4.ts` and `safeParseAnyVersion` as a concrete example; both were removed when the v4 codec was dropped at 9.0, so the example named a file that no longer exists. The symptom now describes the failure mode in version-neutral terms. No change to the rule, its severity, or its enforcement.
+
 ## 8.0.0
 
 ### Major Changes

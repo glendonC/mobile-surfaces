@@ -1,5 +1,48 @@
 # @mobile-surfaces/surface-contracts
 
+## 9.0.0
+
+### Major Changes
+
+- e70c9e7: Remove the frozen v4 schema codec. Per the versioning charter a deprecated codec lives at least one full major past the release that announced its deprecation; v4 was announced as deprecated at 6.0, carried through its final-warning major at 8.0, and is removed at 9.0.
+
+  The following public exports are removed: `liveSurfaceSnapshotV4`, `LiveSurfaceSnapshotV4`, `migrateV4ToV5`, `safeParseAnyVersion`, and the `SafeParseAnyVersionResult`, `SafeParseAnyVersionSuccess`, and `SafeParseAnyVersionFailure` result types. The `schema-v4.ts` source file is deleted. The package validates strictly against the current wire generation; there is no multi-version codec.
+
+  Callers that used `safeParseAnyVersion` to tolerate older payloads move to `safeParseSnapshot` (non-throwing) or `assertSnapshot` (throwing), both of which validate strictly against `schemaVersion: "5"`. A payload on an older generation now fails parse and must be migrated by its producer first.
+
+  Consumers holding v4 payloads at rest must pin `@mobile-surfaces/surface-contracts@8.x` once, run `safeParseAnyVersion` to promote v4 to v5, store the result, then upgrade to 9.x.
+
+  `schemaVersion` stays at `"5"`. This release is codec retirement, not a wire-format bump. `@mobile-surfaces/validators` and `@mobile-surfaces/traps` cut majors in lockstep per the linked release group with no API change of their own.
+
+### Minor Changes
+
+- 6f3f486: Drop the `z.lazy()` wrapper from `liveSurfaceSnapshot`. The wrapper deferred discriminated-union construction to first parse, with a stated rationale around serverless cold-start cost that was never benchmarked. Removing the wrapper recovers downstream type narrowing that the lazy proxy interfered with. The variants stay eagerly built (they are independently exported), and `.parse` / `.safeParse` behavior is unchanged.
+
+  Two contract-protecting scripts were also tightened, with no public-surface impact:
+
+  - `scripts/check-projection-envelope-version.mjs` (MS041) no longer requires `schemaVersion` to be the first property of a projection-output schema. The Swift-side Codable mirror decodes by key name, so property order in the Zod source never reached the wire. The literal-type check that schemaVersion equals the canonical version is retained as the load-bearing part.
+  - `scripts/check-activity-attributes.mjs` `isStageEnum` helper now reads `schema.options` (public Zod API) instead of `schema._zod.def.entries` (private internals). A regression test pins the public surface so a future Zod bump that removes the property fails the test rather than silently misbehaving in CI.
+
+- 27dde30: Projection helpers (`toLiveActivityContentState`, `toWidgetTimelineEntry`, `toControlValueProvider`, `toLockAccessoryEntry`, `toStandbyEntry`, `toNotificationContentPayload`) now run their constructed output through the paired Zod schema and throw a new `ProjectionInvariantError` if the parse fails. The check fires at the call site rather than letting an invalid payload reach ActivityKit, WidgetKit, or APNs where the failure mode is silent placeholder rendering.
+
+  The input gate is unchanged: a snapshot that already parsed against `liveSurfaceSnapshot` is guaranteed to satisfy every projection schema, so the new throw path only fires on a bug in the helper itself (a renamed field, a missing literal, a forgotten optional flag). Callers receive the same return types as before. Catch the new error only if you have a deliberate fallback story for an unreachable bug; the right fix is almost always to update the helper.
+
+  New public export: `ProjectionInvariantError` (subclass of `Error`, fields `helper: string` and `issues: ZodIssue[]`).
+
+  This replaces the path the v9 plan originally sketched as `Result<T, ProjectionError>`. Returning a Result would force every caller across the workspace to discriminate `ok`/`err` for a path that never fires when the input is validated, which is permanent API friction with no payoff. A throw at the call site achieves the same "close the loop" intent without the breaking change.
+
+  The package's unit suite (formerly at `scripts/surface-contracts.test.mjs`) moves to `packages/surface-contracts/test/surface-contracts.test.mjs` so the published package's tests live next to the code they exercise. A new `pnpm --filter @mobile-surfaces/surface-contracts test` script runs every `test/*.test.mjs` file. No behavior change to the test contract.
+
+### Patch Changes
+
+- Updated dependencies [fe9eb25]
+- Updated dependencies [c696c1b]
+- Updated dependencies [e4cb220]
+- Updated dependencies [66d5702]
+- Updated dependencies [15310fe]
+- Updated dependencies [11495c3]
+  - @mobile-surfaces/traps@9.0.0
+
 ## 8.0.0
 
 ### Major Changes

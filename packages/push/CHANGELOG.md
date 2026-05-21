@@ -1,5 +1,39 @@
 # @mobile-surfaces/push
 
+## 7.2.0
+
+### Minor Changes
+
+- a1306e2: `createPushClient` now rejects a `bundleId` that carries a trailing `.push-type.liveactivity` suffix, throwing a new `MalformedApnsConfigError` at construction.
+
+  The SDK appends `.push-type.liveactivity` to the `apns-topic` itself when it builds a Live Activity push. A `bundleId` that already carries the suffix produced a doubled topic and a 400 `TopicDisallowed` on every send. The guard turns that per-send runtime failure into one fast rejection at `createPushClient` time. This is the construction-time complement to MS018, which previously surfaced only as an APNs response error.
+
+  New public export: `MalformedApnsConfigError` (subclass of `MobileSurfacesError`, field `field: string`, bound to catalog rule MS018). It is the carrier for present-but-malformed config, distinct from `MissingApnsConfigError` which covers absent config.
+
+  The match is a case-insensitive suffix test, so a bundle id that merely contains the substring mid-string (`com.example.push-type.liveactivity.app`) is unaffected.
+
+- a1306e2: Send methods (`update`, `start`, `end`, `sendNotification`, `sendAlert`) gain an optional `tokenEnvironment` send option. When supplied, the SDK rejects with a new `TokenEnvironmentMismatchError` before the round-trip if the token's environment disagrees with the environment the `PushClient` was constructed for.
+
+  APNs push tokens are environment-specific: a token minted by a dev-client or `expo run:ios` build authenticates only against the development APNs host, a TestFlight or App Store token only against production. Sending one to the wrong host fails with a 400 `BadDeviceToken` that gives no hint the cause is an environment mismatch. This is catalog rule MS014, which until now surfaced only as that opaque 400. Threading the stored token environment through `tokenEnvironment` converts it into a precise pre-send error naming both environments.
+
+  The option is opt-in and backward compatible: a caller passing a bare token string with no `tokenEnvironment` behaves exactly as before (the 400 remains the fallback). The `@mobile-surfaces/tokens` record carries `environment`, so a backend storing tokens through that package has the value to pass; the example backend now threads it on both its Live Activity and notification sends as the reference usage.
+
+  New public export: `TokenEnvironmentMismatchError` (subclass of `MobileSurfacesError`, fields `tokenEnvironment` and `clientEnvironment`, bound to catalog rule MS014). `broadcast` is unaffected — it targets a channel, not a device token, and ignores the option.
+
+### Patch Changes
+
+- Updated dependencies [6f3f486]
+- Updated dependencies [27dde30]
+- Updated dependencies [e70c9e7]
+- Updated dependencies [fe9eb25]
+- Updated dependencies [c696c1b]
+- Updated dependencies [e4cb220]
+- Updated dependencies [66d5702]
+- Updated dependencies [15310fe]
+- Updated dependencies [11495c3]
+  - @mobile-surfaces/surface-contracts@9.0.0
+  - @mobile-surfaces/traps@9.0.0
+
 ## 7.1.1
 
 ### Patch Changes

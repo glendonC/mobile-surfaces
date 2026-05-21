@@ -1,6 +1,6 @@
 {
   "name": "create-mobile-surfaces",
-  "version": "7.1.1",
+  "version": "7.1.2",
   "description": "Scaffold a Mobile Surfaces project, or add the contract and widget target to an existing Expo app.",
   "publishConfig": {
     "access": "public"

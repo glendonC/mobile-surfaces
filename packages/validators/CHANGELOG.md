@@ -1,5 +1,26 @@
 # @mobile-surfaces/validators
 
+## 9.0.0
+
+### Minor Changes
+
+- 7e9a8d4: `validateBundleId` and `validateProjectSlug` gain two classes of check:
+
+  - **Reserved vendor prefixes.** `validateBundleId` now rejects bundle identifiers under `com.apple.`, `com.google.`, `com.amazon.`, `com.microsoft.`, `com.facebook.`, `com.meta.`, and `org.reactjs.`. Apple rejects an upload whose id sits under `com.apple.*`; the others signal a copied-template id (the React Native default template ships `org.reactjs.native.example.*`) that the developer forgot to rename. The match is a case-insensitive prefix check, so `com.apples.foo` and `com.mycompany.google` are unaffected. The existing `com.example.*` placeholder rejection is unchanged.
+  - **Length caps.** `validateBundleId` rejects identifiers longer than 155 characters (Apple's CFBundleIdentifier limit). `validateProjectSlug` rejects slugs longer than 214 characters (npm's package-name limit, the binding constraint since the slug becomes the scaffolded project's `package.json` name).
+
+  NFKC normalization was considered and deliberately not added: every validator's regex is already ASCII-strict, so fullwidth digits, Cyrillic homoglyphs, and other confusable characters are already rejected. Normalization would add no behavior the regexes do not already enforce.
+
+### Patch Changes
+
+- Updated dependencies [fe9eb25]
+- Updated dependencies [c696c1b]
+- Updated dependencies [e4cb220]
+- Updated dependencies [66d5702]
+- Updated dependencies [15310fe]
+- Updated dependencies [11495c3]
+  - @mobile-surfaces/traps@9.0.0
+
 ## 8.0.0
 
 ### Major Changes
