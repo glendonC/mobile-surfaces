@@ -208,6 +208,62 @@ export const APNS_REASON_GUIDE = {
     cause: "The APNs service is temporarily unavailable.",
     fix: "Transient on Apple's side. Wait a moment and re-run the same command.",
   },
+  BadCollapseId: {
+    cause: "The apns-collapse-id header exceeds the 64-byte limit.",
+    fix: "Pass a shorter --collapse-id value. Collapse ids must be 64 bytes or fewer.",
+  },
+  BadMessageId: {
+    cause: "The apns-id header value is malformed.",
+    fix: "Omit --apns-id and let APNs assign one, or pass a valid UUID string.",
+  },
+  BadTopic: {
+    cause: "The apns-topic header is malformed.",
+    fix: "Set APNS_BUNDLE_ID to the bare bundle identifier. The script derives apns-topic from it; do not pass a pre-formatted topic.",
+  },
+  DeviceTokenNotForTopic: {
+    cause: "The device token does not match the specified topic.",
+    fix: "Confirm the token was minted by a build whose bundle identifier matches APNS_BUNDLE_ID. A token issued to a different app cannot receive this topic.",
+  },
+  DuplicateHeaders: {
+    cause: "One or more request headers were sent more than once.",
+    fix: "Re-run with a clean invocation. If it persists, a flag is being passed twice — check for a duplicated --header argument.",
+  },
+  IdleTimeout: {
+    cause: "The connection was idle too long and APNs closed it.",
+    fix: "Transient. Re-run the same command; the script opens a fresh connection per invocation.",
+  },
+  MissingDeviceToken: {
+    cause: "The request carried no device token.",
+    fix: "Pass a non-empty --device-token (or --activity-token / --push-to-start-token for Live Activity sends).",
+  },
+  PayloadEmpty: {
+    cause: "The request body was empty.",
+    fix: "Confirm --attributes-file (or the event payload) resolves to non-empty JSON before the send.",
+  },
+  BadCertificate: {
+    cause: "The certificate offered during the TLS handshake was invalid.",
+    fix: "The script authenticates with a provider JWT, not a client certificate. Seeing this means a proxy is rewriting the connection. Confirm the host reaches api.push.apple.com (or the sandbox host) directly.",
+  },
+  BadCertificateEnvironment: {
+    cause: "The client certificate offered was for the wrong APNs environment.",
+    fix: "Same root cause as BadCertificate: the script uses token authentication, so this can only come from an intercepting proxy. Remove the proxy or point it at the correct host.",
+  },
+  MissingProviderToken: {
+    cause: "No provider token (JWT) was supplied and no client certificate was used.",
+    fix: "Confirm APNS_KEY_ID, APNS_TEAM_ID, and the .p8 at APNS_KEY_PATH are all set so the script can mint a bearer token.",
+  },
+  BadPath: {
+    cause: "The request URL path was malformed.",
+    fix: "This indicates a script bug — the request path is built internally. File an issue with the apns-id from the response.",
+  },
+  MethodNotAllowed: {
+    cause: "The request used an HTTP method other than POST.",
+    fix: "This indicates a script bug — APNs requires POST and the script always uses it. File an issue with the apns-id from the response.",
+  },
+  TooManyProviderTokenUpdates: {
+    cause: "The provider token (JWT) is being refreshed too frequently.",
+    fix: "Space out repeated runs. The script mints a fresh JWT per invocation; a tight loop of invocations trips this limit.",
+  },
 };
 
 // Format a millisecond skew as "Nm Ss" for human-readable output.

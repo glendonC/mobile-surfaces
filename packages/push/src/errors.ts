@@ -184,6 +184,117 @@ export class MissingPushTypeError extends ApnsError {
   }
 }
 
+// Request-shape and certificate reasons. These complete the typed taxonomy so
+// every reason in data/apns-reasons.json maps to a class rather than falling
+// through to UnknownApnsError; scripts/check-apns-reason-coverage.mjs gates
+// the set. Several (BadPath, MethodNotAllowed, DuplicateHeaders, PayloadEmpty)
+// can only originate from an SDK bug with a correct caller, but the catalog is
+// only honest if it is exhaustive.
+
+export class BadCollapseIdError extends ApnsError {
+  constructor(init: Omit<ApnsErrorInit, "reason">) {
+    super({ ...init, reason: "BadCollapseId" });
+    this.name = "BadCollapseIdError";
+  }
+}
+
+export class BadMessageIdError extends ApnsError {
+  constructor(init: Omit<ApnsErrorInit, "reason">) {
+    super({ ...init, reason: "BadMessageId" });
+    this.name = "BadMessageIdError";
+  }
+}
+
+export class BadTopicError extends ApnsError {
+  constructor(init: Omit<ApnsErrorInit, "reason">) {
+    super({ ...init, reason: "BadTopic" });
+    this.name = "BadTopicError";
+  }
+}
+
+export class DeviceTokenNotForTopicError extends ApnsError {
+  constructor(init: Omit<ApnsErrorInit, "reason">) {
+    super({ ...init, reason: "DeviceTokenNotForTopic" });
+    this.name = "DeviceTokenNotForTopicError";
+  }
+}
+
+export class DuplicateHeadersError extends ApnsError {
+  constructor(init: Omit<ApnsErrorInit, "reason">) {
+    super({ ...init, reason: "DuplicateHeaders" });
+    this.name = "DuplicateHeadersError";
+  }
+}
+
+export class IdleTimeoutError extends ApnsError {
+  constructor(init: Omit<ApnsErrorInit, "reason">) {
+    super({ ...init, reason: "IdleTimeout" });
+    this.name = "IdleTimeoutError";
+  }
+}
+
+export class MissingDeviceTokenError extends ApnsError {
+  constructor(init: Omit<ApnsErrorInit, "reason">) {
+    super({ ...init, reason: "MissingDeviceToken" });
+    this.name = "MissingDeviceTokenError";
+  }
+}
+
+export class PayloadEmptyError extends ApnsError {
+  constructor(init: Omit<ApnsErrorInit, "reason">) {
+    super({ ...init, reason: "PayloadEmpty" });
+    this.name = "PayloadEmptyError";
+  }
+}
+
+export class BadCertificateError extends ApnsError {
+  constructor(init: Omit<ApnsErrorInit, "reason">) {
+    super({ ...init, reason: "BadCertificate" });
+    this.name = "BadCertificateError";
+  }
+}
+
+export class BadCertificateEnvironmentError extends ApnsError {
+  constructor(init: Omit<ApnsErrorInit, "reason">) {
+    super({ ...init, reason: "BadCertificateEnvironment" });
+    this.name = "BadCertificateEnvironmentError";
+  }
+}
+
+export class MissingProviderTokenError extends ApnsError {
+  constructor(init: Omit<ApnsErrorInit, "reason">) {
+    super({ ...init, reason: "MissingProviderToken" });
+    this.name = "MissingProviderTokenError";
+  }
+}
+
+export class BadPathError extends ApnsError {
+  constructor(init: Omit<ApnsErrorInit, "reason">) {
+    super({ ...init, reason: "BadPath" });
+    this.name = "BadPathError";
+  }
+}
+
+export class MethodNotAllowedError extends ApnsError {
+  constructor(init: Omit<ApnsErrorInit, "reason">) {
+    super({ ...init, reason: "MethodNotAllowed" });
+    this.name = "MethodNotAllowedError";
+  }
+}
+
+/**
+ * 429 TooManyProviderTokenUpdates. The provider JWT is being re-minted too
+ * often, typically because a fresh `PushClient` is constructed per send
+ * instead of being reused. Distinct from `TooManyRequestsError` (device-token
+ * send rate) because the operator response is different: reuse the client.
+ */
+export class TooManyProviderTokenUpdatesError extends ApnsError {
+  constructor(init: Omit<ApnsErrorInit, "reason">) {
+    super({ ...init, reason: "TooManyProviderTokenUpdates" });
+    this.name = "TooManyProviderTokenUpdatesError";
+  }
+}
+
 /**
  * 403 Forbidden. The auth key was revoked. Terminal — no retry helps; the
  * operator must mint a fresh key in the Apple Developer portal and update
@@ -433,6 +544,34 @@ export function reasonToError(reason: string, init: ReasonToErrorInit): ApnsErro
       return new FeatureNotEnabledError(init);
     case "MissingPushType":
       return new MissingPushTypeError(init);
+    case "BadCollapseId":
+      return new BadCollapseIdError(init);
+    case "BadMessageId":
+      return new BadMessageIdError(init);
+    case "BadTopic":
+      return new BadTopicError(init);
+    case "DeviceTokenNotForTopic":
+      return new DeviceTokenNotForTopicError(init);
+    case "DuplicateHeaders":
+      return new DuplicateHeadersError(init);
+    case "IdleTimeout":
+      return new IdleTimeoutError(init);
+    case "MissingDeviceToken":
+      return new MissingDeviceTokenError(init);
+    case "PayloadEmpty":
+      return new PayloadEmptyError(init);
+    case "BadCertificate":
+      return new BadCertificateError(init);
+    case "BadCertificateEnvironment":
+      return new BadCertificateEnvironmentError(init);
+    case "MissingProviderToken":
+      return new MissingProviderTokenError(init);
+    case "BadPath":
+      return new BadPathError(init);
+    case "MethodNotAllowed":
+      return new MethodNotAllowedError(init);
+    case "TooManyProviderTokenUpdates":
+      return new TooManyProviderTokenUpdatesError(init);
     case "Forbidden":
       return new ForbiddenError(init);
     case "InternalServerError":

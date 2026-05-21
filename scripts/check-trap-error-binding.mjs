@@ -76,6 +76,25 @@ const INTENTIONALLY_UNBOUND = new Set([
   // transient / 5xx fallthroughs — observability bucket, not silent trap:
   "InternalServerError",
   "ServiceUnavailableError",
+  // request-shape and certificate reasons added for taxonomy completeness
+  // (data/apns-reasons.json, gated by check-apns-reason-coverage). None map
+  // to a catalog trap: the request-shape errors signal an SDK or caller bug
+  // that fails the send outright rather than a silent ActivityKit trap, and
+  // the certificate reasons cannot occur without an intercepting proxy.
+  "BadCollapseIdError",
+  "BadMessageIdError",
+  "BadTopicError",
+  "DeviceTokenNotForTopicError",
+  "DuplicateHeadersError",
+  "IdleTimeoutError",
+  "MissingDeviceTokenError",
+  "PayloadEmptyError",
+  "BadCertificateError",
+  "BadCertificateEnvironmentError",
+  "MissingProviderTokenError",
+  "BadPathError",
+  "MethodNotAllowedError",
+  "TooManyProviderTokenUpdatesError",
   // live-activity JS-side wrapper class; the catalog binding flows through
   // the native suffix on a per-case basis (set on LiveActivityNativeError
   // instances), not through the class name.

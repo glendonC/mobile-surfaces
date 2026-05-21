@@ -173,6 +173,18 @@ export const checkRegistry = Object.freeze([
     mode: "check-mode",
     trapIds: ["MS037"],
   },
+  // packages/push/src/reasons.ts is generated from data/apns-reasons.json,
+  // the source of truth for the APNs reason set. Pairs with the stage-3
+  // check-apns-reason-coverage gate that holds errors.ts to the same source.
+  {
+    id: "generate-apns-reasons",
+    label: "push reasons.ts in sync with data/apns-reasons.json",
+    stage: 2,
+    script: "scripts/generate-apns-reasons.mjs",
+    args: ["--check"],
+    diagnose: true,
+    mode: "check-mode",
+  },
   // Ajv ↔ Zod parity belongs in stage 3 because it depends on build-schema
   // having already passed its --check (stage 2): the gate reads the
   // committed schema.json and asserts every fixture validates identically
@@ -245,6 +257,18 @@ export const checkRegistry = Object.freeze([
     label: "validator re-exports in sync with source",
     stage: 3,
     script: "scripts/check-validator-sync.mjs",
+    diagnose: true,
+    mode: "single-mode",
+  },
+  // Holds packages/push/src/errors.ts to data/apns-reasons.json: every
+  // documented reason must have a typed ApnsError subclass and a reasonToError
+  // case. Backs the README's "typed error for every documented APNs reason".
+  {
+    id: "check-apns-reason-coverage",
+    label: "push errors.ts covers every reason in data/apns-reasons.json",
+    stage: 3,
+    dependsOn: ["generate-apns-reasons"],
+    script: "scripts/check-apns-reason-coverage.mjs",
     diagnose: true,
     mode: "single-mode",
   },
