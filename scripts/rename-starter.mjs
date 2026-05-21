@@ -362,6 +362,7 @@ function main() {
     `apps/mobile/targets/widget/${currentIdentity.swiftPrefix}WidgetBundle.swift`,
     `apps/mobile/targets/_shared/${currentIdentity.swiftPrefix}ControlIntents.swift`,
     `apps/mobile/targets/_shared/${currentIdentity.swiftPrefix}NotificationCategories.swift`,
+    `apps/mobile/targets/_shared/${currentIdentity.swiftPrefix}SchemaVersion.swift`,
     `apps/mobile/targets/_shared/${currentIdentity.swiftPrefix}SharedState.swift`,
     `apps/mobile/targets/_shared/${currentIdentity.swiftPrefix}SurfaceSnapshots.swift`,
     `apps/mobile/targets/notification-content/${currentIdentity.swiftPrefix}NotificationViewController.swift`,
