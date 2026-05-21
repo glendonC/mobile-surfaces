@@ -15,7 +15,7 @@ Claude Code does not auto-discover AGENTS.md and instead reads [`CLAUDE.md`](./C
 
 ## Index
 
-40 live rules: 32 error, 2 warning, 6 info. 4 retired ids reserved (see footnote).
+40 live rules: 32 error, 2 warning, 6 info. 23 are enforced at PR time by `pnpm surface:check`; the rest surface as runtime errors or advisory notes. 4 retired ids reserved (see footnote).
 
 | ID | Severity | Detection | Title |
 | --- | --- | --- | --- |

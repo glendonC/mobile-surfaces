@@ -22,6 +22,7 @@ import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { trapCatalog } from "../packages/surface-contracts/src/traps.ts";
 import { computeCatalogStats } from "./lib/catalog-stats.mjs";
+import { checkRegistry } from "./lib/check-registry.mjs";
 
 const { values } = parseArgs({
   options: { check: { type: "boolean", default: false } },
@@ -111,7 +112,11 @@ const sortedEntries = [...liveEntries].sort((a, b) => {
 // The headline counts come from the shared computeCatalogStats so the
 // AGENTS.md / CLAUDE.md headline and the README + doc-site marker blocks
 // (scripts/generate-catalog-stats.mjs) cannot count rules two different ways.
-const stats = computeCatalogStats(catalog);
+// The registry is passed so the headline can state how many rules are gated
+// at PR time (stats.prGated); without it the headline would imply all rules
+// are enforced, when only static and config rules bound to a surface:check
+// stage are.
+const stats = computeCatalogStats(catalog, checkRegistry);
 
 const tagBuckets = new Map();
 for (const entry of liveEntries) {
@@ -186,7 +191,7 @@ const GENERATED_BANNER = [
   "-->",
 ];
 
-const INDEX_SUMMARY = `${stats.live} live rules: ${stats.bySeverity.error} error, ${stats.bySeverity.warning} warning, ${stats.bySeverity.info} info. ${stats.deprecated} retired ids reserved (see footnote).`;
+const INDEX_SUMMARY = `${stats.live} live rules: ${stats.bySeverity.error} error, ${stats.bySeverity.warning} warning, ${stats.bySeverity.info} info. ${stats.prGated} are enforced at PR time by \`pnpm surface:check\`; the rest surface as runtime errors or advisory notes. ${stats.deprecated} retired ids reserved (see footnote).`;
 
 const HOW_TO_USE_LINES = [
   "- **When generating or editing code in a Mobile Surfaces project**, treat every `error` rule as a hard invariant. Do not bypass it; if your change requires breaking the invariant, surface that to the user and stop.",

@@ -83,7 +83,7 @@ const DOC_TARGETS = [
     id: "readme-markers",
     label: "README.md",
     path: resolve("README.md"),
-    keys: ["live"],
+    keys: ["live", "prGated"],
   },
   {
     id: "vs-expo-markers",
