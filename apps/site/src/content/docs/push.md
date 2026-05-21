@@ -25,7 +25,7 @@ ActivityKit and APNs use three distinct token kinds. They are not interchangeabl
 ### Where each token comes from in the harness
 
 - **Device APNs token**: registered by the Expo runtime once notifications are granted. The harness shows it in the bottom row labeled "Device APNs token".
-- **Push-to-start token**: the live-activity adapter (`apps/mobile/src/liveActivity/index.ts`) subscribes to `onPushToStartToken` at mount time and logs every value through. The contract for this event is documented in [the adapter contract](/docs/concepts#adapter-contract). Apple does not expose a synchronous query, so `getPushToStartToken()` always resolves `null`; production code subscribes to the event stream.
+- **Push-to-start token**: the live-activity adapter (`apps/mobile/src/liveActivity/index.ts`) subscribes to `onPushToStartToken` at mount time and logs every value through. The contract for this event is documented in [the adapter contract](/docs/concepts#adapter-contract). Apple does not expose a synchronous query, so `getPushToStartToken()` returns only the most recent token the event stream has already cached (`null` until the first emission); production code subscribes to the event stream.
 - **Per-activity push token**: emitted on `onPushToken` for each active `Activity` instance. The harness "All active activities" panel renders the token as it streams in.
 
 ### How a backend stores them
