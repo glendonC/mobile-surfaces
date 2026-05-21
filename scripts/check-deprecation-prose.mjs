@@ -37,6 +37,13 @@ const REPO_ROOT = path.resolve(".");
 // is deliberately broad so a promise written as "removed in 9.0", "scheduled
 // for removal in 9.0.0", or "will be gone in 9.0" is caught, not only the one
 // canonical "will be removed in X.0" phrasing. Case-insensitive.
+//
+// The breadth can also match past-tense history ("removed in 3.0 of an
+// upstream library"). That is rare in the scanned surface (package src, the
+// doc pages, and the README -- CHANGELOGs are excluded), and a deliberate
+// historical line opts out with a `// CHARTER: keep` marker. The trade is
+// intentional: missing a real removal promise is worse than an allowlistable
+// false positive.
 const PROSE_RE =
   /\b(?:will be removed|to be removed|will be gone|scheduled for removal|slated for removal|removed|removal)\s+in\s+(?:version\s+)?(?:(@[\w-]+\/[\w-]+)@)?v?(\d+)\.0(?:\.0)?/gi;
 

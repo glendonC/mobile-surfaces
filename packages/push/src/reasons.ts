@@ -172,6 +172,7 @@ export const APNS_REASON_GUIDE: Record<string, ApnsReasonGuideEntry> = {
  */
 export const DEFAULT_RETRYABLE_REASONS: ReadonlySet<string> = new Set([
   "ExpiredProviderToken",
+  "IdleTimeout",
   "InternalServerError",
   "ServiceUnavailable",
   "TooManyRequests",

@@ -101,19 +101,23 @@ function walk(dir) {
 function scanFile(file) {
   scanned += 1;
   if (EXEMPT_FILES.has(path.resolve(file))) return;
-  // keepStrings: true preserves the "onPushToken" event-name argument the
-  // pattern matches while still blanking comments, so a commented-out
-  // subscription cannot register as a violation.
-  const src = stripNonCode(fs.readFileSync(file, "utf8"), { keepStrings: true });
-  if (!EVENT_PATTERN.test(src)) return;
-  // The file makes a direct token-event addListener call in app code,
-  // which MS039 forbids regardless of imports. Record one violation per
-  // matching call so the diagnostic detail lists the line numbers.
+  const raw = fs.readFileSync(file, "utf8");
+  // eventSrc keeps string contents (the "onPushToken" event-name argument the
+  // pattern matches) but blanks comments, so a commented-out subscription
+  // cannot register. codeSrc additionally blanks string contents; the two
+  // share byte offsets. A match is a real violation only when the
+  // `addListener` token is still live code in codeSrc -- a match whose
+  // `addListener` was blanked there sat entirely inside a string literal
+  // (e.g. a doc example) and is not an actual call.
+  const eventSrc = stripNonCode(raw, { keepStrings: true });
+  const codeSrc = stripNonCode(raw);
+  if (!EVENT_PATTERN.test(eventSrc)) return;
   EVENT_PATTERN.lastIndex = 0;
   const matcher = new RegExp(EVENT_PATTERN.source, "g");
   let m;
-  while ((m = matcher.exec(src)) !== null) {
-    const line = src.slice(0, m.index).split("\n").length;
+  while ((m = matcher.exec(eventSrc)) !== null) {
+    if (!codeSrc.startsWith("addListener", m.index)) continue; // inside a string
+    const line = eventSrc.slice(0, m.index).split("\n").length;
     violations.push({ file, line, event: m[1] });
   }
 }

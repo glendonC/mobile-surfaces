@@ -257,7 +257,7 @@ export const checkRegistry = Object.freeze([
   },
   {
     id: "check-projection-envelope-version",
-    label: "projection-output schemas declare schemaVersion first",
+    label: "projection-output schemas declare schemaVersion as z.literal(SCHEMA_VERSION)",
     stage: 3,
     script: "scripts/check-projection-envelope-version.mjs",
     diagnose: true,

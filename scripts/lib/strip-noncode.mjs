@@ -43,6 +43,31 @@ const REGEX_PRECEDERS = new Set([
   "?", "+", "-", "*", "/", "%", "^", "~", ">",
 ]);
 
+// Keywords that, when they are the last token before a `/`, mean the `/`
+// begins a regex literal even though the preceding character is alphanumeric.
+// Without this, `return /re/` is mis-read as `return` divided by `re`, and a
+// quote or backtick inside that regex body desyncs the scanner. The set is
+// the statement/operator keywords genuinely followed by an expression; `in`,
+// `of`, and `new` are excluded because they more often appear as property
+// names (`obj.in`) than before a regex. The residual gap (a generator method
+// `gen.return /re/` with no call parens) is too rare to matter for the
+// identifier-presence checks that consume this.
+const REGEX_KEYWORDS = new Set([
+  "return", "typeof", "instanceof", "throw", "case",
+  "delete", "void", "do", "else", "yield", "await",
+]);
+
+// The identifier-or-keyword token ending the already-emitted output, used to
+// resolve a `/` after an alphanumeric character: trailing whitespace is
+// skipped, then word characters are collected backward.
+function trailingWord(emitted) {
+  let i = emitted.length - 1;
+  while (i >= 0 && /\s/.test(emitted[i])) i -= 1;
+  const end = i;
+  while (i >= 0 && /[A-Za-z0-9_$]/.test(emitted[i])) i -= 1;
+  return emitted.slice(i + 1, end + 1);
+}
+
 // Newlines and tabs survive blanking so line/column math is preserved and
 // indentation-sensitive scans are unaffected; every other blanked char
 // becomes a space.
@@ -166,7 +191,16 @@ export function stripNonCode(source, options = {}) {
 
     // Regex literal vs division.
     if (ch === "/") {
-      const isRegex = lastSignificant === "" || REGEX_PRECEDERS.has(lastSignificant);
+      let isRegex;
+      if (lastSignificant === "" || REGEX_PRECEDERS.has(lastSignificant)) {
+        isRegex = true;
+      } else if (/[A-Za-z0-9_$]/.test(lastSignificant)) {
+        // A `/` after an identifier is division, unless that identifier is a
+        // keyword an expression (and so a regex) can follow.
+        isRegex = REGEX_KEYWORDS.has(trailingWord(out));
+      } else {
+        isRegex = false;
+      }
       if (isRegex) {
         out += lit(ch);
         i += 1;
