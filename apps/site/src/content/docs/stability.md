@@ -15,11 +15,11 @@ These three axes advance independently. A consumer pinning a package version is 
 
 | Axis | Current | Cadence |
 | --- | --- | --- |
-| Package major (linked group: `surface-contracts` + `validators` + `traps`) | `8.x` | Bumps on a breaking schema change, a trap-binding removal, or a coordinated release event. |
+| Package major (linked group: `surface-contracts` + `validators` + `traps`) | `9.x` | Bumps on a breaking schema change, a trap-binding removal, or a coordinated release event. |
 | Wire `schemaVersion` literal | `"5"` | Bumps only on a breaking wire-format change. The literal can lag the package major by multiple releases. |
 | Deprecation window for retired codecs | one full major past the deprecation announcement | Enforced by the MS042 gate. Typical window is two majors. |
 
-The current state: package major `8.0` ships `schemaVersion: "5"` on the wire. The v3 codec was retired at 8.0 (one major past its 7.0 final-warning year); the v4 codec is retired at 9.0. The source no longer carries a multi-version codec or any frozen `schema-v<N>.ts` file; the package validates strictly against the current wire generation.
+The current state: package major `9.0` ships `schemaVersion: "5"` on the wire. The v3 codec was retired at 8.0 (one major past its 7.0 final-warning year); the v4 codec was retired at 9.0. The source no longer carries a multi-version codec or any frozen `schema-v<N>.ts` file; the package validates strictly against the current wire generation.
 
 ## Linked release group
 

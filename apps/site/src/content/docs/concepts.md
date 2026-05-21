@@ -205,7 +205,7 @@ Projection-output schemas (widget timeline entry, control value provider, lock-a
 - **The union is strict.** `z.discriminatedUnion("kind", [...])` over six branches; every branch carries its own `.strict()` slice, and unknown keys reject. Cross-kind projection fails at parse time and again at the `assertSnapshotKind` runtime narrow.
 - **`kind` must be set explicitly.** v1 had a `.preprocess()` shim that defaulted missing-kind payloads to `"liveActivity"`; v2 removed it and every later version keeps it removed.
 - **Bump `schemaVersion` only on a breaking change.** Renaming a field, removing a field, changing a type, tightening a constraint, or anything that would make a previously valid payload fail to parse. Additive optional fields are non-breaking.
-- **The schema URL pins to the package major.** `scripts/build-schema.mjs` derives the `$id` from the surface-contracts `package.json` version (`https://unpkg.com/@mobile-surfaces/surface-contracts@8.0/schema.json`).
+- **The schema URL pins to the package major.** `scripts/build-schema.mjs` derives the `$id` from the surface-contracts `package.json` version (`https://unpkg.com/@mobile-surfaces/surface-contracts@9.0/schema.json`).
 
 ### Standard Schema interop
 

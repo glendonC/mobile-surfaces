@@ -124,7 +124,7 @@ Backends that aren't on TypeScript can validate against the published JSON Schem
 The canonical URL is pinned to **major.minor** so a future minor that adds a `kind` branch publishes at a new URL without invalidating existing references:
 
 ```text
-https://unpkg.com/@mobile-surfaces/surface-contracts@8.0/schema.json
+https://unpkg.com/@mobile-surfaces/surface-contracts@9.0/schema.json
 ```
 
 Ajv 2020 example:
@@ -134,7 +134,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 
 const ajv = new Ajv2020();
 const schema = await fetch(
-  "https://unpkg.com/@mobile-surfaces/surface-contracts@8.0/schema.json",
+  "https://unpkg.com/@mobile-surfaces/surface-contracts@9.0/schema.json",
 ).then((r) => r.json());
 
 const validate = ajv.compile(schema);

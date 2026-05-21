@@ -6,7 +6,7 @@ group: "Reference"
 ---
 # Schema
 
-`LiveSurfaceSnapshot` is at `schemaVersion: "5"`. The published JSON Schema is at `https://unpkg.com/@mobile-surfaces/surface-contracts@8.0/schema.json` (the URL pins to the surface-contracts package major.minor; see [JSON Schema `$id` Pinning](#json-schema-id-pinning)). The package validates payloads strictly against v5; there is no multi-version codec. The v3 codec was retired at 8.0 and the v4 codec at 9.0 per the [Versioning Charter](/docs/stability).
+`LiveSurfaceSnapshot` is at `schemaVersion: "5"`. The published JSON Schema is at `https://unpkg.com/@mobile-surfaces/surface-contracts@9.0/schema.json` (the URL pins to the surface-contracts package major.minor; see [JSON Schema `$id` Pinning](#json-schema-id-pinning)). The package validates payloads strictly against v5; there is no multi-version codec. The v3 codec was retired at 8.0 and the v4 codec at 9.0 per the [Versioning Charter](/docs/stability).
 
 This page leads with the v5 shape, the validation entry points consumers use today, and the JSON Schema URL convention. Older-version history and the deprecation timeline live in the [Migrating from earlier versions](#migrating-from-earlier-versions) appendix at the bottom.
 
@@ -53,7 +53,7 @@ A payload written under an older `schemaVersion` fails the parser. There is no m
 `scripts/build-schema.mjs` pins `$id` to the current package **major.minor**:
 
 ```text
-https://unpkg.com/@mobile-surfaces/surface-contracts@8.0/schema.json
+https://unpkg.com/@mobile-surfaces/surface-contracts@9.0/schema.json
 ```
 
 Pinning to `8.0` rather than `8` lets a future minor that adds a discriminated-union variant publish at `@8.1/schema.json` without invalidating the URL existing consumers reference. Backends that want to track the latest minor automatically can pin to `@8/schema.json` (unpkg resolves the major), but the canonical `$id` stamped into the schema is the major.minor URL. Older URLs (`@7.0/schema.json`, `@6.0/schema.json`, `@5.0/schema.json`, `@4.0/schema.json`, `@3.0/schema.json`) stay resolvable forever; unpkg never deletes a published artifact.
@@ -116,7 +116,7 @@ This appendix documents the history of the schema and the migration entry points
 | `notification.category` typing | `z.string().optional()` | `z.enum([...NOTIFICATION_CATEGORY_IDS]).optional()`; values come from `packages/surface-contracts/src/notificationCategories.ts`, enforced by MS037 codegen |
 | Notification projection sidecar | `kind: "surface_notification"` | `kind: "surface_snapshot"` (aligned with `liveActivityAlertPayload`'s sidecar) |
 | `liveSurfaceNotificationContentEntry` | inline anonymous object | hoisted, named, MS036-parity-checked |
-| `$id` | `https://unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json` | `https://unpkg.com/@mobile-surfaces/surface-contracts@8.0/schema.json` |
+| `$id` | `https://unpkg.com/@mobile-surfaces/surface-contracts@5.0/schema.json` | `https://unpkg.com/@mobile-surfaces/surface-contracts@9.0/schema.json` |
 
 The breaking change v5 carries lives in the projection-output sidecar, not the snapshot. A v4 snapshot promotes to v5 by bumping the literal; no field renames, no slice restructure. Producers that hand-wrote APNs envelopes against `kind: "surface_notification"` will need to update; everyone projecting through `toNotificationContentPayload` gets the new shape for free.
 
