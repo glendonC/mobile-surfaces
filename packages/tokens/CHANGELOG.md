@@ -1,5 +1,22 @@
 # @mobile-surfaces/tokens
 
+## 7.1.2
+
+### Patch Changes
+
+- Updated dependencies [6f3f486]
+- Updated dependencies [27dde30]
+- Updated dependencies [e70c9e7]
+- Updated dependencies [fe9eb25]
+- Updated dependencies [c696c1b]
+- Updated dependencies [e4cb220]
+- Updated dependencies [66d5702]
+- Updated dependencies [15310fe]
+- Updated dependencies [11495c3]
+  - @mobile-surfaces/surface-contracts@9.0.0
+  - @mobile-surfaces/traps@9.0.0
+  - @mobile-surfaces/live-activity@7.1.2
+
 ## 7.1.1
 
 ### Patch Changes

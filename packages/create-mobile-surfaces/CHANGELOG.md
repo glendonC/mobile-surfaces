@@ -1,5 +1,19 @@
 # create-mobile-surfaces
 
+## 7.1.2
+
+### Patch Changes
+
+- Updated dependencies [fe9eb25]
+- Updated dependencies [c696c1b]
+- Updated dependencies [e4cb220]
+- Updated dependencies [66d5702]
+- Updated dependencies [15310fe]
+- Updated dependencies [11495c3]
+- Updated dependencies [7e9a8d4]
+  - @mobile-surfaces/traps@9.0.0
+  - @mobile-surfaces/validators@9.0.0
+
 ## 7.1.1
 
 ### Patch Changes
