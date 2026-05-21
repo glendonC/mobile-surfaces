@@ -13,7 +13,7 @@ Wire-layer code only: no HTTP, retry, or APNs client framework. Uses `node:http2
 ## Install
 
 ```bash
-pnpm add @mobile-surfaces/push@5 @mobile-surfaces/surface-contracts@5
+pnpm add @mobile-surfaces/push @mobile-surfaces/surface-contracts
 ```
 
 Requires Node 20+ (for stable HTTP/2 + native `crypto.randomUUID`). `@mobile-surfaces/push` versions independently of the contract; the linked group covers `surface-contracts`, `validators`, and `traps` only. The push SDK declares its compatible contract major range explicitly in `peerDependencies`.
