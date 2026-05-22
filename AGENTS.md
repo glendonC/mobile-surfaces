@@ -15,7 +15,7 @@ Claude Code does not auto-discover AGENTS.md and instead reads [`CLAUDE.md`](./C
 
 ## Index
 
-40 live rules: 32 error, 2 warning, 6 info. 23 are enforced at PR time by `pnpm surface:check`; the rest surface as runtime errors or advisory notes. 4 retired ids reserved (see footnote).
+41 live rules: 33 error, 2 warning, 6 info. 24 are enforced at PR time by `pnpm surface:check`; the rest surface as runtime errors or advisory notes. 4 retired ids reserved (see footnote).
 
 | ID | Severity | Detection | Title |
 | --- | --- | --- | --- |
@@ -51,6 +51,7 @@ Claude Code does not auto-discover AGENTS.md and instead reads [`CLAUDE.md`](./C
 | [MS042](#ms042-deprecation-prose-must-not-promise-removal-in-the-current-or-a-past-major) | error | static | Deprecation prose must not promise removal in the current or a past major |
 | [MS043](#ms043-changelog-entry-required-on-package-major) | error | static | CHANGELOG entry required on package major |
 | [MS044](#ms044-catalog-headline-counts-stay-in-sync-with-the-trap-catalog) | error | static | Catalog headline counts stay in sync with the trap catalog |
+| [MS045](#ms045-widget-color-asset-references-must-resolve-to-a-generated-colorset) | error | static | Widget Color asset references must resolve to a generated colorset |
 | [MS010](#ms010-toolchain-preflight-node-24-pnpm-xcode-26) | warning | config | Toolchain preflight (Node 24, pnpm, Xcode 26+) |
 | [MS015](#ms015-push-priority-5-vs-10-budget-rules) | warning | runtime | Push priority 5 vs 10 budget rules |
 | [MS016](#ms016-subscribe-to-onpushtostarttoken-at-mount-not-on-demand) | info | advisory | Subscribe to onPushToStartToken at mount, not on demand |
@@ -65,7 +66,7 @@ Claude Code does not auto-discover AGENTS.md and instead reads [`CLAUDE.md`](./C
 - `app-group`: MS013, MS025
 - `channels`: MS031, MS034
 - `cng`: MS017, MS029
-- `config`: MS012, MS013, MS017, MS018, MS025, MS029, MS034, MS035, MS037, MS041, MS042, MS043, MS044
+- `config`: MS012, MS013, MS017, MS018, MS025, MS029, MS034, MS035, MS037, MS041, MS042, MS043, MS044, MS045
 - `contract`: MS001, MS003, MS004, MS006, MS007, MS008, MS009, MS024, MS036, MS037, MS038, MS039, MS040, MS041, MS042, MS043, MS044
 - `control`: MS013, MS026, MS036
 - `ios-version`: MS012
@@ -73,10 +74,10 @@ Claude Code does not auto-discover AGENTS.md and instead reads [`CLAUDE.md`](./C
 - `live-activity`: MS001, MS002, MS003, MS004, MS011, MS015, MS016, MS019, MS021, MS032, MS038, MS039
 - `notification`: MS037
 - `push`: MS006, MS011, MS014, MS015, MS018, MS024, MS028, MS030, MS031, MS032, MS034, MS035
-- `swift`: MS002, MS003, MS004, MS036, MS040
+- `swift`: MS002, MS003, MS004, MS036, MS040, MS045
 - `tokens`: MS014, MS016, MS019, MS020, MS021, MS023, MS028, MS030, MS039
 - `toolchain`: MS010, MS026
-- `widget`: MS013, MS026, MS036
+- `widget`: MS013, MS026, MS036, MS045
 
 ## Cross-references
 
@@ -449,6 +450,18 @@ Every public count of catalog rules is generated. data/catalog-stats.json holds 
 
 **Fix.** Run `pnpm surface:codegen` (or `node --experimental-strip-types scripts/generate-catalog-stats.mjs`) to regenerate data/catalog-stats.json and rewrite the marker blocks. Never hand-edit a number inside a `catalog-stats:` marker; edit data/traps.json and regenerate.
 
+### MS045: Widget Color asset references must resolve to a generated colorset
+
+**severity:** error  •  **detection:** static (script-checkable)  •  **tags:** widget, config, swift  •  **enforced by:** `scripts/check-widget-color-assets.mjs`
+
+Every Color("literal") reference in the widget target's Swift must name a colorset that @bacons/apple-targets materializes on disk. The generator names each colorset after the literal key in the colors map of apps/mobile/targets/widget/expo-target.config.js, so the on-disk asset names are the config keys themselves ($accent.colorset, $widgetBackground.colorset), not the human-facing palette names.
+
+**Symptom.** The widget renders with default system colors instead of the brand palette, and nothing reports an error. SwiftUI Color("name") for a name with no matching colorset does not crash; it silently falls back to a default color. A Swift file that says Color("AccentColor") while the asset catalog only holds $accent.colorset compiles, ships, and renders the wrong color on the device with no log, no warning, and no build failure.
+
+**Fix.** Reference colorsets by the exact key declared in the expo-target.config.js colors map. Two keys are magic: $accent is bound to ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME and $widgetBackground to ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME. Reference the global accent as Color.accentColor (the literal Color("$accent") is also valid since the colorset is genuinely named $accent); reference the background as the literal Color("$widgetBackground"). scripts/check-widget-color-assets.mjs lists the on-disk *.colorset directories and fails when any Color("literal") names no colorset.
+
+**See:** [https://mobile-surfaces.com/docs/ios-environment](https://mobile-surfaces.com/docs/ios-environment)
+
 ### MS010: Toolchain preflight (Node 24, pnpm, Xcode 26+)
 
 **severity:** warning  •  **detection:** config (declarative file)  •  **tags:** toolchain  •  **enforced by:** `scripts/doctor.mjs`
@@ -560,5 +573,5 @@ Trap ids are monotonic forever; retired rules keep their id with a one-line tomb
 - [Push](https://mobile-surfaces.com/docs/push): wire-layer reference, SDK, smoke script, token taxonomy, error reasons.
 - [Observability](https://mobile-surfaces.com/docs/observability): which catalog-bound errors are worth alerting on, what a stuck Live Activity looks like on the wire, recommended log shape.
 - [Troubleshooting](https://mobile-surfaces.com/docs/troubleshooting): symptom-to-fix recipes for failures not in this catalog.
-- [Trap catalog maintenance](https://mobile-surfaces.com/docs/traps): schema and workflow for editing this catalog.
+- [Trap catalog maintenance](https://mobile-surfaces.com/docs/catalog-maintenance): schema and workflow for editing this catalog.
 

@@ -207,7 +207,7 @@ const RELATED_DOCS_LINES = [
   "- [Push](https://mobile-surfaces.com/docs/push): wire-layer reference, SDK, smoke script, token taxonomy, error reasons.",
   "- [Observability](https://mobile-surfaces.com/docs/observability): which catalog-bound errors are worth alerting on, what a stuck Live Activity looks like on the wire, recommended log shape.",
   "- [Troubleshooting](https://mobile-surfaces.com/docs/troubleshooting): symptom-to-fix recipes for failures not in this catalog.",
-  "- [Trap catalog maintenance](https://mobile-surfaces.com/docs/traps): schema and workflow for editing this catalog.",
+  "- [Trap catalog maintenance](https://mobile-surfaces.com/docs/catalog-maintenance): schema and workflow for editing this catalog.",
 ];
 
 // AGENTS.md — the full reference. Per-rule Symptom + Fix prose lives here;

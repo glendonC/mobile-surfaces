@@ -465,6 +465,16 @@ public enum MSTraps {
       symptom: "A rule is added, retired, or reclassified and a prose number is not updated. README advertises a documented-rule count the catalog no longer matches; vs-expo-live-activity.md claims a PR-gated count that disagrees with the registry. The catalog silently contradicts itself across published surfaces.",
       fix: "Run `pnpm surface:codegen` (or `node --experimental-strip-types scripts/generate-catalog-stats.mjs`) to regenerate data/catalog-stats.json and rewrite the marker blocks. Never hand-edit a number inside a `catalog-stats:` marker; edit data/traps.json and regenerate.",
       docsUrl: "https://github.com/glendonC/mobile-surfaces/blob/main/AGENTS.md#ms044-catalog-headline-counts-stay-in-sync-with-the-trap-catalog"
+    ),
+    "MS045": MSTrapBinding(
+      id: "MS045",
+      title: "Widget Color asset references must resolve to a generated colorset",
+      severity: "error",
+      detection: "static",
+      summary: "Every Color(\"literal\") reference in the widget target's Swift must name a colorset that @bacons/apple-targets materializes on disk. The generator names each colorset after the literal key in the colors map of apps/mobile/targets/widget/expo-target.config.js, so the on-disk asset names are the config keys themselves ($accent.colorset, $widgetBackground.colorset), not the human-facing palette names.",
+      symptom: "The widget renders with default system colors instead of the brand palette, and nothing reports an error. SwiftUI Color(\"name\") for a name with no matching colorset does not crash; it silently falls back to a default color. A Swift file that says Color(\"AccentColor\") while the asset catalog only holds $accent.colorset compiles, ships, and renders the wrong color on the device with no log, no warning, and no build failure.",
+      fix: "Reference colorsets by the exact key declared in the expo-target.config.js colors map. Two keys are magic: $accent is bound to ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME and $widgetBackground to ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME. Reference the global accent as Color.accentColor (the literal Color(\"$accent\") is also valid since the colorset is genuinely named $accent); reference the background as the literal Color(\"$widgetBackground\"). scripts/check-widget-color-assets.mjs lists the on-disk *.colorset directories and fails when any Color(\"literal\") names no colorset.",
+      docsUrl: "https://github.com/glendonC/mobile-surfaces/blob/main/AGENTS.md#ms045-widget-color-asset-references-must-resolve-to-a-generated-colorset"
     )
   ]
 
