@@ -211,8 +211,11 @@ export function toControlValueProvider(
       snapshotId: snapshot.id,
       surfaceId: snapshot.surfaceId,
       controlKind: control.controlKind,
-      value: control.state ?? null,
-      intent: control.intent ?? null,
+      // Omit absent optionals rather than coercing them to null, matching
+      // toLockAccessoryEntry / toNotificationContentPayload. A button or
+      // deepLink control has no toggle state; the key is simply absent.
+      ...(control.state !== undefined ? { value: control.state } : {}),
+      ...(control.intent !== undefined ? { intent: control.intent } : {}),
       label: control.label,
       deepLink: control.deepLink,
     },
@@ -255,7 +258,9 @@ export function toStandbyEntry(
     surfaceId: snapshot.surfaceId,
     state: snapshot.state,
     presentation: snapshot.standby.presentation,
-    tint: snapshot.standby.tint ?? null,
+    ...(snapshot.standby.tint !== undefined
+      ? { tint: snapshot.standby.tint }
+      : {}),
     headline: snapshot.standby.title,
     subhead: snapshot.standby.body,
     progress: snapshot.standby.progress,

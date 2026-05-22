@@ -11,7 +11,13 @@
 //     the source (an orphan case means the source is behind the code);
 //   - the "Error responses" reference table in apps/site/src/content/docs/
 //     push.md lists a row for every reason, so the published docs cannot
-//     fall behind the typed taxonomy.
+//     fall behind the typed taxonomy;
+//   - the APNS_REASON_GUIDE in scripts/send-apns.mjs carries an entry for
+//     every reason and no extra. The script ships its own guide so the CLI
+//     can print a fix without a built @mobile-surfaces/push; its prose is
+//     deliberately CLI-flavored and is NOT gated. Only the key set is, and
+//     now directly against this source rather than transitively through the
+//     package guide (which is what the send-apns reason-parity test did).
 //
 // With these gates green the prose claim is a closed, CI-enforced invariant
 // rather than something a reader has to take on trust.
@@ -28,6 +34,13 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { buildReport, emitDiagnosticReport } from "./lib/diagnostics.mjs";
 import { stripNonCode } from "./lib/strip-noncode.mjs";
+// Imported, not text-parsed: send-apns.mjs is a standalone script with a
+// guarded main(), so importing it has no side effect (the reason-parity test
+// imports it the same way), and importing yields the object keys directly
+// without a fragile regex over a nested object literal. The text-parse
+// approach used for errors.ts below is to avoid coupling to the
+// @mobile-surfaces/traps build state, which send-apns.mjs does not depend on.
+import { APNS_REASON_GUIDE } from "./send-apns.mjs";
 
 const { values } = parseArgs({
   options: { json: { type: "boolean", default: false } },
@@ -130,7 +143,30 @@ if (!fs.existsSync(PUSH_DOC)) {
   }
 }
 
-const issues = [...missing, ...orphans, ...docGaps];
+// scripts/send-apns.mjs APNS_REASON_GUIDE: an entry for every reason, no
+// extra. This gates the CLI guide's key set directly against the source of
+// truth. The guide's cause/fix prose is deliberately CLI-flavored and is not
+// compared; only the keys are.
+const scriptKeys = new Set(Object.keys(APNS_REASON_GUIDE));
+const scriptGaps = [];
+for (const reason of sourceReasons) {
+  if (!scriptKeys.has(reason)) {
+    scriptGaps.push({
+      path: reason,
+      message: `no APNS_REASON_GUIDE entry for "${reason}" in scripts/send-apns.mjs`,
+    });
+  }
+}
+for (const reason of scriptKeys) {
+  if (!sourceSet.has(reason)) {
+    scriptGaps.push({
+      path: reason,
+      message: `scripts/send-apns.mjs APNS_REASON_GUIDE declares "${reason}" but it is absent from data/apns-reasons.json`,
+    });
+  }
+}
+
+const issues = [...missing, ...orphans, ...docGaps, ...scriptGaps];
 const checks = [
   {
     id: "apns-reason-coverage",
@@ -144,9 +180,10 @@ const checks = [
       : {
           detail: {
             message:
-              "Add the missing ApnsError subclass and reasonToError case in packages/push/src/errors.ts, " +
-              "or update data/apns-reasons.json. The README claim of a typed error per documented reason " +
-              "depends on this gate staying green.",
+              "Reconcile data/apns-reasons.json with its consumers: the ApnsError subclass and " +
+              "reasonToError case in packages/push/src/errors.ts, the Error responses table in " +
+              "push.md, and the APNS_REASON_GUIDE in scripts/send-apns.mjs. The README claim of a " +
+              "typed error per documented reason depends on this gate staying green.",
             issues,
           },
         }),

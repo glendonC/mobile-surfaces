@@ -573,8 +573,14 @@ export const liveSurfaceControlValueProvider = z
     snapshotId: z.string(),
     surfaceId: z.string(),
     controlKind: z.enum(["toggle", "button", "deepLink"]),
-    value: z.boolean().nullable(),
-    intent: z.string().nullable(),
+    // `value` and `intent` mirror the optional fields on liveSurfaceControlSlice
+    // (state, intent). They are omitted, not null, when absent: a "button" or
+    // "deepLink" control carries no toggle value, and the absence of the key is
+    // the signal. Modeling them as required-but-nullable would erase the
+    // distinction between "toggle is off" (value: false) and "not a toggle"
+    // (no value), forcing consumers to also branch on controlKind to recover it.
+    value: z.boolean().optional(),
+    intent: z.string().optional(),
     label: z.string().min(1),
     deepLink: z.string(),
   })
@@ -617,7 +623,10 @@ export const liveSurfaceStandbyEntry = z
     surfaceId: z.string(),
     state: liveSurfaceState,
     presentation: liveSurfaceStandbyPresentation,
-    tint: z.enum(["default", "monochrome"]).nullable(),
+    // `tint` mirrors the optional field on liveSurfaceStandbySlice: omitted,
+    // not null, when the producer states no preference. See the value/intent
+    // note on liveSurfaceControlValueProvider for the omit-not-null rationale.
+    tint: z.enum(["default", "monochrome"]).optional(),
     headline: z.string(),
     subhead: z.string(),
     progress: z.number().min(0).max(1),
@@ -657,6 +666,16 @@ export const liveSurfaceNotificationContentEntry = z
     surfaceId: z.string(),
     state: liveSurfaceState,
     deepLink: z.string(),
+    // Deliberately `z.string()`, not the NOTIFICATION_CATEGORY_IDS enum that
+    // constrains the input slice (liveSurfaceNotificationSlice.category). This
+    // is a projection *output*: its schema exists to catch helper bugs, not to
+    // re-validate input. toNotificationContentPayload copies note.category
+    // verbatim, and note.category was already enum-checked at the input gate,
+    // so the value reaching here is always a registry id by construction.
+    // Keeping it `z.string()` also keeps the generated Swift sidecar mirror a
+    // plain String rather than a second generated enum coupled to the registry.
+    // The asymmetry is intentional; see the projection-invariants test that
+    // pins it.
     category: z.string().optional(),
   })
   .strict();
@@ -696,29 +715,15 @@ export type LiveSurfaceNotificationContentPayloadOutput = z.infer<
 >;
 
 // Derived arrays preserve the older string-list export surface for consumers
-// who only need the union members. Tuple-narrow so downstream `as const`
-// patterns keep working.
-export const liveSurfaceStates = liveSurfaceState.options as unknown as readonly [
-  "queued",
-  "active",
-  "paused",
-  "attention",
-  "bad_timing",
-  "completed",
-];
-export const liveSurfaceStages = liveSurfaceStage.options as unknown as readonly [
-  "prompted",
-  "inProgress",
-  "completing",
-];
-export const liveSurfaceKinds = liveSurfaceKind.options as unknown as readonly [
-  "liveActivity",
-  "widget",
-  "control",
-  "lockAccessory",
-  "standby",
-  "notification",
-];
+// who only need the union members. `.options` on a Zod enum is already a
+// typed `readonly` tuple of the literal members, so these are a direct
+// re-export with no cast: the previous `as unknown as readonly [...]` form
+// hand-duplicated the member list next to the enum it was derived from, which
+// is exactly the drift risk the rest of this file is built to avoid. A new
+// enum member now propagates here automatically.
+export const liveSurfaceStates = liveSurfaceState.options;
+export const liveSurfaceStages = liveSurfaceStage.options;
+export const liveSurfaceKinds = liveSurfaceKind.options;
 
 /**
  * Strict v5 parser. Throws on any payload that does not match the v5

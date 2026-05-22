@@ -110,8 +110,10 @@ loadEnvFile(".env");
 // flag names), the SDK's copy for API consumers (environment, priority,
 // createChannel()). The wording diverges on purpose, but the set of reason
 // keys must not — a reason added to one and not the other is a silent gap.
-// scripts/send-apns-reason-parity.test.mjs asserts the key sets stay equal so
-// CI catches that drift.
+// scripts/check-apns-reason-coverage.mjs gates the key set of this guide
+// directly against data/apns-reasons.json (the source of truth), and
+// scripts/send-apns-reason-parity.test.mjs additionally cross-checks it
+// against the package guide. The cause/fix prose stays hand-authored.
 //
 // Channel/broadcast reason strings (BadChannelId, ChannelNotRegistered,
 // MissingChannelId, CannotCreateChannelConfig, InvalidPushType) verified

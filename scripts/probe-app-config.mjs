@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 // Reports the static config state that drives MS012 (deployment target),
-// MS013 (App Group match between host and widget), MS024 (project depends
-// on @mobile-surfaces/surface-contracts), MS025 (App Group declared at
-// all), MS026 (widget target managed by @bacons/apple-targets), and MS027
-// (foreign Expo project iOS 17.2+; same constraint as MS012 applied at
-// audit). Reads apps/mobile/app.json, apps/mobile/package.json, and
+// MS024 (project depends on @mobile-surfaces/surface-contracts), MS025
+// (App Group declared at all), MS026 (widget target managed by
+// @bacons/apple-targets), and MS027 (foreign Expo project iOS 17.2+; same
+// constraint as MS012 applied at audit). It also emits an advisory,
+// untagged note on whether the widget target appears to inherit the host
+// App Group; MS013 (App Group identifier identity across sources) is gated
+// exactly and separately by check-app-group-identity, not here.
+// Reads apps/mobile/app.json, apps/mobile/package.json, and
 // apps/mobile/targets/widget/expo-target.config.js. Emits "skip" cleanly
 // when the apps/mobile/ tree is absent so a foreign consumer running
 // surface:diagnose still gets a useful bundle.
@@ -185,9 +188,13 @@ export function probeAppConfig({ rootDir = process.cwd(), mode = "in-tree" } = {
       widgetSrc,
     );
     checks.push({
+      // No trapId: this is an advisory heuristic ("appears to inherit"), not
+      // an MS013 gate. MS013 is enforced exactly by check-app-group-identity,
+      // which compares the actual identifier across every source and fails the
+      // build on a mismatch. Tagging this warn-status row MS013 implied a gate
+      // that does not exist here; the row stays advisory and untagged.
       id: "widget-app-group-inheritance",
       status: inheritsFromHost ? "ok" : "warn",
-      trapId: "MS013",
       summary: inheritsFromHost
         ? "Widget target inherits App Group from host app config."
         : "Widget target's expo-target.config.js does not appear to inherit App Group from the host config; verify it matches.",

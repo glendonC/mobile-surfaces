@@ -11,6 +11,25 @@ export type LiveActivityStage = LiveSurfaceStage;
 
 export type LiveActivityContentState = LiveSurfaceActivityContentState;
 
+/**
+ * Internal nominal brand for a ContentState that has been validated through
+ * `liveSurfaceActivityContentState`. `parseContentState` is the only function
+ * that produces one: it holds the sole `as ParsedContentState` cast in this
+ * module, applied to the parsed `safeParse` output after the failure branch
+ * has thrown. The native bridge methods `start` and `update` require
+ * `ParsedContentState`, so TypeScript itself rejects any path that forwards an
+ * unvalidated content state across the bridge.
+ *
+ * This is the type-level half of MS038. The compiler makes parse-on-entry
+ * impossible to bypass without an explicit cast; `check-adapter-parses.mjs`
+ * polices the single mint site so the brand cannot be forged. The brand stays
+ * un-exported: it is an enforcement device, not public API.
+ */
+declare const parsedContentStateBrand: unique symbol;
+type ParsedContentState = LiveActivityContentState & {
+  readonly [parsedContentStateBrand]: true;
+};
+
 export interface LiveActivitySnapshot {
   id: string;
   surfaceId: string;
@@ -164,7 +183,7 @@ declare class LiveActivityNativeModule
   start(
     surfaceId: string,
     modeLabel: string,
-    state: LiveActivityContentState,
+    state: ParsedContentState,
     channelId?: string | null,
     options?: LiveActivityContentOptions | null,
   ): Promise<{
@@ -174,7 +193,7 @@ declare class LiveActivityNativeModule
   }>;
   update(
     activityId: string,
-    state: LiveActivityContentState,
+    state: ParsedContentState,
     options?: LiveActivityContentOptions | null,
   ): Promise<void>;
   end(
@@ -211,14 +230,20 @@ export class InvalidContentStateError extends MobileSurfacesError {
   }
 }
 
+// The sole site that mints a ParsedContentState. Every bridge-crossing input
+// (start, update) is routed through here first; the native module's typed
+// signatures require the brand, so TypeScript rejects any caller that skips
+// this function. The lone `as ParsedContentState` cast is applied to the
+// parsed safeParse output, after the failure branch has thrown, never to the
+// raw input.
 function parseContentState(
   state: LiveActivityContentState,
-): LiveActivityContentState {
+): ParsedContentState {
   const parsed = liveSurfaceActivityContentState.safeParse(state);
   if (!parsed.success) {
     throw new InvalidContentStateError(parsed.error.issues);
   }
-  return parsed.data;
+  return parsed.data as ParsedContentState;
 }
 
 // Wrap the native module so:

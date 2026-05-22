@@ -137,6 +137,15 @@ export const checkRegistry = Object.freeze([
     mode: "check-mode",
   },
   {
+    id: "generate-widget-colors",
+    label: "Widget asset-catalog colors in sync with theme.ts",
+    stage: 2,
+    script: "scripts/generate-widget-colors.mjs",
+    args: ["--check"],
+    diagnose: false,
+    mode: "check-mode",
+  },
+  {
     id: "generate-scenarios",
     label: "scenarios.ts in sync with data/scenarios/*.json",
     stage: 2,
@@ -383,6 +392,20 @@ export const checkRegistry = Object.freeze([
     stage: 5,
     dependsOn: ["build-schema"],
     script: "packages/surface-contracts/test/projection-invariants.test.mjs",
+    runner: "node-test",
+    diagnose: false,
+    mode: "single-mode",
+    json: false,
+  },
+  {
+    id: "validators-tests",
+    label: "validators package unit suite",
+    stage: 5,
+    // Co-located with the package source (packages/validators/test/) so the
+    // published package's tests live next to what they exercise. Registered
+    // here so surface:check runs them; the package is load-bearing for
+    // scaffold correctness and previously had no owned test file.
+    script: "packages/validators/test/validators.test.mjs",
     runner: "node-test",
     diagnose: false,
     mode: "single-mode",
