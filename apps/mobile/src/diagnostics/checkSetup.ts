@@ -16,6 +16,7 @@ import type { DiagnosticCheck } from "@mobile-surfaces/surface-contracts";
 import { liveActivityAdapter } from "../liveActivity";
 import { APP_GROUP } from "../generated/appGroup";
 import { readSurfaceDecodeError } from "../surfaceStorage";
+import { meetsIosFloor } from "./iosVersion";
 import {
   controlSurfaceFixtures,
   lockAccessorySurfaceFixtures,
@@ -81,11 +82,7 @@ function probeIosVersion(): DiagnosticCheck {
     };
   }
   const version = String(Platform.Version);
-  const [majorStr, minorStr = "0"] = version.split(".");
-  const major = Number(majorStr);
-  const minor = Number(minorStr);
-  const meetsFloor =
-    Number.isFinite(major) && (major > 17 || (major === 17 && minor >= 2));
+  const meetsFloor = meetsIosFloor(version);
   return {
     id: "ios-version",
     status: meetsFloor ? "ok" : "fail",

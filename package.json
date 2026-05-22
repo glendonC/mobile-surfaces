@@ -68,6 +68,7 @@
     "traps:check": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/validate-trap-catalog.mjs",
     "test:scripts": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test scripts/*.test.mjs",
     "test:push": "pnpm --filter @mobile-surfaces/push test",
+    "test:mobile": "pnpm --filter mobile-surfaces-app test",
     "surface:rename": "node scripts/rename-starter.mjs",
     "mobile:dev": "pnpm --dir apps/mobile exec expo start --host lan",
     "mobile:dev-client": "pnpm --dir apps/mobile exec expo start --dev-client --host lan",
