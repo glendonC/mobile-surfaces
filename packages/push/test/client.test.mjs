@@ -12,6 +12,8 @@ const {
   BadDateError,
   ExpiredProviderTokenError,
   TooManyRequestsError,
+  TooManyProviderTokenUpdatesError,
+  ForbiddenError,
   InvalidSnapshotError,
   ClientClosedError,
   MissingApnsConfigError,
@@ -2592,6 +2594,94 @@ test("AbortSignal plumbs through createChannel/listChannels/deleteChannel", asyn
   await assert.rejects(
     () => client.deleteChannel("abc==", { signal: controller.signal }),
     (err) => err instanceof AbortError,
+  );
+});
+
+// --- error-path coverage: typed reasons with no prior end-to-end test ----
+
+test("429 TooManyProviderTokenUpdates surfaces as TooManyProviderTokenUpdatesError", async (t) => {
+  // Not in DEFAULT_RETRYABLE_REASONS and not terminal, so the default policy
+  // surfaces it on the first attempt without retrying.
+  const mock = await startMockApns(() => ({
+    status: 429,
+    body: { reason: "TooManyProviderTokenUpdates" },
+  }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.alert("a".repeat(64), SNAPSHOT),
+    (err) => {
+      assert.ok(
+        err instanceof TooManyProviderTokenUpdatesError,
+        `expected TooManyProviderTokenUpdatesError, got ${err?.name}`,
+      );
+      assert.equal(err.reason, "TooManyProviderTokenUpdates");
+      return true;
+    },
+  );
+  assert.equal(mock.requests.length, 1, "must not retry");
+});
+
+test("403 Forbidden surfaces as ForbiddenError", async (t) => {
+  // Auth-key revocation: deliberately excluded from both the retryable and
+  // terminal sets, so it surfaces via the reason-not-retryable fallthrough.
+  const mock = await startMockApns(() => ({
+    status: 403,
+    body: { reason: "Forbidden" },
+  }));
+  const client = makeClient({ sendOrigin: mock.origin });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.alert("b".repeat(64), SNAPSHOT),
+    (err) => {
+      assert.ok(
+        err instanceof ForbiddenError,
+        `expected ForbiddenError, got ${err?.name}`,
+      );
+      assert.equal(err.reason, "Forbidden");
+      return true;
+    },
+  );
+  assert.equal(mock.requests.length, 1, "must not retry");
+});
+
+test("Retry-After in HTTP-date form is parsed into retryAfterSeconds", async (t) => {
+  // parseRetryAfterSeconds accepts both the numeric delta form and the
+  // HTTP-date form (rare for APNs but allowed by spec). maxRetries: 0 keeps
+  // the test from actually sleeping the parsed delay: the 429 surfaces on
+  // the first attempt with retryAfterSeconds populated from the date.
+  const RETRY_AFTER_SECONDS = 600;
+  const httpDate = new Date(Date.now() + RETRY_AFTER_SECONDS * 1000).toUTCString();
+  const mock = await startMockApns(() => ({
+    status: 429,
+    headers: { "retry-after": httpDate },
+    body: { reason: "TooManyRequests" },
+  }));
+  const client = makeClient({
+    sendOrigin: mock.origin,
+    retryPolicy: { maxRetries: 0, baseDelayMs: 1, maxDelayMs: 5, jitter: false },
+  });
+  teardown(t, client, mock);
+
+  await assert.rejects(
+    () => client.alert("c".repeat(64), SNAPSHOT),
+    (err) => {
+      assert.ok(
+        err instanceof TooManyRequestsError,
+        `expected TooManyRequestsError, got ${err?.name}`,
+      );
+      // toUTCString has 1-second resolution and a tick elapses between
+      // building the date and parsing it, so allow a small lower margin.
+      assert.ok(
+        typeof err.retryAfterSeconds === "number" &&
+          err.retryAfterSeconds >= RETRY_AFTER_SECONDS - 5 &&
+          err.retryAfterSeconds <= RETRY_AFTER_SECONDS,
+        `retryAfterSeconds ${err.retryAfterSeconds} not parsed from the HTTP-date`,
+      );
+      return true;
+    },
   );
 });
 

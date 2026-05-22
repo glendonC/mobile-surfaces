@@ -89,6 +89,22 @@ export function startMockApns(handler, options = {}) {
             // session may already be closing; ignore.
           }
         },
+        // Send a fresh SETTINGS frame on the most recent session, mirroring
+        // APNs tightening (or loosening) SETTINGS_MAX_CONCURRENT_STREAMS
+        // mid-connection. The returned promise resolves once the client has
+        // acknowledged the frame, so a test can assert against the new value
+        // without racing the frame's delivery.
+        updateSettings(settings) {
+          const last = sessions[sessions.length - 1];
+          if (!last || last.destroyed) return Promise.resolve();
+          return new Promise((res, rej) => {
+            try {
+              last.settings(settings, () => res());
+            } catch (err) {
+              rej(err);
+            }
+          });
+        },
         close: () =>
           new Promise((res) => {
             // Forcibly destroy any sessions still attached to the server so

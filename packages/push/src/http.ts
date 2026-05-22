@@ -99,6 +99,21 @@ export interface Http2ClientOptions {
  */
 const STREAM_CAP_FLOOR = 900;
 
+/**
+ * The concurrent-stream cap the client enforces: the smallest of the
+ * caller's configured cap, the peer's advertised
+ * `SETTINGS_MAX_CONCURRENT_STREAMS`, and the defensive {@link STREAM_CAP_FLOOR}.
+ * Either input may be `Infinity` (`userCap` for the documented opt-out,
+ * `peerCap` before the peer's SETTINGS frame has arrived); the floor is then
+ * the binding constraint. Pure and exported so the cap arithmetic is
+ * unit-testable on its own; `#effectiveCap` re-applies it with a live read
+ * of the peer setting on every slot acquisition, so a mid-connection
+ * tighten is honored without any cached state to go stale.
+ */
+export function effectiveStreamCap(userCap: number, peerCap: number): number {
+  return Math.min(userCap, peerCap, STREAM_CAP_FLOOR);
+}
+
 interface QueueWaiter {
   resolve: () => void;
   reject: (err: unknown) => void;
@@ -171,7 +186,7 @@ export class Http2Client {
     // documented but optional; treat missing as Infinity and let the
     // STREAM_CAP_FLOOR be the binding constraint.
     const peer = this.#session?.remoteSettings?.maxConcurrentStreams ?? Infinity;
-    return Math.min(this.#userMaxConcurrentStreams, peer, STREAM_CAP_FLOOR);
+    return effectiveStreamCap(this.#userMaxConcurrentStreams, peer);
   }
 
   #acquireSlot(signal: AbortSignal | undefined): Promise<void> {

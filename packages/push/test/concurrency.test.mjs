@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import http2 from "node:http2";
 
-const { Http2Client } = await import("../dist/http.js");
+const { Http2Client, effectiveStreamCap } = await import("../dist/http.js");
 
 import { startMockApns } from "./fixtures/mock-apns.mjs";
 
@@ -389,4 +389,110 @@ test("createPushClient honors an injected async JwtCacheLike", async (t) => {
   // The request should carry the bearer the cache returned.
   const sent = mock.requests[0];
   assert.match(String(sent.headers.authorization), /^bearer header\.payload\.signature-/);
+});
+
+test("a burst completes across a mid-connection SETTINGS tighten", async (t) => {
+  // End-to-end: the peer starts permissive (4 concurrent streams) and is
+  // tightened to 2 mid-connection while wave 1 is in flight. The client must
+  // process the new SETTINGS frame and complete every request. This exercises
+  // the SETTINGS-frame handling path; it does not isolate the SDK's own
+  // #effectiveCap, because Node's http2 client enforces the peer's
+  // maxConcurrentStreams identically (see effectiveStreamCap's unit test for
+  // the cap-arithmetic gate). With the peer at 2, only 2 streams reach the
+  // server at a time regardless of which layer holds the rest.
+  const mock = await startReleasableMock({ maxConcurrentStreams: 4 });
+  const client = new Http2Client({
+    origin: mock.origin,
+    idleTimeoutMs: 60_000,
+    connect: connectInsecure,
+  });
+  t.after(async () => {
+    mock.releaseAll();
+    await client.close();
+    await mock.close();
+  });
+
+  // Warmup so the session is up and the peer's SETTINGS(4) has arrived.
+  const warmup = client.request({
+    headers: { ":method": "POST", ":path": "/3/device/warmup" },
+    body: "{}",
+  });
+  await mock.awaitArrival();
+  mock.releaseOne();
+  await warmup;
+
+  // Wave 1: 4 requests all dispatch under the peer cap of 4.
+  const wave1 = [];
+  for (let i = 0; i < 4; i++) {
+    wave1.push(
+      client.request({
+        headers: { ":method": "POST", ":path": `/3/w1/${i}` },
+        body: "{}",
+      }),
+    );
+  }
+  for (let i = 0; i < 4; i++) await mock.awaitArrival();
+  await new Promise((res) => setTimeout(res, 30));
+  assert.equal(mock.pendingCount, 4, "all 4 dispatch under the peer cap of 4");
+
+  // APNs tightens SETTINGS_MAX_CONCURRENT_STREAMS 4 -> 2 mid-connection.
+  // updateSettings resolves once the client has ACKed the frame.
+  await mock.updateSettings({ maxConcurrentStreams: 2 });
+
+  // Drain wave 1 so #inFlight returns to 0.
+  mock.releaseAll();
+  await Promise.all(wave1);
+
+  // Wave 2: 6 requests. With the tightened cap, only 2 should dispatch; the
+  // remaining 4 stay in the SDK's queue.
+  const wave2 = [];
+  for (let i = 0; i < 6; i++) {
+    wave2.push(
+      client.request({
+        headers: { ":method": "POST", ":path": `/3/w2/${i}` },
+        body: "{}",
+      }),
+    );
+  }
+  await mock.awaitArrival();
+  await mock.awaitArrival();
+  await new Promise((res) => setTimeout(res, 30));
+  assert.equal(
+    mock.pendingCount,
+    2,
+    "the tightened peer cap of 2 holds the rest back",
+  );
+
+  // Drain.
+  for (let i = 0; i < 6; i++) {
+    mock.releaseOne();
+    await new Promise((res) => setTimeout(res, 10));
+  }
+  await Promise.all(wave2);
+});
+
+// effectiveStreamCap is the pure cap arithmetic #effectiveCap delegates to.
+// #effectiveCap re-applies it with a live read of the peer's SETTINGS on
+// every slot acquisition, so these cases also pin the mid-connection-tighten
+// behavior: feeding a lower peerCap yields a lower cap, with no cached state.
+test("effectiveStreamCap takes the smallest of user cap, peer cap, and floor", () => {
+  // Both inputs unbounded: the defensive floor (900) is the binding cap.
+  assert.equal(effectiveStreamCap(Infinity, Infinity), 900);
+  // User cap binds when it is the smallest.
+  assert.equal(effectiveStreamCap(50, Infinity), 50);
+  assert.equal(effectiveStreamCap(2, 10), 2);
+  // Peer cap binds when it is the smallest.
+  assert.equal(effectiveStreamCap(Infinity, 2), 2);
+  assert.equal(effectiveStreamCap(10, 2), 2);
+  // A peer cap above the floor cannot raise the cap past it.
+  assert.equal(effectiveStreamCap(Infinity, 5000), 900);
+});
+
+test("effectiveStreamCap drops when the peer setting is tightened", () => {
+  // The mid-burst tighten the SDK must honor: recomputing with a lower
+  // peerCap yields a lower cap. #effectiveCap reads the peer setting live on
+  // each call, so a peer that tightens 4 -> 2 mid-connection drops the cap.
+  const userCap = Infinity;
+  assert.equal(effectiveStreamCap(userCap, 4), 4);
+  assert.equal(effectiveStreamCap(userCap, 2), 2);
 });
