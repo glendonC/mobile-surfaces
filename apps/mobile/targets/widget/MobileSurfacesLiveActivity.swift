@@ -6,7 +6,7 @@ struct MobileSurfacesLiveActivity: Widget {
   var body: some WidgetConfiguration {
     ActivityConfiguration(for: MobileSurfacesActivityAttributes.self) { context in
       LockScreenView(context: context)
-        .activityBackgroundTint(Color("WidgetBackground"))
+        .activityBackgroundTint(Color("$widgetBackground"))
         .activitySystemActionForegroundColor(Color.primary)
     } dynamicIsland: { context in
       DynamicIsland {
@@ -27,18 +27,18 @@ struct MobileSurfacesLiveActivity: Widget {
         }
         DynamicIslandExpandedRegion(.bottom) {
           ProgressView(value: context.state.progress)
-            .tint(Color("AccentColor"))
+            .tint(Color.accentColor)
         }
       } compactLeading: {
         Image(systemName: "bolt.horizontal.circle")
-          .foregroundStyle(Color("AccentColor"))
+          .foregroundStyle(Color.accentColor)
       } compactTrailing: {
         Text("\(Int(context.state.progress * 100))%")
           .font(.caption2.weight(.medium))
           .monospacedDigit()
       } minimal: {
         Image(systemName: "bolt.horizontal.circle")
-          .foregroundStyle(Color("AccentColor"))
+          .foregroundStyle(Color.accentColor)
       }
     }
   }
@@ -63,7 +63,7 @@ private struct LockScreenView: View {
         .foregroundStyle(.secondary)
         .lineLimit(2)
       ProgressView(value: context.state.progress)
-        .tint(Color("AccentColor"))
+        .tint(Color.accentColor)
     }
     .padding(.horizontal, 16)
     .padding(.vertical, 12)

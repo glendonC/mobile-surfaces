@@ -39,7 +39,7 @@ extension MobileSurfacesActivityAttributes.Stage {
   var tintColor: Color {
     switch self {
     case .prompted: return .orange
-    case .inProgress: return Color("AccentColor")
+    case .inProgress: return Color.accentColor
     case .completing: return .green
     }
   }
