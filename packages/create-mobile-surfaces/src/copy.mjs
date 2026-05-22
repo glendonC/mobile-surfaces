@@ -89,7 +89,7 @@ export const existingSuccessSections = ({ projectName, packageManager }) => ({
     `pnpm mobile:push:device:liveactivity       push a real Live Activity update`,
   ],
   learnMore: [
-    "https://mobile-surfaces.com/docs/architecture     the data shape behind everything",
+    "https://mobile-surfaces.com/docs/concepts         the data shape behind everything",
     "https://mobile-surfaces.com/docs/troubleshooting  when something breaks",
     "README.md                quick start",
   ],
@@ -136,7 +136,7 @@ export const successSections = (projectName, { installNow = true } = {}) => ({
   ],
   learnMore: [
     "README.md                quick start",
-    "https://mobile-surfaces.com/docs/architecture     the data shape behind everything",
+    "https://mobile-surfaces.com/docs/concepts         the data shape behind everything",
     "https://mobile-surfaces.com/docs/troubleshooting  when something breaks",
   ],
 });

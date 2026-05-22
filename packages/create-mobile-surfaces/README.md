@@ -38,7 +38,6 @@ npm create mobile-surfaces@latest --yes \
 | `--home-widget` / `--no-home-widget` | Include the home-screen widget surface (default: yes). |
 | `--control-widget` / `--no-control-widget` | Include the iOS 18 control widget (default: yes). |
 | `--install` / `--no-install` | Run `pnpm install` + `expo prebuild` after scaffold (default: yes). |
-| `--new-arch` / `--no-new-arch` | Force Expo's New Architecture on or off. Omit to keep the template default. |
 | `--yes`, `-y` | Non-interactive: accept defaults, skip the recap. |
 | `--help`, `-h` | Show help. |
 
@@ -99,8 +98,8 @@ Breaking change in v1.4: refuse paths (cannot-scaffold-here) used to exit `2`. T
 ## Links
 
 - [Mobile Surfaces docs hub](https://mobile-surfaces.com/docs)
-- [Architecture](https://mobile-surfaces.com/docs/architecture)
-- [Backend integration](https://mobile-surfaces.com/docs/backend-integration)
+- [Architecture](https://mobile-surfaces.com/docs/concepts)
+- [Backend integration](https://mobile-surfaces.com/docs/backend)
 - [Troubleshooting](https://mobile-surfaces.com/docs/troubleshooting)
 
 ## License

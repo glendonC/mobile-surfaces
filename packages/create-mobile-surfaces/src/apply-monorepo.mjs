@@ -27,9 +27,9 @@ import { BackupSession } from "./backup.mjs";
 const REWRITE_CONCURRENCY = 8;
 
 // Mirrors scripts/rename-starter.mjs DEFAULT_IDENTITY. Kept small so any
-// monorepo-mode rewrite stays in lockstep with the canonical rename script.
-// MS005 (validator regex parity) covers the validator side; if these literals
-// drift, the failure mode is a half-renamed apps/mobile/ tree at the user.
+// monorepo-mode rewrite stays in lockstep with the canonical rename script;
+// if these literals drift from that script's, the failure mode is a
+// half-renamed apps/mobile/ tree at the user.
 export const DEFAULT_IDENTITY = Object.freeze({
   name: "Mobile Surfaces",
   scheme: "mobilesurfaces",
@@ -269,9 +269,6 @@ export function patchAppsMobileAppJson({
     // upstream placeholder so expo's own missing-team-id error surfaces
     // instead of an opaque signing failure.
     delete expo.ios.appleTeamId;
-  }
-  if (config.newArchEnabled !== undefined) {
-    expo.newArchEnabled = config.newArchEnabled;
   }
   if (appGroup) {
     expo.ios.entitlements = expo.ios.entitlements ?? {};

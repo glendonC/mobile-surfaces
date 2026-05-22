@@ -150,7 +150,7 @@ export function renderMonorepoSuccess({ summary, evidence, config, packageManage
   blocks.push(
     section("Learn more", [
       "https://github.com/glendonC/mobile-surfaces#readme",
-      "https://mobile-surfaces.com/docs/architecture (in your scaffolded app)",
+      "https://mobile-surfaces.com/docs/concepts (in your scaffolded app)",
       "https://mobile-surfaces.com/docs/troubleshooting (in your scaffolded app)",
     ]),
   );

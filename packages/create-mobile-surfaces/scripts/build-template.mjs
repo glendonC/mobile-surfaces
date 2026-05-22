@@ -61,11 +61,13 @@ const manifest = buildManifestFromLive(repoRoot);
 // workspace siblings in the user's cloned monorepo for greenfield). For
 // the published manifest, rewrite those markers to concrete pinned
 // versions read from each package's own package.json so the
-// add-to-existing flow can pull them from npm. Exact pins match the
-// project's wider exact-pin discipline (check-external-pins.mjs) and the
-// linked-group release cadence: every @mobile-surfaces/* package ships
-// together on the same version, so a caret here would float silently
-// across linked-group republishes without an intentional bump.
+// add-to-existing flow can pull them from npm. Each package is pinned at
+// its own real published version (they no longer share a single version:
+// surface-contracts is 9.x while live-activity is 7.x). Only the linked
+// changeset group - surface-contracts/validators/traps - moves in lockstep.
+// Exact pins match the project's wider exact-pin discipline
+// (check-external-pins.mjs); a caret here would float silently across
+// republishes without an intentional bump.
 const packagesByName = new Map();
 const packagesDir = path.join(repoRoot, "packages");
 for (const dirName of fs.readdirSync(packagesDir)) {
