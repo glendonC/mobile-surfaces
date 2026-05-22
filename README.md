@@ -12,7 +12,7 @@ Mobile Surfaces is not a Live Activity bridge. It is the layer above the bridge 
 Three pieces ship together:
 
 - **`@mobile-surfaces/surface-contracts`**: typed `LiveSurfaceSnapshot` plus six projection helpers, a published JSON Schema, and Standard Schema interop.
-- **`@mobile-surfaces/push`**: Node APNs client. HTTP/2 connection pooling, JWT signing, push-to-start tokens, iOS 18 broadcast channels, typed errors for every documented APNs reason.
+- **`@mobile-surfaces/push`**: Node APNs client. Single-session HTTP/2 multiplexing, JWT signing, push-to-start tokens, iOS 18 broadcast channels, typed errors for every documented APNs reason.
 - **Trap catalog**: <!-- catalog-stats:live -->40<!-- /catalog-stats:live --> documented iOS silent-failure modes ([`data/traps.json`](./data/traps.json)), rendered as [`AGENTS.md`](./AGENTS.md) and [`CLAUDE.md`](./CLAUDE.md). <!-- catalog-stats:prGated -->23<!-- /catalog-stats:prGated --> are enforced at PR time by `pnpm surface:check`; the rest surface as typed runtime errors or advisory notes.
 
 Mobile Surfaces is a single-maintainer reference architecture. The trap catalog and push client reflect failure modes encountered building the reference app, not a survey of every production deployment. Treat it as a worked example to read and adapt, not a turnkey dependency with a support contract.
@@ -66,7 +66,7 @@ pnpm surface:audit --root ./path/to/project
 
 Add `--json` to wire the report into CI.
 
-See [the docs](https://mobile-surfaces.com/docs) for the full reading paths.
+Full documentation is at [mobile-surfaces.com/docs](https://mobile-surfaces.com/docs).
 
 ## Why this exists
 

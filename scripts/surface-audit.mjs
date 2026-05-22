@@ -31,8 +31,10 @@ import { parseArgs } from "node:util";
 const SCRIPTS_DIR = dirname(fileURLToPath(import.meta.url));
 
 // Each gate script under scripts/, plus the foreign-audit flags it accepts.
-// probe-app-config and doctor branch on --mode=audit; the other two only
-// need --root.
+// All four branch on --mode=audit: it switches the gate from the fixed
+// monorepo layout to discovering the audited project's Expo app directory,
+// so a foreign project whose app.json sits at its own root is handled
+// instead of false-failing against a hard-coded apps/mobile path.
 const AUDIT_CHECKS = Object.freeze([
   {
     id: "probe-app-config",
@@ -44,13 +46,13 @@ const AUDIT_CHECKS = Object.freeze([
     id: "check-app-group-identity",
     label: "App Group identifier identity across sources",
     script: "check-app-group-identity.mjs",
-    args: (root) => ["--root", root],
+    args: (root) => ["--root", root, "--mode", "audit"],
   },
   {
     id: "check-ios-gitignore",
-    label: "apps/mobile/ios/ gitignored and untracked",
+    label: "Generated ios/ gitignored and untracked",
     script: "check-ios-gitignore.mjs",
-    args: (root) => ["--root", root],
+    args: (root) => ["--root", root, "--mode", "audit"],
   },
   {
     id: "doctor",

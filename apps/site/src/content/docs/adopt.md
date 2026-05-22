@@ -64,7 +64,7 @@ The published JSON Schema at `https://unpkg.com/@mobile-surfaces/surface-contrac
 
 ## Drop in the push client
 
-`@mobile-surfaces/push` is a Node SDK for APNs. HTTP/2 session pooling, ES256 JWT signing and rotation, typed error classes per Apple reason code, push-to-start, iOS 18 broadcast channels, channel management. One client per `(auth-key, environment, bundleId)` tuple, multiplexed across alert / Live Activity / broadcast / channel-management requests.
+`@mobile-surfaces/push` is a Node SDK for APNs. Single-session HTTP/2 multiplexing, ES256 JWT signing and rotation, typed error classes per Apple reason code, push-to-start, iOS 18 broadcast channels, channel management. One client per `(auth-key, environment, bundleId)` tuple, multiplexed across alert / Live Activity / broadcast / channel-management requests.
 
 ```ts
 import { createPushClient } from "@mobile-surfaces/push";

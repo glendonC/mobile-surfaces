@@ -1,7 +1,7 @@
 // PushClient — the canonical entry point for sending Mobile Surfaces snapshots
 // to APNs. One client per (auth-key, environment, bundleId) tuple; a single
 // client multiplexes alert / Live-Activity / broadcast / channel-management
-// requests over its session pool.
+// requests over one HTTP/2 session per origin.
 
 import crypto from "node:crypto";
 import {

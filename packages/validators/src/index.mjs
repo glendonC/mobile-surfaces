@@ -7,9 +7,25 @@
 // user's scaffolded project *before* pnpm install, so it imports this
 // file via a relative path instead — both paths land on the same source.
 //
-// Each validator returns `undefined` on success and a human-readable error
-// string on failure. Consumers wrap the string with their own emission
-// policy (CLI prompts re-ask; rename-starter prints + exits).
+// This module has two function categories with two deliberately different
+// contracts:
+//
+//   validate*  (validateProjectSlug, validateScheme, validateBundleId,
+//              validateTeamId, validateSwiftIdentifier)
+//              Return `undefined` on success and a human-readable error
+//              string on failure. Consumers wrap the string with their own
+//              emission policy (CLI prompts re-ask; rename-starter prints +
+//              exits). A validator never throws.
+//
+//   to*        (toScheme, toBundleId, toSwiftPrefix)
+//              Derivers: transform a project name into a derived identifier.
+//              They return the derived string. toScheme and toBundleId always
+//              succeed. toSwiftPrefix throws when no valid Swift identifier can
+//              be derived at all (a name with no letters, e.g. "123"), because
+//              there is no in-band string it could return that a caller could
+//              not mistake for a valid prefix. Call the matching validate* on
+//              user input first; a deriver throwing means the input reached it
+//              unvalidated.
 
 // The project slug becomes the scaffolded project's directory name and its
 // package.json `name`. npm caps package names at 214 characters; that is the

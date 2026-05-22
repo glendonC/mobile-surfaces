@@ -1,9 +1,10 @@
 // Inline color palette for the mobile demo. Previously lived in
 // @mobile-surfaces/design-tokens but that package was just a re-export of a
 // JSON file with one local consumer (this app), so it was retired in 3.2.0.
-// The widget target reads two hex values directly from
-// apps/mobile/targets/widget/expo-target.config.js — keep this file and that
-// one in sync if the brand palette changes.
+// This file is the single source of truth for the brand palette: the widget
+// target's two asset-catalog colors are generated from `primary` and
+// `surface` here by scripts/generate-widget-colors.mjs (pnpm surface:codegen)
+// into apps/mobile/targets/widget/colors.generated.cjs, drift-gated in CI.
 
 export const surfaceColors = {
   surface: "#F7F5F0",

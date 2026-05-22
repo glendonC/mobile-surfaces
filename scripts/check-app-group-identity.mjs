@@ -35,69 +35,163 @@
 // Phase 6 (refactor/v7): exposes a rootDir-parameterised core function so
 // `pnpm surface:audit` can run the same check against a foreign project.
 // CLI behavior preserved when invoked without --root.
+//
+// Two modes:
+//   check  (default) — the Mobile Surfaces monorepo self-check. Every source
+//                      is at its fixed apps/mobile/ path and the generated
+//                      Swift/TS/entitlements files are required; their absence
+//                      means codegen was not run.
+//   audit            — a foreign Expo project pointed at by `surface:audit`.
+//                      The Expo app directory is discovered (app.json may sit
+//                      at the project root, not under apps/mobile/), and the
+//                      Mobile-Surfaces-specific generated files are optional:
+//                      a project that has not adopted Mobile Surfaces will not
+//                      carry them, and their absence is not an MS013 mismatch.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { buildReport, emitDiagnosticReport } from "./lib/diagnostics.mjs";
+import {
+  discoverAppConfig,
+  loadAppJson,
+  readAppGroups,
+} from "./lib/app-config.mjs";
 
 const TOOL = "check-app-group-identity";
 
+// A source that is optional in the active mode is included only when its file
+// exists; its absence then carries no finding. A non-optional source is always
+// included, so a missing file surfaces as a `file not found` parse failure.
+function pickSource(source, optional) {
+  if (optional && !fs.existsSync(source.file)) return [];
+  return [source];
+}
+
 /**
  * Verify App Group identifier identity across every source under `rootDir`.
- * Returns a DiagnosticReport; the caller renders it. Missing source files
- * are surfaced as `file not found` entries (which become check failures),
- * matching the script's pre-refactor behavior on a fresh checkout.
+ * Returns a DiagnosticReport; the caller renders it.
  *
- * @param {{ rootDir?: string }} [options]
+ * @param {{ rootDir?: string, mode?: "check" | "audit" }} [options]
  */
-export function checkAppGroupIdentity({ rootDir = process.cwd() } = {}) {
+export function checkAppGroupIdentity({
+  rootDir = process.cwd(),
+  mode = "check",
+} = {}) {
   const root = path.resolve(rootDir);
-  const APP_JSON = path.join(root, "apps/mobile/app.json");
+  const audit = mode === "audit";
+
+  // Resolve the directory that holds app.json. Check mode uses the fixed
+  // monorepo path; audit mode discovers it so a foreign Expo project is
+  // handled instead of false-failing against a hard-coded apps/mobile path.
+  let appJsonPath;
+  let mobileRoot;
+  if (audit) {
+    const discovered = discoverAppConfig(root);
+    if (!discovered.found) {
+      return buildReport(TOOL, [
+        {
+          id: "app-group-sources-readable",
+          status: "fail",
+          summary: `No Expo app config found under ${root}.`,
+          detail: {
+            message:
+              "surface:audit could not locate an app.json or app.config.json at the project root, apps/mobile/, or apps/*/. Point --root at an Expo project.",
+          },
+        },
+      ]);
+    }
+    appJsonPath = discovered.appJsonPath;
+    mobileRoot = discovered.mobileRoot;
+  } else {
+    mobileRoot = path.join(root, "apps/mobile");
+    appJsonPath = path.join(mobileRoot, "app.json");
+  }
+
+  // In audit mode, a foreign project that declares no App Group at all is not
+  // an MS013 violation: MS013 is about identity *across* sources, and whether
+  // an App Group should be declared at all is probe-app-config's call.
+  if (audit) {
+    const loaded = loadAppJson(appJsonPath);
+    if (loaded.status === "invalid") {
+      return buildReport(TOOL, [
+        {
+          id: "app-group-sources-readable",
+          status: "fail",
+          summary: `${path.relative(root, appJsonPath)} could not be parsed as JSON.`,
+          detail: { message: loaded.error },
+        },
+      ]);
+    }
+    if (loaded.status === "ok" && !readAppGroups(loaded.appJson).declared) {
+      return buildReport(TOOL, [
+        {
+          id: "app-group-identity-match",
+          status: "ok",
+          summary:
+            "No App Group declared in app.json; MS013 cross-source identity is not applicable.",
+          trapId: "MS013",
+        },
+      ]);
+    }
+  }
+
   const WIDGET_ENTITLEMENTS = path.join(
-    root,
-    "apps/mobile/targets/widget/generated.entitlements",
+    mobileRoot,
+    "targets/widget/generated.entitlements",
   );
   const NOTIFICATION_CONTENT_ENTITLEMENTS = path.join(
-    root,
-    "apps/mobile/targets/notification-content/generated.entitlements",
+    mobileRoot,
+    "targets/notification-content/generated.entitlements",
   );
   const APP_GROUP_SWIFT = path.join(
-    root,
-    "apps/mobile/targets/_shared/MobileSurfacesAppGroup.swift",
+    mobileRoot,
+    "targets/_shared/MobileSurfacesAppGroup.swift",
   );
-  const APP_GROUP_TS = path.join(root, "apps/mobile/src/generated/appGroup.ts");
+  const APP_GROUP_TS = path.join(mobileRoot, "src/generated/appGroup.ts");
 
+  // app.json is always required. The widget entitlements, the generated Swift
+  // constant and the generated TS constant are required in check mode and
+  // optional in audit mode. The notification-content entitlements file is
+  // optional in both modes (not every layout has adopted that surface).
   const sources = [
-    { label: "app.json (host entitlements)", file: APP_JSON, extract: extractFromAppJson },
     {
-      label: "widget generated.entitlements",
-      file: WIDGET_ENTITLEMENTS,
-      extract: extractFromWidgetEntitlements,
+      label: "app.json (host entitlements)",
+      file: appJsonPath,
+      extract: extractFromAppJson,
     },
-    // Notification-content extension entitlements file. Optional: when the
-    // target dir does not yet exist (older snapshot of the repo or a
-    // consumer that has not adopted the notification surface), skip the
-    // entry rather than fail-loud so MS013 stays usable on partial layouts.
-    ...(fs.existsSync(NOTIFICATION_CONTENT_ENTITLEMENTS)
-      ? [
-          {
-            label: "notification-content generated.entitlements",
-            file: NOTIFICATION_CONTENT_ENTITLEMENTS,
-            extract: extractFromWidgetEntitlements,
-          },
-        ]
-      : []),
-    {
-      label: "MobileSurfacesAppGroup.swift",
-      file: APP_GROUP_SWIFT,
-      extract: extractFromAppGroupSwift,
-    },
-    {
-      label: "generated/appGroup.ts",
-      file: APP_GROUP_TS,
-      extract: extractFromTsConstant,
-    },
+    ...pickSource(
+      {
+        label: "widget generated.entitlements",
+        file: WIDGET_ENTITLEMENTS,
+        extract: extractFromWidgetEntitlements,
+      },
+      audit,
+    ),
+    ...pickSource(
+      {
+        label: "notification-content generated.entitlements",
+        file: NOTIFICATION_CONTENT_ENTITLEMENTS,
+        extract: extractFromWidgetEntitlements,
+      },
+      true,
+    ),
+    ...pickSource(
+      {
+        label: "MobileSurfacesAppGroup.swift",
+        file: APP_GROUP_SWIFT,
+        extract: extractFromAppGroupSwift,
+      },
+      audit,
+    ),
+    ...pickSource(
+      {
+        label: "generated/appGroup.ts",
+        file: APP_GROUP_TS,
+        extract: extractFromTsConstant,
+      },
+      audit,
+    ),
   ];
 
   const findings = [];
@@ -171,7 +265,9 @@ export function checkAppGroupIdentity({ rootDir = process.cwd() } = {}) {
       parseErrors.length > 0
         ? "Skipped: one or more sources failed to parse."
         : mismatches.length === 0
-          ? `All ${findings.length} sources resolve to "${canonical}".`
+          ? findings.length === 1
+            ? `Only app.json declares an App Group ("${canonical}"); no other source to cross-check.`
+            : `All ${findings.length} sources resolve to "${canonical}".`
           : `${mismatches.length} source(s) declare a different App Group than the host app.`,
     trapId: "MS013",
     ...(mismatches.length > 0
@@ -252,10 +348,12 @@ if (isDirectInvocation) {
     options: {
       json: { type: "boolean", default: false },
       root: { type: "string" },
+      mode: { type: "string", default: "check" },
     },
   });
   const report = checkAppGroupIdentity({
     rootDir: values.root ?? process.cwd(),
+    mode: values.mode === "audit" ? "audit" : "check",
   });
   emitDiagnosticReport(report, { json: values.json });
 }

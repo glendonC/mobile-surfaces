@@ -12,6 +12,12 @@ import {
   liveSurfaceSnapshot,
   liveSurfaceStandbyEntry,
   liveSurfaceWidgetTimelineEntry,
+  liveSurfaceState,
+  liveSurfaceStage,
+  liveSurfaceKind,
+  liveSurfaceStates,
+  liveSurfaceStages,
+  liveSurfaceKinds,
   safeParseSnapshot,
   surfaceFixtureSnapshots,
   toControlValueProvider,
@@ -358,7 +364,7 @@ test("standby projection reads slice fields and applies presentation default", (
   });
 });
 
-test("toStandbyEntry defaults presentation to card and null-tints when absent", () => {
+test("toStandbyEntry defaults presentation to card and omits tint when absent", () => {
   const standby = assertSnapshot({
     ...withoutLiveActivity(queued),
     id: "fixture-standby-default",
@@ -373,7 +379,9 @@ test("toStandbyEntry defaults presentation to card and null-tints when absent", 
   });
   const entry = toStandbyEntry(standby);
   assert.equal(entry.presentation, "card");
-  assert.equal(entry.tint, null);
+  // tint is optional on the slice; the projection omits the key rather than
+  // emitting null when the producer states no preference (see C1).
+  assert.equal("tint" in entry, false);
 });
 
 // ---------------------------------------------------------------------------
@@ -622,6 +630,16 @@ test("output schemas reject extra fields a helper might accidentally introduce",
   const inflated = { ...projected, extraField: "drifted in" };
   const result = liveSurfaceStandbyEntry.safeParse(inflated);
   assert.equal(result.success, false, "strict schema must reject excess keys");
+});
+
+// C2: the liveSurface{States,Stages,Kinds} arrays are a direct re-export of
+// the enum `.options` tuple, not a hand-duplicated literal list behind a cast.
+// These assertions fail if a future edit reintroduces a hand-written tuple
+// that drifts from the enum it is meant to mirror.
+test("liveSurfaceStates/Stages/Kinds stay in lockstep with their enum options", () => {
+  assert.deepEqual([...liveSurfaceStates], [...liveSurfaceState.options]);
+  assert.deepEqual([...liveSurfaceStages], [...liveSurfaceStage.options]);
+  assert.deepEqual([...liveSurfaceKinds], [...liveSurfaceKind.options]);
 });
 
 test("liveSurfaceSnapshot exposes a Standard Schema (~standard) interface", () => {

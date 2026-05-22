@@ -71,6 +71,10 @@ if (!fs.existsSync(APPS_ROOT)) {
     ]),
     { json: values.json },
   );
+  // emitDiagnosticReport only exits the process on a "fail" rollup; an "ok"
+  // early-out has to exit explicitly, or execution falls through to the
+  // readdirSync scan below and crashes on the missing directory.
+  process.exit(0);
 }
 
 const violations = [];

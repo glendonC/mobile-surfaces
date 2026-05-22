@@ -56,7 +56,7 @@ A payload written under an older `schemaVersion` fails the parser. There is no m
 https://unpkg.com/@mobile-surfaces/surface-contracts@9.0/schema.json
 ```
 
-Pinning to `8.0` rather than `8` lets a future minor that adds a discriminated-union variant publish at `@8.1/schema.json` without invalidating the URL existing consumers reference. Backends that want to track the latest minor automatically can pin to `@8/schema.json` (unpkg resolves the major), but the canonical `$id` stamped into the schema is the major.minor URL. Older URLs (`@7.0/schema.json`, `@6.0/schema.json`, `@5.0/schema.json`, `@4.0/schema.json`, `@3.0/schema.json`) stay resolvable forever; unpkg never deletes a published artifact.
+Pinning to `9.0` rather than `9` lets a future minor that adds a discriminated-union variant publish at `@9.1/schema.json` without invalidating the URL existing consumers reference. Backends that want to track the latest minor automatically can pin to `@9/schema.json` (unpkg resolves the major), but the canonical `$id` stamped into the schema is the major.minor URL. Older `major.minor` URLs stay resolvable forever; unpkg never deletes a published artifact.
 
 The URL channel is keyed off the package major; the wire-format `schemaVersion` stays at `"5"` across package majors that ship no breaking wire change (every package major from 5.x onward has shipped `schemaVersion: "5"`). This is self-consistent and intentional: a coordinated linked-group bump can be driven by changes elsewhere in the family without forcing a wire-format major.
 
@@ -70,7 +70,7 @@ The package can publish many releases while `schemaVersion` stays `"5"`. Only a 
 
 - **Bump `schemaVersion`** only on a breaking change: renaming or removing a field, changing a type, tightening a constraint (e.g. an enum drops a value, a string gains a regex it did not have before), or anything that makes a previously valid payload fail to parse.
 - **Additive optional fields are non-breaking.** Adding a new `actionLabel`-style optional field, or a new `kind` branch with its own optional slice, does not require a bump.
-- **A new `kind` value is a minor bump on the published JSON Schema** (new `oneOf` branch, new `$id` at `@7.N/schema.json`). The TypeScript union widens, but no existing payload becomes invalid.
+- **A new `kind` value is a minor bump on the published JSON Schema** (new `oneOf` branch, new `$id` at `@9.N/schema.json`). The TypeScript union widens, but no existing payload becomes invalid.
 - **When v6 lands**, it ships with a documented migration path for stored v5 payloads, scheduled and retired under the same charter rule that governed v3 and v4: a codec lives at least one full major past the release that deprecated it.
 
 ## Standard Schema interop
@@ -126,7 +126,7 @@ The package validates strictly against v5. Each earlier wire generation shipped 
 
 | Release | Codec state | Producer guidance |
 | --- | --- | --- |
-| 5.0.0 | v3 codec on. `safeParseAnyVersion` emits a `deprecationWarning` on every v3 parse. | Start migrating producers to v4. |
+| 5.0.0 | v3 codec on; every v3 parse emits a `deprecationWarning`. | Start migrating producers to v4. |
 | 6.0.0 | v5 schema cuts over. v4 codec joins v3 with a `deprecationWarning`. Both remain on. | Start migrating producers to v5. |
 | 7.0.0 | v3 and v4 codecs remain on with `deprecationWarning`. Final warning major for v3. | Producers still on v3 must migrate before 8.0. |
 | 8.0.0 | v3 codec removed. v4 codec remains on with `deprecationWarning`; final warning major for v4. | Producers still on v4 must migrate before 9.0. |
@@ -134,7 +134,7 @@ The package validates strictly against v5. Each earlier wire generation shipped 
 
 ### Migrating stored payloads from a retired codec
 
-The v4 codec was retired at 9.0.0. Consumers who still have v4 payloads at rest must pin `@mobile-surfaces/surface-contracts@8.x` once, run them through `safeParseAnyVersion` to promote v4 → v5, store the result, and then upgrade to 9.x.
+The v4 codec was retired at 9.0.0, so the 9.x package cannot read a v4 payload at all. Consumers who still have v4 payloads at rest have two options. Migrate at the producer so nothing v4 remains stored; or, for payloads already at rest, pin `@mobile-surfaces/surface-contracts@8.x` once (its v4 codec is still present), parse each stored payload there to promote v4 → v5, write the v5 result back, and then upgrade to 9.x. There is no in-9.x codec to fall back on.
 
-The v3 codec was retired at 8.0.0; promote v3 payloads through `@7.x` the same way. The v2 codec was retired earlier at 5.0.0; v1 / v0 are also no longer reachable from the current package. Promote stored payloads through the matching older major (`@3` for v1 → v2, `@4` for v2 → v3, `@7.x` for v3 → v5, `@8.x` for v4 → v5) before upgrading.
+The v3 codec was retired at 8.0.0; promote v3 payloads through `@7.x` the same way (pin, parse, store the upgraded result). The v2 codec was retired earlier at 5.0.0; v1 / v0 are also no longer reachable from the current package. Promote stored payloads through the matching older major (`@3` for v1 → v2, `@4` for v2 → v3, `@7.x` for v3 → v5, `@8.x` for v4 → v5) before upgrading.
 

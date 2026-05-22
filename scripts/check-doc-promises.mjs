@@ -22,6 +22,13 @@
 // chain on any stale-promise pattern in the prose, so the doc and the
 // shipped state cannot drift.
 //
+// Also flags forbidden terms: words a shipped doc must not use because they
+// misdescribe the architecture or name a removed API ("pool" / "pooling" --
+// the push client multiplexes over one HTTP/2 session per origin, it does
+// not pool; "safeParseAnyVersion" -- a migration entry point removed at
+// surface-contracts 9.0). And it verifies that every relative link in the
+// repo-root README.md resolves to a file that exists.
+//
 // Coverage:
 //   - apps/site/src/content/docs/**/*.md
 //   - README.md (repo root)
@@ -109,6 +116,34 @@ const CITATION_PATTERNS = [
 // Comparatives are scanned only under this subtree (the published site).
 const COMPARATIVE_SCOPE = "apps/site/src/content/docs";
 
+// Forbidden terms: words a shipped doc must not use. Unlike the promise
+// patterns, there is no allowlist -- a forbidden term is always wrong, so
+// the fix is to rewrite the prose, not to link a tracking issue. Scanned
+// across every doc surface.
+const FORBIDDEN_TERMS = [
+  {
+    // The push client multiplexes over a single HTTP/2 session per origin;
+    // "connection pooling" / "session pool" misdescribes that architecture.
+    pattern: /\bpool(?:ing|ed|s)?\b/i,
+    reason:
+      'misdescribes the push client: it multiplexes over one HTTP/2 session per origin, it does not pool. Use "single-session HTTP/2 multiplexing".',
+  },
+  {
+    // safeParseAnyVersion was the multi-version migration entry point; it
+    // was removed at surface-contracts 9.0. Docs must not name it as a live
+    // API. See schema.md's migration appendix for the current guidance.
+    pattern: /\bsafeParseAnyVersion\b/,
+    reason:
+      "names safeParseAnyVersion, removed at surface-contracts 9.0. Describe the migration without naming the removed function.",
+  },
+];
+
+// The repo-root README is the one doc whose relative links are checked: its
+// links point at repo files (./AGENTS.md, ./data/traps.json). Doc-site pages
+// use site-routing links (/docs/...) that do not map to file paths and are
+// out of scope here.
+const README_REL = "README.md";
+
 const SKIP_DIRS = new Set([
   "node_modules",
   ".git",
@@ -168,6 +203,8 @@ function* walkMdRoot(absRoot, relRoot) {
 const repoRoot = path.resolve(".");
 const issues = [];
 const comparativeIssues = [];
+const forbiddenIssues = [];
+const linkIssues = [];
 let scanned = 0;
 
 for (const root of SCAN_ROOTS) {
@@ -195,6 +232,16 @@ for (const root of SCAN_ROOTS) {
         });
         break; // one issue per line is enough
       }
+      // Forbidden terms: always wrong, no allowlist. Scanned everywhere.
+      for (const term of FORBIDDEN_TERMS) {
+        const m = term.pattern.exec(line);
+        if (!m) continue;
+        forbiddenIssues.push({
+          path: `${rel}:${i + 1}`,
+          message: `"${m[0]}" ${term.reason}`,
+        });
+        break;
+      }
       // Comparatives: doc-site only, excused by a same-line citation.
       if (inComparativeScope) {
         for (const pat of COMPARATIVE_PATTERNS) {
@@ -207,6 +254,42 @@ for (const root of SCAN_ROOTS) {
           });
           break;
         }
+      }
+    }
+  }
+}
+
+// README internal-link resolution: every relative link target in the
+// repo-root README must point at a file that exists. External URLs
+// (http/https/mailto), in-page anchors (#...), and site-absolute paths
+// (/docs/...) are out of scope -- only on-disk repo links are verified.
+const readmeAbs = path.join(repoRoot, README_REL);
+if (fs.existsSync(readmeAbs)) {
+  const readmeSrc = fs.readFileSync(readmeAbs, "utf8");
+  const readmeLines = readmeSrc.split("\n");
+  const linkRe = /\]\(([^)]+)\)/g;
+  for (let i = 0; i < readmeLines.length; i += 1) {
+    let m;
+    linkRe.lastIndex = 0;
+    while ((m = linkRe.exec(readmeLines[i])) !== null) {
+      // A markdown link may carry an optional title: `](url "title")`. The
+      // URL is the first whitespace-delimited token; drop any title.
+      const target = m[1].trim().split(/\s+/)[0];
+      if (
+        /^(?:https?:|mailto:)/i.test(target) ||
+        target.startsWith("#") ||
+        target.startsWith("/")
+      ) {
+        continue;
+      }
+      // Drop any #anchor or ?query suffix before resolving the file path.
+      const filePart = target.split(/[#?]/)[0];
+      if (filePart === "") continue;
+      if (!fs.existsSync(path.resolve(repoRoot, filePart))) {
+        linkIssues.push({
+          path: `${README_REL}:${i + 1}`,
+          message: `relative link target does not exist: ${target}`,
+        });
       }
     }
   }
@@ -244,6 +327,40 @@ emitDiagnosticReport(
               message:
                 "A marketing comparative in the doc site needs a citation on the same line (a markdown link, a test reference, or an issue number) or it should be rewritten declaratively. Brand voice for Mobile Surfaces copy is declarative, not superlative.",
               issues: comparativeIssues,
+            },
+          }
+        : {}),
+    },
+    {
+      id: "doc-forbidden-terms",
+      status: forbiddenIssues.length === 0 ? "ok" : "fail",
+      summary:
+        forbiddenIssues.length === 0
+          ? `No forbidden terms across ${scanned} doc file(s).`
+          : `${forbiddenIssues.length} forbidden-term occurrence(s) across ${scanned} doc file(s).`,
+      ...(forbiddenIssues.length > 0
+        ? {
+            detail: {
+              message:
+                "A forbidden term either misdescribes the architecture or names a removed API. There is no allowlist; rewrite the prose.",
+              issues: forbiddenIssues,
+            },
+          }
+        : {}),
+    },
+    {
+      id: "readme-links",
+      status: linkIssues.length === 0 ? "ok" : "fail",
+      summary:
+        linkIssues.length === 0
+          ? "Every relative link in README.md resolves."
+          : `${linkIssues.length} unresolved relative link(s) in README.md.`,
+      ...(linkIssues.length > 0
+        ? {
+            detail: {
+              message:
+                "A relative link in README.md points at a file that does not exist. Fix the path or remove the link.",
+              issues: linkIssues,
             },
           }
         : {}),

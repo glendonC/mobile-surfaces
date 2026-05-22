@@ -28,31 +28,86 @@
 // CLI behavior preserved when invoked without --root.
 
 import { execFileSync } from "node:child_process";
-import { resolve } from "node:path";
+import { resolve, relative, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { buildReport, emitDiagnosticReport } from "./lib/diagnostics.mjs";
+import { discoverAppConfig } from "./lib/app-config.mjs";
 
 const TOOL = "check-ios-gitignore";
-const TARGET_PATH = "apps/mobile/ios";
+
+// True when `cwd` sits inside a git working tree. In audit mode a foreign
+// project that is not under git is not an MS029 violation; there is no
+// tracked-vs-ignored question to answer.
+function isGitWorkTree(cwd) {
+  try {
+    execFileSync("git", ["rev-parse", "--is-inside-work-tree"], {
+      stdio: "pipe",
+      cwd,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Run the MS029 gate against the git working tree at `rootDir`. Returns a
- * DiagnosticReport; the caller renders it. When `rootDir` is not a git
- * working tree, both checks fail with the git invocation error surfaced
- * verbatim (rather than silently passing).
+ * DiagnosticReport; the caller renders it.
  *
- * @param {{ rootDir?: string }} [options]
+ * Check mode targets the fixed monorepo path apps/mobile/ios and treats a git
+ * failure as a real fault. Audit mode discovers the Expo app directory so a
+ * foreign project with ios/ at its root is handled, and treats a project that
+ * is not a git working tree as not-applicable rather than a failure.
+ *
+ * @param {{ rootDir?: string, mode?: "check" | "audit" }} [options]
  */
-export function checkIosGitignore({ rootDir = process.cwd() } = {}) {
+export function checkIosGitignore({
+  rootDir = process.cwd(),
+  mode = "check",
+} = {}) {
   const cwd = resolve(rootDir);
+  const audit = mode === "audit";
+
+  // Resolve the generated ios/ directory relative to the audited root. Check
+  // mode uses the fixed monorepo layout; audit mode discovers the Expo app
+  // directory so a root-shaped foreign project (ios/ at the project root) is
+  // handled instead of false-failing against a hard-coded apps/mobile path.
+  let targetPath = "apps/mobile/ios";
+  if (audit) {
+    const discovered = discoverAppConfig(cwd);
+    if (!discovered.found) {
+      return buildReport(TOOL, [
+        {
+          id: "ios-path-located",
+          status: "fail",
+          summary: `No Expo app config found under ${cwd}; cannot locate the generated ios/ directory.`,
+        },
+      ]);
+    }
+    targetPath = relative(cwd, join(discovered.mobileRoot, "ios")) || "ios";
+  }
+
+  // In audit mode a project that is not a git working tree has no MS029
+  // question to answer. Check mode keeps the strict behavior.
+  if (audit && !isGitWorkTree(cwd)) {
+    return buildReport(TOOL, [
+      {
+        id: "ios-gitignore",
+        status: "ok",
+        summary: `${cwd} is not a git working tree; MS029 (ios/ gitignored and untracked) is not applicable.`,
+        trapId: "MS029",
+      },
+    ]);
+  }
+
   const checks = [];
 
   // Check 1: the path is gitignored.
   let ignored = false;
   let ignoreErr;
   try {
-    execFileSync("git", ["check-ignore", "--no-index", TARGET_PATH], {
+    execFileSync("git", ["check-ignore", "--no-index", targetPath], {
       stdio: "pipe",
       cwd,
     });
@@ -80,8 +135,8 @@ export function checkIosGitignore({ rootDir = process.cwd() } = {}) {
       id: "ios-path-gitignored",
       status: ignored ? "ok" : "fail",
       summary: ignored
-        ? `${TARGET_PATH} is gitignored.`
-        : `${TARGET_PATH} is not gitignored.`,
+        ? `${targetPath} is gitignored.`
+        : `${targetPath} is not gitignored.`,
       trapId: "MS029",
       ...(ignored
         ? {}
@@ -99,7 +154,7 @@ export function checkIosGitignore({ rootDir = process.cwd() } = {}) {
   let trackedFiles = [];
   let lsErr;
   try {
-    const out = execFileSync("git", ["ls-files", TARGET_PATH], {
+    const out = execFileSync("git", ["ls-files", targetPath], {
       stdio: "pipe",
       cwd,
     });
@@ -124,14 +179,14 @@ export function checkIosGitignore({ rootDir = process.cwd() } = {}) {
       id: "ios-path-untracked",
       status: ok ? "ok" : "fail",
       summary: ok
-        ? `${TARGET_PATH} has no tracked files in git.`
-        : `${TARGET_PATH} has ${trackedFiles.length} tracked file(s) despite the ignore rule.`,
+        ? `${targetPath} has no tracked files in git.`
+        : `${targetPath} has ${trackedFiles.length} tracked file(s) despite the ignore rule.`,
       trapId: "MS029",
       ...(ok
         ? {}
         : {
             detail: {
-              message: `Run \`git rm -r --cached ${TARGET_PATH}\` and commit the deletion. The ignore rule only applies to new files; existing tracked entries must be removed explicitly.`,
+              message: `Run \`git rm -r --cached ${targetPath}\` and commit the deletion. The ignore rule only applies to new files; existing tracked entries must be removed explicitly.`,
               paths: trackedFiles.slice(0, 10),
             },
           }),
@@ -149,8 +204,12 @@ if (isDirectInvocation) {
     options: {
       json: { type: "boolean", default: false },
       root: { type: "string" },
+      mode: { type: "string", default: "check" },
     },
   });
-  const report = checkIosGitignore({ rootDir: values.root ?? process.cwd() });
+  const report = checkIosGitignore({
+    rootDir: values.root ?? process.cwd(),
+    mode: values.mode === "audit" ? "audit" : "check",
+  });
   emitDiagnosticReport(report, { json: values.json });
 }

@@ -10,6 +10,17 @@ import {
   type LiveSurfaceSnapshotWidget,
 } from "@mobile-surfaces/surface-contracts";
 import { APP_GROUP } from "../generated/appGroup";
+import {
+  coerceSnapshotValue,
+  coerceWrittenAt,
+  parseDecodeErrorBreadcrumb,
+  type SurfaceDecodeErrorBreadcrumb,
+} from "./parse";
+
+// Re-exported so existing importers (`../surfaceStorage`) keep resolving the
+// type from one place; the definition lives in the native-free parse module.
+export type { SurfaceDecodeErrorBreadcrumb } from "./parse";
+
 const WIDGET_KIND = "MobileSurfacesHomeWidget";
 const CONTROL_KIND = "MobileSurfacesControlWidget";
 const LOCK_ACCESSORY_KIND = "MobileSurfacesLockAccessoryWidget";
@@ -120,22 +131,10 @@ function snapshotKey(surfaceId: string) {
 }
 
 // Decode-error breadcrumbs are written from the Swift side when JSONDecoder
-// fails to parse the snapshot payload (MS036's silent-fail mode). Shape:
-//   `{ at: <ISO8601>, error: <string>, trapId?: <string> }`
-// `trapId` was added in v7: the Swift writer defaults to "MS036" (the trap
-// the breadcrumb represents) and MSTrapBound errors override with their
-// own binding. Older builds (pre-v7) omit the field; readers tolerate
-// either shape and fall back to MS036.
-// Stored under `surface.snapshot.<id>.decodeError`. Cleared on the next
-// successful decode. Exposed here so the diagnostics layer can probe these
-// keys without reaching directly into the App Group bridge.
-export interface SurfaceDecodeErrorBreadcrumb {
-  readonly surfaceId: string;
-  readonly at: string;
-  readonly error: string;
-  readonly trapId: string;
-}
-
+// fails to parse the snapshot payload (MS036's silent-fail mode). Stored
+// under `surface.snapshot.<id>.decodeError` and cleared on the next
+// successful decode. The breadcrumb's wire shape and parsing live in
+// ./parse.ts (SurfaceDecodeErrorBreadcrumb, parseDecodeErrorBreadcrumb).
 function decodeErrorKey(surfaceId: string) {
   return `surface.snapshot.${surfaceId}.decodeError`;
 }
@@ -158,25 +157,7 @@ export function readSurfaceDecodeError(
   } catch {
     return null;
   }
-  if (raw == null) return null;
-  let parsed: unknown = raw;
-  if (typeof raw === "string") {
-    // Swift writes the breadcrumb as a JSON-encoded string in our pipeline;
-    // tolerate a raw object too in case a future writer drops the JSON layer.
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      return null;
-    }
-  }
-  if (!parsed || typeof parsed !== "object") return null;
-  const obj = parsed as { at?: unknown; error?: unknown; trapId?: unknown };
-  if (typeof obj.at !== "string" || typeof obj.error !== "string") return null;
-  // trapId is optional on the wire (pre-v7 writers omitted it). Default to
-  // MS036, the trap this breadcrumb represents at the host-side write
-  // boundary.
-  const trapId = typeof obj.trapId === "string" ? obj.trapId : "MS036";
-  return { surfaceId, at: obj.at, error: obj.error, trapId };
+  return parseDecodeErrorBreadcrumb(surfaceId, raw);
 }
 
 /**
@@ -202,27 +183,13 @@ export function readSurfaceAppGroupRecord(
 ): SurfaceAppGroupRecord {
   let rawSnapshot: unknown = null;
   try {
-    const raw = storage.get(snapshotKey(surfaceId));
-    if (typeof raw === "string") {
-      try {
-        rawSnapshot = JSON.parse(raw);
-      } catch {
-        rawSnapshot = raw;
-      }
-    } else if (raw != null) {
-      rawSnapshot = raw;
-    }
+    rawSnapshot = coerceSnapshotValue(storage.get(snapshotKey(surfaceId)));
   } catch {
     rawSnapshot = null;
   }
   let writtenAt: number | null = null;
   try {
-    const raw = storage.get(writtenAtKey(surfaceId));
-    if (typeof raw === "number" && Number.isFinite(raw)) writtenAt = raw;
-    else if (typeof raw === "string") {
-      const n = Number(raw);
-      if (Number.isFinite(n)) writtenAt = n;
-    }
+    writtenAt = coerceWrittenAt(storage.get(writtenAtKey(surfaceId)));
   } catch {
     writtenAt = null;
   }
