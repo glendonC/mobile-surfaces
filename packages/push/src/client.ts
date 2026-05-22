@@ -34,6 +34,7 @@ import {
   assertActivityTimestampOptions,
   assertPayloadWithinLimit,
   assertTokenEnvironment,
+  assertValidPriority,
   resolveBroadcastExpiration,
 } from "./preflight.ts";
 import type { PayloadKind } from "./preflight.ts";
@@ -409,7 +410,14 @@ export interface SendDescription {
   /** `apns-topic` header value, or null for broadcast (which omits the header). */
   topic: string | null;
   priority: 5 | 10;
-  apnsId: string;
+  /**
+   * The `apns-id` header value, present only when the caller supplied
+   * `options.apnsId`. When omitted, the real send mints a fresh UUID per
+   * attempt and APNs echoes it back; `describeSend` deliberately leaves it
+   * absent so two calls on the same input describe identical bytes (a fresh
+   * UUID would make the description non-deterministic).
+   */
+  apnsId?: string;
   expirationSeconds: number;
   staleDateSeconds?: number;
   dismissalDateSeconds?: number;
@@ -935,6 +943,9 @@ export class PushClient {
     // ActivityKit payload. expirationSeconds: 0 passes through here because
     // resolveBroadcastExpiration owns the zero-vs-storagePolicy decision below.
     assertActivityTimestampOptions(options);
+    // MS015 pre-flight: reject an out-of-range apns-priority before the
+    // round-trip, the same as the device send paths.
+    assertValidPriority(options.priority);
     const payload = JSON.stringify(
       this.#buildActivityPayload(live, "update", undefined, options),
     );
@@ -1066,13 +1077,21 @@ export class PushClient {
     this.#assertOpen();
     const validated = validateSnapshot(input.snapshot);
     const live = snapshotMustBeLiveActivity(validated, "describeSend()");
-    const apnsId = input.options?.apnsId ?? genApnsId();
+    // describeSend is a side-effect-free description of the exact bytes a
+    // send would issue. The real send paths mint a fresh apns-id UUID per
+    // attempt when the caller omits one; minting here would make two calls on
+    // the same input describe different bytes. So the description carries the
+    // caller's apnsId when supplied and leaves it absent otherwise (APNs
+    // assigns and echoes one on the real send).
+    const apnsId = input.options?.apnsId;
     const expirationSeconds =
       input.options?.expirationSeconds ?? nowSec() + 3600;
     const bundleId = this.#options.bundleId;
-    // MS032 pre-flight, same as the real send paths: the preview must reject
-    // exactly the timestamp inputs #sendDevice and broadcast() would reject.
+    // MS032/MS015 pre-flight, same as the real send paths: the preview must
+    // reject exactly the timestamp and priority inputs #sendDevice and
+    // broadcast() would reject.
     assertActivityTimestampOptions(input.options ?? {});
+    assertValidPriority(input.options?.priority);
     switch (input.operation) {
       case "alert": {
         const payload = toApnsAlertPayload(live);
@@ -1223,7 +1242,7 @@ export class PushClient {
     pushType: "alert" | "liveactivity";
     topic: string | null;
     priority: 5 | 10;
-    apnsId: string;
+    apnsId: string | undefined;
     expirationSeconds: number;
     staleDateSeconds?: number;
     dismissalDateSeconds?: number;
@@ -1247,7 +1266,7 @@ export class PushClient {
       pushType: args.pushType,
       topic: args.topic,
       priority: args.priority,
-      apnsId: args.apnsId,
+      ...(args.apnsId !== undefined ? { apnsId: args.apnsId } : {}),
       expirationSeconds: args.expirationSeconds,
       ...(args.staleDateSeconds !== undefined
         ? { staleDateSeconds: args.staleDateSeconds }
@@ -1326,6 +1345,11 @@ export class PushClient {
     // instead of letting it surface as an opaque 400 BadDeviceToken. No-op
     // when tokenEnvironment was not supplied.
     assertTokenEnvironment(args.options.tokenEnvironment, this.#options.environment);
+    // MS015 pre-flight: reject an out-of-range apns-priority before the
+    // round-trip. SendOptions.priority is typed 5 | 10, but a plain-JS caller
+    // can pass anything; without this the value surfaces as an opaque 400
+    // BadPriority. No-op when priority was not supplied.
+    assertValidPriority(args.options.priority);
     const apnsId = args.options.apnsId ?? genApnsId();
     const priority = args.options.priority ?? args.defaultPriority;
     const expiration = String(args.options.expirationSeconds ?? nowSec() + 3600);
