@@ -6,8 +6,10 @@
 //   - the MobileSurfacesError abstract base class (every error class in
 //     the monorepo derives from this; lazy trapId/docsUrl getters resolve
 //     through the generated table);
-//   - the single docs URL builder (every renderer imports docsUrlFor from
-//     here so the slug algorithm cannot drift);
+//   - the docs URL builder, re-exported from the ./docs-url.ts leaf module
+//     so external code imports it from the package root while the codegen
+//     script imports the same module directly — one slug algorithm, no
+//     drift between generated docsUrl and runtime docsUrl;
 //   - lookup helpers (findTrap, findTrapByErrorClass, trapIdForErrorClass,
 //     docsUrlForErrorClass) and the typed TrapIds constant.
 //
@@ -20,6 +22,15 @@ import {
   ERROR_CLASS_TO_TRAP_ID as GENERATED_ERROR_CLASS_MAP,
   TrapIds as GENERATED_TRAP_IDS,
 } from "./generated/bindings.ts";
+
+// The docs-URL / slug logic lives in the ./docs-url.ts leaf module (no
+// bootstrap cycle with codegen) and is re-exported here so external code
+// keeps importing it from the package root. scripts/generate-traps-package
+// .mjs imports the SAME module by relative path, so the docsUrl baked into
+// the generated bindings and the docsUrl this package exports at runtime
+// are computed by one function. The index.test.ts regression lock pins
+// that equality forever.
+export { DOCS_BASE_URL, docsUrlFor, githubAnchor } from "./docs-url.ts";
 
 export type TrapId = `MS${string}`;
 
@@ -127,28 +138,6 @@ export function trapIdForErrorClass(name: string): TrapId | undefined {
  */
 export function docsUrlForErrorClass(name: string): string | undefined {
   return findTrapByErrorClass(name)?.docsUrl;
-}
-
-const DOCS_BASE_URL =
-  "https://github.com/glendonC/mobile-surfaces/blob/main/CLAUDE.md";
-
-/**
- * Single URL builder. Every renderer (the generator, build-agents-md, the
- * CLI error formatter) imports this so the slug algorithm cannot drift
- * across consumers. Matches the GitHub markdown heading-slug algorithm
- * used by AGENTS.md / CLAUDE.md: lowercase, replace any run of
- * non-alphanumeric characters with a single hyphen, trim leading/trailing
- * hyphens, prefix with `MSXXX: ` to match the rendered heading shape.
- */
-export function docsUrlFor(trapId: TrapId, title: string): string {
-  return `${DOCS_BASE_URL}#${githubAnchor(`${trapId}: ${title}`)}`;
-}
-
-function githubAnchor(heading: string): string {
-  return heading
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
 }
 
 /**

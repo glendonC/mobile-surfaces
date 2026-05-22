@@ -36,6 +36,13 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, relative } from "node:path";
 import { parseArgs } from "node:util";
 import { buildReport, emitDiagnosticReport } from "./lib/diagnostics.mjs";
+// docsUrlFor is the single docs-URL builder. It lives in the traps package's
+// ./docs-url.ts leaf module (no workspace imports, no codegen-output import,
+// so it is safe to pull in pre-install by relative path). index.ts of the
+// same package re-exports it, so the docsUrl baked into the generated
+// bindings below and the docsUrl @mobile-surfaces/traps exports at runtime
+// are produced by one function. Node strips the .ts types on import.
+import { docsUrlFor } from "../packages/traps/src/docs-url.ts";
 
 const { values } = parseArgs({
   options: {
@@ -55,12 +62,6 @@ const SWIFT_REPLICA_LIVE_ACTIVITY = resolve(
 const SWIFT_REPLICA_SHARED = resolve(
   "apps/mobile/targets/_shared/MobileSurfacesTraps.swift",
 );
-
-// Per-trap docsUrl strings deep-link into the full reference. AGENTS.md
-// carries the per-rule Symptom + Fix prose; CLAUDE.md is a compact index
-// that points back at AGENTS.md for the same anchors.
-const DOCS_BASE_URL =
-  "https://github.com/glendonC/mobile-surfaces/blob/main/AGENTS.md";
 
 const raw = readFileSync(TRAPS_PATH, "utf8");
 const parsed = JSON.parse(raw);
@@ -144,17 +145,6 @@ if (values.check) {
       console.log(`Wrote ${relative(process.cwd(), out)}.`);
     }
   }
-}
-
-function githubAnchor(heading) {
-  return heading
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-}
-
-function docsUrlFor(id, title) {
-  return `${DOCS_BASE_URL}#${githubAnchor(`${id}: ${title}`)}`;
 }
 
 function tsLit(s) {

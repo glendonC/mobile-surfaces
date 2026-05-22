@@ -419,6 +419,23 @@ export const checkRegistry = Object.freeze([
     mode: "single-mode",
     json: false,
   },
+  {
+    id: "traps-tests",
+    label: "traps package unit suite",
+    stage: 5,
+    // Co-located with the package source (packages/traps/src/index.test.ts).
+    // The package is load-bearing — every monorepo error class derives from
+    // MobileSurfacesError, and every diagnostic logger reads its lookup
+    // helpers — but it previously had no owned test file. The suite's
+    // load-bearing assertion pins docsUrlFor against the docsUrl baked into
+    // the generated bindings, so the CLAUDE.md/AGENTS.md slug drift cannot
+    // recur silently.
+    script: "packages/traps/src/index.test.ts",
+    runner: "node-test",
+    diagnose: false,
+    mode: "single-mode",
+    json: false,
+  },
 
   // Stage 6: trap-derived files. The trap catalog must validate before
   // anything that consumes it.
