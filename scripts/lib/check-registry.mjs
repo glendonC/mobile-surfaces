@@ -341,6 +341,14 @@ export const checkRegistry = Object.freeze([
     mode: "single-mode",
   },
   {
+    id: "check-doc-schema-url",
+    label: "doc schema URLs match the canonical package major",
+    stage: 4,
+    script: "scripts/check-doc-schema-url.mjs",
+    diagnose: true,
+    mode: "single-mode",
+  },
+  {
     id: "check-deprecation-prose",
     label: "deprecation prose targets a future major",
     stage: 4,
