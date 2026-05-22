@@ -102,9 +102,9 @@ Trap ids are monotonic forever; retired rules keep their id with a one-line tomb
 
 ## Related local documentation
 
-- [Architecture](https://mobile-surfaces.com/docs/architecture): the contract, the surfaces, the adapter boundary.
-- [Multi-surface](https://mobile-surfaces.com/docs/multi-surface): every `kind` value and the projection it drives.
-- [Backend integration](https://mobile-surfaces.com/docs/backend-integration): domain event to snapshot to APNs walkthrough.
+- [Architecture](https://mobile-surfaces.com/docs/concepts): the contract, the surfaces, the adapter boundary.
+- [Multi-surface](https://mobile-surfaces.com/docs/surfaces): every `kind` value and the projection it drives.
+- [Backend integration](https://mobile-surfaces.com/docs/backend): domain event to snapshot to APNs walkthrough.
 - [Push](https://mobile-surfaces.com/docs/push): wire-layer reference, SDK, smoke script, token taxonomy, error reasons.
 - [Observability](https://mobile-surfaces.com/docs/observability): which catalog-bound errors are worth alerting on, what a stuck Live Activity looks like on the wire, recommended log shape.
 - [Troubleshooting](https://mobile-surfaces.com/docs/troubleshooting): symptom-to-fix recipes for failures not in this catalog.
