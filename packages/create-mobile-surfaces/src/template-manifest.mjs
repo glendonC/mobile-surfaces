@@ -11,46 +11,88 @@
 //
 // Both paths produce the same shape so callers don't care which mode they're in.
 
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// One probe, cached for the life of the process. resolveTemplateRoot() and
-// scaffold.mjs's resolveTemplateSource() both ask the same question — is
-// this a published tarball or a live monorepo — so cache the answer in a
-// shape that carries every path either caller needs.
+// git archive records the commit it was built from in the tar's pax global
+// extended header (the same value `git get-tar-commit-id` extracts). Read it
+// straight out of the gzipped tarball so a cached template.tgz can be checked
+// for freshness against the monorepo without unpacking it. Returns null when
+// the file is missing, not a git-archive tarball, or otherwise unreadable.
+// Exported so the freshness logic can be exercised against real tarballs.
+export function readTarballCommitId(tarballPath) {
+  let tar;
+  try {
+    tar = zlib.gunzipSync(fs.readFileSync(tarballPath));
+  } catch {
+    return null;
+  }
+  // Block 0 is a ustar header; typeflag 'g' (0x67) at offset 156 marks a pax
+  // global extended header. Its octal size field (offset 124, 12 bytes) gives
+  // the byte length of the record data that begins at block 1 (offset 512).
+  if (tar.length < 512 || tar[156] !== 0x67) return null;
+  const sizeField = tar.toString("ascii", 124, 136).replace(/\0.*$/, "").trim();
+  const size = Number.parseInt(sizeField, 8);
+  if (!Number.isInteger(size) || size <= 0 || tar.length < 512 + size) {
+    return null;
+  }
+  // Records are "<len> <keyword>=<value>\n"; git archive writes comment=<sha>.
+  const data = tar.toString("utf8", 512, 512 + size);
+  const match = data.match(/\bcomment=([0-9a-f]{40,64})\b/);
+  return match ? match[1] : null;
+}
+
+// HEAD of the monorepo the CLI is running inside, or null when repoRoot is
+// not a readable git working tree.
+function readHeadCommit(repoRoot) {
+  try {
+    return (
+      execFileSync("git", ["-C", repoRoot, "rev-parse", "HEAD"], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim() || null
+    );
+  } catch {
+    return null;
+  }
+}
+
+// Decide whether the CLI runs from bundled publish artifacts or live monorepo
+// source, given the two candidate locations and the environment. Pure of the
+// __dirname-relative path resolution so the freshness branch can be exercised
+// against synthetic fixtures; production callers reach it through the cached
+// resolveCliMode() below.
 //
-// The default probe prefers the bundled template/manifest.json when it
-// exists on disk, else falls back to the live monorepo. Those bundled
-// files are gitignored build outputs (scripts/build-template.mjs writes
-// them), so whether they exist is purely a function of local history: a
-// fresh CI checkout has none, a developer who ever ran build:template has
-// stale ones. Anything that probes the mode therefore gets a different
-// answer in CI vs. locally: silent and environment-dependent.
-//
-// MOBILE_SURFACES_CLI_MODE pins the answer explicitly, bypassing the disk
-// probe entirely. The scaffold snapshot test sets it to "live" so it
-// always runs from the monorepo source regardless of whether stale
-// bundled artifacts happen to be on disk. Valid values: "live", "bundled".
-let _cliMode;
-function resolveCliMode() {
-  if (_cliMode) return _cliMode;
-  const templateDir = path.resolve(__dirname, "..", "template");
+// MOBILE_SURFACES_CLI_MODE pins the answer explicitly and bypasses every
+// probe. Without it:
+//   • No bundled manifest on disk -> live. A fresh checkout; a published
+//     package never reaches this branch.
+//   • Bundled manifest present, no monorepo alongside it -> bundled. This is
+//     the published-package case: prepublishOnly rebuilt the tarball, so it
+//     is current by construction and there is no live source to compare to.
+//   • Bundled manifest present *and* a monorepo alongside it -> the artifacts
+//     are gitignored build outputs and may be stale leftovers from an earlier
+//     build:template. Compare the tarball's embedded commit id against HEAD:
+//     trust the bundle only when they match, else fall back to live source so
+//     the scaffold reflects HEAD rather than a frozen older tree.
+export function computeCliMode({ templateDir, repoRoot, env }) {
   const manifestPath = path.join(templateDir, "manifest.json");
   const tarballPath = path.join(templateDir, "template.tgz");
-  const repoRoot = path.resolve(__dirname, "..", "..", "..");
+  const workspaceMarker = path.join(repoRoot, "pnpm-workspace.yaml");
 
-  const forced = process.env.MOBILE_SURFACES_CLI_MODE;
+  const forced = env.MOBILE_SURFACES_CLI_MODE;
   if (forced === "live") {
-    if (!fs.existsSync(path.join(repoRoot, "pnpm-workspace.yaml"))) {
+    if (!fs.existsSync(workspaceMarker)) {
       throw new Error(
         `MOBILE_SURFACES_CLI_MODE=live but no monorepo found at ${repoRoot}.`,
       );
     }
-    _cliMode = { kind: "live", repoRoot };
-    return _cliMode;
+    return { kind: "live", repoRoot };
   }
   if (forced === "bundled") {
     if (!fs.existsSync(manifestPath)) {
@@ -58,8 +100,7 @@ function resolveCliMode() {
         `MOBILE_SURFACES_CLI_MODE=bundled but no bundled template at ${manifestPath}. Run build:template first.`,
       );
     }
-    _cliMode = { kind: "bundled", manifestPath, tarballPath };
-    return _cliMode;
+    return { kind: "bundled", manifestPath, tarballPath };
   }
   if (forced !== undefined && forced !== "") {
     throw new Error(
@@ -67,17 +108,53 @@ function resolveCliMode() {
     );
   }
 
+  const hasMonorepo = fs.existsSync(workspaceMarker);
+
   if (fs.existsSync(manifestPath)) {
-    _cliMode = { kind: "bundled", manifestPath, tarballPath };
-    return _cliMode;
+    if (!hasMonorepo) {
+      return { kind: "bundled", manifestPath, tarballPath };
+    }
+    // Bundled artifacts sitting next to a live monorepo: trust them only when
+    // the tarball was archived from the current HEAD.
+    const head = readHeadCommit(repoRoot);
+    const bundledCommit = readTarballCommitId(tarballPath);
+    if (head && bundledCommit && head === bundledCommit) {
+      return { kind: "bundled", manifestPath, tarballPath };
+    }
+    if (head) {
+      console.warn(
+        bundledCommit
+          ? `[create-mobile-surfaces] Ignoring a stale template.tgz (archived from ${bundledCommit.slice(0, 12)}, HEAD is ${head.slice(0, 12)}); scaffolding from live source. Run build:template to refresh it.`
+          : `[create-mobile-surfaces] Could not read a commit id from template.tgz; scaffolding from live source instead of the unverifiable bundle.`,
+      );
+      return { kind: "live", repoRoot };
+    }
+    // No readable HEAD: freshness cannot be verified and live mode's git
+    // archive would fail here too. Keep the prior existence-based behavior.
+    return { kind: "bundled", manifestPath, tarballPath };
   }
-  if (fs.existsSync(path.join(repoRoot, "pnpm-workspace.yaml"))) {
-    _cliMode = { kind: "live", repoRoot };
-    return _cliMode;
+
+  if (hasMonorepo) {
+    return { kind: "live", repoRoot };
   }
   throw new Error(
     `Couldn't locate the template. Looked for ${manifestPath} (published) or a monorepo at ${repoRoot} (dev).`,
   );
+}
+
+// One probe, cached for the life of the process. resolveTemplateRoot() and
+// scaffold.mjs's resolveTemplateSource() both ask the same question — is
+// this a published tarball or a live monorepo — so cache the answer in a
+// shape that carries every path either caller needs.
+let _cliMode;
+function resolveCliMode() {
+  if (_cliMode) return _cliMode;
+  _cliMode = computeCliMode({
+    templateDir: path.resolve(__dirname, "..", "template"),
+    repoRoot: path.resolve(__dirname, "..", "..", ".."),
+    env: process.env,
+  });
+  return _cliMode;
 }
 
 export function resolveTemplateRoot() {
