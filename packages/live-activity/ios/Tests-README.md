@@ -7,6 +7,9 @@ surfaces extracted from `LiveActivityModule.swift` in v5:
 - `ObserverRegistry` — the actor that owns Task handles for the
   ActivityKit AsyncSequence drains
 - `LiveActivityCodableBridge` — the JSON-dict <-> Codable round-trip
+- `LiveActivityModuleLogic` — push-type selection, options-bag parsing
+  (`staleDateSeconds` / `relevanceScore`), activity-state labels, and
+  push-token hex formatting, extracted from `LiveActivityModule.swift`
 
 None of these files `import ActivityKit` or `ExpoModulesCore`, so `swift
 test` runs natively on macOS without spinning up an iOS simulator. The
