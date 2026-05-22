@@ -69,6 +69,8 @@ The validator runs once at the boundary; everything downstream consumes a typed 
 
 `liveSurfaceSnapshot` is a discriminated union: `kind` picks which branch is valid, and the validator rejects fields that belong to the wrong branch. It covers six branches at `schemaVersion: "5"`:
 
+> **`schemaVersion` is not the npm version.** The npm package version (`9.0.0`) tracks the TypeScript API — exports, helper signatures, build output — and follows semver for *that*. The wire `schemaVersion` literal (`"5"`) tracks the on-the-wire payload shape and only bumps when the bytes a producer emits change incompatibly. They move independently: a package major that only renames an export or drops a retired codec leaves `schemaVersion` at `"5"`. Always set `schemaVersion: "5"` in a snapshot regardless of which `9.x`/`10.x` package you have installed; the package validates strictly against that one literal.
+
 | `kind` | Renders as | Slice (required fields in **bold**) |
 | --- | --- | --- |
 | `liveActivity` | Lock Screen Live Activity, Dynamic Island | `liveActivity: { `**`title, body, progress, deepLink, modeLabel, contextLabel, statusLine, stage, estimatedSeconds, morePartsCount`**`, actionLabel? }` |

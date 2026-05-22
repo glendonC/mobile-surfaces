@@ -36,6 +36,6 @@ export const READING_PATHS: ReadonlyArray<ReadingPath> = [
     label: "Triaging a silent failure",
     intro:
       "A live bug where the Lock Screen is empty or APNs returns 200 with no effect.",
-    slugs: ["troubleshooting", "traps", "push"],
+    slugs: ["troubleshooting", "catalog-maintenance", "push"],
   },
 ];

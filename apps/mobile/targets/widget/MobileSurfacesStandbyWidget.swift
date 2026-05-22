@@ -130,7 +130,7 @@ private struct MobileSurfacesStandbyView: View {
         .lineLimit(2)
       Spacer(minLength: 0)
       ProgressView(value: snapshot.progress)
-        .tint(isMonochrome ? Color.primary : Color("AccentColor"))
+        .tint(isMonochrome ? Color.primary : Color.accentColor)
     }
     .padding()
     .opacity(isStale ? 0.7 : 1.0)
@@ -144,7 +144,7 @@ private struct MobileSurfacesStandbyBackground: View {
     if snapshot.presentation == "night" {
       Color.black
     } else {
-      Color("WidgetBackground")
+      Color("$widgetBackground")
     }
   }
 }

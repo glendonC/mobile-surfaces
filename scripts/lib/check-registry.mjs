@@ -312,6 +312,15 @@ export const checkRegistry = Object.freeze([
     mode: "single-mode",
     trapIds: ["MS029"],
   },
+  {
+    id: "check-widget-color-assets",
+    label: "widget Color asset references resolve to generated colorsets",
+    stage: 3,
+    script: "scripts/check-widget-color-assets.mjs",
+    diagnose: true,
+    mode: "single-mode",
+    trapIds: ["MS045"],
+  },
 
   // Stage 4: environment/config probes. Read-only inspection of app.json,
   // package.json pins, and doc files for stale schema-version literals.
@@ -371,6 +380,14 @@ export const checkRegistry = Object.freeze([
     label: "no stale TODOs or unfulfilled promises in doc prose",
     stage: 4,
     script: "scripts/check-doc-promises.mjs",
+    diagnose: true,
+    mode: "single-mode",
+  },
+  {
+    id: "check-doc-links",
+    label: "internal doc links and trap anchors resolve",
+    stage: 4,
+    script: "scripts/check-doc-links.mjs",
     diagnose: true,
     mode: "single-mode",
   },

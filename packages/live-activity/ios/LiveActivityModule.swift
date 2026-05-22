@@ -6,8 +6,12 @@ import Foundation
 //   - LiveActivityError.swift            error enum bridged to JS
 //   - ObserverRegistry.swift             actor-isolated Task-handle registry
 //   - LiveActivityCodableBridge.swift    JSON-dict <-> Codable round-trip
+//   - LiveActivityModuleLogic.swift      push-type / options / state decisions
 // Each is independent of ExpoModulesCore so the Swift Package at
-// packages/live-activity/ios/Tests can exercise them directly.
+// packages/live-activity/ios/SwiftTests can exercise them directly. This
+// file keeps only the ActivityKit calls that cannot run off-device
+// (Activity.request / update / end and the AsyncSequence drains); the
+// branches they depend on are decided in LiveActivityModuleLogic.
 
 public class LiveActivityModule: Module {
   // The registry is created lazily in `definition()` once we have the iOS
@@ -56,30 +60,40 @@ public class LiveActivityModule: Module {
         try LiveActivityCodableBridge.decode(state)
       let content = Self.activityContent(state: parsed, options: options)
 
-      // Channel push (iOS 18+) is opt-in: only when the JS caller passes a
-      // non-nil channelId AND we're on iOS 18. If they ask for it on an older
-      // OS we surface a typed error so the adapter can show a clear message
-      // instead of silently downgrading to token push.
+      // Channel push (iOS 18+) is opt-in. The token-vs-channel decision —
+      // and the typed failure when a channel is requested on an older OS —
+      // lives in LiveActivityModuleLogic.pushTypeDecision so it is unit
+      // tested off-device; this site only performs the ActivityKit call the
+      // decision selects.
+      let isIOS18: Bool = { if #available(iOS 18, *) { return true }; return false }()
       let activity: Activity<MobileSurfacesActivityAttributes>
       let isChannelMode: Bool
-      if let channelId = channelId {
-        if #available(iOS 18, *) {
-          activity = try Activity.request(
-            attributes: attrs,
-            content: content,
-            pushType: .channel(channelId)
-          )
-          isChannelMode = true
-        } else {
+      switch LiveActivityModuleLogic.pushTypeDecision(
+        channelId: channelId,
+        isIOS18OrLater: isIOS18
+      ) {
+      case .channel(let channelId):
+        guard #available(iOS 18, *) else {
+          // Unreachable: pushTypeDecision only returns .channel when
+          // isIOS18OrLater is true. The guard satisfies the compiler's
+          // availability check for the .channel(_) pushType below.
           throw LiveActivityError.unsupportedFeature
         }
-      } else {
+        activity = try Activity.request(
+          attributes: attrs,
+          content: content,
+          pushType: .channel(channelId)
+        )
+        isChannelMode = true
+      case .token:
         activity = try Activity.request(
           attributes: attrs,
           content: content,
           pushType: .token
         )
         isChannelMode = false
+      case .unsupportedFeature:
+        throw LiveActivityError.unsupportedFeature
       }
 
       self.observe(activity: activity, isChannelMode: isChannelMode)
@@ -116,8 +130,9 @@ public class LiveActivityModule: Module {
         .first(where: { $0.id == activityId }) else {
         throw LiveActivityError.notFound
       }
-      let policy: ActivityUIDismissalPolicy = (dismissalPolicy == "immediate")
-        ? .immediate : .default
+      let policy: ActivityUIDismissalPolicy =
+        LiveActivityModuleLogic.dismissalPolicyIsImmediate(dismissalPolicy)
+          ? .immediate : .default
       await activity.end(nil, dismissalPolicy: policy)
     }
 
@@ -252,27 +267,32 @@ public class LiveActivityModule: Module {
       for await update in activity.activityStateUpdates {
         if Task.isCancelled { return }
         guard let self = self else { return }
-        let label: String = {
+        // The known-case label strings live in LiveActivityModuleLogic so a
+        // unit test pins them. `@unknown default` must stay here — it only
+        // compiles against the real ActivityKit enum — and routes to
+        // `unknownActivityStateLabel` so future Apple-added cases surface as
+        // "unknown" rather than collapsing into "active". The JS layer
+        // treats "unknown" as a non-terminal observed state.
+        let caseName: String? = {
           switch update {
           case .active: return "active"
           case .ended: return "ended"
           case .dismissed: return "dismissed"
           case .stale: return "stale"
           case .pending: return "pending"
-          // Future-Apple-added cases surface as "unknown" rather than
-          // collapsing into "active". The JS layer treats unknown as a
-          // non-terminal observed state — neither dropping the activity from
-          // its tracking list nor pretending the activity is still healthy.
-          @unknown default: return "unknown"
+          @unknown default: return nil
           }
         }()
+        let label: String = caseName
+          .flatMap { LiveActivityModuleLogic.activityStateLabel(forCaseName: $0) }
+          ?? LiveActivityModuleLogic.unknownActivityStateLabel
         self.sendEvent("onActivityStateChange", [
           "activityId": activity.id,
           "state": label
         ])
         // Terminal states: drain the registry slot so we don't leak Task
         // handles after ActivityKit closes the AsyncSequence on its end.
-        if update == .ended || update == .dismissed {
+        if LiveActivityModuleLogic.isTerminalActivityState(label) {
           await registry.clear(id: activityId)
           return
         }
@@ -286,7 +306,7 @@ public class LiveActivityModule: Module {
   }
 
   private static func hexString(_ data: Data) -> String {
-    return data.map { String(format: "%02x", $0) }.joined()
+    return LiveActivityModuleLogic.hexString(data)
   }
 
   /// Build an `ActivityContent` from an optional JS-supplied options bag.
@@ -295,30 +315,21 @@ public class LiveActivityModule: Module {
   /// `staleDate: nil`. JS callers omit fields by passing `nil` /
   /// undefined; the wrapper accepts `nil` for both. Used by both
   /// `start()` and `update()` so the two paths cannot drift.
+  ///
+  /// The options-bag parsing (number coercion, the positivity gate on
+  /// `staleDateSeconds`) lives in LiveActivityModuleLogic so it is unit
+  /// tested off-device; this method only constructs the ActivityKit
+  /// `ActivityContent` wrapper from the parsed values.
   @available(iOS 16.2, *)
   private static func activityContent(
     state: MobileSurfacesActivityAttributes.ContentState,
     options: [String: Any]?
   ) -> ActivityContent<MobileSurfacesActivityAttributes.ContentState> {
-    let staleDate: Date? = {
-      guard let raw = options?["staleDateSeconds"] else { return nil }
-      // JS numbers arrive as Double through the ExpoModulesCore bridge.
-      // Accept Int and NSNumber too in case a caller pre-coerced.
-      let seconds: Double?
-      if let d = raw as? Double { seconds = d }
-      else if let i = raw as? Int { seconds = Double(i) }
-      else if let n = raw as? NSNumber { seconds = n.doubleValue }
-      else { seconds = nil }
-      guard let seconds, seconds > 0 else { return nil }
-      return Date(timeIntervalSince1970: seconds)
-    }()
-    let relevanceScore: Double? = {
-      guard let raw = options?["relevanceScore"] else { return nil }
-      if let d = raw as? Double { return d }
-      if let i = raw as? Int { return Double(i) }
-      if let n = raw as? NSNumber { return n.doubleValue }
-      return nil
-    }()
+    let staleDate: Date? = LiveActivityModuleLogic
+      .staleDateSeconds(fromOptions: options)
+      .map { Date(timeIntervalSince1970: $0) }
+    let relevanceScore: Double? =
+      LiveActivityModuleLogic.relevanceScore(fromOptions: options)
     if let relevanceScore {
       return ActivityContent(
         state: state,

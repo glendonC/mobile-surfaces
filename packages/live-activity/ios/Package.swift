@@ -47,6 +47,10 @@ let package = Package(
                 "LiveActivityError.swift",
                 "ObserverRegistry.swift",
                 "LiveActivityCodableBridge.swift",
+                // Pure decision logic extracted from LiveActivityModule.swift
+                // (push-type selection, options-bag parsing, activity-state
+                // labels). ActivityKit-free, so it is exercised directly here.
+                "LiveActivityModuleLogic.swift",
                 // MS040 byte-identity replica. LiveActivityError conforms to
                 // MSTrapBound and stamps trapId / docsUrl via MSTraps; the
                 // protocol + lookup must be in the same SwiftPM target.

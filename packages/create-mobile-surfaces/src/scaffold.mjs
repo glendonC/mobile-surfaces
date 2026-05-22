@@ -210,22 +210,19 @@ export async function renameIdentity({ target, config }) {
     { cwd: target },
   );
 
-  // Apply both app.json patches in a single read-modify-write. The rename
-  // script already wrote app.json in this run; bundling the teamId and
-  // newArchEnabled writes into one r-m-w cycle avoids two extra reads of a
-  // file we just touched.
+  // The rename script already wrote app.json in this run; apply the teamId
+  // patch with one more read-modify-write of a file we just touched.
   applyAppJsonPatches({
     target,
     teamId: config.teamId,
-    newArchEnabled: config.newArchEnabled,
   });
 }
 
 /**
- * Read apps/mobile/app.json, apply both the teamId and newArchEnabled
- * patches in a single read-modify-write, and write back. Returns true when
- * any change was written, false when the file is missing, has no expo
- * block, or the inputs produced no change.
+ * Read apps/mobile/app.json, apply the teamId patch in a single
+ * read-modify-write, and write back. Returns true when a change was
+ * written, false when the file is missing, has no expo block, or the
+ * input produced no change.
  *
  * Behavior details:
  * - teamId provided -> writes expo.ios.appleTeamId (only when expo.ios
@@ -233,10 +230,8 @@ export async function renameIdentity({ target, config }) {
  * - teamId nullish AND expo.ios.appleTeamId is the literal upstream
  *   "XXXXXXXXXX" placeholder -> strips it. A real existing team id is
  *   preserved (defensive against a re-run that does not pass --team-id).
- * - newArchEnabled is a boolean (undefined means the user passed neither
- *   --new-arch nor --no-new-arch; leave the template default in place).
  */
-export function applyAppJsonPatches({ target, teamId, newArchEnabled }) {
+export function applyAppJsonPatches({ target, teamId }) {
   const appJsonPath = path.join(target, "apps", "mobile", "app.json");
   if (!fs.existsSync(appJsonPath)) return false;
   const j = JSON.parse(fs.readFileSync(appJsonPath, "utf8"));
@@ -251,11 +246,6 @@ export function applyAppJsonPatches({ target, teamId, newArchEnabled }) {
       delete j.expo.ios.appleTeamId;
       changed = true;
     }
-  }
-
-  if (newArchEnabled !== undefined) {
-    j.expo.newArchEnabled = newArchEnabled;
-    changed = true;
   }
 
   if (!changed) return false;

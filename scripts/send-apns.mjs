@@ -876,7 +876,20 @@ function printSkewWarning(responseHeaders) {
 function http2Request({ origin, headers, body }) {
   return new Promise((resolve, reject) => {
     const client = http2.connect(origin);
-    client.on("error", (err) => reject(err));
+    // Close the session on every exit path. A bare client.close() in the
+    // `end` handler leaks the HTTP/2 session whenever the request or the
+    // session errors out before `end` fires; settle() funnels success and
+    // both error sources through one teardown so the socket is never left
+    // open. `settled` guards against double-settling the promise when, for
+    // example, a request error is followed by a session error.
+    let settled = false;
+    const settle = (fn, arg) => {
+      if (settled) return;
+      settled = true;
+      client.close();
+      fn(arg);
+    };
+    client.on("error", (err) => settle(reject, err));
     const req = client.request(headers);
     req.setEncoding("utf8");
     let status = 0;
@@ -888,10 +901,9 @@ function http2Request({ origin, headers, body }) {
     });
     req.on("data", (chunk) => (bodyText += chunk));
     req.on("end", () => {
-      client.close();
-      resolve({ status, responseHeaders, bodyText });
+      settle(resolve, { status, responseHeaders, bodyText });
     });
-    req.on("error", (err) => reject(err));
+    req.on("error", (err) => settle(reject, err));
     if (body !== undefined) req.write(body);
     req.end();
   });

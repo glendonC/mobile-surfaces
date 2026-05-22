@@ -122,5 +122,5 @@ Both packages are designed to coexist with the established ecosystem bridge. The
 - [`docs/surfaces.md`](/docs/surfaces): every `kind` value, its projection helper, the native target it drives.
 - [`docs/backend.md`](/docs/backend): domain event to snapshot to APNs end-to-end.
 - [`docs/push.md`](/docs/push): wire-layer reference, token taxonomy, error taxonomy, broadcast channels.
-- [`docs/traps.md`](/docs/traps): trap catalog maintenance, the source `data/traps.json` consumes.
+- [`docs/catalog-maintenance.md`](/docs/catalog-maintenance): trap catalog maintenance, the source `data/traps.json` consumes.
 - [`docs/troubleshooting.md`](/docs/troubleshooting): symptom-to-fix recipes for silent ActivityKit failures.

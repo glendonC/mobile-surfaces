@@ -162,12 +162,5 @@ export async function runPrompts({ initialName, overrides = {}, yes = false, ui 
       standbyWidget,
     },
     installNow,
-    // Pass through the New Architecture override only when the user supplied
-    // a flag. Interactive runs that don't pass --new-arch / --no-new-arch
-    // accept the template default (Expo's own default) and never need to
-    // touch app.json's newArchEnabled key.
-    ...(overrides.newArchEnabled !== undefined
-      ? { newArchEnabled: overrides.newArchEnabled }
-      : {}),
   };
 }

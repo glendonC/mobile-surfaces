@@ -10,7 +10,7 @@ struct MobileSurfacesHomeWidget: Widget {
         MobileSurfacesVersionMismatchView(kindLabel: "widget")
       } else {
         MobileSurfacesHomeWidgetView(entry: entry)
-          .containerBackground(Color("WidgetBackground"), for: .widget)
+          .containerBackground(Color("$widgetBackground"), for: .widget)
       }
     }
     .configurationDisplayName("Mobile Surfaces")
@@ -144,7 +144,7 @@ private struct MobileSurfacesHomeWidgetView: View {
       Spacer(minLength: 0)
 
       ProgressView(value: snapshot.progress)
-        .tint(Color("AccentColor"))
+        .tint(Color.accentColor)
     }
     .padding()
     .opacity(isStale ? 0.7 : 1.0)

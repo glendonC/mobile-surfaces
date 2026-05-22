@@ -25,6 +25,33 @@ const schemaUrl = canonicalSchemaUrl();
 if (schemaUrl) schema.$id = schemaUrl;
 schema.title = "LiveSurfaceSnapshot";
 
+// z.toJSONSchema emits the discriminated union as a bare `oneOf` of
+// const-discriminated branches. A pure JSON Schema validator (Ajv) handles
+// that fine, but OpenAPI tooling reports a generic "matched 0 schemas" on a
+// bad payload instead of pointing at the offending branch. The OpenAPI 3.x
+// `discriminator` object fixes that: it names the property a consumer should
+// branch on (`kind`). It is an OpenAPI extension keyword, not part of
+// draft-2020-12 — but draft-2020-12 ignores unknown keywords, so this stays a
+// valid 2020-12 schema; only discriminator-aware tooling reads it. Sound only
+// because `kind` is a required const in every `oneOf` branch (the contract is
+// a Zod discriminatedUnion on `kind`); the assertion below pins that.
+if (Array.isArray(schema.oneOf)) {
+  for (const branch of schema.oneOf) {
+    const isDiscriminated =
+      branch?.properties?.kind?.const !== undefined &&
+      Array.isArray(branch.required) &&
+      branch.required.includes("kind");
+    if (!isDiscriminated) {
+      throw new Error(
+        "build-schema: a oneOf branch is missing a required `kind` const; " +
+          "cannot attach an OpenAPI discriminator. Did the union stop " +
+          "discriminating on `kind`?",
+      );
+    }
+  }
+  schema.discriminator = { propertyName: "kind" };
+}
+
 const out = JSON.stringify(schema, null, 2) + "\n";
 const target = resolve("packages/surface-contracts/schema.json");
 

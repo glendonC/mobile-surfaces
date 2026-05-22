@@ -292,9 +292,12 @@ function computeLiveManifest(repoRoot) {
 
 // Look up the version of a @mobile-surfaces/* package from its own
 // package.json under packages/. Returns null for names outside the scope
-// or when the package directory is missing. The linked changeset group
-// keeps these versions in lockstep, so reading one is enough to pin a
-// foreign install to a coherent set.
+// or when the package directory is missing. Each @mobile-surfaces/*
+// package is pinned at its own real published version - they no longer
+// share a single version (surface-contracts is 9.x while live-activity is
+// 7.x); only the linked changeset group - surface-contracts/validators/
+// traps - moves in lockstep. So each foreign dependency is resolved
+// individually here rather than inferred from a sibling.
 function resolvePublishedMobileSurfacesVersion(repoRoot, name) {
   if (!name.startsWith("@mobile-surfaces/")) return null;
   const shortName = name.slice("@mobile-surfaces/".length);

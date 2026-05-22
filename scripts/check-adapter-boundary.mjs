@@ -7,6 +7,20 @@
 // expo-widgets, etc.) stays a one-file edit. The catalog text scopes this to
 // apps/*/src/, so the script scans every app generically rather than
 // hardcoding apps/mobile.
+//
+// Detection is structural, not grep-shaped. The earlier version matched a
+// single `(?:from|import)\s*\(?\s*"<pkg>"` regex; that caught the named,
+// default, and dynamic forms but conflated "aliased import" with
+// "undetectable import". An `import * as LA from "<pkg>"` or a renamed
+// default `import Renamed from "<pkg>"` carries the specifier in the same
+// trailing `from "<pkg>"` clause as any other import — the alias lives on
+// the binding side, never the source side — so a from-anchored match catches
+// it. findModuleImports() (scripts/lib/module-imports.mjs) matches the four
+// statement forms (from / bare side-effect / dynamic import() / require())
+// explicitly, so a re-export, a bare `import "<pkg>"`, or a CJS `require` can
+// no longer slip past. Source is run through stripNonCode first (keepStrings,
+// so the specifier literal survives) so a commented-out import does not trip
+// the gate.
 import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
@@ -14,6 +28,8 @@ import {
   buildReport,
   emitDiagnosticReport,
 } from "./lib/diagnostics.mjs";
+import { stripNonCode } from "./lib/strip-noncode.mjs";
+import { findModuleImports } from "./lib/module-imports.mjs";
 
 const { values } = parseArgs({
   options: { json: { type: "boolean", default: false } },
@@ -76,15 +92,15 @@ const checks = [
         ? `No apps/*/src directories found — nothing to check.`
         : violations.length === 0
           ? `Adapter boundary intact (${scanned} file(s) across ${appSrcRoots.length} app(s) scanned, only each app's liveActivity/index.ts imports "${TARGET_PACKAGE}").`
-          : `${violations.length} file(s) import "${TARGET_PACKAGE}" outside the per-app liveActivity/index.ts re-export.`,
+          : `${violations.length} import site(s) reach "${TARGET_PACKAGE}" outside the per-app liveActivity/index.ts re-export.`,
     trapId: "MS001",
     ...(violations.length > 0
       ? {
           detail: {
-            message: `Route imports through the app's src/liveActivity/index.ts (re-exports liveActivityAdapter and types).`,
+            message: `Route imports through the app's src/liveActivity/index.ts (re-exports liveActivityAdapter and types). Detection is structural: a named, default, namespace (\`* as\`), aliased, re-export, dynamic \`import()\`, or \`require()\` of the package all count.`,
             issues: violations.map((v) => ({
               path: `${path.relative(process.cwd(), v.file)}:${v.line}`,
-              message: `imports ${TARGET_PACKAGE} directly`,
+              message: `imports ${TARGET_PACKAGE} directly (${v.form} import)`,
             })),
           },
         }
@@ -109,14 +125,13 @@ function scanFile(file) {
   scanned += 1;
   // An app's own liveActivity/index.ts is the allowed importer; skip it.
   const isAdapter = adapterFiles.has(path.resolve(file));
-  const src = fs.readFileSync(file, "utf8");
   if (isAdapter) return;
-  // Match `from "@mobile-surfaces/live-activity"` and
-  // `import("@mobile-surfaces/live-activity")` including subpath imports.
-  const re = /(?:from|import)\s*\(?\s*["']@mobile-surfaces\/live-activity(?:\/[^"']*)?["']/g;
-  let match;
-  while ((match = re.exec(src)) !== null) {
-    const line = src.slice(0, match.index).split("\n").length;
-    violations.push({ file, line });
+  const raw = fs.readFileSync(file, "utf8");
+  // keepStrings: true so the module-specifier string literal survives the
+  // strip (it is what findModuleImports matches), while comments are still
+  // blanked so a commented-out import cannot register.
+  const src = stripNonCode(raw, { keepStrings: true });
+  for (const hit of findModuleImports(src, TARGET_PACKAGE)) {
+    violations.push({ file, line: hit.line, form: hit.form });
   }
 }

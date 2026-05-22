@@ -15,6 +15,7 @@
 import {
   BadDateError,
   BadExpirationDateError,
+  BadPriorityError,
   PayloadTooLargeError,
   TokenEnvironmentMismatchError,
 } from "./errors.ts";
@@ -149,6 +150,37 @@ export function assertActivityTimestampOptions(options: {
       "expirationSeconds",
       BadExpirationDateError,
     );
+  }
+}
+
+/**
+ * The only `apns-priority` values APNs accepts. 10 = deliver immediately;
+ * 5 = deliver power-considerately (the only Live Activity update value, and
+ * the floor for an active Live Activity send). Apple rejects every other
+ * value with 400 BadPriority (MS015).
+ */
+export const VALID_APNS_PRIORITIES = [5, 10] as const;
+
+/**
+ * Client-side pre-flight for `apns-priority`. `SendOptions.priority` is typed
+ * `5 | 10`, but a plain-JS caller (or a value widened through `any`) can pass
+ * anything; without this check a `1` reaches APNs and fails with the opaque
+ * 400 BadPriority. We surface that before the round-trip the same way
+ * `assertPayloadWithinLimit` handles MS011 and `assertValidActivityTimestamp`
+ * handles MS032 — reusing the typed error class with `status: 400` so
+ * observability hooks bucket the client-caught and server-returned variants
+ * together. `undefined` passes through untouched: the send paths fall back to
+ * their operation default (10 for alert, 5 for Live Activity sends).
+ */
+export function assertValidPriority(value: number | undefined): void {
+  if (value === undefined) return;
+  if (value !== 5 && value !== 10) {
+    throw new BadPriorityError({
+      status: 400,
+      message:
+        `Client-side pre-flight: apns-priority must be 5 or 10 ` +
+        `(received ${JSON.stringify(value)}); rejected before APNs round-trip. See MS015.`,
+    });
   }
 }
 

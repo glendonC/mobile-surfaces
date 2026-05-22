@@ -406,8 +406,7 @@ const liveSurfaceSnapshotBaseShape = {
       "pointer.",
   ),
   kind: liveSurfaceKind,
-  updatedAt: z
-    .string()
+  updatedAt: z.iso
     .datetime({ offset: true })
     .describe(
       "RFC 3339 instant the snapshot was authored. Consumers compare against " +
@@ -555,7 +554,7 @@ export const liveSurfaceWidgetTimelineEntry = z
     headline: z.string(),
     subhead: z.string(),
     progress: z.number().min(0).max(1),
-    deepLink: z.string(),
+    deepLink: deepLinkSchema,
   })
   .strict();
 export type LiveSurfaceWidgetTimelineEntryOutput = z.infer<
@@ -582,7 +581,7 @@ export const liveSurfaceControlValueProvider = z
     value: z.boolean().optional(),
     intent: z.string().optional(),
     label: z.string().min(1),
-    deepLink: z.string(),
+    deepLink: deepLinkSchema,
   })
   .strict();
 export type LiveSurfaceControlValueProviderOutput = z.infer<
@@ -604,7 +603,7 @@ export const liveSurfaceLockAccessoryEntry = z
     headline: z.string(),
     shortText: z.string().optional(),
     gaugeValue: z.number().min(0).max(1).optional(),
-    deepLink: z.string(),
+    deepLink: deepLinkSchema,
   })
   .strict();
 export type LiveSurfaceLockAccessoryEntryOutput = z.infer<
@@ -630,7 +629,7 @@ export const liveSurfaceStandbyEntry = z
     headline: z.string(),
     subhead: z.string(),
     progress: z.number().min(0).max(1),
-    deepLink: z.string(),
+    deepLink: deepLinkSchema,
   })
   .strict();
 export type LiveSurfaceStandbyEntryOutput = z.infer<
@@ -665,7 +664,7 @@ export const liveSurfaceNotificationContentEntry = z
     snapshotId: z.string(),
     surfaceId: z.string(),
     state: liveSurfaceState,
-    deepLink: z.string(),
+    deepLink: deepLinkSchema,
     // Deliberately `z.string()`, not the NOTIFICATION_CATEGORY_IDS enum that
     // constrains the input slice (liveSurfaceNotificationSlice.category). This
     // is a projection *output*: its schema exists to catch helper bugs, not to
