@@ -17,7 +17,7 @@
         "script": "scripts/check-adapter-boundary.mjs"
       },
       "docs": [
-        "https://mobile-surfaces.com/docs/architecture#adapter-contract"
+        "https://mobile-surfaces.com/docs/concepts#adapter-contract"
       ],
       "since": "1.0.0"
     },
@@ -37,7 +37,7 @@
         "script": "scripts/check-activity-attributes.mjs"
       },
       "docs": [
-        "https://mobile-surfaces.com/docs/architecture#native-constraints"
+        "https://mobile-surfaces.com/docs/concepts#native-constraints"
       ],
       "since": "1.0.0"
     },
@@ -445,7 +445,7 @@
         "script": "scripts/probe-app-config.mjs"
       },
       "docs": [
-        "https://mobile-surfaces.com/docs/backend-integration"
+        "https://mobile-surfaces.com/docs/backend"
       ],
       "since": "1.0.0"
     },
@@ -486,7 +486,7 @@
         "script": "scripts/probe-app-config.mjs"
       },
       "docs": [
-        "https://mobile-surfaces.com/docs/architecture"
+        "https://mobile-surfaces.com/docs/concepts"
       ],
       "since": "1.0.0"
     },

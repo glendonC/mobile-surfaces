@@ -103,7 +103,7 @@ Application code under apps/*/src/ must import the live-activity adapter through
 
 **Fix.** Import from apps/mobile/src/liveActivity (the boundary re-export) instead of @mobile-surfaces/live-activity directly. Add new methods to the adapter contract first, not at the call site.
 
-**See:** [https://mobile-surfaces.com/docs/architecture#adapter-contract](https://mobile-surfaces.com/docs/architecture#adapter-contract)
+**See:** [https://mobile-surfaces.com/docs/concepts#adapter-contract](https://mobile-surfaces.com/docs/concepts#adapter-contract)
 
 ### MS002: ActivityKit attribute file byte-identity
 
@@ -115,7 +115,7 @@ MobileSurfacesActivityAttributes.swift in packages/live-activity/ios/ and apps/m
 
 **Fix.** Both files are generated from the Zod source of truth. Edit liveSurfaceActivityContentState or liveSurfaceStage in packages/surface-contracts/src/schema.ts, then run pnpm surface:codegen to regenerate both files. CI gates codegen drift at stage 2 and byte-identity + Zod parity at stage 3. The follow-up plan to consolidate this duplication into a local Swift Package is upstream-blocked on @bacons/apple-targets local-SPM support and RN 0.84 local-path spm_dependency landing in Expo SDK 56. Codegen is the intermediate state until that unblocks.
 
-**See:** [https://mobile-surfaces.com/docs/architecture#native-constraints](https://mobile-surfaces.com/docs/architecture#native-constraints)
+**See:** [https://mobile-surfaces.com/docs/concepts#native-constraints](https://mobile-surfaces.com/docs/concepts#native-constraints)
 
 ### MS003: Swift ContentState fields and JSON keys match Zod liveSurfaceActivityContentState
 
@@ -261,7 +261,7 @@ Foreign Expo projects auditing as Mobile Surfaces consumers must list the contra
 
 **Fix.** Add @mobile-surfaces/surface-contracts on every layer that emits or consumes a snapshot. Add @mobile-surfaces/push on the backend. Both packages release together (linked group).
 
-**See:** [https://mobile-surfaces.com/docs/backend-integration](https://mobile-surfaces.com/docs/backend-integration)
+**See:** [https://mobile-surfaces.com/docs/backend](https://mobile-surfaces.com/docs/backend)
 
 ### MS025: App Group declared in app.json
 
@@ -285,7 +285,7 @@ The Mobile Surfaces widget target lives outside the generated ios/ directory and
 
 **Fix.** Keep the target source under apps/mobile/targets/widget/ with an expo-target.config.js. Pin @bacons/apple-targets at the supported exact version.
 
-**See:** [https://mobile-surfaces.com/docs/architecture](https://mobile-surfaces.com/docs/architecture)
+**See:** [https://mobile-surfaces.com/docs/concepts](https://mobile-surfaces.com/docs/concepts)
 
 ### MS028: APNs auth key environment variables must be set before sending
 
@@ -554,9 +554,9 @@ Trap ids are monotonic forever; retired rules keep their id with a one-line tomb
 
 ## Related local documentation
 
-- [Architecture](https://mobile-surfaces.com/docs/architecture): the contract, the surfaces, the adapter boundary.
-- [Multi-surface](https://mobile-surfaces.com/docs/multi-surface): every `kind` value and the projection it drives.
-- [Backend integration](https://mobile-surfaces.com/docs/backend-integration): domain event to snapshot to APNs walkthrough.
+- [Architecture](https://mobile-surfaces.com/docs/concepts): the contract, the surfaces, the adapter boundary.
+- [Multi-surface](https://mobile-surfaces.com/docs/surfaces): every `kind` value and the projection it drives.
+- [Backend integration](https://mobile-surfaces.com/docs/backend): domain event to snapshot to APNs walkthrough.
 - [Push](https://mobile-surfaces.com/docs/push): wire-layer reference, SDK, smoke script, token taxonomy, error reasons.
 - [Observability](https://mobile-surfaces.com/docs/observability): which catalog-bound errors are worth alerting on, what a stuck Live Activity looks like on the wire, recommended log shape.
 - [Troubleshooting](https://mobile-surfaces.com/docs/troubleshooting): symptom-to-fix recipes for failures not in this catalog.

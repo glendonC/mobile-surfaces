@@ -17,8 +17,9 @@ import UserNotificationsUI
 /// and the host may not have run recently enough for any enrichment row to
 /// exist when the notification arrives. App-Group enrichment is the
 /// canonical Apple pattern when paired with a `UNNotificationServiceExtension`
-/// that writes before delivery; that target is deferred to a follow-up (see
-/// the roadmap's "Deferred - notification service extension" section).
+/// that writes before delivery; that pre-delivery enrichment target is not
+/// shipped in this reference architecture, so this content extension renders
+/// from the push payload alone.
 ///
 /// The default system chrome (title + body) renders above this view because
 /// the Info.plist omits `UNNotificationExtensionDefaultContentHidden`, so a

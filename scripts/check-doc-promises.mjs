@@ -138,6 +138,52 @@ const FORBIDDEN_TERMS = [
   },
 ];
 
+// Doc-site slug references: catalog prose (data/traps.json `docs` fields and
+// the generated AGENTS.md / CLAUDE.md) links into the published site with
+// `https://mobile-surfaces.com/docs/<slug>` URLs. The site routes each doc by
+// the filename in apps/site/src/content/docs/, so a stale slug renders a 404.
+// This gate resolves every such reference: the <slug> must be a real
+// `<slug>.md` under the docs content dir, and any `#anchor` must match a real
+// heading in that file. Without this, a doc rename or a hand-edited URL drifts
+// silently. Scanned across the catalog source and its generated outputs.
+const DOCS_CONTENT_DIR = "apps/site/src/content/docs";
+const DOC_SLUG_SCAN_FILES = ["data/traps.json", "AGENTS.md", "CLAUDE.md"];
+const DOC_URL_RE = /https:\/\/mobile-surfaces\.com\/docs\/([a-z0-9-]+)(#[A-Za-z0-9-]+)?/g;
+
+// GitHub-style anchor slug: lowercase, drop chars that are not alphanumeric,
+// space, or hyphen, then collapse whitespace runs to single hyphens.
+function headingToAnchor(heading) {
+  return heading
+    .toLowerCase()
+    .replace(/[^\w\- ]/g, "")
+    .trim()
+    .replace(/\s+/g, "-");
+}
+
+// Cache of slug -> Set of anchor ids for each docs-content file.
+const docAnchorCache = new Map();
+function loadDocAnchors(slug) {
+  if (docAnchorCache.has(slug)) return docAnchorCache.get(slug);
+  const abs = path.join(repoRoot, DOCS_CONTENT_DIR, `${slug}.md`);
+  if (!fs.existsSync(abs)) {
+    docAnchorCache.set(slug, null);
+    return null;
+  }
+  const anchors = new Set();
+  let inFence = false;
+  for (const line of fs.readFileSync(abs, "utf8").split("\n")) {
+    if (line.trimStart().startsWith("```")) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    const m = /^#{1,6}\s+(.*\S)\s*$/.exec(line);
+    if (m) anchors.add(headingToAnchor(m[1]));
+  }
+  docAnchorCache.set(slug, anchors);
+  return anchors;
+}
+
 // The repo-root README is the one doc whose relative links are checked: its
 // links point at repo files (./AGENTS.md, ./data/traps.json). Doc-site pages
 // use site-routing links (/docs/...) that do not map to file paths and are
@@ -295,6 +341,37 @@ if (fs.existsSync(readmeAbs)) {
   }
 }
 
+// Doc-site slug + anchor resolution across the catalog source and its
+// generated outputs.
+const docSlugIssues = [];
+for (const rel of DOC_SLUG_SCAN_FILES) {
+  const abs = path.join(repoRoot, rel);
+  if (!fs.existsSync(abs)) continue;
+  const fileLines = fs.readFileSync(abs, "utf8").split("\n");
+  for (let i = 0; i < fileLines.length; i += 1) {
+    let m;
+    DOC_URL_RE.lastIndex = 0;
+    while ((m = DOC_URL_RE.exec(fileLines[i])) !== null) {
+      const slug = m[1];
+      const anchor = m[2] ? m[2].slice(1) : null;
+      const anchors = loadDocAnchors(slug);
+      if (anchors === null) {
+        docSlugIssues.push({
+          path: `${rel}:${i + 1}`,
+          message: `doc slug "${slug}" has no file at ${DOCS_CONTENT_DIR}/${slug}.md`,
+        });
+        continue;
+      }
+      if (anchor && !anchors.has(anchor)) {
+        docSlugIssues.push({
+          path: `${rel}:${i + 1}`,
+          message: `doc anchor "#${anchor}" does not resolve to a heading in ${DOCS_CONTENT_DIR}/${slug}.md`,
+        });
+      }
+    }
+  }
+}
+
 emitDiagnosticReport(
   buildReport(TOOL, [
     {
@@ -344,6 +421,23 @@ emitDiagnosticReport(
               message:
                 "A forbidden term either misdescribes the architecture or names a removed API. There is no allowlist; rewrite the prose.",
               issues: forbiddenIssues,
+            },
+          }
+        : {}),
+    },
+    {
+      id: "doc-site-slugs",
+      status: docSlugIssues.length === 0 ? "ok" : "fail",
+      summary:
+        docSlugIssues.length === 0
+          ? "Every mobile-surfaces.com/docs reference resolves to a doc file and heading."
+          : `${docSlugIssues.length} unresolved doc-site reference(s).`,
+      ...(docSlugIssues.length > 0
+        ? {
+            detail: {
+              message:
+                "A mobile-surfaces.com/docs/<slug> reference must point at an existing apps/site/src/content/docs/<slug>.md file, and any #anchor must match a real heading in it. Fix the slug or anchor in data/traps.json (then regenerate AGENTS.md/CLAUDE.md with pnpm agents:build).",
+              issues: docSlugIssues,
             },
           }
         : {}),

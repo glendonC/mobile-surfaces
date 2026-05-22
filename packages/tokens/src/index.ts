@@ -216,10 +216,6 @@ export function createTokenStore(opts: TokenStoreOptions = {}): TokenStore {
     }
   }
 
-  function persistedKinds(): boolean {
-    return persistKinds.size > 0;
-  }
-
   async function upsert(
     input: Omit<TokenRecord, "recordedAt" | "lifecycle" | "idempotencyKey">,
   ): Promise<TokenRecord> {
@@ -239,7 +235,7 @@ export function createTokenStore(opts: TokenStoreOptions = {}): TokenStore {
     };
     records.set(idempotencyKey, record);
     notify();
-    if (persistedKinds() && persistKinds.has(record.kind)) scheduleSave();
+    if (persistKinds.has(record.kind)) scheduleSave();
     return record;
   }
 
