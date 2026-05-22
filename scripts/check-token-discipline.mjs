@@ -6,15 +6,25 @@
 // hand-rolled subscriptions reliably re-introduce the failure modes
 // the package exists to prevent.
 //
-// The check is grep-shaped. Any file under apps/*/src/ that calls
-// addListener with one of the three token-related events is a
-// violation: correct code routes the subscription through
-// @mobile-surfaces/tokens, whose own addListener call lives inside the
-// package (out of scope here), so app code that imports the token
-// store still has zero direct token addListener calls. An earlier
-// version exempted any file that imported @mobile-surfaces/tokens for
-// any reason; that let a file import the store AND hand-roll a direct
-// subscription, the exact MS039 violation the rule exists to catch.
+// Detection is structural, not grep-shaped. A violation is an
+// addListener call in app code whose event argument is one of the three
+// token events. The check catches the event argument in two forms:
+//
+//   1. a direct string literal — `addListener("onPushToken", ...)`.
+//   2. an identifier the same file binds to one of those literals —
+//      `const EV = "onPushToken"; adapter.addListener(EV, ...)`. The
+//      earlier version only matched form 1 and shipped form 2 as a
+//      documented "known weak spot"; aliasing the event name through a
+//      const (or destructuring it off an imported events object) then
+//      slipped a real subscription past the gate. Resolving locally
+//      bound event-name identifiers closes that hole.
+//
+// The receiver of addListener is intentionally not constrained: whether
+// the call is `adapter.addListener(...)`, `LA.liveActivityAdapter
+// .addListener(...)` via an aliased namespace import, or a bare
+// `addListener(...)`, the event argument is what makes it a token
+// subscription, so matching on the call + event argument is sound for
+// every import alias of the adapter.
 //
 // Source is run through stripNonCode with keepStrings: true so a
 // commented-out subscription cannot trip the gate, while the event-name
@@ -45,6 +55,7 @@ const TOKEN_EVENTS = [
   "onPushToStartToken",
   "onActivityStateChange",
 ];
+const TOKEN_EVENT_SET = new Set(TOKEN_EVENTS);
 
 // Files explicitly exempted from MS039 token-discipline. Empty as of
 // Phase 3 — the Phase 2 LiveActivityHarness exemption was removed when
@@ -52,12 +63,15 @@ const TOKEN_EVENTS = [
 // @mobile-surfaces/tokens.
 const EXEMPT_FILES = new Set();
 
-// Match `addListener("onPushToken", ...)` and friends. Allow either
-// single or double quotes; allow whitespace between addListener and
-// the parens; allow the event arg to be the first positional arg.
-const EVENT_PATTERN = new RegExp(
-  `\\baddListener\\s*\\(\\s*[\"'](${TOKEN_EVENTS.join("|")})[\"']`,
+// addListener call whose first argument is a quoted token-event literal.
+const LITERAL_EVENT_PATTERN = new RegExp(
+  `\\baddListener\\s*\\(\\s*["'](${TOKEN_EVENTS.join("|")})["']`,
 );
+
+// addListener call whose first argument is a bare identifier (no quote).
+// The identifier is resolved against the file's local string-literal
+// bindings below; only one bound to a token event is a violation.
+const IDENT_EVENT_PATTERN = /\baddListener\s*\(\s*([A-Za-z_$][\w$]*)\s*[,)]/g;
 
 if (!fs.existsSync(APPS_ROOT)) {
   emitDiagnosticReport(
@@ -102,6 +116,28 @@ function walk(dir) {
   }
 }
 
+// Collect every local identifier the file binds, directly, to one of the
+// three token-event string literals. Covers a plain const/let/var binding
+// (`const EV = "onPushToken"`) and a destructured rename off an object
+// literal (`const { onPushToken: EV } = EVENTS`-style is rare; the common
+// shape is the simple binding). Source is comment+string-stripped on the
+// code side and string-kept on the literal side; this scan reads the
+// string-kept side so the literal value is visible.
+function collectEventAliases(litSrc) {
+  const aliases = new Set();
+  // `const EV = "onPushToken"` / `let`/`var`. The RHS must be exactly a
+  // token-event string literal (optionally `as const`).
+  const bindRe = new RegExp(
+    `\\b(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*(?::[^=]+)?=\\s*["'](${TOKEN_EVENTS.join("|")})["']`,
+    "g",
+  );
+  let m;
+  while ((m = bindRe.exec(litSrc)) !== null) {
+    aliases.add(m[1]);
+  }
+  return aliases;
+}
+
 function scanFile(file) {
   scanned += 1;
   if (EXEMPT_FILES.has(path.resolve(file))) return;
@@ -115,14 +151,31 @@ function scanFile(file) {
   // (e.g. a doc example) and is not an actual call.
   const eventSrc = stripNonCode(raw, { keepStrings: true });
   const codeSrc = stripNonCode(raw);
-  if (!EVENT_PATTERN.test(eventSrc)) return;
-  EVENT_PATTERN.lastIndex = 0;
-  const matcher = new RegExp(EVENT_PATTERN.source, "g");
-  let m;
-  while ((m = matcher.exec(eventSrc)) !== null) {
-    if (!codeSrc.startsWith("addListener", m.index)) continue; // inside a string
-    const line = eventSrc.slice(0, m.index).split("\n").length;
-    violations.push({ file, line, event: m[1] });
+
+  // Form 1: addListener("onPushToken", ...) — direct string literal.
+  {
+    const matcher = new RegExp(LITERAL_EVENT_PATTERN.source, "g");
+    let m;
+    while ((m = matcher.exec(eventSrc)) !== null) {
+      if (!codeSrc.startsWith("addListener", m.index)) continue; // inside a string
+      const line = eventSrc.slice(0, m.index).split("\n").length;
+      violations.push({ file, line, event: m[1], form: "literal" });
+    }
+  }
+
+  // Form 2: addListener(EV, ...) where EV is locally bound to a token-event
+  // literal. The bare-identifier pattern fires on every addListener(ident)
+  // call; only those whose identifier resolves to a token event count.
+  const aliases = collectEventAliases(eventSrc);
+  if (aliases.size > 0) {
+    const matcher = new RegExp(IDENT_EVENT_PATTERN.source, "g");
+    let m;
+    while ((m = matcher.exec(codeSrc)) !== null) {
+      const ident = m[1];
+      if (!aliases.has(ident)) continue;
+      const line = codeSrc.slice(0, m.index).split("\n").length;
+      violations.push({ file, line, event: ident, form: "indirect" });
+    }
   }
 }
 
@@ -143,7 +196,10 @@ const checks = [
               `Hand-rolled addListener calls in app code re-introduce the MS020 / MS021 failure modes the token-store package exists to prevent.`,
             issues: violations.map((v) => ({
               path: `${path.relative(process.cwd(), v.file)}:${v.line}`,
-              message: `addListener("${v.event}", ...) outside @mobile-surfaces/tokens`,
+              message:
+                v.form === "indirect"
+                  ? `addListener(${v.event}, ...) — ${v.event} is locally bound to a token event — outside @mobile-surfaces/tokens`
+                  : `addListener("${v.event}", ...) outside @mobile-surfaces/tokens`,
             })),
           },
         }

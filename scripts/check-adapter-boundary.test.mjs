@@ -132,6 +132,137 @@ test("flags a re-export `export ... from \"@mobile-surfaces/live-activity\"`", (
   }
 });
 
+test("flags an aliased default import (`import Renamed from \"@mobile-surfaces/live-activity\"`)", () => {
+  // The alias lives on the binding side; the specifier is unchanged. A
+  // from-anchored structural match catches it. The old grep matched this
+  // too, but the test pins the structural behavior explicitly.
+  const ws = withWorkspace({
+    "screens/Live.tsx":
+      'import Renamed from "@mobile-surfaces/live-activity";\n',
+  });
+  try {
+    const r = runCheck(ws.dir);
+    assert.notEqual(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout + r.stderr, /Live\.tsx/);
+  } finally {
+    ws.cleanup();
+  }
+});
+
+test("flags a namespace import (`import * as LA from \"@mobile-surfaces/live-activity\"`)", () => {
+  // The exact aliased/star form the hardening targets: a namespace import
+  // followed by indirection (`LA.liveActivityAdapter`). The specifier still
+  // terminates a `from` clause, so the structural check catches it.
+  const ws = withWorkspace({
+    "screens/Live.tsx":
+      'import * as LA from "@mobile-surfaces/live-activity";\n' +
+      "export const adapter = LA.liveActivityAdapter;\n",
+  });
+  try {
+    const r = runCheck(ws.dir);
+    assert.notEqual(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout + r.stderr, /Live\.tsx/);
+    assert.match(r.stdout + r.stderr, /from import/);
+  } finally {
+    ws.cleanup();
+  }
+});
+
+test("flags a namespace re-export (`export * as LA from \"@mobile-surfaces/live-activity\"`)", () => {
+  const ws = withWorkspace({
+    "lib/reexport.ts":
+      'export * as LA from "@mobile-surfaces/live-activity";\n',
+  });
+  try {
+    const r = runCheck(ws.dir);
+    assert.notEqual(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout + r.stderr, /reexport\.ts/);
+  } finally {
+    ws.cleanup();
+  }
+});
+
+test("flags a bare side-effect import (`import \"@mobile-surfaces/live-activity\"`)", () => {
+  // A side-effect import has no binding and no `from` clause; the old
+  // `(?:from|import)\s*\(?\s*"<pkg>"` regex matched it only incidentally
+  // via the `import` branch. The structural check matches it as its own
+  // "bare" form.
+  const ws = withWorkspace({
+    "screens/SideEffect.tsx": 'import "@mobile-surfaces/live-activity";\n',
+  });
+  try {
+    const r = runCheck(ws.dir);
+    assert.notEqual(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout + r.stderr, /SideEffect\.tsx/);
+  } finally {
+    ws.cleanup();
+  }
+});
+
+test("flags a require(\"@mobile-surfaces/live-activity\") CJS call", () => {
+  // A .ts file using CJS interop. The old regex never matched `require`;
+  // the structural check has a dedicated form for it.
+  const ws = withWorkspace({
+    "screens/Cjs.ts":
+      'const LA = require("@mobile-surfaces/live-activity");\nexport const a = LA.liveActivityAdapter;\n',
+  });
+  try {
+    const r = runCheck(ws.dir);
+    assert.notEqual(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout + r.stderr, /Cjs\.ts/);
+  } finally {
+    ws.cleanup();
+  }
+});
+
+test("does not flag an import that survives only inside a comment", () => {
+  // stripNonCode integration: a commented-out forbidden import is not a
+  // violation. The old check read the raw source and would have flagged it.
+  const ws = withWorkspace({
+    "screens/Live.tsx":
+      '// import * as LA from "@mobile-surfaces/live-activity";\nexport const x = 1;\n',
+  });
+  try {
+    const r = runCheck(ws.dir);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+  } finally {
+    ws.cleanup();
+  }
+});
+
+test("does not flag the specifier embedded in an unrelated string literal", () => {
+  // A doc-string mentioning the package by name is not an import.
+  const ws = withWorkspace({
+    "docs/note.ts":
+      'export const note = "do not import @mobile-surfaces/live-activity here";\n',
+  });
+  try {
+    const r = runCheck(ws.dir);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+  } finally {
+    ws.cleanup();
+  }
+});
+
+test("does not false-positive on a `.from(...)` method call naming the package", () => {
+  // `\bfrom` is word-anchored, but a method named `from` could in principle
+  // collide. Pin that `obj.from("@mobile-surfaces/live-activity")` is not an
+  // import: the structural matcher requires the specifier to follow `from`
+  // as an import clause, and a `.from(` call has the package in a paren, not
+  // a quote-directly-after-from position.
+  const ws = withWorkspace({
+    "screens/Live.tsx":
+      'import { liveActivityAdapter } from "../liveActivity";\n' +
+      'export const r = registry.from("@other/pkg").select();\n',
+  });
+  try {
+    const r = runCheck(ws.dir);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+  } finally {
+    ws.cleanup();
+  }
+});
+
 test("flags multiple violations and reports counts", () => {
   const ws = withWorkspace({
     "screens/A.tsx":
