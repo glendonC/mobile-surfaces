@@ -66,6 +66,7 @@
     "agents:build": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/build-agents-md.mjs",
     "agents:check": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/build-agents-md.mjs --check",
     "traps:check": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/validate-trap-catalog.mjs",
+    "docs:check-links": "node --experimental-strip-types --no-warnings=ExperimentalWarning scripts/check-doc-links.mjs",
     "test:scripts": "node --experimental-strip-types --no-warnings=ExperimentalWarning --test scripts/*.test.mjs",
     "test:push": "pnpm --filter @mobile-surfaces/push test",
     "test:mobile": "pnpm --filter mobile-surfaces-app test",

@@ -61,7 +61,7 @@ Two halves: mint the APNs auth key in the Apple Developer portal, then wire its 
 
 1. Sign in to [developer.apple.com/account](https://developer.apple.com/account) → **Certificates, Identifiers & Profiles** → **Keys**.
 2. Click **+**. Name the key (e.g. `Mobile Surfaces dev`).
-3. Tick **Apple Push Notifications service (APNs)**. If you need iOS 18 broadcast channels, also tick **Broadcast Notifications** ([MS034](/docs/traps#ms034-broadcast-capability-must-be-enabled-on-the-apns-auth-key)).
+3. Tick **Apple Push Notifications service (APNs)**. If you need iOS 18 broadcast channels, also tick **Broadcast Notifications** ([MS034](/traps#ms034-broadcast-capability-must-be-enabled-on-the-apns-auth-key)).
 4. Click **Continue** → **Register**.
 5. Download the `.p8` file. Apple lets you download once; save outside the repo and lock the permissions:
 
@@ -73,8 +73,8 @@ Two halves: mint the APNs auth key in the Apple Developer portal, then wire its 
 
 6. Copy the 10-character **Key ID** from the key detail page → `APNS_KEY_ID`.
 7. Copy your 10-character **Team ID** from the **Membership** tab → `APNS_TEAM_ID`.
-8. Your bundle id (the bare `expo.ios.bundleIdentifier` from `apps/mobile/app.json`) goes into `APNS_BUNDLE_ID`. Do NOT append `.push-type.liveactivity` ([MS018](/docs/traps#ms018-apns-bundle-id-must-not-include-the-push-type-liveactivity-suffix)); the SDK appends it internally.
-9. Pick an environment for `APNS_ENVIRONMENT`: `development` for dev-client / TestFlight-development builds, `production` for App Store / TestFlight production. Tokens are environment-scoped ([MS014](/docs/traps#ms014-apns-token-environment-must-match-the-build-environment)).
+8. Your bundle id (the bare `expo.ios.bundleIdentifier` from `apps/mobile/app.json`) goes into `APNS_BUNDLE_ID`. Do NOT append `.push-type.liveactivity` ([MS018](/traps#ms018-apns-bundle-id-must-not-include-the-push-type-liveactivity-suffix)); the SDK appends it internally.
+9. Pick an environment for `APNS_ENVIRONMENT`: `development` for dev-client / TestFlight-development builds, `production` for App Store / TestFlight production. Tokens are environment-scoped ([MS014](/traps#ms014-apns-token-environment-must-match-the-build-environment)).
 
 ### Wire the wizard
 

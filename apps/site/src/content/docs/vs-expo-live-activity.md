@@ -22,7 +22,7 @@ Mobile Surfaces is not a competitor. It is the layer above any iOS bridge: the w
 | Home-screen widget, control widget, lock accessory, StandBy | no | yes (one snapshot, six projections) | drives the alert that triggers the host write | catalogs widget App Group rules (MS013, MS025, MS036) |
 | Notification surface (alert, content extension, category routing) | no | yes | yes (`client.sendNotification`) | catalogs notification rules (MS037) |
 | Node APNs SDK (JWT signing, HTTP/2 multiplexing, error taxonomy, retry, broadcast channels) | no | no | yes | catalogs APNs reason rules (MS011, MS014, MS018, MS028, MS030, MS031, MS032, MS034, MS035) |
-| Catalog of silent-failure modes (<!-- catalog-stats:live -->40<!-- /catalog-stats:live --> documented; <!-- catalog-stats:prGated -->23<!-- /catalog-stats:prGated --> PR-gated in `surface:check`) | no | no | no | yes |
+| Catalog of silent-failure modes (<!-- catalog-stats:live -->41<!-- /catalog-stats:live --> documented; <!-- catalog-stats:prGated -->24<!-- /catalog-stats:prGated --> PR-gated in `surface:check`) | no | no | no | yes |
 | AI-coding-assistant grounding artifact (`AGENTS.md`, `CLAUDE.md`) | no | no | no | yes |
 
 The diagonal is the point. `expo-live-activity` is the iOS bridge. Mobile Surfaces is everything that surrounds the bridge: the contract that types the wire shape, the push SDK that drives it, and the catalog that catches the failures the bridge can't see.
@@ -92,7 +92,7 @@ The contract and push client are bridge-agnostic; the bridge in this repo is not
 | Multiple surfaces (widget + control + Live Activity) sharing one data shape | `expo-live-activity` + `@mobile-surfaces/surface-contracts`. The contract is the only shape your domain emits; every surface projects from it. |
 | Multiple surfaces and you also build the backend | Add `@mobile-surfaces/push`. The Node SDK saves the wire-layer work and types the error taxonomy for retry decisions. |
 | Building from zero, want every surface set up end to end | `pnpm create mobile-surfaces`. The starter ships the Mobile Surfaces bridge as the default; swap to `expo-live-activity` later if needed (the adapter boundary at `apps/mobile/src/liveActivity/index.ts` is a one-file swap point). |
-| Foreign Expo project, want to harden against silent ActivityKit failures | Clone Mobile Surfaces and run `pnpm surface:audit --root <path>` against your project, or read the catalog at [`/docs/traps`](/docs/traps) and apply each `error`-severity rule manually. |
+| Foreign Expo project, want to harden against silent ActivityKit failures | Clone Mobile Surfaces and run `pnpm surface:audit --root <path>` against your project, or read the catalog at [`/traps`](/traps) and apply each `error`-severity rule manually. |
 | AI coding assistant working in a Live Activity codebase | Point the assistant at `AGENTS.md` / `CLAUDE.md` (generated from the catalog). The catalog is the grounding artifact regardless of which bridge the project uses. |
 
 The thing the Mobile Surfaces packages do that nothing else in the ecosystem does is treat ActivityKit's silent-failure modes as a first-class, enforceable contract. That value compounds when the project is multi-surface, multi-developer, or backend-heavy. It's negligible when the project is one Lock Screen panel maintained by one author who has already paid for every trap on their own device.

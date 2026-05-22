@@ -4,7 +4,7 @@ description: "Schema and workflow for editing the trap catalog that generates AG
 order: 100
 group: "Reference"
 ---
-# Trap Catalog
+# Trap Catalog Maintenance
 
 `data/traps.json` is the load-bearing artifact for Mobile Surfaces' agentic-development surface. It enumerates every silent-failure trap, contract invariant, and platform constraint that downstream consumers (the AI assistant guides, future audit CLI, future MCP server, the long-form troubleshooting recipes) read from. Edit the catalog; everything else regenerates.
 
