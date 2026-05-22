@@ -272,7 +272,9 @@ if (fs.existsSync(readmeAbs)) {
     let m;
     linkRe.lastIndex = 0;
     while ((m = linkRe.exec(readmeLines[i])) !== null) {
-      const target = m[1].trim();
+      // A markdown link may carry an optional title: `](url "title")`. The
+      // URL is the first whitespace-delimited token; drop any title.
+      const target = m[1].trim().split(/\s+/)[0];
       if (
         /^(?:https?:|mailto:)/i.test(target) ||
         target.startsWith("#") ||
