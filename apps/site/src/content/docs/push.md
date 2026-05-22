@@ -120,7 +120,7 @@ const client = createPushClient({
 });
 ```
 
-One client per `(auth-key, environment, bundleId)` tuple. A single client multiplexes alert / Live-Activity / broadcast / channel-management traffic over its session pool. `client.close()` flushes in-flight requests and tears down both HTTP/2 sessions; subsequent calls throw `ClientClosedError`.
+One client per `(auth-key, environment, bundleId)` tuple. A single client multiplexes alert / Live-Activity / broadcast / channel-management traffic over one HTTP/2 session per origin. `client.close()` flushes in-flight requests and tears down both HTTP/2 sessions; subsequent calls throw `ClientClosedError`.
 
 ### `alert(deviceToken, snapshot, options?)`
 
