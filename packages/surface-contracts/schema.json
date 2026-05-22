@@ -630,5 +630,8 @@
     }
   ],
   "$id": "https://unpkg.com/@mobile-surfaces/surface-contracts@9.0/schema.json",
-  "title": "LiveSurfaceSnapshot"
+  "title": "LiveSurfaceSnapshot",
+  "discriminator": {
+    "propertyName": "kind"
+  }
 }
