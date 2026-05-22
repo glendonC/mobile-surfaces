@@ -106,7 +106,14 @@ export const notificationCategoryRegistry = z
         "Registry schema version. Distinct from the wire-format " +
           "schemaVersion that lives on LiveSurfaceSnapshot.",
       ),
-    categories: z.array(notificationCategory),
+    categories: z
+      .array(notificationCategory)
+      .min(1)
+      .describe(
+        "At least one category. The z.enum over these ids requires a " +
+          "non-empty tuple, and a registry with zero categories would " +
+          "leave liveSurfaceNotificationSlice.category unconstructable.",
+      ),
   })
   .strict();
 export type NotificationCategoryRegistry = z.infer<
@@ -144,11 +151,25 @@ export const NOTIFICATION_CATEGORIES = {
 notificationCategoryRegistry.parse(NOTIFICATION_CATEGORIES);
 
 /**
- * Flat string-tuple view used by Zod's enum constraint on
- * `liveSurfaceNotificationSlice.category`. Keeping the tuple narrow lets
- * the snapshot schema reject category values that are not in the registry
- * at parse time.
+ * The literal union of every category id, derived from the `as const`
+ * registry. This is the static type the `z.enum` over
+ * `liveSurfaceNotificationSlice.category` carries — not `string`.
+ */
+export type CategoryId =
+  (typeof NOTIFICATION_CATEGORIES.categories)[number]["id"];
+
+/**
+ * Flat tuple view used by Zod's enum constraint on
+ * `liveSurfaceNotificationSlice.category`. Element type is the literal
+ * union `CategoryId`, so the snapshot schema rejects category values not
+ * in the registry both at parse time AND at compile time.
+ *
+ * The single `as` narrows `.map()`'s `CategoryId[]` result to the
+ * non-empty tuple shape `z.enum` requires. The non-empty assertion is
+ * sound: `notificationCategoryRegistry` constrains `categories` with
+ * `.min(1)`, and `notificationCategoryRegistry.parse` runs at module load
+ * above, so a zero-length registry throws before this line is reached.
  */
 export const NOTIFICATION_CATEGORY_IDS = NOTIFICATION_CATEGORIES.categories.map(
   (c) => c.id,
-) as unknown as readonly [string, ...string[]];
+) as [CategoryId, ...CategoryId[]];
