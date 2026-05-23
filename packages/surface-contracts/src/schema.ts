@@ -298,10 +298,14 @@ export const liveSurfaceNotificationSlice = z
       ),
     subtitle: z
       .string()
+      .min(1)
       .optional()
       .describe(
         "Notification subtitle. Maps to aps.alert.subtitle. Renders between " +
-          "the title and body on iOS 10+.",
+          "the title and body on iOS 10+. Empty string is rejected: the " +
+          "projection helper drops absent subtitles via a truthy check, so " +
+          "an empty string would silently disappear from the wire. Producers " +
+          "that want no subtitle should omit the field.",
       ),
     body: z
       .string()
@@ -324,9 +328,13 @@ export const liveSurfaceNotificationSlice = z
       ),
     threadId: z
       .string()
+      .min(1)
       .optional()
       .describe(
-        "Thread identifier for notification grouping. Maps to aps.thread-id.",
+        "Thread identifier for notification grouping. Maps to aps.thread-id. " +
+          "Empty string is rejected: the projection drops absent threadIds via " +
+          "a truthy check, so an empty string would silently disappear from the " +
+          "wire. Producers that do not want grouping should omit the field.",
       ),
     interruptionLevel: liveSurfaceInterruptionLevel.optional().describe(
       "iOS aps.interruption-level (iOS 15+). Omitted = system default " +
@@ -344,11 +352,15 @@ export const liveSurfaceNotificationSlice = z
       ),
     targetContentId: z
       .string()
+      .min(1)
       .optional()
       .describe(
         "iOS aps.target-content-id. Routes the tap to a specific scene/" +
           "window identifier the host app advertises via " +
-          "UISceneActivationConditions.",
+          "UISceneActivationConditions. Empty string is rejected: the " +
+          "projection drops an absent value via a truthy check, so an empty " +
+          "string would silently disappear from the wire. Omit the field if " +
+          "no specific scene/window should be targeted.",
       ),
   })
   .strict();
