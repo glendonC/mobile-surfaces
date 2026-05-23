@@ -238,6 +238,84 @@ test("a literal that matches a declared key but missing colorset still fails", (
   }
 });
 
+test("L8: flags Color(uiColor: UIColor(named: \"X\")) against the colorset list", () => {
+  // The original MS045 gate only matched the Color("literal") form. The
+  // UIKit-bridge path Color(uiColor: UIColor(named: "X")) is a second way
+  // to reference an asset by name; without coverage, a brand-palette
+  // regression introduced via this shape silently ships. Closure for L8.
+  const swift =
+    'import SwiftUI\n' +
+    'import UIKit\n' +
+    'let bad = Color(uiColor: UIColor(named: "AccentColor")!)\n';
+  const ws = withWidget({ swift: { "Widget.swift": swift } });
+  try {
+    const r = runCheck(ws.dir);
+    assert.notEqual(
+      r.status,
+      0,
+      "UIColor(named: \"AccentColor\") with no AccentColor.colorset must fail",
+    );
+    assert.match(r.stdout, /AccentColor/);
+  } finally {
+    ws.cleanup();
+  }
+});
+
+test("L8: Color(uiColor: UIColor(named: \"$widgetBackground\")) resolves when the colorset exists", () => {
+  const swift =
+    'import SwiftUI\n' +
+    'import UIKit\n' +
+    'let ok = Color(uiColor: UIColor(named: "$widgetBackground")!)\n';
+  const ws = withWidget({ swift: { "Widget.swift": swift } });
+  try {
+    const r = runCheck(ws.dir);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+  } finally {
+    ws.cleanup();
+  }
+});
+
+test("L8: Color(.staticMember) (no asset name) is not flagged", () => {
+  // Color(.brandAccent) calls a static Color extension; no asset catalog
+  // lookup happens. The gate must not false-fail on this shape.
+  const swift =
+    'import SwiftUI\n' +
+    'extension Color { static let brandAccent = Color.accentColor }\n' +
+    'let a = Color(.brandAccent)\n';
+  const ws = withWidget({ swift: { "Widget.swift": swift } });
+  try {
+    const r = runCheck(ws.dir);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+  } finally {
+    ws.cleanup();
+  }
+});
+
+test("L8: dynamic-name Color(name) is documented as out of scope, not silently passed", () => {
+  // Name resolution from a variable is undecidable from text. The gate does
+  // not flag it, but the README/header on the script must say so explicitly,
+  // and a Color("$accent") form alongside must still resolve. Pin both: the
+  // dynamic form does not cause a false fail, and the literal sibling does.
+  const swift =
+    'import SwiftUI\n' +
+    'let name = "AccentColor"\n' +
+    'let dyn = Color(name)\n' +
+    'let lit = Color("$accent")\n';
+  const ws = withWidget({ swift: { "Widget.swift": swift } });
+  try {
+    const r = runCheck(ws.dir);
+    assert.equal(
+      r.status,
+      0,
+      "dynamic-name Color(name) is out of scope; the literal must still pass. Output:\n" +
+        r.stdout +
+        r.stderr,
+    );
+  } finally {
+    ws.cleanup();
+  }
+});
+
 test("parses quoted colors keys in expo-target.config.js", () => {
   // The keys may be written as quoted strings; the structural parser must
   // read them the same as bare-identifier keys.
