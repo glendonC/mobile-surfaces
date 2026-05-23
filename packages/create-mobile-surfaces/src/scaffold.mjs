@@ -10,7 +10,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as logger from "./logger.mjs";
 import { resolveTemplateTarball } from "./template-manifest.mjs";
-import { toSwiftPrefix } from "./validators.mjs";
+import { toDisplayName, toSwiftPrefix } from "./validators.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -188,9 +188,38 @@ async function copyFromWorkingTree({ sourcePath, target }) {
   }
 }
 
+// Resolve the iOS Settings display name from a scaffold config. Three
+// branches:
+//   - explicit config.displayName wins (user supplied --display-name or
+//     answered the prompt).
+//   - missing displayName falls back to a titlecase derive of the slug, so
+//     "pinecrest-diner" yields "Pinecrest Diner".
+//   - if the slug yields the empty string (slug has no alphanumerics),
+//     fall back to "Mobile Surfaces" so the rename script never receives
+//     the literal string "undefined" as a substitution value.
+//
+// Exists as a named, exported helper so direct callers of renameIdentity
+// (dev-smoke-e2e, fixtures, any future scripted entry point) cannot
+// silently bypass the default by skipping flags.mjs resolveYesConfig and
+// prompts.mjs runPrompts. The scaffold-e2e CI gate caught exactly that
+// bypass on the first PR run; this helper closes the class.
+export function resolveDisplayName(config) {
+  if (typeof config.displayName === "string" && config.displayName.length > 0) {
+    return config.displayName;
+  }
+  return toDisplayName(config.projectName) || "Mobile Surfaces";
+}
+
 export async function renameIdentity({ target, config }) {
   const swiftPrefix = toSwiftPrefix(config.projectName);
   const widgetTarget = `${swiftPrefix}Widget`;
+  // A4: --name is the rename script's "display name" argument (lands in
+  // app.json's expo.name and the iOS Settings label); --slug is the kebab
+  // identifier used for folders/packages. Earlier code passed
+  // config.projectName for both, so a user whose slug was "pinecrest-diner"
+  // saw "pinecrest-diner" in iOS Settings. resolveDisplayName centralizes
+  // the displayName-or-derive choice (see its docstring above).
+  const displayName = resolveDisplayName(config);
   // --skip-verify: rename runs before `pnpm install`, so the post-rename
   // surface:check pass would fail importing zod from packages/surface-contracts.
   // The user's first install + surface:check covers verification end-to-end.
@@ -198,7 +227,7 @@ export async function renameIdentity({ target, config }) {
     "node",
     [
       "scripts/rename-starter.mjs",
-      `--name=${config.projectName}`,
+      `--name=${displayName}`,
       `--scheme=${config.scheme}`,
       `--bundle-id=${config.bundleId}`,
       `--widget-target=${widgetTarget}`,

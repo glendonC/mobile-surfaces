@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { applyAppJsonPatches, runStreamed } from "../src/scaffold.mjs";
+import { applyAppJsonPatches, resolveDisplayName, runStreamed } from "../src/scaffold.mjs";
 
 let tmp;
 
@@ -70,6 +70,52 @@ describe("applyAppJsonPatches - teamId", () => {
     assert.equal(
       applyAppJsonPatches({ target: tmp, teamId: "ABCDE12345" }),
       false,
+    );
+  });
+});
+
+describe("resolveDisplayName - default for direct callers (A4 / e2e regression)", () => {
+  // dev-smoke-e2e builds a config without flags.mjs / prompts.mjs, so
+  // config.displayName is undefined. The previous shape passed that
+  // through to rename-starter as the literal string "undefined", and
+  // every test that asserted "Mobile Surfaces" in the scaffolded tree
+  // saw "undefined" instead. resolveDisplayName centralizes the default
+  // so the bypass cannot recur.
+
+  it("returns config.displayName when supplied", () => {
+    assert.equal(
+      resolveDisplayName({
+        projectName: "pinecrest-diner",
+        displayName: "Pinecrest Diner Inc",
+      }),
+      "Pinecrest Diner Inc",
+    );
+  });
+
+  it("derives titlecase from the slug when displayName is missing", () => {
+    assert.equal(
+      resolveDisplayName({ projectName: "pinecrest-diner" }),
+      "Pinecrest Diner",
+    );
+    assert.equal(
+      resolveDisplayName({ projectName: "ms-e2e-mphnpzn9" }),
+      "Ms E2e Mphnpzn9",
+    );
+  });
+
+  it("falls back to \"Mobile Surfaces\" when the slug has no alphanumerics", () => {
+    // The derive returns "" for a no-alphanumeric slug; the function must
+    // return a non-empty string so rename-starter cannot receive the empty
+    // string (which would substitute "Mobile Surfaces" to "" everywhere).
+    assert.equal(resolveDisplayName({ projectName: "---" }), "Mobile Surfaces");
+    assert.equal(resolveDisplayName({ projectName: "" }), "Mobile Surfaces");
+  });
+
+  it("ignores empty-string and non-string displayName values", () => {
+    // An empty string is not a useful display name; treat the same as missing.
+    assert.equal(
+      resolveDisplayName({ projectName: "my-app", displayName: "" }),
+      "My App",
     );
   });
 });

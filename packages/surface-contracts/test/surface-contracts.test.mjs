@@ -162,6 +162,54 @@ test("notification projection maps slice title/body to aps.alert", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Empty-string optionals on the notification slice (C7).
+//
+// Without these gates, a producer that legitimately sets subtitle/threadId/
+// targetContentId to "" parses cleanly at the boundary but the projection
+// helper silently drops the field via a truthy check (toNotificationContentPayload
+// in src/index.ts uses `note.subtitle ? ... : ...` and friends). The wire
+// shape then differs from what the producer wrote, with no error surface.
+// The fix is .min(1) at the slice, matching the title/body posture: empty
+// strings fail at the producer boundary loudly rather than disappearing.
+// ---------------------------------------------------------------------------
+
+function notificationSnapshotWith(noteOverrides) {
+  return {
+    ...withoutLiveActivity(queued),
+    id: "fixture-notification-empty-optional",
+    surfaceId: "surface-notification-empty-optional",
+    kind: "notification",
+    notification: {
+      title: "Surface needs attention",
+      body: "Open the app to review the surface state.",
+      deepLink: queued.liveActivity.deepLink,
+      ...noteOverrides,
+    },
+  };
+}
+
+test("notification slice rejects subtitle: \"\" (would silently drop at projection)", () => {
+  assert.throws(
+    () => assertSnapshot(notificationSnapshotWith({ subtitle: "" })),
+    /subtitle/,
+  );
+});
+
+test("notification slice rejects threadId: \"\" (would silently drop at projection)", () => {
+  assert.throws(
+    () => assertSnapshot(notificationSnapshotWith({ threadId: "" })),
+    /threadId/,
+  );
+});
+
+test("notification slice rejects targetContentId: \"\" (would silently drop at projection)", () => {
+  assert.throws(
+    () => assertSnapshot(notificationSnapshotWith({ targetContentId: "" })),
+    /targetContentId/,
+  );
+});
+
+// ---------------------------------------------------------------------------
 // Discriminated-union enforcement
 // ---------------------------------------------------------------------------
 

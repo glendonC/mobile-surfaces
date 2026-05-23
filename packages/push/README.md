@@ -110,7 +110,7 @@ All non-2xx responses throw a typed subclass of `ApnsError`:
 | `TooManyRequestsError` | 429; `retryAfterSeconds` parsed from `Retry-After`. |
 | `UnknownApnsError` | Reason not in the local guide; raw reason on `.reason`. |
 
-All carry `apnsId`, `status`, `timestamp`, and `reason`. The following additional classes round out the taxonomy:
+Every `ApnsError` subclass in the table above carries `apnsId`, `status`, `timestamp`, and `reason`. The classes below extend `MobileSurfacesError` instead and round out the taxonomy; they do **not** carry the APNs response fields:
 
 - `InvalidSnapshotError`: Zod validation failure or wrong `kind`.
 - `ClientClosedError`: method called after `close()`.

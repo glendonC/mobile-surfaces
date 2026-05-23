@@ -18,7 +18,9 @@ import {
   validateBundleId,
   validateTeamId,
   validateSwiftIdentifier,
+  toDisplayName,
   toScheme,
+  validateDisplayName,
   toBundleId,
   toSwiftPrefix,
 } from "../src/index.mjs";
@@ -98,6 +100,31 @@ test("validateSwiftIdentifier requires UpperCamelCase", () => {
 test("toScheme strips non-alphanumerics and lowercases", () => {
   assert.equal(toScheme("My App"), "myapp");
   assert.equal(toScheme("lock-screen-demo"), "lockscreendemo");
+});
+
+test("validateDisplayName accepts free-form text and rejects empty / >100 chars", () => {
+  assert.equal(validateDisplayName("Pinecrest Diner"), undefined);
+  assert.equal(validateDisplayName("App"), undefined);
+  assert.equal(validateDisplayName("My App 2026"), undefined);
+  // Unicode is fine; only length and emptiness are constrained.
+  assert.equal(validateDisplayName("カフェ"), undefined);
+  assert.match(validateDisplayName(""), /Required/);
+  assert.match(validateDisplayName("   "), /Required/);
+  assert.match(validateDisplayName("x".repeat(101)), /100 characters/);
+});
+
+test("toDisplayName titlecases each kebab segment with single-space joins", () => {
+  // A4: the scaffolder's iOS Settings display name (app.json's expo.name)
+  // previously took the kebab slug verbatim. toDisplayName is the derive
+  // that fills the new --display-name flag's default.
+  assert.equal(toDisplayName("pinecrest-diner"), "Pinecrest Diner");
+  assert.equal(toDisplayName("mobile-surfaces"), "Mobile Surfaces");
+  assert.equal(toDisplayName("my-app-2026"), "My App 2026");
+  assert.equal(toDisplayName("lock screen demo"), "Lock Screen Demo");
+  // Empty / no-alphanumeric input returns an empty string; callers should
+  // fall back to a hardcoded default or prompt the user.
+  assert.equal(toDisplayName(""), "");
+  assert.equal(toDisplayName("---"), "");
 });
 
 test("toBundleId derives a com.example placeholder id", () => {

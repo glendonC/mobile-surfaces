@@ -370,8 +370,9 @@
               "description": "Notification title. Maps directly to aps.alert.title in the APNs envelope."
             },
             "subtitle": {
-              "description": "Notification subtitle. Maps to aps.alert.subtitle. Renders between the title and body on iOS 10+.",
-              "type": "string"
+              "description": "Notification subtitle. Maps to aps.alert.subtitle. Renders between the title and body on iOS 10+. Empty string is rejected: the projection helper drops absent subtitles via a truthy check, so an empty string would silently disappear from the wire. Producers that want no subtitle should omit the field.",
+              "type": "string",
+              "minLength": 1
             },
             "body": {
               "type": "string",
@@ -390,8 +391,9 @@
               ]
             },
             "threadId": {
-              "description": "Thread identifier for notification grouping. Maps to aps.thread-id.",
-              "type": "string"
+              "description": "Thread identifier for notification grouping. Maps to aps.thread-id. Empty string is rejected: the projection drops absent threadIds via a truthy check, so an empty string would silently disappear from the wire. Producers that do not want grouping should omit the field.",
+              "type": "string",
+              "minLength": 1
             },
             "interruptionLevel": {
               "description": "iOS aps.interruption-level (iOS 15+). Omitted = system default (active). Use timeSensitive for notifications that must break through Focus modes (e.g. delivery-arrived alerts).",
@@ -410,8 +412,9 @@
               "maximum": 1
             },
             "targetContentId": {
-              "description": "iOS aps.target-content-id. Routes the tap to a specific scene/window identifier the host app advertises via UISceneActivationConditions.",
-              "type": "string"
+              "description": "iOS aps.target-content-id. Routes the tap to a specific scene/window identifier the host app advertises via UISceneActivationConditions. Empty string is rejected: the projection drops an absent value via a truthy check, so an empty string would silently disappear from the wire. Omit the field if no specific scene/window should be targeted.",
+              "type": "string",
+              "minLength": 1
             }
           },
           "required": [

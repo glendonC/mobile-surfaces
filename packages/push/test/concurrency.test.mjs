@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import http2 from "node:http2";
 
-const { Http2Client, effectiveStreamCap } = await import("../dist/http.js");
+const { Http2Client, effectiveStreamCap, shouldRedialStaleSession } = await import("../dist/http.js");
 
 import { startMockApns } from "./fixtures/mock-apns.mjs";
 
@@ -495,4 +495,47 @@ test("effectiveStreamCap drops when the peer setting is tightened", () => {
   const userCap = Infinity;
   assert.equal(effectiveStreamCap(userCap, 4), 4);
   assert.equal(effectiveStreamCap(userCap, 2), 2);
+});
+
+// shouldRedialStaleSession is the pure decision the request method delegates
+// to when checking whether a session returned by #ensureSession has gone
+// stale in the window between resolve and dispatch. End-to-end coverage of
+// the GOAWAY-during-dispatch path lives in the GOAWAY-cycle tests in
+// client.test.mjs; these unit cases pin the decision rules so removing the
+// re-dial guard would still surface as a test failure even before the
+// race could manifest on the wire.
+test("shouldRedialStaleSession: same healthy session returns false", () => {
+  const session = { closed: false, destroyed: false };
+  assert.equal(shouldRedialStaleSession(session, session), false);
+});
+
+test("shouldRedialStaleSession: undefined current session forces a re-dial", () => {
+  // dropSession() ran between #ensureSession resolving and us reading
+  // this.#session; the returned reference is now orphaned. Re-dial.
+  const session = { closed: false, destroyed: false };
+  assert.equal(shouldRedialStaleSession(undefined, session), true);
+});
+
+test("shouldRedialStaleSession: session swapped under us forces a re-dial", () => {
+  // Concurrent dial promoted a different session into #session while we
+  // were awaiting #ensureSession; the returned reference is no longer the
+  // cached one.
+  const returned = { closed: false, destroyed: false };
+  const current = { closed: false, destroyed: false };
+  assert.equal(shouldRedialStaleSession(current, returned), true);
+});
+
+test("shouldRedialStaleSession: closed session forces a re-dial", () => {
+  // GOAWAY fired mid-race. Apple's GOAWAY is graceful (existing streams
+  // finish, no new ones accepted), so a new dial gives us a fresh session
+  // that can dispatch immediately.
+  const session = { closed: true, destroyed: false };
+  assert.equal(shouldRedialStaleSession(session, session), true);
+});
+
+test("shouldRedialStaleSession: destroyed session forces a re-dial", () => {
+  // Connection dropped (network event, RST_STREAM cascade). The session is
+  // unusable; re-dial to give the request a healthy one.
+  const session = { closed: false, destroyed: true };
+  assert.equal(shouldRedialStaleSession(session, session), true);
 });

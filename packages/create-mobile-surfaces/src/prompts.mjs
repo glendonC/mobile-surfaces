@@ -14,8 +14,10 @@ import { prompts as copy } from "./copy.mjs";
 import * as defaultUi from "./ui.mjs";
 import {
   toBundleId,
+  toDisplayName,
   toScheme,
   validateBundleId,
+  validateDisplayName,
   validateProjectSlug,
   validateScheme,
   validateTeamId,
@@ -31,6 +33,22 @@ export async function runPrompts({ initialName, overrides = {}, yes = false, ui 
         defaultValue: initialName ?? "lockscreen-demo",
         validate: validateProjectSlug,
       });
+
+  // displayName is what shows in iOS Settings / Home Screen / App Switcher.
+  // Default is a titlecase derive of the slug (pinecrest-diner -> "Pinecrest
+  // Diner"); --display-name overrides at any layer. A4: prior code passed
+  // the kebab slug as both --name and --slug to the rename script, so an
+  // app whose slug was "pinecrest-diner" appeared in iOS Settings as
+  // "pinecrest-diner" instead of "Pinecrest Diner".
+  const displayName = overrides.displayName !== undefined
+    ? overrides.displayName
+    : yes
+      ? toDisplayName(projectName) || "Mobile Surfaces"
+      : await ui.askText({
+          message: copy.displayName.message,
+          defaultValue: toDisplayName(projectName) || "Mobile Surfaces",
+          validate: validateDisplayName,
+        });
 
   const scheme = overrides.scheme !== undefined
     ? overrides.scheme
@@ -125,6 +143,7 @@ export async function runPrompts({ initialName, overrides = {}, yes = false, ui 
     // Recap — single stdout.write block. Cannot be redrawn over.
     const recapBody = [
       `name             ${pc.bold(projectName)}`,
+      `display name     ${pc.bold(displayName)}`,
       `scheme           ${pc.bold(scheme)}`,
       `bundle           ${pc.bold(bundleId)}`,
       `team id          ${teamId ? pc.bold(teamId) : pc.dim("skip — set later in app.json")}`,
@@ -149,6 +168,7 @@ export async function runPrompts({ initialName, overrides = {}, yes = false, ui 
 
   return {
     projectName,
+    displayName,
     scheme,
     bundleId,
     teamId: teamId || null,

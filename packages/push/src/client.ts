@@ -522,10 +522,15 @@ function parseRetryAfterSeconds(value: string | undefined): number | undefined {
   if (!value) return undefined;
   const numeric = Number(value);
   if (Number.isFinite(numeric) && numeric >= 0) return numeric;
-  // HTTP-date form (rare for APNs but allowed by spec).
+  // HTTP-date form (rare for APNs but allowed by spec). Round UP: the
+  // header expresses the earliest time at which the next retry is allowed;
+  // floor would bias the client toward under-waiting (e.g. a delta of
+  // 9.8 seconds would yield 9, retrying ~200ms early), and the polite
+  // direction on an APNs back-off header is to wait at least as long as
+  // the server asked, not less.
   const ms = Date.parse(value);
   if (!Number.isFinite(ms)) return undefined;
-  return Math.max(0, Math.floor((ms - Date.now()) / 1000));
+  return Math.max(0, Math.ceil((ms - Date.now()) / 1000));
 }
 
 function isTransportError(err: unknown): boolean {

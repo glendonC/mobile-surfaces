@@ -30,6 +30,7 @@ import {
   type LiveSurfaceSnapshotNotification,
 } from "@mobile-surfaces/surface-contracts";
 import { useTokenStore } from "@mobile-surfaces/tokens/react";
+import { createTokenForwarder } from "@mobile-surfaces/tokens/forwarder";
 import { surfaceColors } from "../theme";
 import { liveActivityAdapter } from "../liveActivity";
 import {
@@ -75,23 +76,33 @@ export function DeliveryExampleScreen() {
   const tokenStore = useTokenStore({
     adapter: liveActivityAdapter,
     environment: "development",
-    // The example uses a mock forwarder that logs to console. Real apps
-    // wire `createTokenForwarder({ url: ... })` from
-    // @mobile-surfaces/tokens/forwarder against their backend.
-    forwarder: useMemo(
-      () => ({
+    // The bundled example-backend at apps/example-backend/ accepts tokens
+    // at POST /tokens. Setting EXPO_PUBLIC_TOKEN_FORWARDER_URL on the
+    // mobile build wires this screen at it so the on-device side and the
+    // local backend actually shake hands. With the env var unset (the
+    // default for a quick first-run), the forwarder falls back to a
+    // no-op that logs the token kind and a 12-char prefix; the rest of
+    // the surface still drives end-to-end. Real apps wire
+    // `createTokenForwarder({ url: ... })` against their production
+    // backend, not the EXPO_PUBLIC_ env var (which is bundle-baked).
+    forwarder: useMemo(() => {
+      const url = process.env.EXPO_PUBLIC_TOKEN_FORWARDER_URL;
+      if (typeof url === "string" && url.length > 0) {
+        return createTokenForwarder({ url });
+      }
+      return {
         async forward(record) {
           // eslint-disable-next-line no-console
           console.log(
             "[delivery] would forward token to backend:",
             record.kind,
             record.token.slice(0, 12) + "…",
+            "(set EXPO_PUBLIC_TOKEN_FORWARDER_URL to wire a real endpoint)",
           );
           return { kind: "ok" as const, status: 200, attempts: 1 };
         },
-      }),
-      [],
-    ),
+      };
+    }, []),
   });
 
   const activityIdRef = useRef<string | null>(null);

@@ -117,6 +117,34 @@ test("MS042: alternate removal phrasings are all caught", () => {
   }
 });
 
+test("MS042: bare-major and v-prefix-bare-major phrasings are caught (L7)", () => {
+  // Without .0 on the removal version, prior PROSE_RE silently passed. A
+  // promise written as "removed in 4" or "removed in v4" is just as
+  // load-bearing as "removed in 4.0.0"; the regex must accept all four shapes.
+  const phrasings = [
+    "// The codec is removed in 4.\n",
+    "// The codec is removed in v4.\n",
+    "// The codec will be gone in 4.\n",
+    "// The codec is to be removed in version 4.\n",
+  ];
+  const dir = withWorkspace("@mobile-surfaces/example", "5.0.0", {
+    "phrasings-bare.ts": phrasings.join(""),
+  });
+  try {
+    const result = runScript(dir);
+    assert.equal(result.status, 1, "every bare-major phrasing must fail the gate");
+    const report = JSON.parse(result.stdout);
+    const issues = report.checks[0].detail.issues;
+    assert.equal(
+      issues.length,
+      phrasings.length,
+      `expected one issue per bare-major phrasing, got ${issues.length}`,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("MS042: prose promising removal in a future major passes", () => {
   const dir = withWorkspace("@mobile-surfaces/example", "5.0.0", {
     "schema-v1.ts":

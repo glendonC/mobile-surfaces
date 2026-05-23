@@ -2673,7 +2673,12 @@ test("Retry-After in HTTP-date form is parsed into retryAfterSeconds", async (t)
         `expected TooManyRequestsError, got ${err?.name}`,
       );
       // toUTCString has 1-second resolution and a tick elapses between
-      // building the date and parsing it, so allow a small lower margin.
+      // building the date and parsing it. parseRetryAfterSeconds rounds UP
+      // (Math.ceil) so a delta of 599.8 yields 600, not 599: the polite
+      // direction on a server-issued back-off is to wait at least as long
+      // as asked, not less. The expected value lands at exactly
+      // RETRY_AFTER_SECONDS in the common case; allow a small lower margin
+      // only to absorb genuine multi-second slow-test scheduling.
       assert.ok(
         typeof err.retryAfterSeconds === "number" &&
           err.retryAfterSeconds >= RETRY_AFTER_SECONDS - 5 &&

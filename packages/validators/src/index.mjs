@@ -17,7 +17,7 @@
 //              emission policy (CLI prompts re-ask; rename-starter prints +
 //              exits). A validator never throws.
 //
-//   to*        (toScheme, toBundleId, toSwiftPrefix)
+//   to*        (toScheme, toBundleId, toDisplayName, toSwiftPrefix)
 //              Derivers: transform a project name into a derived identifier.
 //              They return the derived string. toScheme and toBundleId always
 //              succeed. toSwiftPrefix throws when no valid Swift identifier can
@@ -102,6 +102,20 @@ export function validateBundleId(s) {
 // `pnpm surface:setup-apns`. APNs send-time presence is enforced separately
 // (MS028: createPushClient throws if APNS_TEAM_ID is unset; scripts/setup-apns.mjs
 // has its own stricter validator that rejects empty).
+// validate: the iOS Settings / Home Screen display name. Free-form Unicode
+// text (any human-readable name is fine), bounded at 100 chars so a
+// runaway clipboard paste cannot produce a string that no UI can render.
+// The kebab-slug constraint applies to projectName, not displayName.
+export function validateDisplayName(s) {
+  if (typeof s !== "string" || s.trim().length === 0) {
+    return "Required.";
+  }
+  if (s.length > 100) {
+    return "Must be 100 characters or fewer.";
+  }
+  return undefined;
+}
+
 export function validateTeamId(s) {
   if (!s || s.length === 0) return undefined;
   if (!/^[A-Z0-9]{10}$/.test(s)) {
@@ -120,6 +134,22 @@ export function validateSwiftIdentifier(s) {
 
 export function toScheme(projectName) {
   return projectName.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+// Derive a human-readable display name from a kebab/lowercase project slug.
+// Used as the default for the iOS Settings display name (app.json's
+// expo.name). The scaffolder previously passed the slug verbatim, so a user
+// who typed `pinecrest-diner` saw `pinecrest-diner` in iOS Settings. The
+// derive splits on any non-alphanumeric separator, capitalizes each word,
+// and joins with single spaces. Returns "" only if the input has no
+// alphanumeric content (caller should fall back to "Mobile Surfaces" or
+// prompt the user). Always succeeds otherwise; no throw.
+export function toDisplayName(projectName) {
+  return projectName
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+    .join(" ");
 }
 
 export function toBundleId(projectName) {

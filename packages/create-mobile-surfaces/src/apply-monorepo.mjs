@@ -257,7 +257,11 @@ export function patchAppsMobileAppJson({
   const p = path.join(appsMobileRoot, "app.json");
   const j = JSON.parse(fs.readFileSync(p, "utf8"));
   const expo = (j.expo = j.expo ?? {});
-  expo.name = config.projectName;
+  // A4: expo.name is the human-readable display name (iOS Settings, Home
+  // Screen, App Switcher); expo.slug is the kebab identifier. Earlier code
+  // wrote the slug into both, so a user with slug "pinecrest-diner" saw
+  // "pinecrest-diner" in iOS Settings.
+  expo.name = config.displayName ?? config.projectName;
   expo.slug = config.projectName;
   expo.scheme = config.scheme;
   expo.ios = expo.ios ?? {};
@@ -496,7 +500,12 @@ function stripSurfacesAndMarkers({ config, summary }) {
 // passes: text content (substitutions) and Swift filename renames.
 async function rewriteIdentityInTree({ config, summary }) {
   const newIdentity = {
-    name: config.projectName,
+    // `name` here mirrors rename-starter.mjs's DEFAULT_IDENTITY.name, which is
+    // the human-readable display name ("Mobile Surfaces"), not the slug. The
+    // substitution table replaces "Mobile Surfaces" -> displayName everywhere
+    // the literal appears. Falls back to the slug if no displayName is
+    // present so legacy callers without the new field keep working.
+    name: config.displayName ?? config.projectName,
     scheme: config.scheme,
     bundleId: config.bundleId,
     widgetTarget: `${toSwiftPrefix(config.projectName)}Widget`,

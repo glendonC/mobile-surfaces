@@ -13,8 +13,10 @@ import { parseArgs } from "node:util";
 import path from "node:path";
 import {
   toBundleId,
+  toDisplayName,
   toScheme,
   validateBundleId,
+  validateDisplayName,
   validateProjectSlug,
   validateScheme,
   validateTeamId,
@@ -22,6 +24,7 @@ import {
 
 export const FLAG_OPTIONS = Object.freeze({
   name: { type: "string" },
+  "display-name": { type: "string" },
   scheme: { type: "string" },
   "bundle-id": { type: "string" },
   "team-id": { type: "string" },
@@ -73,6 +76,7 @@ function derivePositionalName(positional) {
 export function flagsToOverrides(values) {
   const overrides = {};
   if (values.name !== undefined) overrides.projectName = values.name;
+  if (values["display-name"] !== undefined) overrides.displayName = values["display-name"];
   if (values.scheme !== undefined) overrides.scheme = values.scheme;
   if (values["bundle-id"] !== undefined) overrides.bundleId = values["bundle-id"];
   if (values["team-id"] !== undefined) overrides.teamId = values["team-id"];
@@ -102,6 +106,10 @@ export function validateOverrides(overrides) {
   if (overrides.projectName !== undefined) {
     const err = validateProjectSlug(overrides.projectName);
     if (err) errors.push(`--name: ${err}`);
+  }
+  if (overrides.displayName !== undefined) {
+    const err = validateDisplayName(overrides.displayName);
+    if (err) errors.push(`--display-name: ${err}`);
   }
   if (overrides.scheme !== undefined) {
     const err = validateScheme(overrides.scheme);
@@ -134,6 +142,8 @@ export function resolveYesConfig(overrides) {
 
   if (errors.length > 0) return { config: null, errors };
 
+  config.displayName =
+    overrides.displayName ?? (toDisplayName(config.projectName) || "Mobile Surfaces");
   config.scheme = overrides.scheme ?? toScheme(config.projectName);
   config.bundleId = overrides.bundleId ?? toBundleId(config.projectName);
   config.teamId = overrides.teamId && overrides.teamId.length > 0 ? overrides.teamId : null;
@@ -173,7 +183,10 @@ Scripted (non-interactive):
     --no-install
 
 Options:
-  --name <slug>             Project name. Required with --yes.
+  --name <slug>             Project slug (folder, package name, file paths).
+                            Required with --yes.
+  --display-name <name>     iOS Settings / Home Screen display name. Defaults
+                            to titlecased slug (my-app -> "My App").
   --scheme <scheme>         URL scheme. Defaults to slugified project name.
   --bundle-id <id>          iOS bundle id. Defaults to com.example.<slug>.
   --team-id <id>            Apple Team ID (10 chars). Optional; omit to skip

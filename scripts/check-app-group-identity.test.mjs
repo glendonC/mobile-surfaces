@@ -188,6 +188,37 @@ test("flags an app.json that declares zero App Groups", () => {
   }
 });
 
+test("L4: flags a widget entitlements plist that declares more than one App Group", () => {
+  // extractFromAppJson rejects length > 1; the widget plist extractor used to
+  // silently keep only the first <string> in the <array>. The two extractors
+  // must agree on what "the App Group" means, or a misconfigured widget plist
+  // with two groups parses as its first entry and the mismatched second entry
+  // never surfaces.
+  const ws = withWorkspace();
+  const twoGroupPlist = `<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.application-groups</key>
+  <array>
+    <string>group.com.example.mobilesurfaces</string>
+    <string>group.com.example.unrelated</string>
+  </array>
+</dict>
+</plist>
+`;
+  writeFileSync(
+    join(ws.dir, "apps/mobile/targets/widget/generated.entitlements"),
+    twoGroupPlist,
+  );
+  try {
+    const r = runCheck(ws.dir);
+    assert.notEqual(r.status, 0, "widget plist with 2 groups must fail the gate");
+    assert.match(r.stdout + r.stderr, /expected exactly one|found 2/i);
+  } finally {
+    ws.cleanup();
+  }
+});
+
 test("flags an app.json that declares more than one App Group", () => {
   const ws = withWorkspace();
   writeFileSync(

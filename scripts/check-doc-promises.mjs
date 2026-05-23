@@ -136,6 +136,19 @@ const FORBIDDEN_TERMS = [
     reason:
       "names safeParseAnyVersion, removed at surface-contracts 9.0. Describe the migration without naming the removed function.",
   },
+  {
+    // D6: "All carry `apnsId`, ..." over-generalizes to every error class in
+    // the push package, but only ApnsError subclasses carry the APNs response
+    // fields. The MobileSurfacesError siblings (InvalidSnapshotError,
+    // ClientClosedError, CreateChannelResponseError, AbortError) do not. The
+    // load-bearing fix is to scope the prose to ApnsError subclasses; this
+    // gate forbids the under-scoped phrasing so the next reword cannot drop
+    // the qualifier. Case-sensitive on `apnsId` (the field name) so the
+    // match cannot fire on unrelated "All ... carry" prose.
+    pattern: /\bAll\s+(?:carry|include)\s+`?apnsId\b/,
+    reason:
+      'overclaims error-field coverage: only ApnsError subclasses carry apnsId/status/timestamp/reason. The MobileSurfacesError siblings do not. Scope the sentence to "Every ApnsError subclass ... carries ..." or "All ApnsError subclasses above carry ...".',
+  },
 ];
 
 // Doc-site slug references: catalog prose (data/traps.json `docs` fields and

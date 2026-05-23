@@ -309,11 +309,35 @@ function extractFromAppJson(src) {
 function extractFromWidgetEntitlements(src) {
   // The plist is small and structurally predictable; a regex on the array
   // contents is more robust than pulling in a plist parser dependency.
-  const match = src.match(
-    /<key>com\.apple\.security\.application-groups<\/key>\s*<array>\s*<string>([^<]+)<\/string>/,
+  //
+  // Enumerate every <string> inside the application-groups <array> so a
+  // misconfigured plist with two groups cannot silently collapse to its
+  // first entry. extractFromAppJson rejects length != 1 on the same gate;
+  // the two extractors must agree on what "the App Group" means.
+  const arrayMatch = src.match(
+    /<key>com\.apple\.security\.application-groups<\/key>\s*<array>([\s\S]*?)<\/array>/,
   );
-  if (!match) throw new Error("application-groups <string> entry not found");
-  return match[1].trim();
+  if (!arrayMatch) {
+    throw new Error("application-groups <array> not found");
+  }
+  const groups = [];
+  const stringRe = /<string>([^<]*)<\/string>/g;
+  let m;
+  while ((m = stringRe.exec(arrayMatch[1])) !== null) {
+    groups.push(m[1].trim());
+  }
+  if (groups.length === 0) {
+    throw new Error("application-groups <array> contains no <string> entries");
+  }
+  if (groups.length > 1) {
+    throw new Error(
+      `expected exactly one App Group, found ${groups.length}: ${groups.join(", ")}`,
+    );
+  }
+  if (!groups[0]) {
+    throw new Error("App Group <string> entry is empty");
+  }
+  return groups[0];
 }
 
 function extractFromAppGroupSwift(src) {

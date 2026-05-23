@@ -11,13 +11,23 @@
 // token events. The check catches the event argument in two forms:
 //
 //   1. a direct string literal — `addListener("onPushToken", ...)`.
-//   2. an identifier the same file binds to one of those literals —
-//      `const EV = "onPushToken"; adapter.addListener(EV, ...)`. The
-//      earlier version only matched form 1 and shipped form 2 as a
-//      documented "known weak spot"; aliasing the event name through a
-//      const (or destructuring it off an imported events object) then
-//      slipped a real subscription past the gate. Resolving locally
-//      bound event-name identifiers closes that hole.
+//   2. an identifier the same file binds via const/let/var to one of
+//      those literals — `const EV = "onPushToken"; adapter.addListener(EV, ...)`.
+//      The earlier version only matched form 1; aliasing the event name
+//      through a const then slipped a real subscription past the gate.
+//
+// Two binding shapes are explicitly out of scope:
+//
+//   - destructured bindings — `const { onPushToken: ev } = {...}`. The
+//     resolver only matches plain `name = "literal"` forms.
+//   - cross-file imports — `import { ev } from "./events"`. Resolving the
+//     binding requires reading the imported module.
+//
+// Both are documented limits, pinned by fixtures in check-token-discipline
+// .test.mjs. The structural fix for them is the MS038 brand pattern
+// (force every subscription through a single typed helper that only the
+// adapter package exports); that lives outside MS039's enforcement model
+// and would be a separate refactor.
 //
 // The receiver of addListener is intentionally not constrained: whether
 // the call is `adapter.addListener(...)`, `LA.liveActivityAdapter

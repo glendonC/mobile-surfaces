@@ -1,18 +1,30 @@
 #!/usr/bin/env node
-// Enforces MS045: every Color("literal") asset reference in the widget
-// target's Swift resolves to a colorset that @bacons/apple-targets actually
-// generates on disk.
+// Enforces MS045: every named asset reference in the widget target's Swift
+// resolves to a colorset that @bacons/apple-targets actually generates on
+// disk. Two reference forms are covered:
+//
+//   1. `Color("literal")` — SwiftUI's string-name initializer.
+//   2. `UIColor(named: "literal")` — the UIKit bridge, reachable from SwiftUI
+//      via `Color(uiColor: UIColor(named: "literal")!)`.
+//
+// Forms that are explicitly out of scope: `Color(.staticMember)` (a static
+// Color extension, no asset lookup at all) and `Color(varName)` (dynamic
+// name lookup, undecidable from text). The dynamic-name carve-out is
+// documented here so a future contributor does not introduce one and assume
+// the gate covers it; if a static-name binding pattern ever becomes common
+// in the widget code, broaden the alias resolver then.
 //
 // The silent failure: @bacons/apple-targets generates one *.colorset
 // directory per key in the `colors` map of expo-target.config.js. Those keys
 // are the literal config keys ($accent, $widgetBackground), so the on-disk
 // asset names are Assets.xcassets/$accent.colorset and
-// $widgetBackground.colorset. SwiftUI `Color("name")` for a name with no
-// matching colorset does NOT crash — it silently falls back to a default
-// color — so a Swift file that says Color("AccentColor") while the catalog
-// only holds $accent.colorset compiles, ships, and renders the wrong color
-// with no error anywhere. That is the exact silent-failure class the trap
-// catalog exists to surface.
+// $widgetBackground.colorset. SwiftUI `Color("name")` and UIKit
+// `UIColor(named: "name")` for a name with no matching colorset do NOT
+// crash — both silently fall back to a default color — so a Swift file that
+// says Color("AccentColor") (or Color(uiColor: UIColor(named: "AccentColor")!))
+// while the catalog only holds $accent.colorset compiles, ships, and renders
+// the wrong color with no error anywhere. That is the exact silent-failure
+// class the trap catalog exists to surface.
 //
 // Two config keys are magic. @bacons/apple-targets binds:
 //   $accent           -> ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME
@@ -260,30 +272,50 @@ function literalResolves(literal) {
   return false;
 }
 
-const colorLiteralRe = /\bColor\s*\(\s*"([^"]*)"\s*\)/g;
+// Reference shapes the gate recognizes. Each entry: a regex that captures
+// the asset name, plus the rendered form used in the failure message so an
+// engineer can grep for the exact site in their Swift.
+const REFERENCE_SHAPES = [
+  {
+    re: /\bColor\s*\(\s*"([^"]*)"\s*\)/g,
+    render: (name) => `Color("${name}")`,
+  },
+  {
+    // UIColor(named: "...") — the UIKit bridge. Reachable from SwiftUI via
+    // Color(uiColor: UIColor(named: "...")!). Capture the named argument
+    // regardless of whether a bundle: argument follows (UIColor(named:in:)).
+    re: /\bUIColor\s*\(\s*named:\s*"([^"]*)"\s*(?:,[^)]*)?\)/g,
+    render: (name) => `UIColor(named: "${name}")`,
+  },
+];
 
 let swiftRefCount = 0;
 for (const file of swiftFiles) {
   const src = stripComments(readFileSync(file, "utf8"));
   const rel = relative(process.cwd(), file);
-  let m;
-  colorLiteralRe.lastIndex = 0;
-  while ((m = colorLiteralRe.exec(src)) !== null) {
-    swiftRefCount += 1;
-    const literal = m[1];
-    const line = src.slice(0, m.index).split("\n").length;
-    if (!literalResolves(literal)) {
-      const colorsetList =
-        [...colorsetsOnDisk].sort().map((c) => `${c}.colorset`).join(", ") ||
-        "(none)";
-      const hint =
-        literal.toLowerCase().includes("accent") && colorsetsOnDisk.has(ACCENT_KEY)
-          ? ` The global accent color is the colorset "${ACCENT_KEY}.colorset" (magic key bound to ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME); reference it as Color.accentColor or Color("${ACCENT_KEY}").`
-          : "";
-      issues.push({
-        path: `${rel}:${line}`,
-        message: `Color("${literal}") names no colorset on disk. Available colorsets: ${colorsetList}.${hint}`,
-      });
+  for (const shape of REFERENCE_SHAPES) {
+    shape.re.lastIndex = 0;
+    let m;
+    while ((m = shape.re.exec(src)) !== null) {
+      swiftRefCount += 1;
+      const literal = m[1];
+      const line = src.slice(0, m.index).split("\n").length;
+      if (!literalResolves(literal)) {
+        const colorsetList =
+          [...colorsetsOnDisk]
+            .sort()
+            .map((c) => `${c}.colorset`)
+            .join(", ") || "(none)";
+        const hint =
+          literal.toLowerCase().includes("accent") &&
+          colorsetsOnDisk.has(ACCENT_KEY)
+            ? ` The global accent color is the colorset "${ACCENT_KEY}.colorset" (magic key bound to ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME); reference it as Color.accentColor or Color("${ACCENT_KEY}").`
+            : "";
+        issues.push({
+          path: `${rel}:${line}`,
+          message: `${shape.render(literal)} names no colorset on disk. Available colorsets: ${colorsetList}.${hint}`,
+        });
+      }
     }
   }
 }

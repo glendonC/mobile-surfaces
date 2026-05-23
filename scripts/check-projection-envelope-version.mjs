@@ -63,40 +63,131 @@ const canonical = SCHEMA_VERSION;
 // chained off). Property ordering is not checked: the on-device Codable
 // mirror decodes by key name.
 //
-// We avoid a full TS AST dependency: the schema file is hand-maintained and
-// the projection schemas follow a deterministic shape, so a careful regex
-// is sufficient. The script is exercised by surface:check on every PR; if
-// the shape ever drifts beyond the regex, the error is caught here, not
-// silently passed.
+// Body extraction is brace-balanced rather than regex-truncated. A prior
+// non-greedy `z.object\({([\s\S]*?)}\).strict\(\)` form terminated at the
+// first nested `})\s*.strict()` it encountered, which collapsed the captured
+// body for any schema whose sibling fields used `.strict()` themselves (the
+// notification ContentPayload is the live example). A legitimately-declared
+// schemaVersion that happened to sit after such a sibling was reported
+// missing. The balanced walk below finds the real outer body so property
+// order is wire-irrelevant and gate-irrelevant.
+
+// Find the index of the `}` that matches an opening `{` at openIdx. Counts
+// combined brace/paren/bracket depth so e.g. `arr[0]` inside a body does not
+// fool the matcher; tracks string and template-literal state so a `}` inside
+// a description string is not counted. Returns -1 if no match is found.
+function findMatchingBrace(src, openIdx) {
+  let depth = 1;
+  let inString = null; // null | '"' | "'" | "`"
+  for (let i = openIdx + 1; i < src.length; i += 1) {
+    const ch = src[i];
+    if (inString) {
+      if (ch === "\\") {
+        i += 1; // skip the escaped char outright
+        continue;
+      }
+      if (ch === inString) inString = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") {
+      inString = ch;
+      continue;
+    }
+    if (ch === "{" || ch === "(" || ch === "[") {
+      depth += 1;
+    } else if (ch === "}" || ch === ")" || ch === "]") {
+      depth -= 1;
+      if (depth === 0 && ch === "}") return i;
+    }
+  }
+  return -1;
+}
 
 const issues = [];
 
-// Capture: name + the body inside z.object({ ... }) at the top of the
-// declaration. `[\s\S]*?` is non-greedy across newlines; `.strict()` (or
-// .describe before .strict) bounds the match.
-const EXPORT_RE =
-  /^export\s+const\s+(liveSurface[A-Za-z0-9_]+)\s*=\s*z\s*\.object\(\{([\s\S]*?)\}\)\s*\.strict\(\)/gm;
+// Anchor each declaration with a start regex that matches up to and
+// including the `{` opening the z.object body. `z\s*\.object\(\s*\{` covers
+// both `z.object({` and the multi-line `z\n  .object({` shapes the source
+// uses for wide schemas.
+const START_RE =
+  /^export\s+const\s+(liveSurface[A-Za-z0-9_]+)\s*=\s*z\s*\.\s*object\(\s*\{/gm;
 
 let inspected = 0;
-let m;
-while ((m = EXPORT_RE.exec(source)) !== null) {
-  const name = m[1];
+let startMatch;
+while ((startMatch = START_RE.exec(source)) !== null) {
+  const name = startMatch[1];
   if (!PROJECTION_SUFFIXES.some((re) => re.test(name))) continue;
   if (ALLOWLIST.has(name)) continue;
+
+  // Position of the `{` we just matched (last char of the start regex).
+  const openIdx = startMatch.index + startMatch[0].length - 1;
+  const closeIdx = findMatchingBrace(source, openIdx);
+  if (closeIdx === -1) {
+    issues.push({
+      path: `packages/surface-contracts/src/schema.ts:${name}`,
+      message: `unbalanced braces in z.object({...}) body; cannot extract schemaVersion.`,
+    });
+    continue;
+  }
+  // Verify the declaration closes with `)\s*.strict()` so we are looking at
+  // a real projection-output schema and not, say, a z.object(...) used as a
+  // sub-component without the outer .strict().
+  const tail = source.slice(closeIdx + 1);
+  if (!/^\s*\)\s*\.\s*strict\(\)/.test(tail)) continue;
+
   inspected += 1;
 
-  const body = m[2];
+  const body = source.slice(openIdx + 1, closeIdx);
   const lines = body.split("\n");
 
-  // Find the schemaVersion field anywhere in the body. Property ordering
-  // is not significant on the wire (Codable decodes by key name), so the
-  // field can appear at any position.
+  // Find the schemaVersion field at depth 0 of the body. The body's depth
+  // starts at 0 (we are inside the outer { ... } already); a nested object
+  // increments. Property ordering is not significant on the wire (Codable
+  // decodes by key name), so the field can appear at any position.
   let schemaVersionLineIdx = -1;
-  for (let i = 0; i < lines.length; i += 1) {
-    const trimmed = lines[i].trim();
-    if (/^schemaVersion\s*:/.test(trimmed)) {
-      schemaVersionLineIdx = i;
-      break;
+  {
+    let depth = 0;
+    let inString = null;
+    let lineStart = 0;
+    for (let i = 0; i < body.length; i += 1) {
+      const ch = body[i];
+      if (ch === "\n") {
+        lineStart = i + 1;
+        continue;
+      }
+      if (inString) {
+        if (ch === "\\") {
+          i += 1;
+          continue;
+        }
+        if (ch === inString) inString = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'" || ch === "`") {
+        inString = ch;
+        continue;
+      }
+      if (ch === "{" || ch === "(" || ch === "[") {
+        depth += 1;
+        continue;
+      }
+      if (ch === "}" || ch === ")" || ch === "]") {
+        depth -= 1;
+        continue;
+      }
+      if (depth === 0) {
+        // Look for `schemaVersion:` starting at this position. We only check
+        // when we are at the beginning of a non-whitespace run at depth 0.
+        if (
+          (i === lineStart || /^\s+$/.test(body.slice(lineStart, i))) &&
+          body.slice(i).startsWith("schemaVersion") &&
+          /^schemaVersion\s*:/.test(body.slice(i))
+        ) {
+          // Convert byte offset back to a line index.
+          schemaVersionLineIdx = body.slice(0, i).split("\n").length - 1;
+          break;
+        }
+      }
     }
   }
 
@@ -108,7 +199,7 @@ while ((m = EXPORT_RE.exec(source)) !== null) {
     continue;
   }
 
-  // Confirm the value is `z.literal("<canonical>")` (optionally followed by
+  // Confirm the value is `z.literal(SCHEMA_VERSION)` (optionally followed by
   // chained method calls like .describe(...)). Pull the schemaVersion value
   // block: from after `schemaVersion:` up to the next top-level comma or
   // closing brace. String-aware bracket counter so `.describe("text with (parens)")`
