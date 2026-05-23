@@ -32,20 +32,26 @@ const { values } = parseArgs({
 const TOOL = "check-deprecation-prose";
 const REPO_ROOT = path.resolve(".");
 
-// Match a removal promise: "<removal verb> in [version] [@scope/pkg@][v]X.0[.0]".
+// Match a removal promise: "<removal verb> in [version] [@scope/pkg@][v]X[.0[.0]]".
 // Captures the optional package qualifier and the major number. The verb set
 // is deliberately broad so a promise written as "removed in 9.0", "scheduled
 // for removal in 9.0.0", or "will be gone in 9.0" is caught, not only the one
 // canonical "will be removed in X.0" phrasing. Case-insensitive.
 //
-// The breadth can also match past-tense history ("removed in 3.0 of an
+// The version form also accepts bare-major ("removed in 9") and v-prefixed
+// bare-major ("removed in v9"); without these, prior PROSE_RE silently
+// passed both forms even though they are just as load-bearing as 9.0.0.
+// The trailing .0 / .0.0 segments stay optional and unconstrained for the
+// other digits since the rule is only meaningful at the major.
+//
+// The breadth can also match past-tense history ("removed in 3 of an
 // upstream library"). That is rare in the scanned surface (package src, the
 // doc pages, and the README -- CHANGELOGs are excluded), and a deliberate
 // historical line opts out with a `// CHARTER: keep` marker. The trade is
 // intentional: missing a real removal promise is worse than an allowlistable
 // false positive.
 const PROSE_RE =
-  /\b(?:will be removed|to be removed|will be gone|scheduled for removal|slated for removal|removed|removal)\s+in\s+(?:version\s+)?(?:(@[\w-]+\/[\w-]+)@)?v?(\d+)\.0(?:\.0)?/gi;
+  /\b(?:will be removed|to be removed|will be gone|scheduled for removal|slated for removal|removed|removal)\s+in\s+(?:version\s+)?(?:(@[\w-]+\/[\w-]+)@)?v?(\d+)(?:\.0(?:\.0)?)?\b/gi;
 
 // Allowlist markers. The TS/JS one is a `// CHARTER: keep` single-line comment
 // on the line immediately preceding the prose. The markdown one is an HTML
