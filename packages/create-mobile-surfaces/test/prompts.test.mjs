@@ -303,6 +303,7 @@ test("askText: omits validate when none is supplied so input() runs unvalidated"
 test("runPrompts: each text prompt receives the validator that matches its identity", async () => {
   const ui = makeFakeUi([
     { kind: "text", answer: "myproj" },          // projectName -> validateProjectSlug
+    { kind: "text", answer: "Myproj App" },      // displayName -> validateDisplayName (A4)
     { kind: "text", answer: "myproj" },          // scheme      -> validateScheme
     { kind: "text", answer: "com.acme.myproj" }, // bundleId    -> validateBundleId
     { kind: "text", answer: "" },                // teamId      -> validateTeamId
@@ -315,6 +316,7 @@ test("runPrompts: each text prompt receives the validator that matches its ident
   ]);
   const result = await runPrompts({ overrides: {}, yes: false, ui });
   assert.equal(result.projectName, "myproj");
+  assert.equal(result.displayName, "Myproj App");
   assert.equal(result.bundleId, "com.acme.myproj");
   // v5 surfaced lockAccessoryWidget and standbyWidget in the interactive
   // picker. The defaults are `true` so the happy-path result includes them.
@@ -326,8 +328,8 @@ test("runPrompts: each text prompt receives the validator that matches its ident
   // must reject a bundle-id-shaped value. If the orchestrator wired the
   // wrong validator into the wrong prompt, one of these would reverse.
   const textCalls = ui.calls.filter((c) => c.kind === "text");
-  assert.equal(textCalls.length, 4);
-  const [slugCall, , bundleCall] = textCalls;
+  assert.equal(textCalls.length, 5);
+  const [slugCall, , , bundleCall] = textCalls;
   assert.equal(slugCall.args.validate("myproj"), undefined);
   assert.match(slugCall.args.validate("com.acme.myproj") ?? "", /Lowercase letters/);
   assert.equal(bundleCall.args.validate("com.acme.myproj"), undefined);
@@ -357,11 +359,12 @@ test("runPrompts: --yes mode skips every interactive prompt", async () => {
 
 test("runPrompts: rejected recap confirm restarts the flow; second confirm returns the answer", async () => {
   const ui = makeFakeUi([
-    // First pass — user answers, then declines the recap. Each pass now has
-    // four confirm prompts (home, control, lockAccessory, standby) plus the
-    // recap confirm; that's six confirms per pass, plus four text and one
-    // select. Two passes = 22 scripted answers below.
+    // First pass — user answers, then declines the recap. Each pass has five
+    // text prompts (projectName, displayName, scheme, bundleId, teamId), four
+    // confirm prompts (home, control, lockAccessory, standby), one select
+    // (installNow), and a final recap confirm: 11 entries per pass, 22 total.
     { kind: "text", answer: "first" },
+    { kind: "text", answer: "First App" },
     { kind: "text", answer: "first" },
     { kind: "text", answer: "com.first.app" },
     { kind: "text", answer: "" },
@@ -373,6 +376,7 @@ test("runPrompts: rejected recap confirm restarts the flow; second confirm retur
     { kind: "confirm", answer: false }, // recap rejected -> restart
     // Second pass — user answers again, accepts the recap.
     { kind: "text", answer: "second" },
+    { kind: "text", answer: "Second App" },
     { kind: "text", answer: "second" },
     { kind: "text", answer: "com.second.app" },
     { kind: "text", answer: "" },
@@ -385,8 +389,9 @@ test("runPrompts: rejected recap confirm restarts the flow; second confirm retur
   ]);
   const result = await runPrompts({ overrides: {}, yes: false, ui });
   assert.equal(result.projectName, "second");
+  assert.equal(result.displayName, "Second App");
   assert.equal(result.bundleId, "com.second.app");
-  assert.equal(ui.calls.length, 20);
+  assert.equal(ui.calls.length, 22);
 });
 
 // --- live inquirer retry loop --------------------------------------------
@@ -504,12 +509,14 @@ test("runPrompts: recap rejected twice restarts twice, then resolves on the thir
   // Extends the single-rejection coverage above. Pinning multi-pass restart
   // protects against a regression where the recursion only triggers once
   // (e.g. accidentally consuming the rejection state on the first restart).
-  // v5 adds two more confirms per pass (lockAccessory + standby), so each
-  // pass is 10 prompts (4 text, 4 confirm, 1 select, 1 recap-confirm). Three
-  // passes = 30 scripted answers.
+  // v5 adds two more confirms per pass (lockAccessory + standby) and A4
+  // adds the displayName text prompt, so each pass is 11 prompts (5 text,
+  // 4 confirm, 1 select, 1 recap-confirm). Three passes = 33 scripted
+  // answers.
   const ui = makeFakeUi([
     // Pass 1 — declined.
     { kind: "text", answer: "one" },
+    { kind: "text", answer: "One App" },
     { kind: "text", answer: "one" },
     { kind: "text", answer: "com.one.app" },
     { kind: "text", answer: "" },
@@ -521,6 +528,7 @@ test("runPrompts: recap rejected twice restarts twice, then resolves on the thir
     { kind: "confirm", answer: false },
     // Pass 2 — declined again.
     { kind: "text", answer: "two" },
+    { kind: "text", answer: "Two App" },
     { kind: "text", answer: "two" },
     { kind: "text", answer: "com.two.app" },
     { kind: "text", answer: "" },
@@ -532,6 +540,7 @@ test("runPrompts: recap rejected twice restarts twice, then resolves on the thir
     { kind: "confirm", answer: false },
     // Pass 3 — accepted.
     { kind: "text", answer: "three" },
+    { kind: "text", answer: "Three App" },
     { kind: "text", answer: "three" },
     { kind: "text", answer: "com.three.app" },
     { kind: "text", answer: "" },
@@ -544,8 +553,9 @@ test("runPrompts: recap rejected twice restarts twice, then resolves on the thir
   ]);
   const result = await runPrompts({ overrides: {}, yes: false, ui });
   assert.equal(result.projectName, "three");
+  assert.equal(result.displayName, "Three App");
   assert.equal(result.bundleId, "com.three.app");
-  assert.equal(ui.calls.length, 30);
+  assert.equal(ui.calls.length, 33);
 });
 
 // --- orchestrator-level cancellation through the live ui --------------------

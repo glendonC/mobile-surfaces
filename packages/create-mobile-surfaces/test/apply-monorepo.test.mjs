@@ -9,6 +9,7 @@ import {
   buildIdentitySubstitutions,
   DEFAULT_IDENTITY,
   mergeWorkspaceGlobs,
+  patchAppsMobileAppJson,
   rewriteAppsMobileWorkspaceDeps,
 } from "../src/apply-monorepo.mjs";
 
@@ -266,5 +267,65 @@ describe("mergeWorkspaceGlobs", () => {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
     assert.deepEqual(pkg.workspaces.packages, ["lib/*", "apps/*"]);
     assert.deepEqual(pkg.workspaces.nohoist, []);
+  });
+});
+
+describe("patchAppsMobileAppJson - displayName vs slug (A4)", () => {
+  // Prior code wrote config.projectName (the kebab slug) into both expo.name
+  // and expo.slug, so a user with slug "pinecrest-diner" saw "pinecrest-diner"
+  // in iOS Settings instead of "Pinecrest Diner". The fix writes
+  // config.displayName into expo.name and the slug into expo.slug.
+
+  function writeTemplateAppJson() {
+    const root = path.join(tmp, "apps", "mobile");
+    fs.mkdirSync(root, { recursive: true });
+    fs.writeFileSync(
+      path.join(root, "app.json"),
+      JSON.stringify(
+        { expo: { name: "Mobile Surfaces", slug: "mobile-surfaces", ios: {} } },
+        null,
+        2,
+      ),
+    );
+    return root;
+  }
+
+  it("writes displayName to expo.name and projectName to expo.slug", () => {
+    const appsMobileRoot = writeTemplateAppJson();
+    patchAppsMobileAppJson({
+      appsMobileRoot,
+      config: {
+        projectName: "pinecrest-diner",
+        displayName: "Pinecrest Diner",
+        scheme: "pinecrestdiner",
+        bundleId: "com.acme.pinecrestdiner",
+        teamId: null,
+      },
+      appGroup: "group.com.acme.pinecrestdiner",
+    });
+    const j = JSON.parse(
+      fs.readFileSync(path.join(appsMobileRoot, "app.json"), "utf8"),
+    );
+    assert.equal(j.expo.name, "Pinecrest Diner", "iOS Settings display name");
+    assert.equal(j.expo.slug, "pinecrest-diner", "folder/package slug");
+  });
+
+  it("falls back to projectName when no displayName is supplied (legacy callers)", () => {
+    const appsMobileRoot = writeTemplateAppJson();
+    patchAppsMobileAppJson({
+      appsMobileRoot,
+      config: {
+        projectName: "pinecrest-diner",
+        scheme: "pinecrestdiner",
+        bundleId: "com.acme.pinecrestdiner",
+        teamId: null,
+      },
+      appGroup: "group.com.acme.pinecrestdiner",
+    });
+    const j = JSON.parse(
+      fs.readFileSync(path.join(appsMobileRoot, "app.json"), "utf8"),
+    );
+    assert.equal(j.expo.name, "pinecrest-diner", "fallback preserves prior behavior");
+    assert.equal(j.expo.slug, "pinecrest-diner");
   });
 });

@@ -22,7 +22,10 @@ export const welcome = "Let's set up your Live Activity starter. About 90 second
 // message itself for the prompts that need them.
 export const prompts = {
   projectName: {
-    message: "Project name (folder + iOS Settings display name)",
+    message: "Project slug (folder, package name, file paths — lowercase + hyphens)",
+  },
+  displayName: {
+    message: "Display name (iOS Settings, Home Screen icon, App Switcher)",
   },
   scheme: {
     message: "URL scheme (used in deep links like myapp://…)",

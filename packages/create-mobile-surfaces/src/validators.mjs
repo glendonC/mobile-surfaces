@@ -5,9 +5,11 @@ export {
   validateProjectSlug,
   validateScheme,
   validateBundleId,
+  validateDisplayName,
   validateTeamId,
   validateSwiftIdentifier,
   toScheme,
   toBundleId,
+  toDisplayName,
   toSwiftPrefix,
 } from "@mobile-surfaces/validators";

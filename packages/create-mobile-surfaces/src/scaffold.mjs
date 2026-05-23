@@ -194,11 +194,18 @@ export async function renameIdentity({ target, config }) {
   // --skip-verify: rename runs before `pnpm install`, so the post-rename
   // surface:check pass would fail importing zod from packages/surface-contracts.
   // The user's first install + surface:check covers verification end-to-end.
+  //
+  // A4: --name is the rename script's "display name" argument (lands in
+  // app.json's expo.name and the iOS Settings label); --slug is the kebab
+  // identifier used for folders/packages. Earlier code passed
+  // config.projectName for both, so a user whose slug was "pinecrest-diner"
+  // saw "pinecrest-diner" in iOS Settings. config.displayName is the new,
+  // separately-derived (or user-supplied) human label.
   await runStreamed(
     "node",
     [
       "scripts/rename-starter.mjs",
-      `--name=${config.projectName}`,
+      `--name=${config.displayName}`,
       `--scheme=${config.scheme}`,
       `--bundle-id=${config.bundleId}`,
       `--widget-target=${widgetTarget}`,
