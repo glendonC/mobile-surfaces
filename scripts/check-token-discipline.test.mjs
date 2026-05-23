@@ -5,8 +5,15 @@
 // adapter.addListener("onPushToken", ...) directly. The check flags the
 // presence of a forbidden call: unlike a required-marker grep, a forbidden
 // call that is present is itself the violation, so the check is sound for
-// every direct form. Its one known gap is variable-indirected event names,
-// documented below with a fixture, the same posture as MS001's boundary check.
+// every direct form. Two binding shapes for the event-name argument are
+// recognised: a quoted string literal in the call, and an identifier the
+// same file binds to a token-event string literal via const/let/var. Two
+// shapes are explicitly out of scope and pinned by fixtures below: a
+// destructuring binding (`const { onPushToken: ev } = {...}`) and a
+// cross-file import that resolves to a token-event literal in another
+// module. Both are undecidable from a single-file regex pass; the
+// structural fix is the MS038 brand pattern, which is out of scope for
+// MS039's enforcement model.
 //
 // The check runs as a subprocess against a synthesized apps/ tree.
 
@@ -157,6 +164,44 @@ test("does not flag an indirected event name that survives only inside a comment
       '// const ev = "onPushToken";\nexport const x = 1;\n',
   });
   assert.equal(r.status, 0, r.stdout + r.stderr);
+});
+
+test("L5: destructured-binding event names are out of scope (not flagged)", () => {
+  // Documented limit. The shape `const { onPushToken: ev } = {...}` cannot
+  // be resolved by the single-file resolver, which only matches plain
+  // const/let/var literal bindings. The check does not flag it; this
+  // fixture pins the limit so a future tightening is a deliberate change
+  // that breaks the test.
+  const r = runCheck({
+    "screens/Live.tsx":
+      'const { onPushToken: ev } = { onPushToken: "onPushToken" } as const;\n' +
+      "adapter.addListener(ev, handler);\n",
+  });
+  assert.equal(
+    r.status,
+    0,
+    "destructured-binding form is documented out of scope; see MS039 prose and the script header. Output:\n" +
+      r.stdout +
+      r.stderr,
+  );
+});
+
+test("L5: cross-file imported event-name constants are out of scope (not flagged)", () => {
+  // Same limit, the import variant. Resolving `ev` requires reading
+  // ./events.ts. The single-file scan does not, so the call passes the
+  // gate. Fixture pins the limit.
+  const r = runCheck({
+    "screens/Live.tsx":
+      'import { ev } from "./events";\nadapter.addListener(ev, handler);\n',
+    "screens/events.ts": 'export const ev = "onPushToken" as const;\n',
+  });
+  assert.equal(
+    r.status,
+    0,
+    "cross-file imported event-name is documented out of scope. Output:\n" +
+      r.stdout +
+      r.stderr,
+  );
 });
 
 test("ok when there is no apps/ directory", () => {
