@@ -184,19 +184,27 @@ public class LiveActivityModule: Module {
       // and rely on the next system-issued rotation.
       if #available(iOS 17.2, *) {
         let registry = self.registry
-        let task = Task { [weak self] in
-          for await tokenData in Activity<MobileSurfacesActivityAttributes>.pushToStartTokenUpdates {
-            if Task.isCancelled { return }
-            guard let self = self else { return }
-            let hex = Self.hexString(tokenData)
-            // MS020: treat the latest emission as authoritative. Cache first
-            // so a JS caller racing the event still sees the new value
-            // synchronously via getPushToStartToken().
-            await registry.setPushToStartToken(hex)
-            self.sendEvent("onPushToStartToken", ["token": hex])
+        // Spawn-and-register atomically (C8). The build closure runs inside
+        // the actor's isolation, so by the time this Task's await resolves
+        // the drain handle is in the registry; a clearObservers queued by a
+        // concurrent OnStopObserving cannot land in a gap where the drain
+        // exists but is untracked.
+        Task {
+          await registry.beginPushToStartObservation { [weak self] in
+            Task<Void, Never> { [weak self] in
+              for await tokenData in Activity<MobileSurfacesActivityAttributes>.pushToStartTokenUpdates {
+                if Task.isCancelled { return }
+                guard let self = self else { return }
+                let hex = Self.hexString(tokenData)
+                // MS020: treat the latest emission as authoritative. Cache first
+                // so a JS caller racing the event still sees the new value
+                // synchronously via getPushToStartToken().
+                await registry.setPushToStartToken(hex)
+                self.sendEvent("onPushToStartToken", ["token": hex])
+              }
+            }
           }
         }
-        Task { await registry.replacePushToStart(task) }
       }
     }
 
@@ -206,9 +214,14 @@ public class LiveActivityModule: Module {
     // AsyncSequences forever and re-attach stacks new ones on next mount.
     //
     // Contract with OnStartObserving (MS020 / MS016): `clearObservers()`
-    // cancels every per-activity drain in flight, which on its own would drop
-    // future token rotations on existing activities across a bridge teardown.
-    // The recovery path lives in OnStartObserving above: it iterates
+    // cancels every per-activity drain installed via `beginObservation` and
+    // the push-to-start drain installed via `beginPushToStartObservation`.
+    // Both registration methods install handles inside actor isolation, so a
+    // clearObservers queued here always sees the handles a concurrent
+    // OnStartObserving's `Task` set, regardless of which queued first on
+    // the actor; the only race window is the actor's own arrival order,
+    // which Swift serializes in submission order in practice. The recovery
+    // path lives in OnStartObserving above: it iterates
     // `Activity<MobileSurfacesActivityAttributes>.activities` and calls
     // `observe(activity:isChannelMode:)` for each one, re-attaching fresh
     // drains. If you change OnStartObserving's startup loop (for example,
@@ -247,62 +260,71 @@ public class LiveActivityModule: Module {
     let registry = self.registry
     let activityId = activity.id
 
-    var tasks: [Task<Void, Never>] = []
+    // Spawn-and-register atomically (C8). Earlier code created the drain
+    // Tasks first and queued a separate `Task { await registry.replace(...) }`
+    // to install them; in the gap between spawn and install, a concurrent
+    // OnStopObserving could clear an empty registry and the drains would
+    // leak until the next replace. beginObservation runs the build closure
+    // inside actor isolation, so the handles exist in the registry before
+    // this call returns.
+    Task {
+      await registry.beginObservation(id: activityId) { [weak self] in
+        var tasks: [Task<Void, Never>] = []
 
-    if !isChannelMode {
-      let tokenTask = Task { [weak self] in
-        for await tokenData in activity.pushTokenUpdates {
-          if Task.isCancelled { return }
-          guard let self = self else { return }
-          self.sendEvent("onPushToken", [
-            "activityId": activity.id,
-            "token": Self.hexString(tokenData)
-          ])
-        }
-      }
-      tasks.append(tokenTask)
-    }
-
-    let stateTask = Task { [weak self] in
-      for await update in activity.activityStateUpdates {
-        if Task.isCancelled { return }
-        guard let self = self else { return }
-        // The known-case label strings live in LiveActivityModuleLogic so a
-        // unit test pins them. `@unknown default` must stay here — it only
-        // compiles against the real ActivityKit enum — and routes to
-        // `unknownActivityStateLabel` so future Apple-added cases surface as
-        // "unknown" rather than collapsing into "active". The JS layer
-        // treats "unknown" as a non-terminal observed state.
-        let caseName: String? = {
-          switch update {
-          case .active: return "active"
-          case .ended: return "ended"
-          case .dismissed: return "dismissed"
-          case .stale: return "stale"
-          case .pending: return "pending"
-          @unknown default: return nil
+        if !isChannelMode {
+          let tokenTask = Task<Void, Never> { [weak self] in
+            for await tokenData in activity.pushTokenUpdates {
+              if Task.isCancelled { return }
+              guard let self = self else { return }
+              self.sendEvent("onPushToken", [
+                "activityId": activity.id,
+                "token": Self.hexString(tokenData)
+              ])
+            }
           }
-        }()
-        let label: String = caseName
-          .flatMap { LiveActivityModuleLogic.activityStateLabel(forCaseName: $0) }
-          ?? LiveActivityModuleLogic.unknownActivityStateLabel
-        self.sendEvent("onActivityStateChange", [
-          "activityId": activity.id,
-          "state": label
-        ])
-        // Terminal states: drain the registry slot so we don't leak Task
-        // handles after ActivityKit closes the AsyncSequence on its end.
-        if LiveActivityModuleLogic.isTerminalActivityState(label) {
-          await registry.clear(id: activityId)
-          return
+          tasks.append(tokenTask)
         }
+
+        let stateTask = Task<Void, Never> { [weak self] in
+          for await update in activity.activityStateUpdates {
+            if Task.isCancelled { return }
+            guard let self = self else { return }
+            // The known-case label strings live in LiveActivityModuleLogic so a
+            // unit test pins them. `@unknown default` must stay here — it only
+            // compiles against the real ActivityKit enum — and routes to
+            // `unknownActivityStateLabel` so future Apple-added cases surface as
+            // "unknown" rather than collapsing into "active". The JS layer
+            // treats "unknown" as a non-terminal observed state.
+            let caseName: String? = {
+              switch update {
+              case .active: return "active"
+              case .ended: return "ended"
+              case .dismissed: return "dismissed"
+              case .stale: return "stale"
+              case .pending: return "pending"
+              @unknown default: return nil
+              }
+            }()
+            let label: String = caseName
+              .flatMap { LiveActivityModuleLogic.activityStateLabel(forCaseName: $0) }
+              ?? LiveActivityModuleLogic.unknownActivityStateLabel
+            self.sendEvent("onActivityStateChange", [
+              "activityId": activity.id,
+              "state": label
+            ])
+            // Terminal states: drain the registry slot so we don't leak Task
+            // handles after ActivityKit closes the AsyncSequence on its end.
+            if LiveActivityModuleLogic.isTerminalActivityState(label) {
+              await registry.clear(id: activityId)
+              return
+            }
+          }
+        }
+        tasks.append(stateTask)
+
+        return tasks
       }
     }
-    tasks.append(stateTask)
-
-    // Hand the new handles to the registry; this also cancels any prior
-    // observers for the same activity ID (re-entry from OnStartObserving etc.).
-    Task { await registry.replace(id: activityId, tasks: tasks) }
   }
 
   private static func hexString(_ data: Data) -> String {

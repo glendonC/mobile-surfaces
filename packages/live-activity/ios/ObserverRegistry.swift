@@ -52,6 +52,27 @@ actor ObserverRegistry {
     handles[id] = tasks
   }
 
+  /// Atomically cancel any existing handles for `id`, spawn new drain tasks
+  /// via `build`, and install them. The build closure runs inside actor
+  /// isolation, so the new tasks exist in the registry before this method
+  /// returns; a clearObservers call queued afterward sees and cancels them.
+  ///
+  /// This is the preferred entry point over `replace(id:tasks:)`: the latter
+  /// requires the caller to spawn the tasks first, which means the tasks are
+  /// live and unregistered during the gap between spawn and `replace` -- a
+  /// concurrent OnStopObserving in that gap finds no handle and the drain
+  /// leaks until the next replace. The build-inside-actor pattern removes
+  /// the gap.
+  func beginObservation(
+    id: String,
+    _ build: @Sendable () -> [Task<Void, Never>]
+  ) {
+    if let existing = handles[id] {
+      for task in existing { task.cancel() }
+    }
+    handles[id] = build()
+  }
+
   /// Cancel and remove handles for a single activity (e.g. terminal state).
   func clear(id: String) {
     if let existing = handles.removeValue(forKey: id) {
@@ -64,6 +85,17 @@ actor ObserverRegistry {
   func replacePushToStart(_ task: Task<Void, Never>) {
     pushToStartHandle?.cancel()
     pushToStartHandle = task
+  }
+
+  /// Atomically cancel any existing push-to-start drain, spawn a new one via
+  /// `build`, and install it. Same atomicity as `beginObservation(id:_:)`;
+  /// preferred over `replacePushToStart(_:)` so the drain Task does not exist
+  /// outside the registry's view between spawn and registration.
+  func beginPushToStartObservation(
+    _ build: @Sendable () -> Task<Void, Never>
+  ) {
+    pushToStartHandle?.cancel()
+    pushToStartHandle = build()
   }
 
   /// Store the latest token observed on the push-to-start AsyncSequence.

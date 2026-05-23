@@ -138,6 +138,80 @@ final class ObserverRegistryTests: XCTestCase {
         XCTAssertTrue(firstTask.isCancelled)
     }
 
+    func testBeginPushToStartObservationSpawnsAndStoresAtomically() async {
+        // C8: the spawn-then-register pattern in LiveActivityModule had two
+        // separate Tasks (one for the drain, one for the registration). A
+        // tight detach during attach could see the drain Task in flight with
+        // no handle yet stored, leaving the OnStopObserving cancel a no-op.
+        // beginPushToStartObservation closes that window: the build closure
+        // runs inside actor isolation, so the spawned Task is stored before
+        // the actor returns.
+        let registry = ObserverRegistry()
+        await registry.beginPushToStartObservation {
+            Task<Void, Never> {
+                while !Task.isCancelled { await Task.yield() }
+            }
+        }
+        // By the time the actor call returns, the registry holds a handle.
+        let hasHandle = await registry.hasPushToStartHandle()
+        XCTAssertTrue(hasHandle)
+
+        // A subsequent clearObservers cancels the stored task; the prior
+        // window in which the task could exist unregistered is gone.
+        await registry.clearObservers()
+        let postClearHasHandle = await registry.hasPushToStartHandle()
+        XCTAssertFalse(postClearHasHandle)
+    }
+
+    func testBeginPushToStartObservationCancelsPriorBeforeSpawn() async {
+        // Re-entry of OnStartObserving (JS bridge reconnect, hot reload) must
+        // cancel the prior drain before installing a new one. Two consecutive
+        // beginPushToStartObservation calls leave exactly one live handle and
+        // the prior task observes cancellation.
+        let registry = ObserverRegistry()
+        let firstFinished = expectation(description: "prior task observes cancellation")
+        await registry.beginPushToStartObservation {
+            Task<Void, Never> {
+                while !Task.isCancelled { await Task.yield() }
+                firstFinished.fulfill()
+            }
+        }
+        await registry.beginPushToStartObservation {
+            Task<Void, Never> {}
+        }
+        await fulfillment(of: [firstFinished], timeout: 2.0)
+        let hasHandle = await registry.hasPushToStartHandle()
+        XCTAssertTrue(hasHandle)
+    }
+
+    func testBeginObservationSpawnsAndStoresAtomicallyPerActivity() async {
+        // Same atomicity as beginPushToStartObservation, for the per-activity
+        // drain pair. The build closure produces an array of Task handles;
+        // the registry installs them under the activity id.
+        let registry = ObserverRegistry()
+        await registry.beginObservation(id: "ACT-1") {
+            let t1 = Task<Void, Never> {
+                while !Task.isCancelled { await Task.yield() }
+            }
+            let t2 = Task<Void, Never> {
+                while !Task.isCancelled { await Task.yield() }
+            }
+            return [t1, t2]
+        }
+        let count = await registry.handleCount()
+        XCTAssertEqual(count, 2)
+        let ids = await registry.activityIds()
+        XCTAssertTrue(ids.contains("ACT-1"))
+
+        // Re-entry: a second beginObservation under the same id cancels the
+        // prior tasks and installs the new ones in a single isolated step.
+        await registry.beginObservation(id: "ACT-1") {
+            [Task<Void, Never> {}]
+        }
+        let postCount = await registry.handleCount()
+        XCTAssertEqual(postCount, 1)
+    }
+
     func testConcurrentReplacesDoNotInterleave() async {
         // Actor serialization invariant: 50 parallel `replace` calls under
         // distinct ids must leave exactly 50 entries — never fewer (would
