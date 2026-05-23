@@ -167,3 +167,4 @@ notes/
 # can grow to tens of MB; not safe to ship in a tarball or commit.
 .build/
 **/.build/
+.claude/scheduled_tasks.lock
