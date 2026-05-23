@@ -114,6 +114,32 @@ export function effectiveStreamCap(userCap: number, peerCap: number): number {
   return Math.min(userCap, peerCap, STREAM_CAP_FLOOR);
 }
 
+/**
+ * Decide whether a session returned by `#ensureSession` is stale enough to
+ * warrant one more re-dial before dispatching the request. The race we
+ * guard against: GOAWAY (or a network drop that surfaced as `end`) can fire
+ * between `#ensureSession` resolving and `#executeRequest` dispatching, in
+ * which case `dropSession()` has cleared `#session` but our local reference
+ * still points at a closing session. Re-dialing once recovers the next
+ * request without forcing client.ts to consume a retry.
+ *
+ * Pure and exported so the decision is unit-testable on its own, the same
+ * shape `effectiveStreamCap` uses. The caller is responsible for bounding
+ * the re-dial to one attempt: if the second `ensureSession` returns a
+ * session that is again stale by these criteria, the request goes through
+ * anyway and a flapping connection surfaces as a transport error to the
+ * client.ts retry layer rather than looping here.
+ */
+export function shouldRedialStaleSession(
+  currentSession: ClientHttp2Session | undefined,
+  returnedSession: Pick<ClientHttp2Session, "closed" | "destroyed">,
+): boolean {
+  if (currentSession !== returnedSession) return true;
+  if (returnedSession.closed) return true;
+  if (returnedSession.destroyed) return true;
+  return false;
+}
+
 interface QueueWaiter {
   resolve: () => void;
   reject: (err: unknown) => void;
@@ -125,6 +151,22 @@ interface QueueWaiter {
  * Manages a single HTTP/2 session lifecycle. Lazy connect on first request,
  * automatic reconnect when the session ends or receives GOAWAY, idle close
  * after `idleTimeoutMs`.
+ *
+ * No application-level PING keepalive is sent on long-lived sessions. Apple's
+ * APNs guidance suggests periodic PING frames to detect half-open
+ * connections (NAT timeout, load-balancer drop) proactively, but the
+ * trade-off is real:
+ *   - Without PING: the first send after a silently-dead session surfaces
+ *     ECONNRESET / ETIMEDOUT, which goes through the retry layer and
+ *     re-dials on the next attempt. Cost: one wasted attempt per dead
+ *     connection.
+ *   - With PING: extra wire chatter on every session, plus a separate
+ *     timeout/error path to maintain. The detection latency improves but
+ *     the worst-case user-facing outcome (one retry) does not change.
+ * The retry layer absorbs the cost. If a future deployment surfaces a
+ * recurring "first send after idle gap fails" pattern that retries do not
+ * absorb cleanly, revisit by adding `session.ping()` on a configurable
+ * interval and a typed PingTimeoutError.
  */
 export class Http2Client {
   readonly #origin: string;
@@ -279,9 +321,10 @@ export class Http2Client {
       // session. Re-dial once if the session is no longer healthy or was
       // replaced. Bounded to one retry so a flapping connection still
       // surfaces as a transport error to client.ts retry, rather than
-      // looping here.
+      // looping here. The decision is extracted as a pure function so the
+      // staleness rules are unit-testable apart from this dispatch loop.
       let session = await this.#ensureSession();
-      if (this.#session !== session || session.closed || session.destroyed) {
+      if (shouldRedialStaleSession(this.#session, session)) {
         session = await this.#ensureSession();
       }
       return await this.#executeRequest(session, init);
