@@ -26,7 +26,10 @@ const origin = Astro.site
 >
   <article class="docs-prose">
     <header class="docs-prose-header">
-      <h1>{entry.data.title}</h1>
+      <div class="docs-prose-title-block">
+        <p class="docs-prose-eyebrow">{entry.data.group}</p>
+        <h1>{entry.data.title}</h1>
+      </div>
       <PageActions
         slug={entry.id}
         title={entry.data.title}
