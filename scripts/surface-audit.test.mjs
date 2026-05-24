@@ -157,11 +157,39 @@ test("surface:audit produces zero false positives on a correct foreign project",
     const { json } = runAudit(ws.dir);
     // The two gates that hard-coded apps/mobile/ before this fix, plus the
     // app-config probe, must all be clean against a correctly adopted
-    // foreign project. (The doctor gate depends on local toolchain and is
-    // intentionally not asserted here.)
+    // foreign project. The doctor gate's toolchain section is skipped in
+    // audit mode (MS's Node 24 / Xcode 26 floor is in-tree-only), so it
+    // must also be clean — pinned in the next test.
     assert.equal(gateFailCount(json, "check-app-group-identity"), 0);
     assert.equal(gateFailCount(json, "check-ios-gitignore"), 0);
     assert.equal(gateFailCount(json, "probe-app-config"), 0);
+  } finally {
+    ws.cleanup();
+  }
+});
+
+test("doctor audit mode skips the in-tree toolchain checks so MS's own Node/Xcode floor never false-fails a foreign project", () => {
+  const ws = makeProject({ layout: "root" });
+  try {
+    const { json } = runAudit(ws.dir);
+    const doctor = json.checks.find((c) => c.id === "doctor");
+    assert.ok(doctor, "doctor gate must appear in audit output");
+    assert.ok(doctor.report, "doctor must produce a parseable report");
+    const ids = new Set(doctor.report.checks.map((c) => c.id));
+    for (const id of [
+      "node-version",
+      "pnpm",
+      "xcodebuild",
+      "xcrun",
+      "simulator",
+    ]) {
+      assert.ok(
+        !ids.has(id),
+        `audit-mode doctor must not emit toolchain check "${id}"`,
+      );
+    }
+    // The app.json/App Group checks are foreign-relevant and must still run.
+    assert.equal(gateFailCount(json, "doctor"), 0);
   } finally {
     ws.cleanup();
   }
