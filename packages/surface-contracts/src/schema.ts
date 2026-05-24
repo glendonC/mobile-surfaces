@@ -161,8 +161,10 @@ export const liveSurfaceWidgetSlice = z
       .min(0)
       .max(1)
       .describe(
-        "Optional progress fill on system{Small,Medium,Large} widgets that " +
-          "render a progress ring or bar.",
+        "Progress fill 0..1 on system{Small,Medium,Large} widgets that " +
+          "render a progress ring or bar. Required so every widget snapshot " +
+          "carries a renderable value; pass 0 (or 1) when the widget is not " +
+          "progress-shaped and the host can ignore the field.",
       ),
     deepLink: deepLinkSchema,
     family: z

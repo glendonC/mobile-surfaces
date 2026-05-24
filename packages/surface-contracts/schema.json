@@ -186,7 +186,7 @@
               "type": "number",
               "minimum": 0,
               "maximum": 1,
-              "description": "Optional progress fill on system{Small,Medium,Large} widgets that render a progress ring or bar."
+              "description": "Progress fill 0..1 on system{Small,Medium,Large} widgets that render a progress ring or bar. Required so every widget snapshot carries a renderable value; pass 0 (or 1) when the widget is not progress-shaped and the host can ignore the field."
             },
             "deepLink": {
               "type": "string",
