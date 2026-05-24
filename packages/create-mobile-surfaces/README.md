@@ -4,13 +4,15 @@ Guided installer for [Mobile Surfaces](https://github.com/glendonC/mobile-surfac
 
 ## Usage
 
-Pick the package manager you already have on PATH:
+Pick the package manager you already have on PATH to launch the installer:
 
 ```bash
 npm  create mobile-surfaces@latest
 pnpm create mobile-surfaces
 bun  create mobile-surfaces
 ```
+
+Greenfield scaffolds always run the post-scaffold `install` + `expo prebuild` step with pnpm (the bundled template ships a `pnpm-lock.yaml`); the launcher just routes you into the installer. Add-to-existing and monorepo flows respect the package manager detected in the target project.
 
 The installer detects which of four starting situations applies and runs the matching flow:
 
