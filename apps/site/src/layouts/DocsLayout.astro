@@ -184,6 +184,10 @@ const ogImageUrl = Astro.site
       <main class="docs-main">
         <slot />
       </main>
+      <aside class="docs-toc" aria-label="On this page" data-toc hidden>
+        <p class="docs-toc-eyebrow">On this page</p>
+        <ol class="docs-toc-list" data-toc-list></ol>
+      </aside>
     </div>
 
     <script
@@ -290,6 +294,265 @@ const ogImageUrl = Astro.site
         } catch (err) {
           console.error("Reading-path bar failed", err);
         }
+      }
+    </script>
+    <script>
+      // "On this page" TOC. Scans .docs-prose for h2/h3, ensures each has
+      // an id (slugifying the text when one is missing), and builds the
+      // sidebar list. IntersectionObserver drives the active state so the
+      // current section is highlighted as the reader scrolls. The aside
+      // stays hidden when the page has no h2/h3, so short pages don't
+      // render an empty rail.
+      const tocAside = document.querySelector<HTMLElement>("[data-toc]");
+      const tocList = document.querySelector<HTMLOListElement>(
+        "[data-toc-list]",
+      );
+      if (tocAside && tocList) {
+        const prose = document.querySelector<HTMLElement>(".docs-prose");
+        const headings = prose
+          ? Array.from(
+              prose.querySelectorAll<HTMLHeadingElement>("h2, h3"),
+            ).filter((h) => !h.closest(".docs-sr-only"))
+          : [];
+
+        function slugify(s: string) {
+          return s
+            .toLowerCase()
+            .trim()
+            .replace(/[^\w\s-]/g, "")
+            .replace(/\s+/g, "-")
+            .replace(/-+/g, "-");
+        }
+
+        if (headings.length > 0) {
+          const usedIds = new Set<string>();
+          for (const h of headings) {
+            let id = h.id;
+            if (!id) {
+              const base = slugify(h.textContent ?? "");
+              id = base || `section-${usedIds.size + 1}`;
+              let candidate = id;
+              let n = 2;
+              while (usedIds.has(candidate) || document.getElementById(candidate)) {
+                candidate = `${id}-${n++}`;
+              }
+              id = candidate;
+              h.id = id;
+            }
+            usedIds.add(id);
+
+            const li = document.createElement("li");
+            li.dataset.depth = h.tagName === "H3" ? "3" : "2";
+            const a = document.createElement("a");
+            a.href = `#${id}`;
+            a.textContent = h.textContent ?? "";
+            a.dataset.tocLink = id;
+            li.appendChild(a);
+            tocList.appendChild(li);
+          }
+          tocAside.hidden = false;
+
+          // Scrollspy: track which heading's section is currently in view.
+          // rootMargin pulls the activation line up so the active item
+          // changes as a section's heading approaches the viewport top,
+          // not when its body fully scrolls past.
+          const linkById = new Map<string, HTMLAnchorElement>();
+          tocList.querySelectorAll<HTMLAnchorElement>("a").forEach((a) => {
+            const id = a.dataset.tocLink;
+            if (id) linkById.set(id, a);
+          });
+
+          let activeId: string | null = null;
+          function setActive(id: string | null) {
+            if (id === activeId) return;
+            if (activeId) {
+              linkById.get(activeId)?.classList.remove("is-active");
+            }
+            activeId = id;
+            if (id) {
+              linkById.get(id)?.classList.add("is-active");
+            }
+          }
+
+          const visible = new Map<string, number>();
+          const io = new IntersectionObserver(
+            (entries) => {
+              for (const e of entries) {
+                const id = (e.target as HTMLElement).id;
+                if (e.isIntersecting) {
+                  visible.set(id, e.intersectionRatio);
+                } else {
+                  visible.delete(id);
+                }
+              }
+              if (visible.size === 0) return;
+              let topId: string | null = null;
+              let topY = Infinity;
+              for (const id of visible.keys()) {
+                const el = document.getElementById(id);
+                if (!el) continue;
+                const y = el.getBoundingClientRect().top;
+                if (y < topY) {
+                  topY = y;
+                  topId = id;
+                }
+              }
+              setActive(topId);
+            },
+            {
+              rootMargin: "-80px 0px -70% 0px",
+              threshold: [0, 1],
+            },
+          );
+          headings.forEach((h) => io.observe(h));
+        }
+      }
+    </script>
+    <script>
+      // Promote each H2 into a toggleable section. The section frame
+      // (hairline, counter eyebrow, chevron) lives on the summary, and
+      // the H2 + following siblings (up to the next H2) become the
+      // details' children. Sections start open; hash navigation
+      // auto-opens the targeted section's parent.
+      const proseEl = document.querySelector<HTMLElement>(".docs-prose");
+      if (proseEl) {
+        const CHEVRON_SVG =
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>';
+
+        const directH2s = Array.from(
+          proseEl.children,
+        ).filter((c): c is HTMLHeadingElement => c.tagName === "H2");
+
+        for (const h2 of directH2s) {
+          const details = document.createElement("details");
+          details.className = "docs-section";
+          details.open = true;
+
+          const summary = document.createElement("summary");
+          summary.className = "docs-section-summary";
+
+          const chevron = document.createElement("span");
+          chevron.className = "docs-section-chevron";
+          chevron.innerHTML = CHEVRON_SVG;
+
+          // Collect siblings BEFORE we move the H2 — once moved into
+          // summary, h2.nextElementSibling would walk into the new tree.
+          const tail: Element[] = [];
+          let next = h2.nextElementSibling;
+          while (next && next.tagName !== "H2") {
+            tail.push(next);
+            next = next.nextElementSibling;
+          }
+
+          proseEl.insertBefore(details, h2);
+          // Chevron on the LEFT in its own flex column, H2 fills the
+          // rest. Consistent x position across every section.
+          summary.appendChild(chevron);
+          summary.appendChild(h2);
+          details.appendChild(summary);
+          for (const node of tail) details.appendChild(node);
+        }
+
+        // Auto-open the parent <details> chain when the URL targets an
+        // id inside a (potentially collapsed) section.
+        const openParents = (el: Element | null) => {
+          let p: HTMLDetailsElement | null =
+            el?.closest("details.docs-section") ?? null;
+          while (p) {
+            p.open = true;
+            p = p.parentElement?.closest("details.docs-section") ?? null;
+          }
+        };
+        const openFromHash = () => {
+          const id = window.location.hash.replace(/^#/, "");
+          if (!id) return;
+          const target = document.getElementById(id);
+          if (target) {
+            openParents(target);
+            target.scrollIntoView({ block: "start" });
+          }
+        };
+        openFromHash();
+        window.addEventListener("hashchange", openFromHash);
+      }
+    </script>
+    <script>
+      // Wrap every markdown table in a horizontal scroll container so
+      // wide tables (token taxonomies, env × host matrices) scroll in
+      // place instead of overflowing the main column and colliding
+      // with the right-rail TOC.
+      const tables = document.querySelectorAll<HTMLTableElement>(
+        ".docs-prose table",
+      );
+      for (const table of Array.from(tables)) {
+        if (table.parentElement?.classList.contains("docs-table")) continue;
+        const wrap = document.createElement("div");
+        wrap.className = "docs-table";
+        table.parentNode?.insertBefore(wrap, table);
+        wrap.appendChild(table);
+      }
+    </script>
+    <script>
+      // Copy-to-clipboard on code blocks. Wraps every non-Mermaid <pre>
+      // in a .docs-code container and adds a Copy button. Runs before
+      // the Mermaid script so we can skip blocks Mermaid will replace,
+      // and so the wrapper exists before any other late mutations.
+      // SVG paths mirror the "copy" and "check" cases in Icon.astro so
+      // the button stays visually consistent with the rest of the site.
+      const COPY_SVG =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V6a2 2 0 0 1 2-2h9"></path></svg>';
+      const CHECK_SVG =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>';
+
+      const codeBlocks = document.querySelectorAll<HTMLPreElement>(
+        ".docs-prose pre:not([data-language=\"mermaid\"])",
+      );
+      for (const pre of Array.from(codeBlocks)) {
+        if (pre.parentElement?.classList.contains("docs-code")) continue;
+        const wrapper = document.createElement("div");
+        wrapper.className = "docs-code";
+        // Surface the Shiki language hint on the wrapper so CSS can
+        // render a corner label without reaching into the <pre>.
+        const lang = pre.getAttribute("data-language");
+        if (lang && lang !== "plaintext" && lang !== "text") {
+          wrapper.setAttribute("data-language", lang);
+        }
+        pre.parentNode?.insertBefore(wrapper, pre);
+        wrapper.appendChild(pre);
+
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "docs-copy";
+        button.setAttribute("aria-label", "Copy code to clipboard");
+        button.setAttribute("data-tooltip", "Copy");
+        button.setAttribute("data-tooltip-pos", "left");
+        button.innerHTML = COPY_SVG;
+        wrapper.appendChild(button);
+
+        let resetTimer: ReturnType<typeof setTimeout> | null = null;
+        button.addEventListener("click", async () => {
+          const code = pre.querySelector("code");
+          const text = (code?.innerText ?? pre.innerText ?? "").replace(
+            /\n$/,
+            "",
+          );
+          try {
+            await navigator.clipboard.writeText(text);
+            button.innerHTML = CHECK_SVG;
+            button.classList.add("is-copied");
+            button.setAttribute("aria-label", "Copied to clipboard");
+            button.setAttribute("data-tooltip", "Copied");
+          } catch {
+            button.setAttribute("data-tooltip", "Press ⌘C");
+          }
+          if (resetTimer) clearTimeout(resetTimer);
+          resetTimer = setTimeout(() => {
+            button.innerHTML = COPY_SVG;
+            button.classList.remove("is-copied");
+            button.setAttribute("aria-label", "Copy code to clipboard");
+            button.setAttribute("data-tooltip", "Copy");
+          }, 1500);
+        });
       }
     </script>
     <script>

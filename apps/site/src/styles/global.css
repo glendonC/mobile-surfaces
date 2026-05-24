@@ -146,6 +146,17 @@ body {
   }
 }
 
+/* At wider viewports a third column carries the "On this page" TOC.
+ * Below this breakpoint the rail is removed from the grid entirely so
+ * the main column keeps its natural width. */
+@media (min-width: 1100px) {
+  .docs-layout {
+    grid-template-columns: 240px minmax(0, 1fr) 200px;
+    gap: 40px;
+    max-width: 1340px;
+  }
+}
+
 .docs-sidebar {
   position: sticky;
   top: 32px;
@@ -220,6 +231,16 @@ body {
   transition: background-color 100ms ease, color 100ms ease;
 }
 
+/* Nav titles can wrap. Without a hanging indent, the second line lands
+ * flush with the next item's first line and the two read as siblings.
+ * padding-left + negative text-indent puts the first line at the same
+ * x as before but indents wraps so they sit clearly under the title. */
+.docs-sidebar nav a {
+  padding-left: 22px;
+  text-indent: -12px;
+  line-height: 1.4;
+}
+
 .docs-sidebar a:hover {
   background-color: rgba(10, 10, 10, 0.04);
   color: var(--color-ink);
@@ -236,26 +257,66 @@ body {
   min-width: 0;
 }
 
+/* Document-level counter for H2 sections. Lets each major section
+ * carry a "01 / 02 / 03" mono eyebrow that doubles as visual rhythm. */
+.docs-prose {
+  counter-reset: docsection;
+}
+
 .docs-prose h1 {
-  font-size: 2rem;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  margin: 0 0 24px;
-  line-height: 1.2;
+  font-size: 2.4rem;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  margin: 0 0 4px;
+  line-height: 1.1;
 }
 
+/* Bare H2 (used when the section-wrapping script hasn't yet promoted
+ * H2s into <details>, or in pages with non-prose H2s). The actual
+ * section frame — hairline rule, counter eyebrow, chevron — lives on
+ * .docs-section-summary below. */
 .docs-prose h2 {
-  font-size: 1.4rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  margin: 48px 0 16px;
+  font-size: 1.5rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  margin: 64px 0 16px;
+  padding-top: 32px;
+  border-top: 1px solid rgba(10, 10, 10, 0.1);
+  line-height: 1.25;
   scroll-margin-top: 80px;
+  counter-increment: docsection;
 }
 
+.docs-prose h2:first-of-type {
+  margin-top: 40px;
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* Mono counter eyebrow above every H2 — "01" / "02" / "03". Gives
+ * each section a clear numeric anchor without bolding the heading. */
+.docs-prose h2::before {
+  content: counter(docsection, decimal-leading-zero);
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  color: rgba(10, 10, 10, 0.42);
+  margin-bottom: 12px;
+}
+
+/* H3 gets a 2px ink left-rule. The marker — not weight — makes the
+ * subsection visually distinct from body prose and clearly subordinate
+ * to the H2 above. */
 .docs-prose h3 {
-  font-size: 1.1rem;
-  font-weight: 600;
-  margin: 32px 0 12px;
+  font-size: 1.05rem;
+  font-weight: 500;
+  letter-spacing: -0.008em;
+  margin: 40px 0 12px;
+  padding-left: 14px;
+  border-left: 2px solid var(--color-ink);
+  line-height: 1.4;
   scroll-margin-top: 80px;
 }
 
@@ -266,12 +327,69 @@ body {
   margin: 16px 0;
 }
 
+.docs-prose p {
+  line-height: 1.7;
+}
+
+/* Lede: the first paragraph after the page title reads larger and
+ * softer than body, giving the eye a clear entry point before the
+ * dense reference prose. Mirrored for the docs-index (no header
+ * wrapper) and the traps page (article.docs-prose > h1 + p). */
+.docs-prose > .docs-prose-header + p,
+.docs-prose > h1 + p {
+  font-size: 1.08rem;
+  line-height: 1.7;
+  color: rgba(10, 10, 10, 0.72);
+  margin: 0 0 28px;
+}
+
+/* Markdown `**text**` would otherwise default to browser bold (700),
+ * which fights the lighter headings. 500 still reads as emphasized
+ * against the body's regular weight. */
+.docs-prose strong {
+  font-weight: 500;
+}
+
+.docs-prose em {
+  font-style: italic;
+}
+
+/* Inline code: no background. On a technical page with 50+ inline
+ * tokens, a filled pill on every one creates wall-to-wall highlighting
+ * that fights the actual semantic uses of color (active sidebar item,
+ * active TOC item). Monospace + size + a soft color shift carries the
+ * "this is a code token" signal without claiming visual real estate. */
 .docs-prose code {
   font-family: var(--font-mono);
-  font-size: 0.875em;
-  background-color: rgba(10, 10, 10, 0.05);
+  font-size: 0.86em;
+  color: rgba(10, 10, 10, 0.82);
+  background-color: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
+.docs-prose a code {
+  color: inherit;
+}
+
+/* Inline-code inside a heading reads at near-parity with the heading
+ * size; mono is already smaller, dropping further would look stunted. */
+.docs-prose :is(h1, h2, h3) code {
+  font-size: 0.92em;
+  letter-spacing: 0;
+}
+
+/* Keyboard hints get a tactile chip treatment distinct from inline
+ * code, so a `<kbd>⌘C</kbd>` reads as a key, not a token. */
+.docs-prose kbd {
+  font-family: var(--font-mono);
+  font-size: 0.78em;
   padding: 1px 6px;
+  background-color: var(--color-paper);
+  border: 1px solid rgba(10, 10, 10, 0.15);
+  border-bottom-width: 2px;
   border-radius: 4px;
+  box-shadow: 0 1px 0 rgba(10, 10, 10, 0.04);
 }
 
 .docs-prose pre {
@@ -391,7 +509,9 @@ body {
 }
 
 .docs-path-bar-actions.is-stacked .docs-path-bar-link {
+  flex: 0 0 auto;
   padding: 10px 14px;
+  overflow: visible;
 }
 
 /* The sidebar's generic `a` rules color and hover-background every link
@@ -458,56 +578,130 @@ body {
   color: inherit;
 }
 
+/* Faded underline that intensifies on hover. Lets links sit calmly
+ * in prose instead of every link being a competing horizontal stroke. */
 .docs-prose a {
   color: var(--color-ink);
   text-decoration: underline;
   text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
+  text-decoration-color: rgba(10, 10, 10, 0.28);
+  text-underline-offset: 4px;
+  transition: text-decoration-color 120ms ease;
 }
 
 .docs-prose a:hover {
-  text-decoration-thickness: 2px;
+  text-decoration-color: var(--color-ink);
 }
 
+/* Blockquote reads as a quiet aside with italic body and a single
+ * ink rule. Distinct enough from inline-code's filled cream and from
+ * tables' header rule to give the page real variety. */
 .docs-prose blockquote {
-  border-left: 3px solid rgba(10, 10, 10, 0.15);
-  padding-left: 16px;
-  color: rgba(10, 10, 10, 0.7);
+  border-left: 2px solid var(--color-ink);
+  padding: 2px 0 2px 18px;
+  margin: 20px 0;
+  color: rgba(10, 10, 10, 0.68);
+  font-style: italic;
+}
+
+.docs-prose blockquote p {
+  margin: 8px 0;
+}
+
+/* Tables: header is an uppercase eyebrow with a strong bottom rule,
+ * not a filled gray bar. Rows have airy padding and a faint dividing
+ * line; a row-hover tint gives a subtle scan affordance. */
+/* Wide tables (token taxonomies, environments × hosts, etc) were
+ * overflowing the main column and visually colliding with the right
+ * rail. A JS step wraps every prose table in .docs-table so this
+ * container provides the horizontal scrollport while the table itself
+ * keeps its natural width. */
+.docs-table {
+  margin: 24px 0;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-bottom: 1px solid rgba(10, 10, 10, 0.06);
+}
+
+.docs-table::-webkit-scrollbar {
+  height: 6px;
+}
+
+.docs-table::-webkit-scrollbar-thumb {
+  background-color: rgba(10, 10, 10, 0.18);
+  border-radius: 3px;
+}
+
+.docs-table > table {
+  margin: 0;
+  min-width: max-content;
 }
 
 .docs-prose table {
   border-collapse: collapse;
   width: 100%;
-  margin: 20px 0;
+  margin: 24px 0;
   font-size: 0.9rem;
 }
 
 .docs-prose th,
 .docs-prose td {
   text-align: left;
-  padding: 8px 12px;
-  border-bottom: 1px solid rgba(10, 10, 10, 0.08);
+  padding: 10px 14px;
   vertical-align: top;
 }
 
 .docs-prose th {
-  font-weight: 600;
-  background-color: rgba(10, 10, 10, 0.03);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(10, 10, 10, 0.5);
+  background-color: transparent;
+  border-bottom: 1px solid rgba(10, 10, 10, 0.2);
+  padding-top: 0;
+  padding-bottom: 8px;
 }
 
+.docs-prose tbody tr {
+  border-bottom: 1px solid rgba(10, 10, 10, 0.06);
+  transition: background-color 120ms ease;
+}
+
+.docs-prose tbody tr:last-child {
+  border-bottom: 0;
+}
+
+.docs-prose tbody tr:hover {
+  background-color: rgba(10, 10, 10, 0.025);
+}
+
+/* Hairline rule with extra breathing room reads as a real section break
+ * instead of just another underlined element on the page. */
 .docs-prose hr {
   border: none;
-  border-top: 1px solid rgba(10, 10, 10, 0.08);
-  margin: 32px 0;
+  border-top: 1px solid rgba(10, 10, 10, 0.1);
+  margin: 48px 0;
 }
 
 .docs-prose ul,
 .docs-prose ol {
-  padding-left: 24px;
+  padding-left: 22px;
 }
 
 .docs-prose li {
   margin: 6px 0;
+  line-height: 1.65;
+}
+
+.docs-prose ul li::marker {
+  color: rgba(10, 10, 10, 0.35);
+}
+
+.docs-prose ol li::marker {
+  color: rgba(10, 10, 10, 0.5);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Docs index page. The reading-paths grid, full-reference groups, and trap
@@ -662,8 +856,8 @@ body {
   grid-template-columns: 24px minmax(0, 1fr);
   align-items: center;
   gap: 12px;
-  padding: 6px 8px 6px 0;
-  margin: 0 -8px 0 0;
+  padding: 6px 8px;
+  margin: 0 -8px;
   border-radius: 8px;
   text-decoration: none;
   color: var(--color-ink);
@@ -887,9 +1081,23 @@ body {
   margin: 0 0 24px;
 }
 
+.docs-prose-title-block {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.docs-prose-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(10, 10, 10, 0.45);
+  margin: 0 0 10px;
+}
+
 .docs-prose-header h1 {
   margin: 0;
-  flex: 1 1 auto;
 }
 
 .docs-prose-header + h1 {
@@ -1211,4 +1419,406 @@ body {
 [data-tooltip][data-tooltip-pos="right"]:hover::after,
 [data-tooltip][data-tooltip-pos="right"]:focus-visible::after {
   transform: translateY(50%) translateX(0);
+}
+
+/* ---------------------------------------------------------------
+ * Docs: "On this page" right-rail TOC
+ * Built client-side from the article's h2/h3 with scrollspy.
+ * Hidden until populated; hidden entirely below 1100px (the grid
+ * also drops the third column at that breakpoint).
+ * --------------------------------------------------------------- */
+.docs-toc {
+  position: sticky;
+  top: 32px;
+  align-self: start;
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.docs-toc::-webkit-scrollbar {
+  display: none;
+}
+
+.docs-toc[hidden] {
+  display: none;
+}
+
+@media (max-width: 1099px) {
+  .docs-toc {
+    display: none;
+  }
+}
+
+.docs-toc-eyebrow {
+  margin: 0 0 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(10, 10, 10, 0.45);
+}
+
+.docs-toc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.docs-toc-list li {
+  margin: 0;
+}
+
+/* Match the left sidebar's link treatment: pill background on hover,
+ * cream fill on the active item, same colors and padding. Keeps the
+ * two rails reading as siblings instead of competing systems. */
+.docs-toc-list a {
+  display: block;
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: rgba(10, 10, 10, 0.7);
+  text-decoration: none;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  transition:
+    background-color 100ms ease,
+    color 100ms ease;
+}
+
+.docs-toc-list a:hover {
+  background-color: rgba(10, 10, 10, 0.04);
+  color: var(--color-ink);
+  text-decoration: none;
+}
+
+.docs-toc-list a.is-active {
+  background-color: var(--color-cream);
+  color: var(--color-ink);
+  font-weight: 500;
+}
+
+.docs-toc-list li[data-depth="3"] a {
+  padding-left: 22px;
+  font-size: 0.85rem;
+}
+
+/* ---------------------------------------------------------------
+ * Docs: copy-to-clipboard on code blocks
+ * Script wraps each non-Mermaid <pre> in .docs-code and injects a
+ * .docs-copy button. The wrapper owns the margin so the pre can sit
+ * flush; the button is absolutely positioned in the top-right.
+ * --------------------------------------------------------------- */
+.docs-prose .docs-code {
+  position: relative;
+  margin: 16px 0;
+}
+
+.docs-prose .docs-code > pre {
+  margin: 0;
+  padding-right: 48px;
+}
+
+.docs-copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: rgba(245, 243, 238, 0.6);
+  background-color: rgba(245, 243, 238, 0.06);
+  border: 1px solid rgba(245, 243, 238, 0.12);
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 120ms ease,
+    color 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.docs-copy svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.docs-code:hover .docs-copy,
+.docs-code:focus-within .docs-copy {
+  opacity: 1;
+}
+
+.docs-copy:hover,
+.docs-copy:focus-visible {
+  color: #f5f3ee;
+  background-color: rgba(245, 243, 238, 0.14);
+  border-color: rgba(245, 243, 238, 0.26);
+  outline: none;
+}
+
+.docs-copy.is-copied {
+  color: #f5f3ee;
+  background-color: rgba(116, 167, 116, 0.22);
+  border-color: rgba(116, 167, 116, 0.5);
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------
+ * Docs: collapsible <details> sections for long-form material
+ * Authors can write <details><summary>...</summary>...</details> in
+ * markdown to get a toggleable header inline with prose.
+ * --------------------------------------------------------------- */
+/* Author-content <details> blocks (collapsible asides written directly
+ * in markdown). Scoped with :not(.docs-section) so the section-wrap
+ * <details class="docs-section"> doesn't inherit this card chrome. */
+.docs-prose details:not(.docs-section) {
+  margin: 16px 0;
+  padding: 0;
+  border: 1px solid rgba(10, 10, 10, 0.1);
+  border-radius: 8px;
+  background-color: rgba(10, 10, 10, 0.02);
+  overflow: hidden;
+}
+
+.docs-prose details:not(.docs-section) + details:not(.docs-section) {
+  margin-top: 8px;
+}
+
+.docs-prose details:not(.docs-section) > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 12px 16px;
+  font-weight: 500;
+  color: var(--color-ink);
+  position: relative;
+  padding-right: 40px;
+  user-select: none;
+  transition: background-color 120ms ease;
+}
+
+.docs-prose details:not(.docs-section) > summary::-webkit-details-marker {
+  display: none;
+}
+
+.docs-prose details:not(.docs-section) > summary:hover {
+  background-color: rgba(10, 10, 10, 0.03);
+}
+
+.docs-prose details:not(.docs-section) > summary::after {
+  content: "";
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-65%) rotate(45deg);
+  transition: transform 150ms ease;
+  opacity: 0.55;
+}
+
+.docs-prose details:not(.docs-section)[open] > summary::after {
+  transform: translateY(-35%) rotate(-135deg);
+}
+
+.docs-prose details:not(.docs-section)[open] > summary {
+  border-bottom: 1px solid rgba(10, 10, 10, 0.08);
+}
+
+.docs-prose details:not(.docs-section) > :not(summary) {
+  padding: 0 16px;
+}
+
+.docs-prose details:not(.docs-section) > :not(summary):first-of-type {
+  padding-top: 12px;
+}
+
+.docs-prose details:not(.docs-section) > :not(summary):last-child {
+  padding-bottom: 12px;
+}
+
+/* ---------------------------------------------------------------
+ * Docs: callout asides
+ * Use in markdown:
+ *   <aside class="callout callout--note">
+ *     <p class="callout-label">Note</p>
+ *     <p>Body…</p>
+ *   </aside>
+ * Variants: --note (default ink), --warn (warm rust), --trap (crimson).
+ * Stays ink-on-paper per the docs visual language — no pastel fills,
+ * one accent color per variant on the left rule and the label only.
+ * --------------------------------------------------------------- */
+.docs-prose .callout {
+  margin: 24px 0;
+  padding: 16px 18px;
+  background-color: var(--color-paper);
+  border: 1px solid rgba(10, 10, 10, 0.08);
+  border-left: 3px solid rgba(10, 10, 10, 0.5);
+  border-radius: 6px;
+  font-size: 0.95rem;
+}
+
+.docs-prose .callout > :first-child {
+  margin-top: 0;
+}
+
+.docs-prose .callout > :last-child {
+  margin-bottom: 0;
+}
+
+.docs-prose .callout-label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(10, 10, 10, 0.55);
+  margin: 0 0 6px;
+}
+
+.docs-prose .callout-label + p {
+  margin-top: 0;
+}
+
+.docs-prose .callout--warn {
+  border-left-color: #b85a1a;
+}
+
+.docs-prose .callout--warn .callout-label {
+  color: #b85a1a;
+}
+
+.docs-prose .callout--trap {
+  border-left-color: #a32424;
+}
+
+.docs-prose .callout--trap .callout-label {
+  color: #a32424;
+}
+
+/* ---------------------------------------------------------------
+ * Docs: toggleable H2 sections
+ * A client script wraps every H2 + its following content in a
+ * <details class="docs-section"> with the H2 inside the summary
+ * and a chevron toggle on the right. Sections are open by default;
+ * the section frame (hairline, counter eyebrow, chevron) lives on
+ * the summary so collapsed sections still show the heading row.
+ * --------------------------------------------------------------- */
+.docs-section {
+  margin: 0;
+}
+
+/* Summary is a block row. The chevron is absolutely positioned in
+ * the LEFT GUTTER (outside the main column, in the sidebar/content
+ * gap), so heading text AND body content both align at the column's
+ * left edge with no visual step between them. */
+.docs-section-summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 32px 0 0;
+  margin-top: 64px;
+  border-top: 1px solid rgba(10, 10, 10, 0.1);
+  scroll-margin-top: 80px;
+  position: relative;
+}
+
+.docs-section-summary::-webkit-details-marker,
+.docs-section-summary::marker {
+  display: none;
+  content: "";
+}
+
+/* First section sits directly under the page lede — no separator. */
+.docs-section:first-of-type > .docs-section-summary {
+  margin-top: 24px;
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* Inside a section summary the H2's own border / padding / margin
+ * collapse: the frame is owned by the summary, not the heading.
+ * Selector ordering accounts for the .docs-prose h2:first-of-type
+ * rule (which would otherwise match every wrapped H2). */
+.docs-prose .docs-section-summary > h2,
+.docs-prose .docs-section-summary > h2:first-of-type {
+  margin: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* Chevron sits in the gutter to the LEFT of the column. Top value
+ * lines it up with the heading text line (counter eyebrow is above
+ * the text, so the chevron skips past the eyebrow height). */
+.docs-section-chevron {
+  position: absolute;
+  left: -26px;
+  top: 70px;
+  width: 14px;
+  height: 14px;
+  color: rgba(10, 10, 10, 0.4);
+  transition:
+    color 120ms ease,
+    transform 200ms ease;
+}
+
+.docs-section:first-of-type > .docs-section-summary .docs-section-chevron {
+  top: 36px;
+}
+
+.docs-section-chevron svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.docs-section-summary:hover .docs-section-chevron {
+  color: var(--color-ink);
+}
+
+.docs-section[open] > .docs-section-summary .docs-section-chevron {
+  transform: rotate(180deg);
+}
+
+/* Below the breakpoint where the sidebar gap shrinks (or stacks for
+ * mobile), the gutter chevron would be cut off; hide it then. The
+ * summary remains clickable via the cursor: pointer / cursor and
+ * default <summary> click-to-toggle behavior. */
+@media (max-width: 880px) {
+  .docs-section-chevron {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------
+ * Docs: code-block language label
+ * Surfaces the Shiki `data-language` attribute (ts, swift, bash …)
+ * as a tiny mono tag in the top-left of each code block.
+ * --------------------------------------------------------------- */
+.docs-code[data-language]::before {
+  content: attr(data-language);
+  position: absolute;
+  top: 8px;
+  left: 16px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  color: rgba(245, 243, 238, 0.35);
+  pointer-events: none;
+  text-transform: uppercase;
+}
+
+.docs-code[data-language] > pre {
+  padding-top: 32px;
 }
