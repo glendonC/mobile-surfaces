@@ -12,6 +12,7 @@ interface TrapEntry {
   title: string;
   severity: "error" | "warning" | "info";
   detection: "static" | "config" | "runtime" | "advisory";
+  category: "ios-trap" | "wire-trap" | "maintenance";
   tags: string[];
   summary: string;
   symptom: string;
@@ -47,11 +48,29 @@ const severityCounts = sorted.reduce(
   { error: 0, warning: 0, info: 0 } as Record<TrapEntry["severity"], number>,
 );
 
+const categoryCounts = sorted.reduce(
+  (acc, e) => {
+    acc[e.category] += 1;
+    return acc;
+  },
+  { "ios-trap": 0, "wire-trap": 0, maintenance: 0 } as Record<
+    TrapEntry["category"],
+    number
+  >,
+);
+const userFacing = categoryCounts["ios-trap"] + categoryCounts["wire-trap"];
+
 const DETECTION_LABEL: Record<TrapEntry["detection"], string> = {
   static: "static",
   config: "config",
   runtime: "runtime",
   advisory: "advisory",
+};
+
+const CATEGORY_LABEL: Record<TrapEntry["category"], string> = {
+  "ios-trap": "iOS",
+  "wire-trap": "wire",
+  maintenance: "maintenance",
 };
 
 // Mirror the CLAUDE.md slug algorithm from scripts/generate-trap-bindings.mjs
@@ -86,8 +105,11 @@ function anchorFor(entry: TrapEntry) {
     </p>
 
     <p>
-      <strong>{sorted.length} rules total</strong>: {severityCounts.error} error,{" "}
-      {severityCounts.warning} warning, {severityCounts.info} info.
+      <strong>{sorted.length} rules total</strong>: {userFacing} user-facing
+      ({categoryCounts["ios-trap"]} iOS + {categoryCounts["wire-trap"]} wire) +{" "}
+      {categoryCounts.maintenance} catalog-maintenance. By severity:{" "}
+      {severityCounts.error} error, {severityCounts.warning} warning,{" "}
+      {severityCounts.info} info.
     </p>
 
     <h2>How to use this catalog</h2>
@@ -117,6 +139,7 @@ function anchorFor(entry: TrapEntry) {
       <thead>
         <tr>
           <th>ID</th>
+          <th>Category</th>
           <th>Severity</th>
           <th>Detection</th>
           <th>Title</th>
@@ -127,6 +150,7 @@ function anchorFor(entry: TrapEntry) {
           sorted.map((entry) => (
             <tr>
               <td><a href={`#${anchorFor(entry)}`}>{entry.id}</a></td>
+              <td>{CATEGORY_LABEL[entry.category]}</td>
               <td>{entry.severity}</td>
               <td>{DETECTION_LABEL[entry.detection]}</td>
               <td>{entry.title}</td>
@@ -144,6 +168,7 @@ function anchorFor(entry: TrapEntry) {
             {entry.id}: {entry.title}
           </h3>
           <p class="trap-meta">
+            <strong>category:</strong> {CATEGORY_LABEL[entry.category]} ·{" "}
             <strong>severity:</strong> {entry.severity} ·{" "}
             <strong>detection:</strong> {DETECTION_LABEL[entry.detection]} ·{" "}
             <strong>tags:</strong> {entry.tags.join(", ")}

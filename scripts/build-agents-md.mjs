@@ -140,7 +140,7 @@ function buildIndexTable(linkBase) {
   return sortedEntries
     .map(
       (e) =>
-        `| [${e.id}](${linkBase}#${ruleAnchor(e)}) | ${e.severity} | ${e.detection} | ${e.title} |`,
+        `| [${e.id}](${linkBase}#${ruleAnchor(e)}) | ${e.category} | ${e.severity} | ${e.detection} | ${e.title} |`,
     )
     .join("\n");
 }
@@ -191,7 +191,7 @@ const GENERATED_BANNER = [
   "-->",
 ];
 
-const INDEX_SUMMARY = `${stats.live} live rules: ${stats.bySeverity.error} error, ${stats.bySeverity.warning} warning, ${stats.bySeverity.info} info. ${stats.prGated} are enforced at PR time by \`pnpm surface:check\`; the rest surface as runtime errors or advisory notes. ${stats.deprecated} retired ids reserved (see footnote).`;
+const INDEX_SUMMARY = `${stats.live} live rules (${stats.userFacing} user-facing + ${stats.byCategory.maintenance} catalog-maintenance): ${stats.bySeverity.error} error, ${stats.bySeverity.warning} warning, ${stats.bySeverity.info} info. ${stats.prGated} are enforced at PR time by \`pnpm surface:check\`; the rest surface as runtime errors or advisory notes. ${stats.deprecated} retired ids reserved (see footnote).`;
 
 const HOW_TO_USE_LINES = [
   "- **When generating or editing code in a Mobile Surfaces project**, treat every `error` rule as a hard invariant. Do not bypass it; if your change requires breaking the invariant, surface that to the user and stop.",
@@ -228,8 +228,8 @@ const agentsBody = [
   "",
   INDEX_SUMMARY,
   "",
-  "| ID | Severity | Detection | Title |",
-  "| --- | --- | --- | --- |",
+  "| ID | Category | Severity | Detection | Title |",
+  "| --- | --- | --- | --- | --- |",
   buildIndexTable(""),
   "",
   "## Rules by tag",
@@ -282,8 +282,8 @@ const claudeBody = [
   "",
   INDEX_SUMMARY,
   "",
-  "| ID | Severity | Detection | Title |",
-  "| --- | --- | --- | --- |",
+  "| ID | Category | Severity | Detection | Title |",
+  "| --- | --- | --- | --- | --- |",
   buildIndexTable("AGENTS.md"),
   "",
   "## Rules by tag",

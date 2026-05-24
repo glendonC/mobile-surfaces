@@ -9,12 +9,12 @@ import {
 
 const sampleCatalog = {
   entries: [
-    { id: "MS001", severity: "error", detection: "static" },
-    { id: "MS002", severity: "error", detection: "config" },
-    { id: "MS003", severity: "warning", detection: "config" },
-    { id: "MS004", severity: "info", detection: "advisory" },
-    { id: "MS005", severity: "error", detection: "runtime" },
-    { id: "MS006", severity: "info", detection: "advisory", deprecated: true },
+    { id: "MS001", severity: "error", detection: "static", category: "ios-trap" },
+    { id: "MS002", severity: "error", detection: "config", category: "wire-trap" },
+    { id: "MS003", severity: "warning", detection: "config", category: "ios-trap" },
+    { id: "MS004", severity: "info", detection: "advisory", category: "maintenance" },
+    { id: "MS005", severity: "error", detection: "runtime", category: "wire-trap" },
+    { id: "MS006", severity: "info", detection: "advisory", category: "maintenance", deprecated: true },
   ],
 };
 
@@ -27,7 +27,7 @@ const sampleRegistry = [
   { id: "d", stage: 2, trapIds: ["MS001"] },
 ];
 
-test("computeCatalogStats counts live, deprecated, severity, detection", () => {
+test("computeCatalogStats counts live, deprecated, severity, detection, category", () => {
   const stats = computeCatalogStats(sampleCatalog);
   assert.equal(stats.total, 6);
   assert.equal(stats.live, 5);
@@ -39,6 +39,12 @@ test("computeCatalogStats counts live, deprecated, severity, detection", () => {
     runtime: 1,
     advisory: 1,
   });
+  assert.deepEqual(stats.byCategory, {
+    "ios-trap": 2,
+    "wire-trap": 2,
+    maintenance: 1,
+  });
+  assert.equal(stats.userFacing, 4);
 });
 
 test("computeCatalogStats omits prGated when no registry is supplied", () => {
@@ -60,15 +66,20 @@ test("prGated ignores a registry id that is not a live trap", () => {
   assert.equal(stats.prGated, 0);
 });
 
-test("markerValues derives runtime and remainder", () => {
+test("markerValues derives runtime, remainder, and the category split", () => {
   const stats = computeCatalogStats(sampleCatalog, sampleRegistry);
   const values = markerValues(stats);
   // live 5, prGated 2, runtime 1, remainder = 5 - 2 - 1 = 2.
+  // userFacing = ios-trap (2) + wire-trap (2) = 4; maintenance = 1.
   assert.deepEqual(values, {
     live: "5",
     prGated: "2",
     runtime: "1",
     remainder: "2",
+    iosTraps: "2",
+    wireTraps: "2",
+    maintenance: "1",
+    userFacing: "4",
   });
 });
 

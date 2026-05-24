@@ -19,6 +19,11 @@
  *   Live entries grouped by severity.
  * @property {{ static:number, config:number, runtime:number, advisory:number }} byDetection
  *   Live entries grouped by detection.
+ * @property {{ "ios-trap":number, "wire-trap":number, "maintenance":number }} byCategory
+ *   Live entries grouped by category. `ios-trap` and `wire-trap` together are
+ *   the user-facing total; `maintenance` is the repo-internal hygiene count.
+ * @property {number} userFacing
+ *   Convenience: `byCategory["ios-trap"] + byCategory["wire-trap"]`.
  * @property {number} [prGated]
  *   Live rules bound to a check that runs in surface:check (registry stage
  *   >= 1). Present only when a registry is supplied.
@@ -27,7 +32,7 @@
 /**
  * Compute the canonical catalog breakdown.
  *
- * @param {{ entries: ReadonlyArray<{ id:string, severity:string, detection:string, deprecated?:boolean }> }} catalog
+ * @param {{ entries: ReadonlyArray<{ id:string, severity:string, detection:string, category:string, deprecated?:boolean }> }} catalog
  *   Parsed data/traps.json.
  * @param {ReadonlyArray<{ stage:number, trapIds?:ReadonlyArray<string> }>} [registry]
  *   scripts/lib/check-registry.mjs checkRegistry. When supplied, `prGated` is
@@ -42,9 +47,11 @@ export function computeCatalogStats(catalog, registry) {
 
   const bySeverity = { error: 0, warning: 0, info: 0 };
   const byDetection = { static: 0, config: 0, runtime: 0, advisory: 0 };
+  const byCategory = { "ios-trap": 0, "wire-trap": 0, maintenance: 0 };
   for (const e of live) {
     bySeverity[e.severity] += 1;
     byDetection[e.detection] += 1;
+    byCategory[e.category] += 1;
   }
 
   /** @type {CatalogStats} */
@@ -54,6 +61,8 @@ export function computeCatalogStats(catalog, registry) {
     deprecated: deprecated.length,
     bySeverity,
     byDetection,
+    byCategory,
+    userFacing: byCategory["ios-trap"] + byCategory["wire-trap"],
   };
 
   if (registry) {
@@ -80,10 +89,12 @@ export function computeCatalogStats(catalog, registry) {
  * Derive the values consumed by the `catalog-stats:` doc marker blocks. Every
  * value is a string (markers carry rendered text). `remainder` is the live
  * rules that are neither PR-gated nor runtime-detected: advisory rules plus
- * the toolchain preflight.
+ * the toolchain preflight. `iosTraps`, `wireTraps`, `maintenance`, and
+ * `userFacing` surface the category split so the README and site can render
+ * "N user-facing + M maintenance" instead of conflating the two.
  *
  * @param {CatalogStats} stats  Must include `prGated` (pass a registry to computeCatalogStats).
- * @returns {{ live:string, prGated:string, runtime:string, remainder:string }}
+ * @returns {{ live:string, prGated:string, runtime:string, remainder:string, iosTraps:string, wireTraps:string, maintenance:string, userFacing:string }}
  */
 export function markerValues(stats) {
   if (typeof stats.prGated !== "number") {
@@ -97,6 +108,10 @@ export function markerValues(stats) {
     prGated: String(stats.prGated),
     runtime: String(runtime),
     remainder: String(stats.live - stats.prGated - runtime),
+    iosTraps: String(stats.byCategory["ios-trap"]),
+    wireTraps: String(stats.byCategory["wire-trap"]),
+    maintenance: String(stats.byCategory.maintenance),
+    userFacing: String(stats.userFacing),
   };
 }
 

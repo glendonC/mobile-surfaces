@@ -14,5 +14,11 @@
     "runtime": 9,
     "advisory": 7
   },
+  "byCategory": {
+    "ios-trap": 22,
+    "wire-trap": 12,
+    "maintenance": 7
+  },
+  "userFacing": 34,
   "prGated": 24
 }
