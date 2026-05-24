@@ -110,14 +110,20 @@ export const liveSurfaceLiveActivitySlice = z
       ),
     contextLabel: z
       .string()
+      .optional()
       .describe(
-        "Trailing context tag for the Dynamic Island (e.g. \"queue · stage 2\").",
+        "Trailing context tag for the Dynamic Island (e.g. \"queue · stage 2\"). " +
+          "Optional: the current widget views do not render it; producers may " +
+          "omit it for snapshots whose surface has no equivalent tag.",
       ),
     statusLine: z
       .string()
+      .optional()
       .describe(
         "One-line status string composed for accessibility readout and for " +
-          "the expanded Lock-Screen layout's secondary row.",
+          "the expanded Lock-Screen layout's secondary row. Optional: no " +
+          "current widget view consumes it, and it is often a concatenation " +
+          "of title + body; producers should omit it rather than fabricate one.",
       ),
     actionLabel: z
       .string()
@@ -135,16 +141,21 @@ export const liveSurfaceLiveActivitySlice = z
     estimatedSeconds: z
       .int()
       .min(0)
+      .optional()
       .describe(
         "Estimated remaining seconds. Optional hint to the Lock-Screen " +
-          "layout for countdown UIs; zero means \"unknown\".",
+          "layout for countdown UIs; absent means \"unknown\". The current " +
+          "widget views do not render a countdown driven by this field; it " +
+          "stays in the wire shape for forward compatibility.",
       ),
     morePartsCount: z
       .int()
       .min(0)
+      .optional()
       .describe(
-        "Number of queued follow-up parts (e.g. \"+3 more\"). Lets producers " +
-          "signal continuity without padding the payload with the full queue.",
+        "Number of queued follow-up parts (e.g. \"+3 more\"). Optional: lets " +
+          "producers signal continuity without padding the payload with the " +
+          "full queue. Current views do not render it; producers may omit.",
       ),
   })
   .strict();
@@ -161,8 +172,10 @@ export const liveSurfaceWidgetSlice = z
       .min(0)
       .max(1)
       .describe(
-        "Optional progress fill on system{Small,Medium,Large} widgets that " +
-          "render a progress ring or bar.",
+        "Progress fill 0..1 on system{Small,Medium,Large} widgets that " +
+          "render a progress ring or bar. Required so every widget snapshot " +
+          "carries a renderable value; pass 0 (or 1) when the widget is not " +
+          "progress-shaped and the host can ignore the field.",
       ),
     deepLink: deepLinkSchema,
     family: z

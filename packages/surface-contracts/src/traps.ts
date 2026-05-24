@@ -22,6 +22,20 @@ export const trapDetection = z.enum([
 ]);
 export type TrapDetection = z.infer<typeof trapDetection>;
 
+// Coarse classification for the rule. The detection axis above describes *how*
+// the rule is checked; this one describes *who can trip it*. An iOS-trap is a
+// silent-failure mode a downstream consumer can encounter on a real device
+// (App Group identity, byte-identity, color asset resolution). A wire-trap is
+// an APNs / push-layer mismatch that surfaces as a documented response code
+// (token environment, bundle-id topic suffix, payload size, channel state).
+// A maintenance entry is a repo-internal hygiene gate that protects the
+// catalog or contract from rotting (deprecation prose, CHANGELOG-on-major,
+// catalog-stats sync); a downstream consumer can never trip these. Splitting
+// the rules this way keeps the headline trap count from quietly mixing the
+// two classes.
+export const trapCategory = z.enum(["ios-trap", "wire-trap", "maintenance"]);
+export type TrapCategory = z.infer<typeof trapCategory>;
+
 export const trapTag = z.enum([
   "live-activity",
   "widget",
@@ -49,6 +63,7 @@ export const trapEntry = z
     title: z.string().min(1),
     severity: trapSeverity,
     detection: trapDetection,
+    category: trapCategory,
     tags: z.array(trapTag).min(1),
     // One-sentence summary suitable for an `AGENTS.md` table row.
     summary: z.string().min(1),

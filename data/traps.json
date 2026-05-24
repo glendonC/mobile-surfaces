@@ -6,6 +6,7 @@
       "title": "Live Activity adapter boundary",
       "severity": "error",
       "detection": "static",
+      "category": "ios-trap",
       "tags": [
         "live-activity",
         "contract"
@@ -26,6 +27,7 @@
       "title": "ActivityKit attribute file byte-identity",
       "severity": "error",
       "detection": "static",
+      "category": "ios-trap",
       "tags": [
         "live-activity",
         "swift"
@@ -46,6 +48,7 @@
       "title": "Swift ContentState fields and JSON keys match Zod liveSurfaceActivityContentState",
       "severity": "error",
       "detection": "static",
+      "category": "ios-trap",
       "tags": [
         "live-activity",
         "swift",
@@ -64,6 +67,7 @@
       "title": "Swift Stage enum cases match Zod liveSurfaceStage",
       "severity": "error",
       "detection": "static",
+      "category": "ios-trap",
       "tags": [
         "live-activity",
         "swift",
@@ -82,6 +86,7 @@
       "title": "Retired rule (id reserved)",
       "severity": "info",
       "detection": "advisory",
+      "category": "maintenance",
       "tags": [
         "contract"
       ],
@@ -96,6 +101,7 @@
       "title": "Generated JSON Schema must match Zod source",
       "severity": "error",
       "detection": "static",
+      "category": "wire-trap",
       "tags": [
         "contract",
         "push"
@@ -113,6 +119,7 @@
       "title": "All committed fixtures must parse as LiveSurfaceSnapshot",
       "severity": "error",
       "detection": "static",
+      "category": "ios-trap",
       "tags": [
         "contract"
       ],
@@ -129,6 +136,7 @@
       "title": "Snapshot kind must match its projection slice",
       "severity": "error",
       "detection": "static",
+      "category": "ios-trap",
       "tags": [
         "contract"
       ],
@@ -148,6 +156,7 @@
       "title": "Generated TypeScript fixtures must match JSON sources",
       "severity": "error",
       "detection": "static",
+      "category": "ios-trap",
       "tags": [
         "contract"
       ],
@@ -164,6 +173,7 @@
       "title": "Toolchain preflight (Node 24, pnpm, Xcode 26+)",
       "severity": "warning",
       "detection": "config",
+      "category": "maintenance",
       "tags": [
         "toolchain"
       ],
@@ -180,6 +190,7 @@
       "title": "ActivityKit payload size ceiling (4 KB / 5 KB broadcast)",
       "severity": "error",
       "detection": "runtime",
+      "category": "wire-trap",
       "tags": [
         "live-activity",
         "push"
@@ -204,6 +215,7 @@
       "title": "iOS deployment target must be 17.2 or higher",
       "severity": "error",
       "detection": "config",
+      "category": "ios-trap",
       "tags": [
         "ios-version",
         "config"
@@ -228,6 +240,7 @@
       "title": "App Group entitlement must match host app and widget extension",
       "severity": "error",
       "detection": "static",
+      "category": "ios-trap",
       "tags": [
         "app-group",
         "widget",
@@ -250,6 +263,7 @@
       "title": "APNs token environment must match the build environment",
       "severity": "error",
       "detection": "runtime",
+      "category": "wire-trap",
       "tags": [
         "push",
         "tokens"
@@ -271,6 +285,7 @@
       "title": "Push priority 5 vs 10 budget rules",
       "severity": "warning",
       "detection": "runtime",
+      "category": "wire-trap",
       "tags": [
         "push",
         "live-activity"
@@ -291,6 +306,7 @@
       "title": "Subscribe to onPushToStartToken at mount, not on demand",
       "severity": "info",
       "detection": "advisory",
+      "category": "ios-trap",
       "tags": [
         "tokens",
         "live-activity"
@@ -309,6 +325,7 @@
       "title": "apps/mobile/ios/ is generated; do not edit",
       "severity": "error",
       "detection": "advisory",
+      "category": "maintenance",
       "tags": [
         "cng",
         "config"
@@ -326,6 +343,7 @@
       "title": "APNS_BUNDLE_ID must not include the .push-type.liveactivity suffix",
       "severity": "error",
       "detection": "runtime",
+      "category": "wire-trap",
       "tags": [
         "push",
         "config"
@@ -350,6 +368,7 @@
       "title": "FB21158660: push-to-start tokens silent after force-quit",
       "severity": "info",
       "detection": "advisory",
+      "category": "ios-trap",
       "tags": [
         "tokens",
         "live-activity"
@@ -368,6 +387,7 @@
       "title": "Per-activity and push-to-start tokens may rotate at any time",
       "severity": "info",
       "detection": "advisory",
+      "category": "ios-trap",
       "tags": [
         "tokens"
       ],
@@ -387,6 +407,7 @@
       "title": "Discard per-activity tokens when the activity ends",
       "severity": "info",
       "detection": "advisory",
+      "category": "ios-trap",
       "tags": [
         "tokens",
         "live-activity"
@@ -404,6 +425,7 @@
       "title": "Retired rule (merged into MS003)",
       "severity": "info",
       "detection": "advisory",
+      "category": "maintenance",
       "tags": [
         "contract"
       ],
@@ -418,6 +440,7 @@
       "title": "Per-activity tokens are bound to a single Activity instance",
       "severity": "info",
       "detection": "advisory",
+      "category": "ios-trap",
       "tags": [
         "tokens"
       ],
@@ -434,6 +457,7 @@
       "title": "Project must depend on @mobile-surfaces/surface-contracts (and push, when sending)",
       "severity": "error",
       "detection": "config",
+      "category": "wire-trap",
       "tags": [
         "contract",
         "push"
@@ -454,6 +478,7 @@
       "title": "App Group declared in app.json",
       "severity": "error",
       "detection": "config",
+      "category": "ios-trap",
       "tags": [
         "app-group",
         "config"
@@ -474,6 +499,7 @@
       "title": "Widget target managed by @bacons/apple-targets",
       "severity": "error",
       "detection": "config",
+      "category": "ios-trap",
       "tags": [
         "widget",
         "control",
@@ -495,6 +521,7 @@
       "title": "Foreign Expo project must target iOS 17.2 or higher",
       "severity": "info",
       "detection": "advisory",
+      "category": "maintenance",
       "tags": [
         "ios-version",
         "config"
@@ -517,6 +544,7 @@
       "title": "APNs auth key environment variables must be set before sending",
       "severity": "error",
       "detection": "runtime",
+      "category": "wire-trap",
       "tags": [
         "push",
         "tokens"
@@ -537,6 +565,7 @@
       "title": "Generated apps/mobile/ios/ is gitignored",
       "severity": "error",
       "detection": "config",
+      "category": "maintenance",
       "tags": [
         "cng",
         "config"
@@ -557,6 +586,7 @@
       "title": "APNs provider token must be valid and current",
       "severity": "error",
       "detection": "runtime",
+      "category": "wire-trap",
       "tags": [
         "push",
         "tokens"
@@ -579,6 +609,7 @@
       "title": "Channel management failures (missing, malformed, or unregistered channel id)",
       "severity": "error",
       "detection": "runtime",
+      "category": "wire-trap",
       "tags": [
         "push",
         "channels",
@@ -602,12 +633,13 @@
       "title": "Activity timestamp fields must be valid unix-seconds integers",
       "severity": "error",
       "detection": "runtime",
+      "category": "wire-trap",
       "tags": [
         "push",
         "live-activity"
       ],
       "summary": "APNs rejects Live Activity pushes whose date fields (staleDateSeconds, dismissalDateSeconds, apns-expiration) are not positive unix-seconds integers, and rejects broadcast sends to a no-storage channel that carry a nonzero apns-expiration.",
-      "symptom": "APNs returns 400 BadDate or 400 BadExpirationDate. The push payload looked valid locally but a date field was a millisecond timestamp, a negative number, or a non-integer; or apns-expiration was set on a no-storage broadcast channel.",
+      "symptom": "The SDK's pre-flight throws BadDateError on a malformed staleDateSeconds or dismissalDateSeconds (Apple's current reason table does not return a BadDate string; the class is preflight-only). The apns-expiration field still surfaces as a 400 BadExpirationDate from APNs when set on a no-storage broadcast channel, or when it is a millisecond timestamp, negative number, or non-integer.",
       "fix": "Confirm every date field is a positive unix-seconds integer (not milliseconds, not Date.now()). For broadcast on a no-storage channel, apns-expiration must be 0; the SDK's broadcast() already enforces this.",
       "docs": [
         "https://mobile-surfaces.com/docs/push#error-responses"
@@ -623,6 +655,7 @@
       "title": "Retired rule (id reserved)",
       "severity": "info",
       "detection": "advisory",
+      "category": "maintenance",
       "tags": [
         "contract"
       ],
@@ -637,6 +670,7 @@
       "title": "Broadcast capability must be enabled on the APNs auth key",
       "severity": "info",
       "detection": "advisory",
+      "category": "wire-trap",
       "tags": [
         "push",
         "channels",
@@ -659,6 +693,7 @@
       "title": "Notification category outputs in sync with canonical registry",
       "severity": "error",
       "detection": "static",
+      "category": "ios-trap",
       "tags": [
         "notification",
         "contract",
@@ -677,6 +712,7 @@
       "title": "apns-topic header missing or bundleId misconfigured",
       "severity": "error",
       "detection": "runtime",
+      "category": "wire-trap",
       "tags": [
         "push",
         "config"
@@ -700,6 +736,7 @@
       "title": "Surface snapshot Swift structs match their Zod projection-output schemas",
       "severity": "error",
       "detection": "static",
+      "category": "ios-trap",
       "tags": [
         "widget",
         "control",
@@ -719,6 +756,7 @@
       "title": "Live Activity adapter inputs must be Zod-parsed before crossing the bridge",
       "severity": "error",
       "detection": "static",
+      "category": "ios-trap",
       "tags": [
         "live-activity",
         "contract"
@@ -739,6 +777,7 @@
       "title": "Token store discipline: subscribe to ActivityKit token events through @mobile-surfaces/tokens",
       "severity": "error",
       "detection": "static",
+      "category": "ios-trap",
       "tags": [
         "live-activity",
         "tokens",
@@ -757,6 +796,7 @@
       "title": "Swift trap-binding file byte-identity",
       "severity": "error",
       "detection": "static",
+      "category": "maintenance",
       "tags": [
         "contract",
         "swift"
@@ -774,6 +814,7 @@
       "title": "Projection-output envelopes must declare schemaVersion",
       "severity": "error",
       "detection": "static",
+      "category": "ios-trap",
       "tags": [
         "contract",
         "config"
@@ -791,6 +832,7 @@
       "title": "Deprecation prose must not promise removal in the current or a past major",
       "severity": "error",
       "detection": "static",
+      "category": "maintenance",
       "tags": [
         "contract",
         "config"
@@ -808,6 +850,7 @@
       "title": "CHANGELOG entry required on package major",
       "severity": "error",
       "detection": "static",
+      "category": "maintenance",
       "tags": [
         "contract",
         "config"
@@ -825,6 +868,7 @@
       "title": "Catalog headline counts stay in sync with the trap catalog",
       "severity": "error",
       "detection": "static",
+      "category": "maintenance",
       "tags": [
         "contract",
         "config"
@@ -842,6 +886,7 @@
       "title": "Widget Color asset references must resolve to a generated colorset",
       "severity": "error",
       "detection": "static",
+      "category": "ios-trap",
       "tags": [
         "widget",
         "config",

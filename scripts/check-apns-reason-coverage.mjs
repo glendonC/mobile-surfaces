@@ -167,13 +167,25 @@ for (const reason of scriptKeys) {
 }
 
 const issues = [...missing, ...orphans, ...docGaps, ...scriptGaps];
+// apnsDocumented defaults to true; entries that opt out (currently only
+// BadDate) represent typed classes whose origin is client-side pre-flight,
+// not an APNs-returned reason string. Surface the split in the summary so
+// the headline number stays honest and the marker has semantic weight.
+const preflightOnly = reasons
+  .filter((r) => r.apnsDocumented === false)
+  .map((r) => r.reason);
+const apnsDocCount = sourceReasons.length - preflightOnly.length;
+const provenanceNote =
+  preflightOnly.length === 0
+    ? ""
+    : ` (${apnsDocCount} APNs-documented, ${preflightOnly.length} preflight-only: ${preflightOnly.join(", ")})`;
 const checks = [
   {
     id: "apns-reason-coverage",
     status: issues.length === 0 ? "ok" : "fail",
     summary:
       issues.length === 0
-        ? `errors.ts maps every one of the ${sourceReasons.length} APNs reasons in data/apns-reasons.json to a typed subclass.`
+        ? `errors.ts maps every one of the ${sourceReasons.length} APNs reasons in data/apns-reasons.json to a typed subclass${provenanceNote}.`
         : `${issues.length} APNs reason coverage gap(s) between data/apns-reasons.json and packages/push/src/errors.ts.`,
     ...(issues.length === 0
       ? {}

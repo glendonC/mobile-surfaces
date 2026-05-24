@@ -205,6 +205,33 @@ public class LiveActivityModule: Module {
             }
           }
         }
+
+        // Drain the class-level `activityUpdates` AsyncSequence so push-to-
+        // start deliveries that create a new Activity *after* the cold-start
+        // enumeration above has finished are still observed live. Without
+        // this drain, a token-mode delivery between the bridge attaching and
+        // the next reattach is invisible — the per-instance pushTokenUpdates
+        // / activityStateUpdates drains only attach via the `observe(...)`
+        // helper, and the cold-start loop is the only place that calls it
+        // for activities the bridge did not originate.
+        //
+        // Yielded activities are always token-mode (channel activities are
+        // initiated by the bridge's own `start()` path, which calls
+        // `observe(...)` directly). The per-id beginObservation inside
+        // `observe(...)` is re-entry safe, so a duplicate yield against the
+        // cold-start enumeration cancels the prior drains and reinstalls
+        // them — no double-attach.
+        Task {
+          await registry.beginActivityUpdatesObservation { [weak self] in
+            Task<Void, Never> { [weak self] in
+              for await activity in Activity<MobileSurfacesActivityAttributes>.activityUpdates {
+                if Task.isCancelled { return }
+                guard let self = self else { return }
+                self.observe(activity: activity, isChannelMode: false)
+              }
+            }
+          }
+        }
       }
     }
 
@@ -214,8 +241,9 @@ public class LiveActivityModule: Module {
     // AsyncSequences forever and re-attach stacks new ones on next mount.
     //
     // Contract with OnStartObserving (MS020 / MS016): `clearObservers()`
-    // cancels every per-activity drain installed via `beginObservation` and
-    // the push-to-start drain installed via `beginPushToStartObservation`.
+    // cancels every per-activity drain installed via `beginObservation`, the
+    // push-to-start drain installed via `beginPushToStartObservation`, and
+    // the activity-updates drain installed via `beginActivityUpdatesObservation`.
     // Both registration methods install handles inside actor isolation, so a
     // clearObservers queued here always sees the handles a concurrent
     // OnStartObserving's `Task` set, regardless of which queued first on

@@ -43,15 +43,110 @@ export function runDoctor({
   device,
 } = {}) {
   const root = resolve(rootDir);
-  // Toolchain minimums come from the root package.json `mobileSurfaces` block
-  // (the single source of truth). The fallback numbers here are defensive only;
-  // the field is expected to be present.
+  const checks = [];
+
+  // The toolchain section (Node, pnpm, Xcode, xcrun, Simulator) describes the
+  // Mobile Surfaces in-tree dev loop. In audit mode --root points at a foreign
+  // Expo project whose toolchain floor is set by its own engines and Expo SDK
+  // row, not by MS's mobileSurfaces block; surfacing MS's Node 24 / Xcode 26
+  // there would be a false positive. The app.json checks below are foreign-
+  // relevant and run in both modes.
+  if (mode === "in-tree") {
+    pushToolchainChecks(checks, device);
+  }
+
+  // --- app.json: Team ID + App Groups -------------------------------------
+  let appJsonPath;
+  if (mode === "audit") {
+    const discovery = discoverAppConfig(root);
+    appJsonPath = discovery.found ? discovery.appJsonPath : null;
+  } else {
+    appJsonPath = join(root, "apps/mobile/app.json");
+  }
+  if (!appJsonPath) {
+    checks.push({
+      id: "app-json-present",
+      status: "skip",
+      summary: `No Expo app.json found under ${root}; skipping Team ID and App Group checks.`,
+    });
+    return buildReport(TOOL, checks);
+  }
+  const appJsonResult = loadAppJson(appJsonPath);
+  if (appJsonResult.status === "invalid") {
+    checks.push({
+      id: "app-json-parse",
+      status: "fail",
+      summary: `${appJsonPath} is not valid JSON.`,
+      detail: { message: appJsonResult.error },
+    });
+  } else if (appJsonResult.status === "ok") {
+    const { appJson } = appJsonResult;
+    const teamId = readAppleTeamId(appJson);
+    if (!teamId) {
+      checks.push({
+        id: "apple-team-id",
+        status: "warn",
+        summary: "Apple Team ID not set.",
+        detail: {
+          message:
+            "Add expo.ios.appleTeamId to apps/mobile/app.json before running expo run:ios --device.",
+        },
+      });
+    } else if (teamId === "XXXXXXXXXX") {
+      checks.push({
+        id: "apple-team-id",
+        status: "warn",
+        summary: "Apple Team ID is the placeholder value.",
+        detail: {
+          message:
+            "Replace expo.ios.appleTeamId with your 10-character team id (Xcode → Signing & Capabilities → Team, or developer.apple.com → Membership).",
+        },
+      });
+    } else {
+      checks.push({
+        id: "apple-team-id",
+        status: "ok",
+        summary: `Apple Team ID: ${teamId}`,
+      });
+    }
+
+    const { declared, groups } = readAppGroups(appJson);
+    checks.push({
+      id: "app-groups",
+      status: declared ? "ok" : "fail",
+      trapId: "MS025",
+      summary: declared
+        ? `App Groups: ${groups.join(", ")}`
+        : "App Groups not declared in app.json.",
+      ...(declared
+        ? {}
+        : {
+            detail: {
+              message:
+                "Add expo.ios.entitlements['com.apple.security.application-groups'] so widgets and controls can share state with the host app.",
+            },
+          }),
+    });
+  } else {
+    // status === "missing"
+    checks.push({
+      id: "app-json-present",
+      status: "skip",
+      summary: `${appJsonPath} not found; skipping Team ID and App Group checks.`,
+    });
+  }
+
+  return buildReport(TOOL, checks);
+}
+
+// Toolchain minimums come from the root package.json `mobileSurfaces` block
+// (the single source of truth). The fallback numbers here are defensive only;
+// the field is expected to be present. Only called from in-tree mode.
+function pushToolchainChecks(checks, device) {
   const minimums = loadToolchainMinimums();
   const REQUIRED_NODE_MAJOR = minimums.node ?? 24;
   const REQUIRED_XCODE_MAJOR = minimums.xcode ?? 26;
   const DEFAULT_DEVICE = device ?? process.env.DEVICE ?? "iPhone 17 Pro";
-
-  const checks = [];
 
   // --- Node ----------------------------------------------------------------
   const nodeMajor = Number(process.versions.node.split(".")[0]);
@@ -172,89 +267,6 @@ export function runDoctor({
       });
     }
   }
-
-  // --- app.json: Team ID + App Groups -------------------------------------
-  let appJsonPath;
-  if (mode === "audit") {
-    const discovery = discoverAppConfig(root);
-    appJsonPath = discovery.found ? discovery.appJsonPath : null;
-  } else {
-    appJsonPath = join(root, "apps/mobile/app.json");
-  }
-  if (!appJsonPath) {
-    checks.push({
-      id: "app-json-present",
-      status: "skip",
-      summary: `No Expo app.json found under ${root}; skipping Team ID and App Group checks.`,
-    });
-    return buildReport(TOOL, checks);
-  }
-  const appJsonResult = loadAppJson(appJsonPath);
-  if (appJsonResult.status === "invalid") {
-    checks.push({
-      id: "app-json-parse",
-      status: "fail",
-      summary: `${appJsonPath} is not valid JSON.`,
-      detail: { message: appJsonResult.error },
-    });
-  } else if (appJsonResult.status === "ok") {
-    const { appJson } = appJsonResult;
-    const teamId = readAppleTeamId(appJson);
-    if (!teamId) {
-      checks.push({
-        id: "apple-team-id",
-        status: "warn",
-        summary: "Apple Team ID not set.",
-        detail: {
-          message:
-            "Add expo.ios.appleTeamId to apps/mobile/app.json before running expo run:ios --device.",
-        },
-      });
-    } else if (teamId === "XXXXXXXXXX") {
-      checks.push({
-        id: "apple-team-id",
-        status: "warn",
-        summary: "Apple Team ID is the placeholder value.",
-        detail: {
-          message:
-            "Replace expo.ios.appleTeamId with your 10-character team id (Xcode → Signing & Capabilities → Team, or developer.apple.com → Membership).",
-        },
-      });
-    } else {
-      checks.push({
-        id: "apple-team-id",
-        status: "ok",
-        summary: `Apple Team ID: ${teamId}`,
-      });
-    }
-
-    const { declared, groups } = readAppGroups(appJson);
-    checks.push({
-      id: "app-groups",
-      status: declared ? "ok" : "fail",
-      trapId: "MS025",
-      summary: declared
-        ? `App Groups: ${groups.join(", ")}`
-        : "App Groups not declared in app.json.",
-      ...(declared
-        ? {}
-        : {
-            detail: {
-              message:
-                "Add expo.ios.entitlements['com.apple.security.application-groups'] so widgets and controls can share state with the host app.",
-            },
-          }),
-    });
-  } else {
-    // status === "missing"
-    checks.push({
-      id: "app-json-present",
-      status: "skip",
-      summary: `${appJsonPath} not found; skipping Team ID and App Group checks.`,
-    });
-  }
-
-  return buildReport(TOOL, checks);
 }
 
 function tryRun(cmd, args) {

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "5",
+  "kind": "lockAccessory",
+  "id": "neg-oversized-shortText",
+  "surfaceId": "surface-neg",
+  "updatedAt": "2026-05-12T18:30:00.000Z",
+  "state": "active",
+  "lockAccessory": {
+    "title": "Lock accessory with shortText over 20 chars",
+    "deepLink": "mobilesurfaces://surface/neg",
+    "family": "accessoryInline",
+    "shortText": "this string is far longer than twenty characters"
+  }
+}

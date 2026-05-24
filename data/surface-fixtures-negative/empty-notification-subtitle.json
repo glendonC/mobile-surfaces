@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "5",
+  "kind": "notification",
+  "id": "neg-empty-subtitle",
+  "surfaceId": "surface-neg",
+  "updatedAt": "2026-05-12T18:30:00.000Z",
+  "state": "active",
+  "notification": {
+    "title": "Empty subtitle",
+    "subtitle": "",
+    "body": "subtitle is optional but constrained to .min(1) so an empty string is rejected; this is the exact class of bug the projection helper used to double-defend against with a truthy check.",
+    "deepLink": "mobilesurfaces://surface/neg",
+    "category": "surface-update"
+  }
+}
