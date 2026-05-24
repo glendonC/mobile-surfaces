@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "5",
+  "kind": "widget",
+  "id": "neg-bad-deeplink",
+  "surfaceId": "surface-neg",
+  "updatedAt": "2026-05-12T18:30:00.000Z",
+  "state": "active",
+  "widget": {
+    "title": "Bad deepLink scheme",
+    "body": "deepLink must match /^[a-z][a-z0-9+\\-.]*:\\/\\//; a bare path with no scheme://prefix must be rejected by both validators.",
+    "progress": 0.5,
+    "deepLink": "not-a-url"
+  }
+}

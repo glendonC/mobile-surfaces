@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "5",
+  "kind": "widget",
+  "id": "neg-plain-date-updatedAt",
+  "surfaceId": "surface-neg",
+  "updatedAt": "2026-05-12",
+  "state": "active",
+  "widget": {
+    "title": "Plain date masquerading as datetime",
+    "body": "updatedAt must be an RFC 3339 datetime with offset; a calendar-date-only string must be rejected by both validators.",
+    "progress": 0.5,
+    "deepLink": "mobilesurfaces://surface/neg"
+  }
+}

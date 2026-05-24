@@ -4,6 +4,11 @@
     "missing-discriminator-kind.json",
     "wrong-state-enum.json",
     "kind-slice-mismatch.json",
-    "wrong-schema-version.json"
+    "wrong-schema-version.json",
+    "bad-deeplink-scheme.json",
+    "out-of-range-widget-progress.json",
+    "oversized-lock-accessory-shortText.json",
+    "empty-notification-subtitle.json",
+    "plain-date-updatedAt.json"
   ]
 }

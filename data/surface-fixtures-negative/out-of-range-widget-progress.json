@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "5",
+  "kind": "widget",
+  "id": "neg-out-of-range-progress",
+  "surfaceId": "surface-neg",
+  "updatedAt": "2026-05-12T18:30:00.000Z",
+  "state": "active",
+  "widget": {
+    "title": "Widget progress over 1",
+    "body": "widget.progress is constrained to 0..1; both validators must reject 1.5 to keep the Lock Screen progress ring renderable.",
+    "progress": 1.5,
+    "deepLink": "mobilesurfaces://surface/neg"
+  }
+}
