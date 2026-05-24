@@ -121,6 +121,17 @@ export class BadExpirationDateError extends ApnsError {
   }
 }
 
+/**
+ * Raised by the SDK's client-side pre-flight (packages/push/src/preflight.ts)
+ * when a Live Activity `staleDateSeconds` or `dismissalDateSeconds` is not a
+ * finite positive unix-seconds integer. Distinct from
+ * `BadExpirationDateError`, which still maps directly to APNs' returned
+ * "BadExpirationDate" reason for the `apns-expiration` header. APNs does not
+ * return a "BadDate" reason string in its current table; the typed class
+ * stays because the pre-flight surfaces the same class of bug before the
+ * round-trip, and the `data/apns-reasons.json` entry now carries an
+ * `apnsDocumented: false` marker that records the provenance. See MS032.
+ */
 export class BadDateError extends ApnsError {
   constructor(init: Omit<ApnsErrorInit, "reason">) {
     super({ ...init, reason: "BadDate" });

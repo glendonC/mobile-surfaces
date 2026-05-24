@@ -342,7 +342,7 @@ Broadcast and channel-admin calls reject when the channel id is missing from the
 
 APNs rejects Live Activity pushes whose date fields (staleDateSeconds, dismissalDateSeconds, apns-expiration) are not positive unix-seconds integers, and rejects broadcast sends to a no-storage channel that carry a nonzero apns-expiration.
 
-**Symptom.** APNs returns 400 BadDate or 400 BadExpirationDate. The push payload looked valid locally but a date field was a millisecond timestamp, a negative number, or a non-integer; or apns-expiration was set on a no-storage broadcast channel.
+**Symptom.** The SDK's pre-flight throws BadDateError on a malformed staleDateSeconds or dismissalDateSeconds (Apple's current reason table does not return a BadDate string; the class is preflight-only). The apns-expiration field still surfaces as a 400 BadExpirationDate from APNs when set on a no-storage broadcast channel, or when it is a millisecond timestamp, negative number, or non-integer.
 
 **Fix.** Confirm every date field is a positive unix-seconds integer (not milliseconds, not Date.now()). For broadcast on a no-storage channel, apns-expiration must be 0; the SDK's broadcast() already enforces this.
 

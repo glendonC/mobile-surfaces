@@ -30,8 +30,8 @@ export const APNS_REASON_GUIDE: Record<string, ApnsReasonGuideEntry> = {
     fix: "Collapse ids must be 64 bytes or fewer. Shorten the value passed as collapseId before sending.",
   },
   BadDate: {
-    cause: "A timestamp field is malformed.",
-    fix: "Same as BadExpirationDate — confirm staleDateSeconds / dismissalDateSeconds are unix-seconds integers.",
+    cause: "A Live Activity stale-date or dismissal-date field was malformed (not a finite positive integer in unix seconds). Raised by the SDK's client-side pre-flight (packages/push/src/preflight.ts); APNs itself does not return this reason string in its current table.",
+    fix: "Pass staleDateSeconds / dismissalDateSeconds as positive unix-seconds integers (e.g. Math.floor(Date.now() / 1000) + 60). The pre-flight catches non-finite, non-integer, non-positive, or millisecond-magnitude values before the round-trip; if you see this from production code, the input is the bug.",
   },
   BadDeviceToken: {
     cause: "Token / environment mismatch.",
