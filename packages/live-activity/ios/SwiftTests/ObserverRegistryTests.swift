@@ -55,10 +55,15 @@ final class ObserverRegistryTests: XCTestCase {
         await registry.replace(id: "ACT-1", tasks: [activityTask])
         await registry.replacePushToStart(pushToStartTask)
         await registry.setPushToStartToken("hex-token")
+        await registry.beginActivityUpdatesObservation {
+            Task<Void, Never> { while !Task.isCancelled { await Task.yield() } }
+        }
         let preCount = await registry.handleCount()
         XCTAssertEqual(preCount, 1)
         let preHasPushToStart = await registry.hasPushToStartHandle()
         XCTAssertTrue(preHasPushToStart)
+        let preHasActivityUpdates = await registry.hasActivityUpdatesHandle()
+        XCTAssertTrue(preHasActivityUpdates)
         let preToken = await registry.pushToStartToken()
         XCTAssertEqual(preToken, "hex-token")
 
@@ -67,6 +72,8 @@ final class ObserverRegistryTests: XCTestCase {
         XCTAssertEqual(postCount, 0)
         let postHasPushToStart = await registry.hasPushToStartHandle()
         XCTAssertFalse(postHasPushToStart)
+        let postHasActivityUpdates = await registry.hasActivityUpdatesHandle()
+        XCTAssertFalse(postHasActivityUpdates)
         // Token cache cleared on teardown so a fresh bridge session does not
         // surface a stale value.
         let postToken = await registry.pushToStartToken()
@@ -86,12 +93,20 @@ final class ObserverRegistryTests: XCTestCase {
         await registry.replace(id: "ACT-1", tasks: [activityTask])
         await registry.replacePushToStart(pushToStartTask)
         await registry.setPushToStartToken("hex-token")
+        await registry.beginActivityUpdatesObservation {
+            Task<Void, Never> { while !Task.isCancelled { await Task.yield() } }
+        }
 
         await registry.clearObservers()
         let postCount = await registry.handleCount()
         XCTAssertEqual(postCount, 0)
         let postHasPushToStart = await registry.hasPushToStartHandle()
         XCTAssertFalse(postHasPushToStart)
+        // The activity-updates drain follows the push-to-start drain's
+        // lifecycle: cancelled on listener detach so a re-attach installs a
+        // fresh one rather than stacking observers.
+        let postHasActivityUpdates = await registry.hasActivityUpdatesHandle()
+        XCTAssertFalse(postHasActivityUpdates)
         // The token survives the observer teardown.
         let postToken = await registry.pushToStartToken()
         XCTAssertEqual(postToken, "hex-token")
@@ -181,6 +196,50 @@ final class ObserverRegistryTests: XCTestCase {
         }
         await fulfillment(of: [firstFinished], timeout: 2.0)
         let hasHandle = await registry.hasPushToStartHandle()
+        XCTAssertTrue(hasHandle)
+    }
+
+    func testBeginActivityUpdatesObservationSpawnsAndStoresAtomically() async {
+        // C8 generalized to the activity-updates drain. The drain is what
+        // catches push-to-start-delivered Activities that arrive after the
+        // cold-start enumeration in OnStartObserving has already run; without
+        // this atomicity guarantee a tight OnStopObserving racing the spawn
+        // would leave the Task live but unregistered, and the drain would
+        // keep yielding into a detached bridge until the next attach.
+        let registry = ObserverRegistry()
+        await registry.beginActivityUpdatesObservation {
+            Task<Void, Never> {
+                while !Task.isCancelled { await Task.yield() }
+            }
+        }
+        let hasHandle = await registry.hasActivityUpdatesHandle()
+        XCTAssertTrue(hasHandle)
+
+        await registry.clearObservers()
+        let postClearHasHandle = await registry.hasActivityUpdatesHandle()
+        XCTAssertFalse(postClearHasHandle)
+    }
+
+    func testBeginActivityUpdatesObservationCancelsPriorBeforeSpawn() async {
+        // Re-entry of OnStartObserving (bridge reconnect, hot reload) must
+        // cancel the prior activity-updates drain before installing a new one,
+        // matching the push-to-start re-entry semantics. Without this, two
+        // drains race for the same AsyncSequence and a single push-to-start
+        // delivery fires `observe(...)` twice — re-entry safe in the per-id
+        // registry, but the wasted Task is observable here.
+        let registry = ObserverRegistry()
+        let firstFinished = expectation(description: "prior activity-updates task observes cancellation")
+        await registry.beginActivityUpdatesObservation {
+            Task<Void, Never> {
+                while !Task.isCancelled { await Task.yield() }
+                firstFinished.fulfill()
+            }
+        }
+        await registry.beginActivityUpdatesObservation {
+            Task<Void, Never> {}
+        }
+        await fulfillment(of: [firstFinished], timeout: 2.0)
+        let hasHandle = await registry.hasActivityUpdatesHandle()
         XCTAssertTrue(hasHandle)
     }
 

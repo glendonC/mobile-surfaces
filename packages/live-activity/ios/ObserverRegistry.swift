@@ -40,6 +40,16 @@ actor ObserverRegistry {
   // `OnStartObserving` cancels the prior task instead of stacking observers.
   private var pushToStartHandle: Task<Void, Never>?
 
+  // The newly-started-activities stream is also class-level
+  // (`Activity<MobileSurfacesActivityAttributes>.activityUpdates`). It yields
+  // an `Activity` instance every time a push-to-start delivery (iOS 17.2+)
+  // creates one while the bridge is alive. Without observing it the bridge
+  // only ever picks up push-to-start-delivered activities via the cold-start
+  // enumeration in `OnStartObserving`, so a delivery between bridge attach
+  // and any prior activity is invisible until the next reattach. Stored as a
+  // single handle for the same reason as `pushToStartHandle`.
+  private var activityUpdatesHandle: Task<Void, Never>?
+
   // Latest push-to-start token Apple delivered through the AsyncSequence.
   // `nil` until the first emission; rotated on every subsequent emission.
   private var latestPushToStartToken: String?
@@ -98,6 +108,20 @@ actor ObserverRegistry {
     pushToStartHandle = build()
   }
 
+  /// Atomically cancel any existing activity-updates drain, spawn a new one
+  /// via `build`, and install it. The drain yields newly-started `Activity`
+  /// instances (push-to-start deliveries that occur after the cold-start
+  /// enumeration has already completed); the consumer is expected to attach
+  /// per-activity drains via `beginObservation(id:_:)` for each yielded
+  /// activity. Same actor-isolation guarantee as the other `begin*` methods:
+  /// the new Task exists in the registry before this call returns.
+  func beginActivityUpdatesObservation(
+    _ build: @Sendable () -> Task<Void, Never>
+  ) {
+    activityUpdatesHandle?.cancel()
+    activityUpdatesHandle = build()
+  }
+
   /// Store the latest token observed on the push-to-start AsyncSequence.
   func setPushToStartToken(_ token: String) {
     latestPushToStartToken = token
@@ -123,6 +147,8 @@ actor ObserverRegistry {
     handles.removeAll()
     pushToStartHandle?.cancel()
     pushToStartHandle = nil
+    activityUpdatesHandle?.cancel()
+    activityUpdatesHandle = nil
   }
 
   /// Full teardown: cancel every observer Task and drop the cached
@@ -140,4 +166,5 @@ actor ObserverRegistry {
   func handleCount() -> Int { handles.values.reduce(0) { $0 + $1.count } }
   func activityIds() -> Set<String> { Set(handles.keys) }
   func hasPushToStartHandle() -> Bool { pushToStartHandle != nil }
+  func hasActivityUpdatesHandle() -> Bool { activityUpdatesHandle != nil }
 }
