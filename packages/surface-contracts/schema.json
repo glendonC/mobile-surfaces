@@ -70,12 +70,12 @@
               "description": "Compact mode label for the Dynamic Island leading region (e.g. \"active\")."
             },
             "contextLabel": {
-              "type": "string",
-              "description": "Trailing context tag for the Dynamic Island (e.g. \"queue · stage 2\")."
+              "description": "Trailing context tag for the Dynamic Island (e.g. \"queue · stage 2\"). Optional: the current widget views do not render it; producers may omit it for snapshots whose surface has no equivalent tag.",
+              "type": "string"
             },
             "statusLine": {
-              "type": "string",
-              "description": "One-line status string composed for accessibility readout and for the expanded Lock-Screen layout's secondary row."
+              "description": "One-line status string composed for accessibility readout and for the expanded Lock-Screen layout's secondary row. Optional: no current widget view consumes it, and it is often a concatenation of title + body; producers should omit it rather than fabricate one.",
+              "type": "string"
             },
             "actionLabel": {
               "description": "Label for the activity's primary action button. Omitted when the activity has no action affordance.",
@@ -92,16 +92,16 @@
               "description": "ActivityKit ContentState stage. Producers transition prompted → inProgress → completing; iOS uses it to decide the Dynamic Island compact layout and the dismissal grace period."
             },
             "estimatedSeconds": {
+              "description": "Estimated remaining seconds. Optional hint to the Lock-Screen layout for countdown UIs; absent means \"unknown\". The current widget views do not render a countdown driven by this field; it stays in the wire shape for forward compatibility.",
               "type": "integer",
               "minimum": 0,
-              "maximum": 9007199254740991,
-              "description": "Estimated remaining seconds. Optional hint to the Lock-Screen layout for countdown UIs; zero means \"unknown\"."
+              "maximum": 9007199254740991
             },
             "morePartsCount": {
+              "description": "Number of queued follow-up parts (e.g. \"+3 more\"). Optional: lets producers signal continuity without padding the payload with the full queue. Current views do not render it; producers may omit.",
               "type": "integer",
               "minimum": 0,
-              "maximum": 9007199254740991,
-              "description": "Number of queued follow-up parts (e.g. \"+3 more\"). Lets producers signal continuity without padding the payload with the full queue."
+              "maximum": 9007199254740991
             }
           },
           "required": [
@@ -110,11 +110,7 @@
             "progress",
             "deepLink",
             "modeLabel",
-            "contextLabel",
-            "statusLine",
-            "stage",
-            "estimatedSeconds",
-            "morePartsCount"
+            "stage"
           ],
           "additionalProperties": false
         }

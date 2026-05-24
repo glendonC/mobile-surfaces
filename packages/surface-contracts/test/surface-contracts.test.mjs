@@ -546,6 +546,76 @@ test("morePartsCount rejects string-encoded integers", () => {
 });
 
 // ---------------------------------------------------------------------------
+// liveActivity vestigial-field optionality. modeLabel + the four rendered
+// fields (title, body, progress, stage) plus deepLink stay required; the
+// four fields no current widget view consumes (contextLabel, statusLine,
+// estimatedSeconds, morePartsCount) and actionLabel are optional. Pins the
+// audit-driven minimization so a future required-tightening accidentally
+// re-imposing them surfaces as a test diff.
+// ---------------------------------------------------------------------------
+
+test("liveActivity slice accepts a minimal snapshot with only the five required fields plus deepLink", () => {
+  const minimal = {
+    ...queued,
+    liveActivity: {
+      title: "Headline",
+      body: "Subhead",
+      progress: 0,
+      stage: "prompted",
+      modeLabel: "active",
+      deepLink: "mobilesurfaces://surface/test",
+    },
+  };
+  const result = safeParseSnapshot(minimal);
+  assert.equal(result.success, true);
+});
+
+test("liveActivity slice still rejects a snapshot missing modeLabel", () => {
+  const noMode = {
+    ...queued,
+    liveActivity: {
+      title: "Headline",
+      body: "Subhead",
+      progress: 0,
+      stage: "prompted",
+      deepLink: "mobilesurfaces://surface/test",
+    },
+  };
+  const result = safeParseSnapshot(noMode);
+  assert.equal(result.success, false);
+});
+
+test("liveActivity slice still rejects a snapshot missing title", () => {
+  const noTitle = {
+    ...queued,
+    liveActivity: {
+      body: "Subhead",
+      progress: 0,
+      stage: "prompted",
+      modeLabel: "active",
+      deepLink: "mobilesurfaces://surface/test",
+    },
+  };
+  const result = safeParseSnapshot(noTitle);
+  assert.equal(result.success, false);
+});
+
+test("liveActivity slice still rejects a snapshot missing deepLink", () => {
+  const noLink = {
+    ...queued,
+    liveActivity: {
+      title: "Headline",
+      body: "Subhead",
+      progress: 0,
+      stage: "prompted",
+      modeLabel: "active",
+    },
+  };
+  const result = safeParseSnapshot(noLink);
+  assert.equal(result.success, false);
+});
+
+// ---------------------------------------------------------------------------
 // updatedAt (required since v2)
 // ---------------------------------------------------------------------------
 
