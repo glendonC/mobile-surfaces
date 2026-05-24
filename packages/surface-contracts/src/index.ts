@@ -280,19 +280,26 @@ export function toNotificationContentPayload(
       aps: {
         alert: {
           title: note.title,
-          ...(note.subtitle ? { subtitle: note.subtitle } : {}),
+          // Use !== undefined consistently across projections; the slice
+          // schema's .min(1) already rejects empty strings, so the older
+          // truthy guard here was double-defense and inconsistent with the
+          // other helpers in this file (see toControlValueProvider,
+          // toLockAccessoryEntry, toStandbyEntry).
+          ...(note.subtitle !== undefined ? { subtitle: note.subtitle } : {}),
           body: note.body,
         },
         sound: "default",
-        ...(note.category ? { category: note.category } : {}),
-        ...(note.threadId ? { "thread-id": note.threadId } : {}),
-        ...(note.interruptionLevel
+        ...(note.category !== undefined ? { category: note.category } : {}),
+        ...(note.threadId !== undefined
+          ? { "thread-id": note.threadId }
+          : {}),
+        ...(note.interruptionLevel !== undefined
           ? { "interruption-level": note.interruptionLevel }
           : {}),
         ...(note.relevanceScore !== undefined
           ? { "relevance-score": note.relevanceScore }
           : {}),
-        ...(note.targetContentId
+        ...(note.targetContentId !== undefined
           ? { "target-content-id": note.targetContentId }
           : {}),
       },
@@ -303,7 +310,7 @@ export function toNotificationContentPayload(
         surfaceId: snapshot.surfaceId,
         state: snapshot.state,
         deepLink: note.deepLink,
-        ...(note.category ? { category: note.category } : {}),
+        ...(note.category !== undefined ? { category: note.category } : {}),
       },
     },
   );
