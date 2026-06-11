@@ -687,6 +687,11 @@ const cmd = (mgr: string) => `${mgr} create mobile-surfaces`;
   .q-cols {
     display: grid;
     grid-template-columns: minmax(220px, 1fr) 1.2fr;
+    /* Constrain the row to the available height (minmax floor of 0) so the
+       columns can scroll internally instead of growing past the card and
+       letting the longest answer spill into — and clip against — the
+       bottom padding. */
+    grid-template-rows: minmax(0, 1fr);
     gap: 28px;
     flex: 1;
     min-height: 0;
@@ -767,6 +772,11 @@ const cmd = (mgr: string) => `${mgr} create mobile-surfaces`;
     flex-direction: column;
     gap: 10px;
     min-height: 0;
+    /* The longest answer ("What is this?") exceeds the fixed card height;
+       scroll it within its column so the card keeps its bottom padding. */
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--hairline-strong) transparent;
   }
   .q-answer-title,
   .q-answer-body,
@@ -828,18 +838,77 @@ const cmd = (mgr: string) => `${mgr} create mobile-surfaces`;
     }
     .q-cols {
       grid-template-columns: 1fr;
+      grid-template-rows: auto;
       gap: 16px;
     }
-    .island[data-state="full"] {
-      height: min(640px, calc(100vh - 24px));
+    /* On mobile the whole layer scrolls (see height system below), so the
+       answer column must not be a competing nested scroll. */
+    .q-answer {
+      overflow-y: visible;
     }
+    /* Install box on mobile: tabs get their own row, then the command
+       and the copy button share the row below — copy sits beside the
+       thing it copies instead of being stranded up next to the tabs.
+       The command flex-grows so the copy chip is pushed to the right
+       edge, mirroring a standard "copy this command" control. */
     .install-row {
       flex-wrap: wrap;
+      width: 100%;
+      row-gap: 10px;
+    }
+    .install-row .mgr-tabs {
+      flex-basis: 100%;
     }
     .install-cmd {
-      flex-basis: 100%;
-      order: 3;
-      padding: 4px 4px 6px;
+      flex: 1 1 auto;
+      min-width: 0;
+      padding-left: 6px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* The fixed per-state heights (340/480/640px) clip content once the
+       tagline and answer reflow taller at narrow widths: the footer
+       (expanded) and the answer body (full) vanish under overflow:hidden
+       with no way to reach them. On mobile, drive height from the active
+       layer's content instead. The active layer goes in-flow so the
+       island grows to fit it; inactive layers stay absolutely stacked so
+       the cross-fade still works. If content still exceeds the visible
+       viewport, the active layer scrolls internally rather than spilling
+       out of the card. 100dvh (not 100vh) so the ceiling tracks the real
+       visible area as iOS shows/hides its URL bar. */
+    .island[data-state="expanded"],
+    .island[data-state="full"] {
+      height: auto;
+    }
+    .island[data-state="expanded"] .island-expanded,
+    .island[data-state="full"] .island-full {
+      position: relative;
+      max-height: calc(100dvh - 32px);
+      overflow-y: auto;
+      scrollbar-width: none;
+    }
+    .island[data-state="expanded"] .island-expanded::-webkit-scrollbar,
+    .island[data-state="full"] .island-full::-webkit-scrollbar {
+      display: none;
+    }
+    .island[data-state="expanded"] .island-expanded {
+      min-height: min(340px, calc(100dvh - 32px));
+    }
+    .island[data-state="full"] .island-full {
+      min-height: min(480px, calc(100dvh - 32px));
+    }
+
+    /* Compact pill: tabs + command + copy + expand can't share one slim
+       row on a phone without the command running off the edge. Drop the
+       redundant command text here -- the expanded card (the default
+       state) shows it in full -- so the pill stays a clean single row of
+       tabs / copy / expand. */
+    .island-compact {
+      gap: 10px;
+    }
+    .island-compact-cmd {
+      display: none;
     }
   }
 
