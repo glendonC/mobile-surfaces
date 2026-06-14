@@ -1,5 +1,12 @@
 # mobile-surfaces-app
 
+## 1.0.16
+
+### Patch Changes
+
+- Updated dependencies [877c95c]
+  - @mobile-surfaces/live-activity@7.1.3
+
 ## 1.0.15
 
 ### Patch Changes
