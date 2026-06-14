@@ -294,6 +294,16 @@ export interface BroadcastOptions extends SendOptions {
 export interface LiveActivityStartOptions extends SendOptions {
   /** Defaults to `MobileSurfacesActivityAttributes`; override after rename. */
   attributesType?: string;
+  /**
+   * Alert shown when the push STARTS the Live Activity. On current iOS builds a
+   * push-started activity is only PRESENTED when the start payload carries an
+   * `aps.alert` — without it `liveactivitiesd` logs "Received start without an
+   * alert configuration" and silently drops the presentation (no UI, and no
+   * per-activity token is ever vended). Set a minimal title/body for the
+   * first-start banner; `update` / `end` never carry it, so subsequent pushes
+   * stay silent.
+   */
+  alert?: { title: string; body: string; sound?: "default" };
 }
 
 /**
@@ -1311,6 +1321,13 @@ export class PushClient {
     if (event === "start" && startMeta) {
       aps["attributes-type"] = startMeta.attributesType;
       aps.attributes = startMeta.attributes;
+      // Alert is start-only (push-to-start presentation); it rides
+      // LiveActivityStartOptions, the concrete options type start() passes here.
+      // Required for iOS to actually present a push-started activity.
+      const { alert } = options as LiveActivityStartOptions;
+      if (alert !== undefined) {
+        aps.alert = alert;
+      }
     }
     if (options.staleDateSeconds !== undefined) {
       aps["stale-date"] = options.staleDateSeconds;
